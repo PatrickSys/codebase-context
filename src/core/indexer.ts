@@ -178,6 +178,12 @@ export class CodebaseIndexer {
       // Fetch git commit dates for pattern momentum analysis
       const fileDates = await getFileCommitDates(this.rootPath);
 
+      // Create a lowercased map for case-insensitive fallback on Windows
+      const lowercasedFileDates = new Map<string, Date>();
+      for (const [filepath, date] of fileDates.entries()) {
+        lowercasedFileDates.set(filepath.toLowerCase(), date);
+      }
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         this.progress.currentFile = file;
@@ -247,9 +253,13 @@ export class CodebaseIndexer {
             const relPath = file.split(/[\\/]/).slice(-3).join('/');
 
             // Get file date for pattern momentum tracking
-            // Try multiple path formats since git uses forward slashes
+            // Try strict match first, then case-insensitive fallback
             const normalizedRelPath = path.relative(this.rootPath, file).replace(/\\/g, '/');
-            const fileDate = fileDates.get(normalizedRelPath);
+            let fileDate = fileDates.get(normalizedRelPath);
+
+            if (!fileDate) {
+              fileDate = lowercasedFileDates.get(normalizedRelPath.toLowerCase());
+            }
 
             // GENERIC PATTERN FORWARDING
             // Framework analyzers return detectedPatterns in metadata - we just forward them

@@ -10,6 +10,5 @@ dist/
 *.swo
 *~
 .claude
-internal-docs/
-internal-docs.zip
+
 .codebase-intelligence.json

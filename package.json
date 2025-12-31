@@ -1,6 +1,6 @@
 {
   "name": "codebase-context",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "MCP server for semantic codebase indexing and search - gives AI agents real understanding of your codebase",
   "type": "module",
   "main": "./dist/lib.js",

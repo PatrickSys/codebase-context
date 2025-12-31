@@ -6,6 +6,7 @@
  */
 
 import { promises as fs } from "fs";
+
 import path from "path";
 import { glob } from "glob";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -69,14 +70,13 @@ const indexState: IndexState = {
 
 const server = new Server(
   {
-    name: "codebase-context-mcp",
-    version: "1.0.0",
+    name: "codebase-context",
+    version: "1.2.2",
   },
   {
     capabilities: {
       tools: {},
       resources: {},
-      logging: {}, // Enable structured logging for clients that support it
     },
   }
 );

@@ -1,0 +1,3 @@
+[submodule "internal-docs"]
+	path = internal-docs
+	url = https://github.com/PatrickSys/codebase-context-mcp-internal.git

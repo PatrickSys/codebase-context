@@ -27,6 +27,17 @@ const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   keywordWeight: 0.3,
 };
 
+/**
+ * Thrown when the vector index is corrupted or has a schema mismatch.
+ * Callers should catch this and trigger a re-index.
+ */
+export class IndexCorruptedError extends Error {
+  constructor(message: string, public readonly originalError?: unknown) {
+    super(message);
+    this.name = "IndexCorruptedError";
+  }
+}
+
 export class CodebaseSearcher {
   private rootPath: string;
   private storagePath: string;
@@ -222,7 +233,25 @@ export class CodebaseSearcher {
           }
         });
       } catch (error) {
-        console.warn("Semantic search failed:", error);
+        // Check for critical index failures that require re-indexing
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isCriticalIndexError =
+          errorMessage.includes("Table not found") ||
+          errorMessage.includes("Schema mismatch") ||
+          errorMessage.includes("No vector column") ||
+          errorMessage.includes("Column not found") ||
+          errorMessage.includes("does not exist");
+
+        if (isCriticalIndexError) {
+          // Throw so caller can trigger auto-heal
+          throw new IndexCorruptedError(
+            `Semantic index corrupted: ${errorMessage}`,
+            error
+          );
+        }
+
+        // Non-critical errors: log and continue with keyword-only search
+        console.warn("Semantic search failed (non-critical, falling back to keyword):", error);
       }
     }
 

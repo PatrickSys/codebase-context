@@ -21,7 +21,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { CodebaseIndexer } from "./core/indexer.js";
 import { IndexingStats } from "./types/index.js";
-import { CodebaseSearcher } from "./core/search.js";
+import { CodebaseSearcher, IndexCorruptedError } from "./core/search.js";
 import { analyzerRegistry } from "./core/analyzer-registry.js";
 import { AngularAnalyzer } from "./analyzers/angular/index.js";
 import { GenericAnalyzer } from "./analyzers/generic/index.js";
@@ -498,7 +498,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const searcher = new CodebaseSearcher(ROOT_PATH);
-        const results = await searcher.search(query, limit || 5, filters);
+
+        let results;
+        try {
+          results = await searcher.search(query, limit || 5, filters);
+        } catch (searchError) {
+          // Auto-heal: if index is corrupted, trigger re-indexing and retry once
+          if (searchError instanceof IndexCorruptedError) {
+            console.error(`[auto-heal] ${searchError.message}`);
+            console.error("[auto-heal] Triggering full re-index...");
+
+            // Trigger synchronous re-index (blocking)
+            try {
+              const indexer = new CodebaseIndexer({ rootPath: ROOT_PATH });
+              indexState.status = "indexing";
+              indexState.indexer = indexer;
+              const stats = await indexer.index();
+              indexState.status = "ready";
+              indexState.lastIndexed = new Date();
+              indexState.stats = stats;
+              console.error("[auto-heal] Re-index complete. Retrying search...");
+
+              // Retry with fresh searcher
+              const freshSearcher = new CodebaseSearcher(ROOT_PATH);
+              results = await freshSearcher.search(query, limit || 5, filters);
+            } catch (reindexError) {
+              console.error("[auto-heal] Re-index failed:", reindexError);
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify(
+                      {
+                        status: "error",
+                        message: "Search index corrupted and auto-heal failed.",
+                        originalError: searchError.message,
+                        hint: "Try running refresh_index manually.",
+                      },
+                      null,
+                      2
+                    ),
+                  },
+                ],
+              };
+            }
+          } else {
+            // Unknown error, re-throw
+            throw searchError;
+          }
+        }
 
         return {
           content: [

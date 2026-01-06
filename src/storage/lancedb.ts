@@ -183,18 +183,33 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         distance: result._distance || 0
       }));
     } catch (error) {
-      if (error instanceof Error && error.message.includes('No vector column')) {
-        throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
+      if (!(error instanceof Error)) {
+        console.error('[LanceDB] Unknown search error:', error);
+        return [];
       }
-      console.error('Failed to search:', error);
-      // For other errors, we throw IndexCorruptedError to be safe and trigger auto-heal
-      // if it looks like a database issue
-      if (
-        error instanceof Error &&
-        (error.message.includes('LanceDB') || error.message.includes('Arrow'))
-      ) {
-        throw new IndexCorruptedError(`LanceDB runtime error: ${error.message}`);
+
+      const message = error.message.toLowerCase();
+
+      // Known corruption patterns that require re-indexing
+      const corruptionPatterns = [
+        'no vector column',
+        'schema mismatch',
+        'invalid schema',
+        'corrupted table',
+        'cannot read table',
+        'table metadata',
+        'invalid arrow format'
+      ];
+
+      const isCorruption = corruptionPatterns.some((pattern) => message.includes(pattern));
+
+      if (isCorruption) {
+        console.error('[LanceDB] Index corruption detected:', error.message);
+        throw new IndexCorruptedError(`LanceDB index corrupted: ${error.message}`);
       }
+
+      // Transient errors - log and fallback to keyword search
+      console.error('[LanceDB] Transient search error:', error.message);
       return [];
     }
   }

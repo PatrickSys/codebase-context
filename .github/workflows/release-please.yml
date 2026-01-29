@@ -33,8 +33,8 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
+          # No registry-url needed for Trusted Publishers (OIDC)
 
       - name: Install
         if: ${{ steps.release.outputs.release_created }}

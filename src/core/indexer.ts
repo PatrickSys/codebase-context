@@ -32,13 +32,23 @@ import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
+  MANIFEST_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
+import {
+  computeFileHashes,
+  readManifest,
+  writeManifest,
+  diffManifest,
+  type FileManifest,
+  type ManifestDiff
+} from './manifest.js';
 
 export interface IndexerOptions {
   rootPath: string;
   config?: Partial<CodebaseConfig>;
   onProgress?: (progress: IndexingProgress) => void;
+  incrementalOnly?: boolean;
 }
 
 export class CodebaseIndexer {
@@ -46,11 +56,13 @@ export class CodebaseIndexer {
   private config: CodebaseConfig;
   private progress: IndexingProgress;
   private onProgressCallback?: (progress: IndexingProgress) => void;
+  private incrementalOnly: boolean;
 
   constructor(options: IndexerOptions) {
     this.rootPath = path.resolve(options.rootPath);
     this.config = this.mergeConfig(options.config);
     this.onProgressCallback = options.onProgress;
+    this.incrementalOnly = options.incrementalOnly ?? false;
 
     this.progress = {
       phase: 'initializing',
@@ -166,9 +178,56 @@ export class CodebaseIndexer {
 
       console.error(`Found ${files.length} files to index`);
 
+      // Phase 1b: Incremental diff (if incremental mode)
+      const contextDir = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME);
+      const manifestPath = path.join(contextDir, MANIFEST_FILENAME);
+      let diff: ManifestDiff | null = null;
+      let currentHashes: Record<string, string> | null = null;
+
+      if (this.incrementalOnly) {
+        this.updateProgress('scanning', 10);
+        console.error('Computing file hashes for incremental diff...');
+        currentHashes = await computeFileHashes(files, this.rootPath);
+
+        const oldManifest = await readManifest(manifestPath);
+        diff = diffManifest(oldManifest, currentHashes);
+
+        console.error(
+          `Incremental diff: ${diff.added.length} added, ${diff.changed.length} changed, ` +
+          `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged`
+        );
+
+        stats.incremental = {
+          added: diff.added.length,
+          changed: diff.changed.length,
+          deleted: diff.deleted.length,
+          unchanged: diff.unchanged.length
+        };
+
+        // Short-circuit: nothing changed
+        if (diff.added.length === 0 && diff.changed.length === 0 && diff.deleted.length === 0) {
+          console.error('No files changed — skipping re-index.');
+          this.updateProgress('complete', 100);
+          stats.duration = Date.now() - startTime;
+          stats.completedAt = new Date();
+          return stats;
+        }
+      }
+
+      // Build the set of files that need analysis + embedding (incremental: only added/changed)
+      const filesToProcess = diff
+        ? files.filter((f) => {
+            const rel = path.relative(this.rootPath, f).replace(/\\/g, '/');
+            return diff!.added.includes(rel) || diff!.changed.includes(rel);
+          })
+        : files;
+
       // Phase 2: Analyzing & Parsing
+      // Intelligence tracking (patterns, libraries, import graph) runs on ALL files
+      // but embedding only runs on filesToProcess
       this.updateProgress('analyzing', 0);
       const allChunks: CodeChunk[] = [];
+      const changedChunks: CodeChunk[] = []; // Only chunks from added/changed files
       const libraryTracker = new LibraryUsageTracker();
       const patternDetector = new PatternDetector();
       const importGraph = new ImportGraph();
@@ -176,6 +235,9 @@ export class CodebaseIndexer {
 
       // Fetch git commit dates for pattern momentum analysis
       const fileDates = await getFileCommitDates(this.rootPath);
+
+      // When incremental, track which files need embedding
+      const filesToProcessSet = diff ? new Set(filesToProcess.map((f) => f)) : null;
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -190,7 +252,12 @@ export class CodebaseIndexer {
           const result = await analyzerRegistry.analyzeFile(file, content);
 
           if (result) {
+            const isFileChanged = !filesToProcessSet || filesToProcessSet.has(file);
+
             allChunks.push(...result.chunks);
+            if (isFileChanged) {
+              changedChunks.push(...result.chunks);
+            }
             stats.indexedFiles++;
             stats.totalLines += content.split('\n').length;
 
@@ -331,22 +398,29 @@ export class CodebaseIndexer {
           ? Math.round(allChunks.reduce((sum, c) => sum + c.content.length, 0) / allChunks.length)
           : 0;
 
+      // Determine which chunks to embed: in incremental mode, only changed/added file chunks
+      const chunksForEmbedding = diff ? changedChunks : allChunks;
+
       // Memory safety: limit chunks to prevent embedding memory issues
       const MAX_CHUNKS = 5000;
-      let chunksToEmbed = allChunks;
-      if (allChunks.length > MAX_CHUNKS) {
+      let chunksToEmbed = chunksForEmbedding;
+      if (chunksForEmbedding.length > MAX_CHUNKS) {
         console.warn(
-          `WARNING: ${allChunks.length} chunks exceed limit. Indexing first ${MAX_CHUNKS} chunks.`
+          `WARNING: ${chunksForEmbedding.length} chunks exceed limit. Indexing first ${MAX_CHUNKS} chunks.`
         );
-        chunksToEmbed = allChunks.slice(0, MAX_CHUNKS);
+        chunksToEmbed = chunksForEmbedding.slice(0, MAX_CHUNKS);
       }
 
-      // Phase 3: Embedding
+      // Phase 3: Embedding (only changed/added chunks in incremental mode)
       const chunksWithEmbeddings: CodeChunkWithEmbedding[] = [];
 
-      if (!this.config.skipEmbedding) {
+      if (!this.config.skipEmbedding && chunksToEmbed.length > 0) {
         this.updateProgress('embedding', 50);
-        console.error(`Creating embeddings for ${chunksToEmbed.length} chunks...`);
+        console.error(
+          `Creating embeddings for ${chunksToEmbed.length} chunks` +
+          (diff ? ` (${allChunks.length} total, ${chunksToEmbed.length} changed)` : '') +
+          '...'
+        );
 
         // Initialize embedding provider
         const embeddingProvider = await getEmbeddingProvider(this.config.embedding);
@@ -389,32 +463,55 @@ export class CodebaseIndexer {
             );
           }
         }
-      } else {
+      } else if (this.config.skipEmbedding) {
         console.error('Skipping embedding generation (skipEmbedding=true)');
+      } else if (chunksToEmbed.length === 0 && diff) {
+        console.error('No chunks to embed (all unchanged)');
       }
 
       // Phase 4: Storing
       this.updateProgress('storing', 75);
 
-      const contextDir = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME);
       await fs.mkdir(contextDir, { recursive: true });
 
       if (!this.config.skipEmbedding) {
-        console.error(`Storing ${chunksToEmbed.length} chunks...`);
-
-        // Store in LanceDB for vector search
         const storagePath = path.join(contextDir, VECTOR_DB_DIRNAME);
         const storageProvider = await getStorageProvider({ path: storagePath });
-        await storageProvider.clear(); // Clear existing index
-        await storageProvider.store(chunksWithEmbeddings);
+
+        if (diff) {
+          // Incremental: delete old chunks for changed + deleted files, then add new
+          const filesToDelete = [...diff.changed, ...diff.deleted]
+            .map((rel) => path.join(this.rootPath, rel).replace(/\\/g, '/'));
+          // Also try with OS-native separators for matching
+          const filePathsForDelete = [...diff.changed, ...diff.deleted]
+            .map((rel) => path.resolve(this.rootPath, rel));
+          const allDeletePaths = [...new Set([...filesToDelete, ...filePathsForDelete])];
+
+          if (allDeletePaths.length > 0) {
+            await storageProvider.deleteByFilePaths(allDeletePaths);
+          }
+          if (chunksWithEmbeddings.length > 0) {
+            await storageProvider.store(chunksWithEmbeddings);
+          }
+          console.error(
+            `Incremental store: deleted chunks for ${diff.changed.length + diff.deleted.length} files, ` +
+            `added ${chunksWithEmbeddings.length} new chunks`
+          );
+        } else {
+          // Full: clear and re-store everything
+          console.error(`Storing ${chunksToEmbed.length} chunks...`);
+          await storageProvider.clear();
+          await storageProvider.store(chunksWithEmbeddings);
+        }
       }
 
-      // Also save JSON for keyword search (Fuse.js) - use chunksToEmbed for consistency
+      // Keyword index always uses ALL chunks (full regen)
       const indexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
-      // Write without pretty-printing to save memory
-      await fs.writeFile(indexPath, JSON.stringify(chunksToEmbed));
+      // Memory safety: cap keyword index too
+      const keywordChunks = allChunks.length > MAX_CHUNKS ? allChunks.slice(0, MAX_CHUNKS) : allChunks;
+      await fs.writeFile(indexPath, JSON.stringify(keywordChunks));
 
-      // Save library usage and pattern stats
+      // Save library usage and pattern stats (always full regen)
       const intelligencePath = path.join(contextDir, INTELLIGENCE_FILENAME);
       const libraryStats = libraryTracker.getStats();
 
@@ -451,14 +548,30 @@ export class CodebaseIndexer {
       };
       await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));
 
+      // Write manifest (both full and incremental)
+      const manifest: FileManifest = {
+        version: 1,
+        generatedAt: new Date().toISOString(),
+        files: currentHashes ?? await computeFileHashes(files, this.rootPath)
+      };
+      await writeManifest(manifestPath, manifest);
+
       // Phase 5: Complete
       this.updateProgress('complete', 100);
 
       stats.duration = Date.now() - startTime;
       stats.completedAt = new Date();
 
-      console.error(`Indexing complete in ${stats.duration}ms`);
-      console.error(`Indexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks`);
+      if (diff) {
+        console.error(
+          `Incremental indexing complete in ${stats.duration}ms ` +
+          `(${diff.added.length} added, ${diff.changed.length} changed, ` +
+          `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged)`
+        );
+      } else {
+        console.error(`Indexing complete in ${stats.duration}ms`);
+        console.error(`Indexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks`);
+      }
 
       return stats;
     } catch (error) {

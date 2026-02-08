@@ -28,6 +28,12 @@ export interface VectorStorageProvider {
   ): Promise<VectorSearchResult[]>;
 
   /**
+   * Delete chunks matching the given file paths.
+   * Returns the number of deleted rows.
+   */
+  deleteByFilePaths(filePaths: string[]): Promise<number>;
+
+  /**
    * Clear all stored data
    */
   clear(): Promise<void>;

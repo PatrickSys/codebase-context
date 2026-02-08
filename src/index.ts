@@ -46,8 +46,11 @@ import {
   appendMemoryFile,
   readMemoriesFile,
   filterMemories,
-  applyUnfilteredLimit
+  applyUnfilteredLimit,
+  withConfidence
 } from './memory/store.js';
+import { parseGitLogLineToMemory } from './memory/git-memory.js';
+import { buildEvidenceLock } from './preflight/evidence-lock.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -161,6 +164,11 @@ export interface IndexState {
   indexer?: CodebaseIndexer;
 }
 
+// Read version from package.json so it never drifts
+const PKG_VERSION: string = JSON.parse(
+  await fs.readFile(new URL('../package.json', import.meta.url), 'utf-8')
+).version;
+
 const indexState: IndexState = {
   status: 'idle'
 };
@@ -168,7 +176,7 @@ const indexState: IndexState = {
 const server: Server = new Server(
   {
     name: 'codebase-context',
-    version: '1.4.0'
+    version: PKG_VERSION
   },
   {
     capabilities: {
@@ -184,6 +192,8 @@ const TOOLS: Tool[] = [
     description:
       'Search the indexed codebase using natural language queries. Returns code summaries with file locations. ' +
       'Supports framework-specific queries and architectural layer filtering. ' +
+      'When intent is "edit", "refactor", or "migrate", returns a preflight card with risk level, ' +
+      'patterns to use/avoid, impact candidates, related memories, and an evidence lock score — all in one call. ' +
       'Use the returned filePath with other tools to read complete file contents.',
     inputSchema: {
       type: 'object',
@@ -191,6 +201,14 @@ const TOOLS: Tool[] = [
         query: {
           type: 'string',
           description: 'Natural language search query'
+        },
+        intent: {
+          type: 'string',
+          enum: ['explore', 'edit', 'refactor', 'migrate'],
+          description:
+            'Search intent. Use "explore" (default) for read-only browsing. ' +
+            'Use "edit", "refactor", or "migrate" to get a preflight card with risk assessment, ' +
+            'patterns to prefer/avoid, affected files, relevant team memories, and ready-to-edit evidence checks.'
         },
         limit: {
           type: 'number',
@@ -359,8 +377,10 @@ const TOOLS: Tool[] = [
       properties: {
         type: {
           type: 'string',
-          enum: ['convention', 'decision', 'gotcha'],
-          description: 'Type of memory being recorded'
+          enum: ['convention', 'decision', 'gotcha', 'failure'],
+          description:
+            'Type of memory being recorded. Use "failure" for things that were tried and failed — ' +
+            'prevents repeating the same mistakes.'
         },
         category: {
           type: 'string',
@@ -396,7 +416,7 @@ const TOOLS: Tool[] = [
         type: {
           type: 'string',
           description: 'Filter by memory type',
-          enum: ['convention', 'decision', 'gotcha']
+          enum: ['convention', 'decision', 'gotcha', 'failure']
         },
         query: {
           type: 'string',
@@ -563,14 +583,55 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   throw new Error(`Unknown resource: ${uri}`);
 });
 
-async function performIndexing(): Promise<void> {
+/**
+ * Extract memories from conventional git commits (refactor:, migrate:, fix:, revert:).
+ * Scans last 90 days. Deduplicates via content hash. Zero friction alternative to manual memory.
+ */
+async function extractGitMemories(): Promise<number> {
+  // Quick check: skip if not a git repo
+  if (!(await fileExists(path.join(ROOT_PATH, '.git')))) return 0;
+
+  const { execSync } = await import('child_process');
+
+  let log: string;
+  try {
+    // Format: ISO-date<TAB>hash subject  (e.g. "2026-01-15T10:00:00+00:00\tabc1234 fix: race condition")
+    log = execSync('git log --format="%aI\t%h %s" --since="90 days ago" --no-merges', {
+      cwd: ROOT_PATH,
+      encoding: 'utf-8',
+      timeout: 5000
+    }).trim();
+  } catch {
+    // Git not available or command failed — silently skip
+    return 0;
+  }
+
+  if (!log) return 0;
+
+  const lines = log.split('\n').filter(Boolean);
+  let added = 0;
+
+  for (const line of lines) {
+    const parsedMemory = parseGitLogLineToMemory(line);
+    if (!parsedMemory) continue;
+
+    const result = await appendMemoryFile(PATHS.memory, parsedMemory);
+    if (result.status === 'added') added++;
+  }
+
+  return added;
+}
+
+async function performIndexing(incrementalOnly?: boolean): Promise<void> {
   indexState.status = 'indexing';
-  console.error(`Indexing: ${ROOT_PATH}`);
+  const mode = incrementalOnly ? 'incremental' : 'full';
+  console.error(`Indexing (${mode}): ${ROOT_PATH}`);
 
   try {
     let lastLoggedProgress = { phase: '', percentage: -1 };
     const indexer = new CodebaseIndexer({
       rootPath: ROOT_PATH,
+      incrementalOnly,
       onProgress: (progress) => {
         // Only log when phase or percentage actually changes (prevents duplicate logs)
         const shouldLog =
@@ -596,6 +657,18 @@ async function performIndexing(): Promise<void> {
         stats.duration / 1000
       ).toFixed(2)}s`
     );
+
+    // Auto-extract memories from git history (non-blocking, best-effort)
+    try {
+      const gitMemories = await extractGitMemories();
+      if (gitMemories > 0) {
+        console.error(
+          `[git-memory] Extracted ${gitMemories} new memor${gitMemories === 1 ? 'y' : 'ies'} from git history`
+        );
+      }
+    } catch {
+      // Git memory extraction is optional — never fail indexing over it
+    }
   } catch (error) {
     indexState.status = 'error';
     indexState.error = error instanceof Error ? error.message : String(error);
@@ -619,7 +692,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'search_codebase': {
-        const { query, limit, filters } = args as any;
+        const { query, limit, filters, intent } = args as any;
 
         if (indexState.status === 'indexing') {
           return {
@@ -716,18 +789,205 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Load memories for keyword matching
+        // Load memories for keyword matching, enriched with confidence
         const allMemories = await readMemoriesFile(PATHS.memory);
-
-        const findRelatedMemories = (queryTerms: string[]): Memory[] => {
-          return allMemories.filter((m) => {
-            const searchText = `${m.memory} ${m.reason}`.toLowerCase();
-            return queryTerms.some((term) => searchText.includes(term));
-          });
-        };
+        const allMemoriesWithConf = withConfidence(allMemories);
 
         const queryTerms = query.toLowerCase().split(/\s+/);
-        const relatedMemories = findRelatedMemories(queryTerms);
+        const relatedMemories = allMemoriesWithConf
+          .filter((m) => {
+            const searchText = `${m.memory} ${m.reason}`.toLowerCase();
+            return queryTerms.some((term: string) => searchText.includes(term));
+          })
+          .sort((a, b) => b.effectiveConfidence - a.effectiveConfidence);
+
+        // Compose preflight card for edit/refactor/migrate intents
+        let preflight: any = undefined;
+        const preflightIntents = ['edit', 'refactor', 'migrate'];
+        if (intent && preflightIntents.includes(intent)) {
+          try {
+            const intelligenceContent = await fs.readFile(PATHS.intelligence, 'utf-8');
+            const intelligence = JSON.parse(intelligenceContent);
+
+            // --- Avoid / Prefer patterns ---
+            const avoidPatterns: any[] = [];
+            const preferredPatterns: any[] = [];
+            const patterns = intelligence.patterns || {};
+            for (const [category, data] of Object.entries<any>(patterns)) {
+              // Primary pattern = preferred if Rising or Stable
+              if (data.primary) {
+                const p = data.primary;
+                if (p.trend === 'Rising' || p.trend === 'Stable') {
+                  preferredPatterns.push({
+                    pattern: p.name,
+                    category,
+                    adoption: p.frequency,
+                    trend: p.trend,
+                    guidance: p.guidance,
+                    ...(p.canonicalExample && { example: p.canonicalExample.file })
+                  });
+                }
+              }
+              // Also-detected patterns that are Declining = avoid
+              if (data.alsoDetected) {
+                for (const alt of data.alsoDetected) {
+                  if (alt.trend === 'Declining') {
+                    avoidPatterns.push({
+                      pattern: alt.name,
+                      category,
+                      adoption: alt.frequency,
+                      trend: 'Declining',
+                      guidance: alt.guidance
+                    });
+                  }
+                }
+              }
+            }
+
+            // --- Impact candidates (files importing the result files) ---
+            const impactCandidates: string[] = [];
+            const resultPaths = results.map((r) => r.filePath);
+            if (intelligence.internalFileGraph?.imports) {
+              const allImports = intelligence.internalFileGraph.imports as Record<string, string[]>;
+              for (const [file, deps] of Object.entries(allImports)) {
+                if (
+                  deps.some((dep: string) =>
+                    resultPaths.some((rp) => dep.endsWith(rp) || rp.endsWith(dep))
+                  )
+                ) {
+                  if (!resultPaths.some((rp) => file.endsWith(rp) || rp.endsWith(file))) {
+                    impactCandidates.push(file);
+                  }
+                }
+              }
+            }
+
+            // --- Risk level (based on circular deps + impact breadth) ---
+            let riskLevel: 'low' | 'medium' | 'high' = 'low';
+            let cycleCount = 0;
+            if (intelligence.internalFileGraph) {
+              try {
+                const graph = InternalFileGraph.fromJSON(intelligence.internalFileGraph, ROOT_PATH);
+                // Use directory prefixes as scope (not full file paths)
+                // findCycles(scope) filters files by startsWith, so a full path would only match itself
+                const scopes = new Set(
+                  resultPaths.map((rp) => {
+                    const lastSlash = rp.lastIndexOf('/');
+                    return lastSlash > 0 ? rp.substring(0, lastSlash + 1) : rp;
+                  })
+                );
+                for (const scope of scopes) {
+                  const cycles = graph.findCycles(scope);
+                  cycleCount += cycles.length;
+                }
+              } catch {
+                // Graph reconstruction failed — skip cycle check
+              }
+            }
+            if (cycleCount > 0 || impactCandidates.length > 10) {
+              riskLevel = 'high';
+            } else if (impactCandidates.length > 3) {
+              riskLevel = 'medium';
+            }
+
+            // --- Golden files (exemplar code) ---
+            const goldenFiles = (intelligence.goldenFiles || []).slice(0, 3).map((g: any) => ({
+              file: g.file,
+              score: g.score
+            }));
+
+            // --- Confidence (index freshness) ---
+            let confidence: 'fresh' | 'aging' | 'stale' = 'stale';
+            if (intelligence.generatedAt) {
+              const indexAge = Date.now() - new Date(intelligence.generatedAt).getTime();
+              const hoursOld = indexAge / (1000 * 60 * 60);
+              if (hoursOld < 24) {
+                confidence = 'fresh';
+              } else if (hoursOld < 168) {
+                confidence = 'aging';
+              }
+            }
+
+            // --- Failure memories (1.5x relevance boost) ---
+            const failureWarnings = relatedMemories
+              .filter((m) => m.type === 'failure' && !m.stale)
+              .map((m) => ({
+                memory: m.memory,
+                reason: m.reason,
+                confidence: m.effectiveConfidence
+              }))
+              .slice(0, 3);
+
+            const preferredPatternsForOutput = preferredPatterns.slice(0, 5);
+            const avoidPatternsForOutput = avoidPatterns.slice(0, 5);
+
+            // --- Pattern conflicts (split decisions within categories) ---
+            const patternConflicts: Array<{
+              category: string;
+              primary: { name: string; adoption: string };
+              alternative: { name: string; adoption: string };
+            }> = [];
+            for (const [cat, data] of Object.entries<any>(patterns)) {
+              if (!data.primary || !data.alsoDetected?.length) continue;
+              const primaryFreq = parseFloat(data.primary.frequency) || 100;
+              if (primaryFreq >= 80) continue;
+              for (const alt of data.alsoDetected) {
+                const altFreq = parseFloat(alt.frequency) || 0;
+                if (altFreq >= 20) {
+                  patternConflicts.push({
+                    category: cat,
+                    primary: { name: data.primary.name, adoption: data.primary.frequency },
+                    alternative: { name: alt.name, adoption: alt.frequency }
+                  });
+                }
+              }
+            }
+
+            const evidenceLock = buildEvidenceLock({
+              results,
+              preferredPatterns: preferredPatternsForOutput,
+              relatedMemories,
+              failureWarnings,
+              patternConflicts
+            });
+
+            // Bump risk if there are active failure memories for this area
+            if (failureWarnings.length > 0 && riskLevel === 'low') {
+              riskLevel = 'medium';
+            }
+
+            // If evidence triangulation is weak, avoid claiming low risk
+            if (evidenceLock.status === 'block' && riskLevel === 'low') {
+              riskLevel = 'medium';
+            }
+
+            // If epistemic stress says abstain, bump risk
+            if (evidenceLock.epistemicStress?.abstain && riskLevel === 'low') {
+              riskLevel = 'medium';
+            }
+
+            preflight = {
+              intent,
+              riskLevel,
+              confidence,
+              evidenceLock,
+              ...(preferredPatternsForOutput.length > 0 && {
+                preferredPatterns: preferredPatternsForOutput
+              }),
+              ...(avoidPatternsForOutput.length > 0 && {
+                avoidPatterns: avoidPatternsForOutput
+              }),
+              ...(goldenFiles.length > 0 && { goldenFiles }),
+              ...(impactCandidates.length > 0 && {
+                impactCandidates: impactCandidates.slice(0, 10)
+              }),
+              ...(cycleCount > 0 && { circularDependencies: cycleCount }),
+              ...(failureWarnings.length > 0 && { failureWarnings })
+            };
+          } catch {
+            // Intelligence file not available — skip preflight, don't fail the search
+          }
+        }
 
         return {
           content: [
@@ -736,6 +996,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(
                 {
                   status: 'success',
+                  ...(preflight && { preflight }),
                   results: results.map((r) => ({
                     summary: r.summary,
                     snippet: r.snippet,
@@ -749,7 +1010,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     patternWarning: r.patternWarning
                   })),
                   totalResults: results.length,
-                  ...(relatedMemories.length > 0 && { relatedMemories })
+                  ...(relatedMemories.length > 0 && {
+                    relatedMemories: relatedMemories.slice(0, 5)
+                  })
                 },
                 null,
                 2
@@ -776,7 +1039,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         totalFiles: indexState.stats.totalFiles,
                         indexedFiles: indexState.stats.indexedFiles,
                         totalChunks: indexState.stats.totalChunks,
-                        duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`
+                        duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`,
+                        incremental: indexState.stats.incremental
                       }
                     : undefined,
                   progress: progress
@@ -804,10 +1068,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const mode = incrementalOnly ? 'incremental' : 'full';
         console.error(`Refresh requested (${mode}): ${reason || 'Manual trigger'}`);
 
-        // TODO: When incremental indexing is implemented (Phase 2),
-        // use `incrementalOnly` to only re-index changed files.
-        // For now, always do full re-index but acknowledge the intention.
-        performIndexing();
+        performIndexing(incrementalOnly);
 
         return {
           content: [
@@ -818,12 +1079,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   status: 'started',
                   mode,
                   message: incrementalOnly
-                    ? 'Incremental re-indexing requested. Check status with get_indexing_status.'
+                    ? 'Incremental re-indexing started. Only changed files will be re-embedded.'
                     : 'Full re-indexing started. Check status with get_indexing_status.',
-                  reason,
-                  note: incrementalOnly
-                    ? 'Incremental mode requested. Full re-index for now; true incremental indexing coming in Phase 2.'
-                    : undefined
+                  reason
                 },
                 null,
                 2
@@ -1043,6 +1301,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           } catch (_error) {
             // No memory file yet, that's fine - don't fail the whole request
+          }
+
+          // Detect pattern conflicts: primary < 80% and any alternative > 20%
+          const conflicts: any[] = [];
+          const patternsData = intelligence.patterns || {};
+          for (const [cat, data] of Object.entries<any>(patternsData)) {
+            if (category && category !== 'all' && cat !== category) continue;
+            if (!data.primary || !data.alsoDetected?.length) continue;
+
+            const primaryFreq = parseFloat(data.primary.frequency) || 100;
+            if (primaryFreq >= 80) continue;
+
+            for (const alt of data.alsoDetected) {
+              const altFreq = parseFloat(alt.frequency) || 0;
+              if (altFreq < 20) continue;
+
+              conflicts.push({
+                category: cat,
+                primary: {
+                  name: data.primary.name,
+                  adoption: data.primary.frequency,
+                  trend: data.primary.trend
+                },
+                alternative: {
+                  name: alt.name,
+                  adoption: alt.frequency,
+                  trend: alt.trend
+                },
+                note: `Split decision: ${data.primary.frequency} ${data.primary.name} (${data.primary.trend || 'unknown'}) vs ${alt.frequency} ${alt.name} (${alt.trend || 'unknown'})`
+              });
+            }
+          }
+          if (conflicts.length > 0) {
+            result.conflicts = conflicts;
           }
 
           return {
@@ -1369,6 +1661,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const filtered = filterMemories(allMemories, { category, type, query });
           const limited = applyUnfilteredLimit(filtered, { category, type, query }, 20);
 
+          // Enrich with confidence decay
+          const enriched = withConfidence(limited.memories);
+          const staleCount = enriched.filter((m) => m.stale).length;
+
           return {
             content: [
               {
@@ -1376,13 +1672,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'success',
-                    count: limited.memories.length,
+                    count: enriched.length,
                     totalCount: limited.totalCount,
                     truncated: limited.truncated,
+                    ...(staleCount > 0 && {
+                      staleCount,
+                      staleNote: `${staleCount} memor${staleCount === 1 ? 'y' : 'ies'} below 30% confidence. Consider reviewing or removing.`
+                    }),
                     message: limited.truncated
                       ? 'Showing 20 most recent. Use filters (category/type/query) for targeted results.'
                       : undefined,
-                    memories: limited.memories
+                    memories: enriched
                   },
                   null,
                   2

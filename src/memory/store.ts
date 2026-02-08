@@ -10,6 +10,7 @@ type RawMemory = Partial<{
   decision: unknown;
   reason: unknown;
   date: unknown;
+  source: unknown;
 }>;
 
 export type MemoryFilters = {
@@ -40,7 +41,8 @@ export function normalizeMemory(raw: unknown): Memory | null {
 
   if (!id || !category || !memory || !reason || !date) return null;
 
-  return { id, type, category, memory, reason, date };
+  const source = m.source === 'git' ? 'git' as const : undefined;
+  return { id, type, category, memory, reason, date, ...(source && { source }) };
 }
 
 export function normalizeMemories(raw: unknown): Memory[] {
@@ -110,6 +112,52 @@ export function sortMemoriesByRecency(memories: Memory[]): Memory[] {
     return a.i - b.i;
   });
   return withIndex.map((x) => x.m);
+}
+
+/**
+ * Half-life in days per memory type.
+ * Convention memories never decay (Infinity).
+ * Decisions may be revisited. Gotchas and failures get fixed.
+ */
+const HALF_LIFE_DAYS: Record<string, number> = {
+  convention: Infinity,
+  decision: 180,
+  gotcha: 90,
+  failure: 90
+};
+
+export interface MemoryWithConfidence extends Memory {
+  effectiveConfidence: number;
+  stale: boolean;
+}
+
+/**
+ * Compute confidence decay: confidence = 2^(-age_days / half_life)
+ * Conventions never decay. Memories below 0.3 are flagged stale.
+ */
+export function computeConfidence(memory: Memory, now?: Date): { effectiveConfidence: number; stale: boolean } {
+  const halfLife = HALF_LIFE_DAYS[memory.type] ?? 180;
+  if (!Number.isFinite(halfLife)) {
+    return { effectiveConfidence: 1.0, stale: false };
+  }
+  const memDate = Date.parse(memory.date);
+  if (!Number.isFinite(memDate)) {
+    return { effectiveConfidence: 0.5, stale: false };
+  }
+  const ageDays = ((now ?? new Date()).getTime() - memDate) / (1000 * 60 * 60 * 24);
+  const confidence = Math.pow(2, -ageDays / halfLife);
+  const rounded = Math.round(confidence * 100) / 100;
+  return { effectiveConfidence: rounded, stale: rounded < 0.3 };
+}
+
+/**
+ * Enrich an array of memories with confidence decay metadata.
+ */
+export function withConfidence(memories: Memory[], now?: Date): MemoryWithConfidence[] {
+  return memories.map((m) => ({
+    ...m,
+    ...computeConfidence(m, now)
+  }));
 }
 
 export function applyUnfilteredLimit(

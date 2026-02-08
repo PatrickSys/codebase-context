@@ -413,6 +413,12 @@ export interface IndexingStats {
   errors: IndexingError[];
   startedAt: Date;
   completedAt?: Date;
+  incremental?: {
+    added: number;
+    changed: number;
+    deleted: number;
+    unchanged: number;
+  };
 }
 
 // ============================================================================
@@ -542,7 +548,8 @@ export type MemoryCategory =
 export type MemoryType =
   | 'convention' // Style, naming, component preferences
   | 'decision' // Architecture/tooling choices with rationale
-  | 'gotcha'; // Things that break and why
+  | 'gotcha' // Things that break and why
+  | 'failure'; // Tried X, failed because Y — prevents repeating mistakes
 
 /**
  * A recorded architectural or design decision
@@ -561,4 +568,6 @@ export interface Memory {
   reason: string;
   /** ISO 8601 date when decision was recorded */
   date: string;
+  /** Source of the memory: 'user' (default) or 'git' (auto-extracted from commits) */
+  source?: 'user' | 'git';
 }

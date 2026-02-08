@@ -172,6 +172,30 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     }
   }
 
+  async deleteByFilePaths(filePaths: string[]): Promise<number> {
+    if (!this.initialized || !this.table || filePaths.length === 0) {
+      return 0;
+    }
+
+    try {
+      const countBefore = await this.table.countRows();
+
+      // LanceDB supports SQL-style filter for delete
+      // Escape single quotes in file paths to prevent SQL injection
+      const escaped = filePaths.map((p) => p.replace(/'/g, "''"));
+      const inClause = escaped.map((p) => `'${p}'`).join(', ');
+      await this.table.delete(`filePath IN (${inClause})`);
+
+      const countAfter = await this.table.countRows();
+      const deleted = countBefore - countAfter;
+      console.error(`Deleted ${deleted} chunks for ${filePaths.length} files from LanceDB`);
+      return deleted;
+    } catch (error) {
+      console.error('Failed to delete chunks by file paths:', error);
+      throw error;
+    }
+  }
+
   async clear(): Promise<void> {
     if (!this.initialized) return;
 

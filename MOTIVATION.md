@@ -1,6 +1,6 @@
 # Motivation: Why This Exists
 
-> **TL;DR**: AI coding assistants are smart but dangerous. Without guidance, they "vibe code" their way into technical debt. This MCP gives them **Context** (to know your patterns) and **Wisdom** (to keep your codebase healthy).
+> **TL;DR**: AI coding assistants increase throughput but often degrade stability. Without codebase context, they generate code that works but violates team conventions and architectural rules. This MCP provides structured pattern data and recorded rationale so agents produce code that fits.
 
 ---
 
@@ -28,7 +28,7 @@ AI drastically increases **Throughput** (more code/hour) but often kills **Stabi
 
 ## What This Does
 
-We provide **Active Context**—not just raw data, but the *judgment* of a Senior Engineer.
+This MCP provides **active context** - not raw data, but structured intelligence derived from actual codebase state.
 
 ### 1. Pattern Discovery (The "Map")
 - **Frequency Detection**: "97% use `inject()`, 3% use `constructor`." (Consensus)
@@ -40,9 +40,8 @@ We provide **Active Context**—not just raw data, but the *judgment* of a Senio
 - **Health Context**: "⚠️ Careful, `UserService.ts` is a high-churn hotspot with circular dependencies. Add tests."
 
 ### Works with AGENTS.md
-> **AGENTS.md is the Law. MCP is the Map.**
-- **AGENTS.md** says: "We prefer functional functional programming."
-- **MCP** shows: "Here are the 5 most recent functional patterns we actually used."
+- **AGENTS.md** defines intent: "Use functional patterns."
+- **MCP** provides evidence: "Here are the 5 most recent functional patterns actually used."
 
 ---
 
@@ -50,9 +49,9 @@ We provide **Active Context**—not just raw data, but the *judgment* of a Senio
 
 | Limitation | Mitigation |
 |------------|--------|
-| **Pattern frequency ≠ pattern quality** | We added **Pattern Momentum** (Rise/Fall trends) to fix this. |
+| **Pattern frequency ≠ pattern quality** | **Pattern Momentum** (Rise/Fall trends) distinguishes adoption direction from raw count. |
 | **Stale index risk** | Manual re-indexing required for now. |
-| **Framework coverage** | Angular-specialized. React/Vue analyzers extensible. |
+| **Framework coverage** | Deep analysis for Angular. Generic analyzer covers 30+ languages. React/Vue specialized analyzers extensible. |
 | **File-level trend detection** | Trend is based on file modification date, not line-by-line content. A recently modified file may still contain legacy patterns on specific lines. Future: AST-based line-level detection. |
 
 ---
@@ -61,7 +60,7 @@ We provide **Active Context**—not just raw data, but the *judgment* of a Senio
 
 1.  **Context alone is dangerous**: Giving AI "all the context" just confuses it or teaches it bad habits (Search Contamination).
 2.  **Decisions > Data**: AI needs *guidance* ("Use X"), not just *options* ("Here is X and Y").
-3.  **Governance through Discovery**: We don't need to block PRs to be useful. If we show the AI that a pattern is "Declining" and "Dangerous," it self-corrects.
+3.  **Governance through Discovery**: Blocking PRs is not required. If the AI sees that a pattern is "Declining" and "Dangerous," it self-corrects.
 
 ---
 
@@ -75,8 +74,4 @@ We provide **Active Context**—not just raw data, but the *judgment* of a Senio
 ### Internal Validation
 - **Search Contamination**: Without MCP, models copied legacy patterns 40% of the time.
 - **Momentum Success**: With "Trending" signals, models adopted modern patterns even when they were the minority (3%).
-
----
-
-*Last updated: December 2025*
 

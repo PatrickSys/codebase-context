@@ -46,7 +46,7 @@ describe('Memory System', () => {
 
   it('should support all decision categories and types', () => {
     const validCategories = ['tooling', 'architecture', 'testing', 'dependencies', 'conventions'];
-    const validTypes = ['convention', 'decision', 'gotcha'];
+    const validTypes = ['convention', 'decision', 'gotcha', 'failure'];
 
     validCategories.forEach((category) => {
       validTypes.forEach((type) => {

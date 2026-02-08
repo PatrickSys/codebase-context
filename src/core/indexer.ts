@@ -217,7 +217,9 @@ export class CodebaseIndexer {
             const existingChunks = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8'));
             if (Array.isArray(existingChunks)) {
               stats.totalChunks = existingChunks.length;
-              const uniqueFiles = new Set(existingChunks.map((c: { filePath?: string }) => c.filePath));
+              const uniqueFiles = new Set(
+                existingChunks.map((c: { filePath?: string }) => c.filePath)
+              );
               stats.indexedFiles = uniqueFiles.size;
             }
           } catch {

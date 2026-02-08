@@ -2,12 +2,17 @@
 
 ## [1.4.1](https://github.com/PatrickSys/codebase-context/compare/v1.4.0...v1.4.1) (2026-01-29)
 
-
 ### Bug Fixes
 
-* **lint:** disable no-explicit-any rule for AST manipulation code ([41547da](https://github.com/PatrickSys/codebase-context/commit/41547da2aa5529dce3d539c296d5e9d79df379fe))
+- **lint:** disable no-explicit-any rule for AST manipulation code ([41547da](https://github.com/PatrickSys/codebase-context/commit/41547da2aa5529dce3d539c296d5e9d79df379fe))
 
 ## [Unreleased]
+
+### Changed
+
+- **Search ranking**: Removed framework-specific anchor/query promotion heuristics from core ranking flow to keep retrieval behavior generic across codebases.
+- **Search transparency**: `search_codebase` now returns `searchQuality` with confidence and diagnostic signals when retrieval looks ambiguous.
+- **Docs**: Updated README performance section to reflect shipped incremental refresh mode (`incrementalOnly`).
 
 ## [1.4.0] - 2026-01-28
 

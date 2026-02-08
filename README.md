@@ -103,6 +103,7 @@ Before an edit happens, the agent gets a preflight briefing: what to use, what t
 - Failure memories bump risk level and surface as explicit warnings
 - Confidence decay: memories age (90-day or 180-day half-life). Stale guidance gets flagged, not blindly trusted
 - Epistemic stress detection: when evidence is contradictory, stale, or too thin, the preflight card says "insufficient evidence" instead of guessing
+- Search quality transparency: `search_codebase` includes `searchQuality` (`ok`/`low_confidence`, signals, confidence, next steps) so ambiguous retrieval is explicit instead of hidden
 
 ### Discovers
 
@@ -118,13 +119,13 @@ Hybrid search (BM25 keyword 30% + vector embeddings 70%) with structured filters
 
 Tested against a real enterprise Angular codebase (~30k files):
 
-| What was measured                  | Result                                                   |
-| ---------------------------------- | -------------------------------------------------------- |
-| Internal library detection         | 336 uses of `@company/ui-toolkit` vs 3 direct PrimeNG   |
-| DI pattern consensus               | 98% `inject()` adoption detected, constructor DI flagged |
-| Test framework detection           | 74% Jest, 26% Jasmine/Karma, per-module awareness        |
-| Wrapper discovery                  | `ToastEventService`, `DialogComponent` surfaced over raw |
-| Golden file identification         | Top 5 files scoring 4-6 modern patterns each             |
+| What was measured          | Result                                                   |
+| -------------------------- | -------------------------------------------------------- |
+| Internal library detection | 336 uses of `@company/ui-toolkit` vs 3 direct PrimeNG    |
+| DI pattern consensus       | 98% `inject()` adoption detected, constructor DI flagged |
+| Test framework detection   | 74% Jest, 26% Jasmine/Karma, per-module awareness        |
+| Wrapper discovery          | `ToastEventService`, `DialogComponent` surfaced over raw |
+| Golden file identification | Top 5 files scoring 4-6 modern patterns each             |
 
 Without this context, AI agents default to generic patterns: raw PrimeNG imports, constructor injection, Jasmine syntax. With the second brain active, generated code matches the existing codebase on first attempt.
 
@@ -278,7 +279,7 @@ This tool runs locally on your machine.
 
 - **Initial indexing**: First run may take several minutes (e.g., 2-5 min for 30k files) to compute embeddings.
 - **Subsequent queries**: Instant (milliseconds) from cache.
-- **Updates**: `refresh_index` re-scans the codebase. True incremental indexing (processing only changed files) is on the roadmap.
+- **Updates**: `refresh_index` supports full or incremental mode (`incrementalOnly: true`) to process only changed files.
 
 ## Links
 

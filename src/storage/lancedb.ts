@@ -121,7 +121,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
           whereConditions.push(`framework = '${filters.framework}'`);
         }
         if (filters.componentType) {
-          whereConditions.push(`componentType = '${filters.componentType}'`);
+          whereConditions.push(`"componentType" = '${filters.componentType}'`);
         }
         if (filters.layer) {
           whereConditions.push(`layer = '${filters.layer}'`);
@@ -184,7 +184,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
       // Escape single quotes in file paths to prevent SQL injection
       const escaped = filePaths.map((p) => p.replace(/'/g, "''"));
       const inClause = escaped.map((p) => `'${p}'`).join(', ');
-      await this.table.delete(`filePath IN (${inClause})`);
+      await this.table.delete(`"filePath" IN (${inClause})`);
 
       const countAfter = await this.table.countRows();
       const deleted = countBefore - countAfter;

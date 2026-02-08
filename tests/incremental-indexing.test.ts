@@ -66,6 +66,59 @@ describe('Incremental Indexing', () => {
     expect(stats.duration).toBeLessThan(5000);
   });
 
+  it('should preserve indexedFiles and totalChunks in short-circuit (nothing changed)', async () => {
+    // Use files substantial enough to produce chunks
+    await fs.writeFile(path.join(tempDir, 'service.ts'), [
+      'import { Injectable } from "@angular/core";',
+      '',
+      '@Injectable({ providedIn: "root" })',
+      'export class UserService {',
+      '  private users: string[] = [];',
+      '',
+      '  getUsers(): string[] {',
+      '    return this.users;',
+      '  }',
+      '',
+      '  addUser(name: string): void {',
+      '    this.users.push(name);',
+      '  }',
+      '}'
+    ].join('\n'));
+    await fs.writeFile(path.join(tempDir, 'utils.ts'), [
+      'export function formatDate(date: Date): string {',
+      '  return date.toISOString().split("T")[0];',
+      '}',
+      '',
+      'export function capitalize(str: string): string {',
+      '  return str.charAt(0).toUpperCase() + str.slice(1);',
+      '}',
+      '',
+      'export function range(n: number): number[] {',
+      '  return Array.from({ length: n }, (_, i) => i);',
+      '}'
+    ].join('\n'));
+
+    // Full index first
+    const indexer1 = new CodebaseIndexer({
+      rootPath: tempDir,
+      config: { skipEmbedding: true }
+    });
+    const fullStats = await indexer1.index();
+
+    // Incremental index — nothing changed (short-circuit)
+    const indexer2 = new CodebaseIndexer({
+      rootPath: tempDir,
+      config: { skipEmbedding: true },
+      incrementalOnly: true
+    });
+    const incStats = await indexer2.index();
+
+    // Key invariant: short-circuit stats must match full index, not reset to 0
+    expect(incStats.indexedFiles).toBe(fullStats.indexedFiles);
+    expect(incStats.totalChunks).toBe(fullStats.totalChunks);
+    expect(incStats.totalFiles).toBe(fullStats.totalFiles);
+  });
+
   it('should detect changed files in incremental mode', async () => {
     await fs.writeFile(path.join(tempDir, 'index.ts'), 'export const x = 1;');
 

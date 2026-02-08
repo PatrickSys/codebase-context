@@ -575,11 +575,9 @@ export class PatternDetector {
         this.track('unitTestFramework', detected.unit);
       }
 
-      // Legacy testingFramework tracker for backward compatibility
-      // Prioritize e2e if detected, otherwise unit
-      if (detected.e2e) {
-        this.track('testingFramework', detected.e2e);
-      } else if (detected.unit && detected.unit !== 'Generic Test') {
+      // Keep testingFramework aligned with unit tests only.
+      // e2e trends are tracked separately via e2eFramework.
+      if (detected.unit && detected.unit !== 'Generic Test') {
         this.track('testingFramework', detected.unit);
       }
 

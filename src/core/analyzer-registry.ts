@@ -70,7 +70,9 @@ export class AnalyzerRegistry {
     const analyzer = this.findAnalyzer(filePath, content);
 
     if (!analyzer) {
-      console.warn(`No analyzer found for file: ${filePath}`);
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error(`[DEBUG] No analyzer found for file: ${filePath}`);
+      }
       return null;
     }
 

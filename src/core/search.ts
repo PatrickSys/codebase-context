@@ -11,6 +11,8 @@ import { EmbeddingProvider, getEmbeddingProvider } from '../embeddings/index.js'
 import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import { IndexCorruptedError } from '../errors/index.js';
+import { isTestingRelatedQuery } from '../preflight/query-scope.js';
+import { assessSearchQuality } from './search-quality.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -23,14 +25,76 @@ export interface SearchOptions {
   useKeywordSearch?: boolean;
   semanticWeight?: number;
   keywordWeight?: number;
+  profile?: SearchIntentProfile;
+  enableQueryExpansion?: boolean;
+  enableLowConfidenceRescue?: boolean;
+  candidateFloor?: number;
+}
+
+export type SearchIntentProfile = 'explore' | 'edit' | 'refactor' | 'migrate';
+
+interface QueryVariant {
+  query: string;
+  weight: number;
 }
 
 const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   useSemanticSearch: true,
   useKeywordSearch: true,
   semanticWeight: 0.7,
-  keywordWeight: 0.3
+  keywordWeight: 0.3,
+  profile: 'explore',
+  enableQueryExpansion: true,
+  enableLowConfidenceRescue: true,
+  candidateFloor: 30
 };
+
+const QUERY_EXPANSION_HINTS: Array<{ pattern: RegExp; terms: string[] }> = [
+  {
+    pattern: /\b(auth|authentication|login|signin|sign-in|session|token|oauth)\b/i,
+    terms: ['auth', 'login', 'token', 'session', 'guard', 'oauth']
+  },
+  {
+    pattern: /\b(route|routes|routing|router|navigate|navigation|redirect|path)\b/i,
+    terms: ['router', 'route', 'navigation', 'redirect', 'path']
+  },
+  {
+    pattern: /\b(config|configuration|configure|setup|register|provider|providers|bootstrap)\b/i,
+    terms: ['config', 'setup', 'register', 'provider', 'bootstrap']
+  },
+  {
+    pattern: /\b(role|roles|permission|permissions|authorization|authorisation|access)\b/i,
+    terms: ['roles', 'permissions', 'access', 'policy', 'guard']
+  },
+  {
+    pattern: /\b(interceptor|middleware|request|response|http)\b/i,
+    terms: ['interceptor', 'middleware', 'http', 'request', 'response']
+  },
+  {
+    pattern: /\b(theme|styles?|styling|palette|color|branding|upload)\b/i,
+    terms: ['theme', 'styles', 'palette', 'color', 'branding', 'upload']
+  }
+];
+
+const QUERY_STOP_WORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'to',
+  'of',
+  'for',
+  'and',
+  'or',
+  'with',
+  'in',
+  'on',
+  'by',
+  'how',
+  'are',
+  'is',
+  'after',
+  'before'
+]);
 
 export class CodebaseSearcher {
   private rootPath: string;
@@ -197,71 +261,116 @@ export class CodebaseSearcher {
     return { trend: 'Stable' };
   }
 
-  async search(
-    query: string,
-    limit: number = 5,
-    filters?: SearchFilters,
-    options: SearchOptions = DEFAULT_SEARCH_OPTIONS
-  ): Promise<SearchResult[]> {
-    if (!this.initialized) {
-      await this.initialize();
-    }
+  private isTestFile(filePath: string): boolean {
+    const normalized = filePath.toLowerCase().replace(/\\/g, '/');
+    return (
+      normalized.includes('.spec.') ||
+      normalized.includes('.test.') ||
+      normalized.includes('/e2e/') ||
+      normalized.includes('/__tests__/')
+    );
+  }
 
-    const { useSemanticSearch, useKeywordSearch, semanticWeight, keywordWeight } = {
-      ...DEFAULT_SEARCH_OPTIONS,
-      ...options
-    };
+  private normalizeQueryTerms(query: string): string[] {
+    return query
+      .toLowerCase()
+      .split(/[^a-z0-9_]+/)
+      .filter((term) => term.length > 2 && !QUERY_STOP_WORDS.has(term));
+  }
 
-    const results: Map<string, { chunk: CodeChunk; scores: number[] }> = new Map();
+  private buildQueryVariants(query: string, maxExpansions: number): QueryVariant[] {
+    const variants: QueryVariant[] = [{ query, weight: 1 }];
+    if (maxExpansions <= 0) return variants;
 
-    if (useSemanticSearch && this.embeddingProvider && this.storageProvider) {
-      try {
-        const vectorResults = await this.semanticSearch(query, limit * 2, filters);
+    const normalized = query.toLowerCase();
+    const terms = new Set(this.normalizeQueryTerms(query));
 
-        vectorResults.forEach((result) => {
-          const id = result.chunk.id;
-          const existing = results.get(id);
-
-          if (existing) {
-            existing.scores.push(result.score * (semanticWeight || 0.7));
-          } else {
-            results.set(id, {
-              chunk: result.chunk,
-              scores: [result.score * (semanticWeight || 0.7)]
-            });
-          }
-        });
-      } catch (error) {
-        if (error instanceof IndexCorruptedError) {
-          throw error; // Propagate to handler for auto-heal
+    for (const hint of QUERY_EXPANSION_HINTS) {
+      if (!hint.pattern.test(query)) continue;
+      for (const term of hint.terms) {
+        if (!normalized.includes(term)) {
+          terms.add(term);
         }
-        console.warn('Semantic search failed:', error);
       }
     }
 
-    if (useKeywordSearch && this.fuseIndex) {
-      try {
-        const keywordResults = await this.keywordSearch(query, limit * 2, filters);
+    const addedTerms = Array.from(terms).filter((term) => !normalized.includes(term));
+    if (addedTerms.length === 0) return variants;
 
-        keywordResults.forEach((result) => {
-          const id = result.chunk.id;
-          const existing = results.get(id);
+    const firstExpansion = `${query} ${addedTerms.slice(0, 6).join(' ')}`.trim();
+    if (firstExpansion !== query) {
+      variants.push({ query: firstExpansion, weight: 0.35 });
+    }
 
-          if (existing) {
-            existing.scores.push(result.score * (keywordWeight || 0.3));
-          } else {
-            results.set(id, {
-              chunk: result.chunk,
-              scores: [result.score * (keywordWeight || 0.3)]
-            });
-          }
-        });
-      } catch (error) {
-        console.warn('Keyword search failed:', error);
+    if (maxExpansions > 1 && addedTerms.length > 6) {
+      const secondExpansion = `${query} ${addedTerms.slice(6, 12).join(' ')}`.trim();
+      if (secondExpansion !== query) {
+        variants.push({ query: secondExpansion, weight: 0.25 });
       }
     }
 
-    const combinedResults: SearchResult[] = Array.from(results.entries())
+    return variants.slice(0, 1 + maxExpansions);
+  }
+
+  private isCompositionRootFile(filePath: string): boolean {
+    const normalized = filePath.toLowerCase().replace(/\\/g, '/');
+    const base = path.basename(normalized);
+
+    if (/^(main|index|bootstrap|startup)\./.test(base)) return true;
+
+    return (
+      normalized.includes('/routes') ||
+      normalized.includes('/routing') ||
+      normalized.includes('/router') ||
+      normalized.includes('/config') ||
+      normalized.includes('/providers')
+    );
+  }
+
+  private queryPathTokenOverlap(filePath: string, query: string): number {
+    const queryTerms = new Set(this.normalizeQueryTerms(query));
+    if (queryTerms.size === 0) return 0;
+
+    const pathTerms = this.normalizeQueryTerms(filePath.replace(/\\/g, '/'));
+    return pathTerms.reduce((count, term) => (queryTerms.has(term) ? count + 1 : count), 0);
+  }
+
+  private isLikelyWiringOrFlowQuery(query: string): boolean {
+    return /\b(route|router|routing|navigate|navigation|redirect|auth|authentication|login|provider|register|config|configuration|interceptor|middleware)\b/i.test(
+      query
+    );
+  }
+
+  private isActionOrHowQuery(query: string): boolean {
+    return /\b(how|where|configure|configured|setup|register|wire|wiring|navigate|redirect|login|authenticate|copy|upload|handle|create|update|delete)\b/i.test(
+      query
+    );
+  }
+
+  private isDefinitionHeavyResult(chunk: CodeChunk): boolean {
+    const normalizedPath = chunk.filePath.toLowerCase().replace(/\\/g, '/');
+    const componentType = (chunk.componentType || '').toLowerCase();
+
+    if (['type', 'interface', 'enum', 'constant'].includes(componentType)) return true;
+
+    return (
+      normalizedPath.includes('/models/') ||
+      normalizedPath.includes('/interfaces/') ||
+      normalizedPath.includes('/types/') ||
+      normalizedPath.includes('/constants')
+    );
+  }
+
+  private scoreAndSortResults(
+    query: string,
+    limit: number,
+    results: Map<string, { chunk: CodeChunk; scores: number[] }>,
+    profile: SearchIntentProfile
+  ): SearchResult[] {
+    const likelyWiringQuery = this.isLikelyWiringOrFlowQuery(query);
+    const actionQuery = this.isActionOrHowQuery(query);
+
+    return Array.from(results.entries())
       .map(([_id, { chunk, scores }]) => {
         // Calculate base combined score
         let combinedScore = scores.reduce((sum, score) => sum + score, 0);
@@ -270,14 +379,44 @@ export class CodebaseSearcher {
         // If both semantic and keyword matched, max possible is ~1.0
         combinedScore = Math.min(1.0, combinedScore);
 
-        // Boost scores for Angular components with proper detection
-        if (chunk.componentType && chunk.framework === 'angular') {
-          combinedScore = Math.min(1.0, combinedScore * 1.3);
+        // Slight boost when analyzer identified a concrete component type
+        if (chunk.componentType && chunk.componentType !== 'unknown') {
+          combinedScore = Math.min(1.0, combinedScore * 1.1);
         }
 
         // Boost if layer is detected
         if (chunk.layer && chunk.layer !== 'unknown') {
           combinedScore = Math.min(1.0, combinedScore * 1.1);
+        }
+
+        // Query-aware reranking to reduce noisy matches in practical workflows.
+        if (!isTestingRelatedQuery(query) && this.isTestFile(chunk.filePath)) {
+          combinedScore = combinedScore * 0.75;
+        }
+
+        if (actionQuery && this.isDefinitionHeavyResult(chunk)) {
+          combinedScore = combinedScore * 0.82;
+        }
+
+        if (
+          actionQuery &&
+          ['service', 'component', 'interceptor', 'guard', 'module', 'resolver'].includes(
+            (chunk.componentType || '').toLowerCase()
+          )
+        ) {
+          combinedScore = Math.min(1.0, combinedScore * 1.06);
+        }
+
+        // Light intent-aware boost for likely wiring/configuration queries.
+        if (likelyWiringQuery && profile !== 'explore') {
+          if (this.isCompositionRootFile(chunk.filePath)) {
+            combinedScore = Math.min(1.0, combinedScore * 1.12);
+          }
+        }
+
+        const pathOverlap = this.queryPathTokenOverlap(chunk.filePath, query);
+        if (pathOverlap >= 2) {
+          combinedScore = Math.min(1.0, combinedScore * 1.08);
         }
 
         // v1.2: Detect pattern trend and apply momentum boost
@@ -311,8 +450,177 @@ export class CodebaseSearcher {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
+  }
 
-    return combinedResults;
+  private pickBetterResultSet(
+    query: string,
+    primary: SearchResult[],
+    rescue: SearchResult[]
+  ): SearchResult[] {
+    const primaryQuality = assessSearchQuality(query, primary);
+    const rescueQuality = assessSearchQuality(query, rescue);
+
+    if (
+      rescueQuality.status === 'ok' &&
+      primaryQuality.status === 'low_confidence' &&
+      rescueQuality.confidence >= primaryQuality.confidence
+    ) {
+      return rescue;
+    }
+
+    if (rescueQuality.confidence >= primaryQuality.confidence + 0.05) {
+      return rescue;
+    }
+
+    return primary;
+  }
+
+  private async collectHybridMatches(
+    queryVariants: QueryVariant[],
+    candidateLimit: number,
+    filters: SearchFilters | undefined,
+    useSemanticSearch: boolean,
+    useKeywordSearch: boolean,
+    semanticWeight: number,
+    keywordWeight: number
+  ): Promise<Map<string, { chunk: CodeChunk; scores: number[] }>> {
+    const results: Map<string, { chunk: CodeChunk; scores: number[] }> = new Map();
+
+    if (useSemanticSearch && this.embeddingProvider && this.storageProvider) {
+      try {
+        for (const variant of queryVariants) {
+          const vectorResults = await this.semanticSearch(variant.query, candidateLimit, filters);
+
+          vectorResults.forEach((result) => {
+            const id = result.chunk.id;
+            const weightedScore = result.score * semanticWeight * variant.weight;
+            const existing = results.get(id);
+
+            if (existing) {
+              existing.scores.push(weightedScore);
+            } else {
+              results.set(id, {
+                chunk: result.chunk,
+                scores: [weightedScore]
+              });
+            }
+          });
+        }
+      } catch (error) {
+        if (error instanceof IndexCorruptedError) {
+          throw error; // Propagate to handler for auto-heal
+        }
+        console.warn('Semantic search failed:', error);
+      }
+    }
+
+    if (useKeywordSearch && this.fuseIndex) {
+      try {
+        for (const variant of queryVariants) {
+          const keywordResults = await this.keywordSearch(variant.query, candidateLimit, filters);
+
+          keywordResults.forEach((result) => {
+            const id = result.chunk.id;
+            const weightedScore = result.score * keywordWeight * variant.weight;
+            const existing = results.get(id);
+
+            if (existing) {
+              existing.scores.push(weightedScore);
+            } else {
+              results.set(id, {
+                chunk: result.chunk,
+                scores: [weightedScore]
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.warn('Keyword search failed:', error);
+      }
+    }
+
+    return results;
+  }
+
+  async search(
+    query: string,
+    limit: number = 5,
+    filters?: SearchFilters,
+    options: SearchOptions = DEFAULT_SEARCH_OPTIONS
+  ): Promise<SearchResult[]> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    const {
+      useSemanticSearch,
+      useKeywordSearch,
+      semanticWeight,
+      keywordWeight,
+      profile,
+      enableQueryExpansion,
+      enableLowConfidenceRescue,
+      candidateFloor
+    } = {
+      ...DEFAULT_SEARCH_OPTIONS,
+      ...options
+    };
+
+    const candidateLimit = Math.max(limit * 2, candidateFloor || 30);
+    const primaryVariants = this.buildQueryVariants(query, enableQueryExpansion ? 1 : 0);
+
+    const primaryMatches = await this.collectHybridMatches(
+      primaryVariants,
+      candidateLimit,
+      filters,
+      Boolean(useSemanticSearch),
+      Boolean(useKeywordSearch),
+      semanticWeight || 0.7,
+      keywordWeight || 0.3
+    );
+
+    const primaryResults = this.scoreAndSortResults(
+      query,
+      limit,
+      primaryMatches,
+      (profile || 'explore') as SearchIntentProfile
+    );
+
+    if (!enableLowConfidenceRescue) {
+      return primaryResults;
+    }
+
+    const primaryQuality = assessSearchQuality(query, primaryResults);
+    if (primaryQuality.status !== 'low_confidence') {
+      return primaryResults;
+    }
+
+    const rescueVariants = this.buildQueryVariants(query, 2).slice(1);
+    if (rescueVariants.length === 0) {
+      return primaryResults;
+    }
+
+    const rescueMatches = await this.collectHybridMatches(
+      rescueVariants.map((variant, index) => ({
+        query: variant.query,
+        weight: index === 0 ? 1 : 0.8
+      })),
+      candidateLimit,
+      filters,
+      Boolean(useSemanticSearch),
+      Boolean(useKeywordSearch),
+      semanticWeight || 0.7,
+      keywordWeight || 0.3
+    );
+
+    const rescueResults = this.scoreAndSortResults(
+      query,
+      limit,
+      rescueMatches,
+      (profile || 'explore') as SearchIntentProfile
+    );
+
+    return this.pickBetterResultSet(query, primaryResults, rescueResults);
   }
 
   private generateSummary(chunk: CodeChunk): string {
@@ -364,7 +672,7 @@ export class CodebaseSearcher {
     return `${langMap[ext] || ext.toUpperCase()} in ${fileName}.`;
   }
 
-  private generateSnippet(content: string, maxLines: number = 100): string {
+  private generateSnippet(content: string, maxLines: number = 20): string {
     const lines = content.split('\n');
     if (lines.length <= maxLines) {
       return content;

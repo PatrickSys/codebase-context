@@ -352,10 +352,25 @@ export interface SearchResult {
   /** Warning if this result uses declining/legacy patterns */
   patternWarning?: string;
 
+  // v1.5: Relationship enrichment
+  /** Structured relationship data from the import graph and git history */
+  relationships?: RelationshipData;
+
   // Optional detailed context (for agent to request if needed)
   fullContent?: string; // Only included if explicitly requested
   relatedChunks?: CodeChunk[];
   highlights?: TextHighlight[];
+}
+
+export interface RelationshipData {
+  /** Files that import this result */
+  importedBy?: string[];
+  /** Files this result depends on */
+  imports?: string[];
+  /** Test files covering this (heuristic: same basename + .spec/.test) */
+  testedIn?: string[];
+  /** ISO date from git log */
+  lastModified?: string;
 }
 
 export interface TextHighlight {

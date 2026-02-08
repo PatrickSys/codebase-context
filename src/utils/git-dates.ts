@@ -7,6 +7,20 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+const commitDateCache = new Map<string, Map<string, Date>>();
+
+function normalizeRootPath(rootPath: string): string {
+  return rootPath.replace(/\\/g, '/').toLowerCase();
+}
+
+export function clearFileCommitDatesCache(rootPath?: string): void {
+  if (rootPath) {
+    commitDateCache.delete(normalizeRootPath(rootPath));
+    return;
+  }
+
+  commitDateCache.clear();
+}
 
 /**
  * Get the last commit date for each file in the repository.
@@ -16,6 +30,15 @@ const execAsync = promisify(exec);
  * @returns Map of relative file paths to their last commit date
  */
 export async function getFileCommitDates(rootPath: string): Promise<Map<string, Date>> {
+  const cacheKey = normalizeRootPath(rootPath);
+  const cached = commitDateCache.get(cacheKey);
+  if (cached) {
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error(`[git-dates] Cache hit for ${cacheKey}`);
+    }
+    return new Map(cached);
+  }
+
   const fileDates = new Map<string, Date>();
 
   try {
@@ -57,6 +80,7 @@ export async function getFileCommitDates(rootPath: string): Promise<Map<string, 
     }
   }
 
+  commitDateCache.set(cacheKey, new Map(fileDates));
   return fileDates;
 }
 

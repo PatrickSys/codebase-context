@@ -19,7 +19,7 @@ describe('LanceDBStorageProvider corruption detection', () => {
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lancedb-test-'));
     lancedb.connect.mockReset();
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(async () => {
@@ -102,5 +102,49 @@ describe('LanceDBStorageProvider corruption detection', () => {
 
     const results = await provider.search([0.1, 0.2], 5);
     expect(results).toEqual([]);
+  });
+
+  it('quotes filePath column when deleting by file paths', async () => {
+    const { LanceDBStorageProvider } = await import('../src/storage/lancedb.js');
+    const provider = new LanceDBStorageProvider() as any;
+
+    const deleteSpy = vi.fn(async () => {});
+    provider.initialized = true;
+    provider.table = {
+      countRows: vi.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(7),
+      delete: deleteSpy
+    };
+
+    const deleted = await provider.deleteByFilePaths(['C:/repo/src/a.ts', "C:/repo/src/b'test.ts"]);
+
+    expect(deleted).toBe(3);
+    expect(deleteSpy).toHaveBeenCalledWith(
+      "\"filePath\" IN ('C:/repo/src/a.ts', 'C:/repo/src/b''test.ts')"
+    );
+  });
+
+  it('quotes componentType column when applying search filters', async () => {
+    const { LanceDBStorageProvider } = await import('../src/storage/lancedb.js');
+    const provider = new LanceDBStorageProvider() as any;
+
+    const whereSpy = vi.fn(() => query);
+    const query = {
+      limit: vi.fn(() => query),
+      where: whereSpy,
+      toArray: vi.fn(async () => [])
+    };
+
+    provider.initialized = true;
+    provider.table = {
+      vectorSearch: vi.fn(() => query)
+    };
+
+    const results = await provider.search([0.1, 0.2], 5, {
+      componentType: 'service',
+      layer: 'business'
+    });
+
+    expect(results).toEqual([]);
+    expect(whereSpy).toHaveBeenCalledWith("\"componentType\" = 'service' AND layer = 'business'");
   });
 });

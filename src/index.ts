@@ -25,6 +25,7 @@ import { CodebaseIndexer } from './core/indexer.js';
 import type {
   IndexingStats,
   SearchResult,
+  RelationshipData,
   Memory,
   MemoryCategory,
   MemoryType
@@ -34,6 +35,7 @@ import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { InternalFileGraph } from './utils/usage-tracker.js';
+import { getFileCommitDates } from './utils/git-dates.js';
 import { IndexCorruptedError } from './errors/index.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
@@ -51,6 +53,14 @@ import {
 } from './memory/store.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import { buildEvidenceLock } from './preflight/evidence-lock.js';
+import { shouldIncludePatternConflictCategory } from './preflight/query-scope.js';
+import {
+  isComplementaryPatternCategory,
+  isComplementaryPatternConflict,
+  shouldSkipLegacyTestingFrameworkCategory
+} from './patterns/semantics.js';
+import { CONTEXT_RESOURCE_URI, isContextResourceUri } from './resources/uri.js';
+import { assessSearchQuality } from './core/search-quality.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -434,7 +444,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // MCP Resources - Proactive context injection
 const RESOURCES: Resource[] = [
   {
-    uri: 'codebase://context',
+    uri: CONTEXT_RESOURCE_URI,
     name: 'Codebase Intelligence',
     description:
       'Automatic codebase context: libraries used, team patterns, and conventions. ' +
@@ -494,17 +504,47 @@ async function generateCodebaseContext(): Promise<string> {
 
     // Pattern consensus
     if (intelligence.patterns && Object.keys(intelligence.patterns).length > 0) {
+      const patterns = intelligence.patterns as Record<string, any>;
       lines.push("## YOUR Codebase's Actual Patterns (Not Generic Best Practices)");
       lines.push('');
       lines.push('These patterns were detected by analyzing your actual code.');
       lines.push('This is what YOUR team does in practice, not what tutorials recommend.');
       lines.push('');
 
-      for (const [category, data] of Object.entries(intelligence.patterns)) {
+      for (const [category, data] of Object.entries(patterns)) {
+        if (shouldSkipLegacyTestingFrameworkCategory(category, patterns)) {
+          continue;
+        }
+
         const patternData: any = data;
         const primary = patternData.primary;
+        const alternatives = patternData.alsoDetected ?? [];
 
         if (!primary) continue;
+
+        if (
+          isComplementaryPatternCategory(
+            category,
+            [primary.name, ...alternatives.map((alt: any) => alt.name)].filter(Boolean)
+          )
+        ) {
+          const secondary = alternatives[0];
+          if (secondary) {
+            const categoryName = category
+              .replace(/([A-Z])/g, ' $1')
+              .trim()
+              .replace(/^./, (str: string) => str.toUpperCase());
+            lines.push(
+              `### ${categoryName}: **${primary.name}** (${primary.frequency}) + **${secondary.name}** (${secondary.frequency})`
+            );
+            lines.push(
+              '   → Computed and effect are complementary Signals primitives and are commonly used together.'
+            );
+            lines.push('   → Treat this as balanced usage, not a hard split decision.');
+            lines.push('');
+            continue;
+          }
+        }
 
         const percentage = parseInt(primary.frequency);
         const categoryName = category
@@ -520,8 +560,8 @@ async function generateCodebaseContext(): Promise<string> {
             `### ${categoryName}: **${primary.name}** (${primary.frequency} - strong consensus)`
           );
           lines.push(`   → Your team strongly prefers ${primary.name}`);
-          if (patternData.alsoDetected?.length) {
-            const alt = patternData.alsoDetected[0];
+          if (alternatives.length) {
+            const alt = alternatives[0];
             lines.push(
               `   → Minority pattern: ${alt.name} (${alt.frequency}) - avoid for new code`
             );
@@ -529,9 +569,9 @@ async function generateCodebaseContext(): Promise<string> {
         } else if (percentage >= 60) {
           lines.push(`### ${categoryName}: **${primary.name}** (${primary.frequency} - majority)`);
           lines.push(`   → Most code uses ${primary.name}, but not unanimous`);
-          if (patternData.alsoDetected?.length) {
+          if (alternatives.length) {
             lines.push(
-              `   → Also detected: ${patternData.alsoDetected[0].name} (${patternData.alsoDetected[0].frequency})`
+              `   → Also detected: ${alternatives[0].name} (${alternatives[0].frequency})`
             );
           }
         } else {
@@ -539,8 +579,8 @@ async function generateCodebaseContext(): Promise<string> {
           lines.push(`### ${categoryName}: ⚠️ NO TEAM CONSENSUS`);
           lines.push(`   Your codebase is split between multiple approaches:`);
           lines.push(`   - ${primary.name} (${primary.frequency})`);
-          if (patternData.alsoDetected?.length) {
-            for (const alt of patternData.alsoDetected.slice(0, 2)) {
+          if (alternatives.length) {
+            for (const alt of alternatives.slice(0, 2)) {
               lines.push(`   - ${alt.name} (${alt.frequency})`);
             }
           }
@@ -566,13 +606,13 @@ async function generateCodebaseContext(): Promise<string> {
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri;
 
-  if (uri === 'codebase://context') {
+  if (isContextResourceUri(uri)) {
     const content = await generateCodebaseContext();
 
     return {
       contents: [
         {
-          uri,
+          uri: CONTEXT_RESOURCE_URI,
           mimeType: 'text/plain',
           text: content
         }
@@ -733,9 +773,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const searcher = new CodebaseSearcher(ROOT_PATH);
         let results: SearchResult[];
+        const searchProfile =
+          intent && ['explore', 'edit', 'refactor', 'migrate'].includes(intent)
+            ? intent
+            : 'explore';
 
         try {
-          results = await searcher.search(query, limit || 5, filters);
+          results = await searcher.search(query, limit || 5, filters, {
+            profile: searchProfile
+          });
         } catch (error) {
           if (error instanceof IndexCorruptedError) {
             console.error('[Auto-Heal] Index corrupted. Triggering full re-index...');
@@ -746,7 +792,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               console.error('[Auto-Heal] Success. Retrying search...');
               const freshSearcher = new CodebaseSearcher(ROOT_PATH);
               try {
-                results = await freshSearcher.search(query, limit || 5, filters);
+                results = await freshSearcher.search(query, limit || 5, filters, {
+                  profile: searchProfile
+                });
               } catch (retryError) {
                 return {
                   content: [
@@ -801,14 +849,111 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           })
           .sort((a, b) => b.effectiveConfidence - a.effectiveConfidence);
 
+        // Load intelligence data for enrichment (all intents, not just preflight)
+        let intelligence: any = null;
+        try {
+          const intelligenceContent = await fs.readFile(PATHS.intelligence, 'utf-8');
+          intelligence = JSON.parse(intelligenceContent);
+        } catch {
+          /* graceful degradation — intelligence file may not exist yet */
+        }
+
+        // Build reverse import map from intelligence graph
+        const reverseImports = new Map<string, string[]>();
+        if (intelligence?.internalFileGraph?.imports) {
+          for (const [file, deps] of Object.entries<string[]>(
+            intelligence.internalFileGraph.imports
+          )) {
+            for (const dep of deps) {
+              if (!reverseImports.has(dep)) reverseImports.set(dep, []);
+              reverseImports.get(dep)!.push(file);
+            }
+          }
+        }
+
+        // Load git dates for lastModified enrichment
+        let gitDates: Map<string, Date> | null = null;
+        try {
+          gitDates = await getFileCommitDates(ROOT_PATH);
+        } catch {
+          /* not a git repo */
+        }
+
+        // Enrich a search result with relationship data
+        function enrichResult(r: SearchResult): RelationshipData | undefined {
+          const rPath = r.filePath;
+
+          // importedBy: files that import this result (reverse lookup)
+          const importedBy: string[] = [];
+          for (const [dep, importers] of reverseImports) {
+            if (dep.endsWith(rPath) || rPath.endsWith(dep)) {
+              importedBy.push(...importers);
+            }
+          }
+
+          // imports: files this result depends on (forward lookup)
+          const imports: string[] = [];
+          if (intelligence?.internalFileGraph?.imports) {
+            for (const [file, deps] of Object.entries<string[]>(
+              intelligence.internalFileGraph.imports
+            )) {
+              if (file.endsWith(rPath) || rPath.endsWith(file)) {
+                imports.push(...deps);
+              }
+            }
+          }
+
+          // testedIn: heuristic — same basename with .spec/.test extension
+          const testedIn: string[] = [];
+          const baseName = path.basename(rPath).replace(/\.[^.]+$/, '');
+          if (intelligence?.internalFileGraph?.imports) {
+            for (const file of Object.keys(intelligence.internalFileGraph.imports)) {
+              const fileBase = path.basename(file);
+              if (
+                (fileBase.includes('.spec.') || fileBase.includes('.test.')) &&
+                fileBase.startsWith(baseName)
+              ) {
+                testedIn.push(file);
+              }
+            }
+          }
+
+          // lastModified: from git dates
+          let lastModified: string | undefined;
+          if (gitDates) {
+            // Try matching by relative path (git dates use repo-relative forward-slash paths)
+            const relPath = path.relative(ROOT_PATH, rPath).replace(/\\/g, '/');
+            const date = gitDates.get(relPath);
+            if (date) {
+              lastModified = date.toISOString();
+            }
+          }
+
+          // Only return if we have at least one piece of data
+          if (
+            importedBy.length === 0 &&
+            imports.length === 0 &&
+            testedIn.length === 0 &&
+            !lastModified
+          ) {
+            return undefined;
+          }
+
+          return {
+            ...(importedBy.length > 0 && { importedBy }),
+            ...(imports.length > 0 && { imports }),
+            ...(testedIn.length > 0 && { testedIn }),
+            ...(lastModified && { lastModified })
+          };
+        }
+
+        const searchQuality = assessSearchQuality(query, results);
+
         // Compose preflight card for edit/refactor/migrate intents
         let preflight: any = undefined;
         const preflightIntents = ['edit', 'refactor', 'migrate'];
-        if (intent && preflightIntents.includes(intent)) {
+        if (intent && preflightIntents.includes(intent) && intelligence) {
           try {
-            const intelligenceContent = await fs.readFile(PATHS.intelligence, 'utf-8');
-            const intelligence = JSON.parse(intelligenceContent);
-
             // --- Avoid / Prefer patterns ---
             const avoidPatterns: any[] = [];
             const preferredPatterns: any[] = [];
@@ -927,13 +1072,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               primary: { name: string; adoption: string };
               alternative: { name: string; adoption: string };
             }> = [];
+            const hasUnitTestFramework = Boolean((patterns as any).unitTestFramework?.primary);
             for (const [cat, data] of Object.entries<any>(patterns)) {
+              if (shouldSkipLegacyTestingFrameworkCategory(cat, patterns as any)) continue;
+              if (!shouldIncludePatternConflictCategory(cat, query)) continue;
               if (!data.primary || !data.alsoDetected?.length) continue;
               const primaryFreq = parseFloat(data.primary.frequency) || 100;
               if (primaryFreq >= 80) continue;
               for (const alt of data.alsoDetected) {
                 const altFreq = parseFloat(alt.frequency) || 0;
                 if (altFreq >= 20) {
+                  if (isComplementaryPatternConflict(cat, data.primary.name, alt.name)) continue;
+                  if (hasUnitTestFramework && cat === 'testingFramework') continue;
                   patternConflicts.push({
                     category: cat,
                     primary: { name: data.primary.name, adoption: data.primary.frequency },
@@ -985,7 +1135,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               ...(failureWarnings.length > 0 && { failureWarnings })
             };
           } catch {
-            // Intelligence file not available — skip preflight, don't fail the search
+            // Preflight construction failed — skip preflight, don't fail the search
           }
         }
 
@@ -997,18 +1147,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 {
                   status: 'success',
                   ...(preflight && { preflight }),
-                  results: results.map((r) => ({
-                    summary: r.summary,
-                    snippet: r.snippet,
-                    filePath: `${r.filePath}:${r.startLine}-${r.endLine}`,
-                    score: r.score,
-                    relevanceReason: r.relevanceReason,
-                    componentType: r.componentType,
-                    layer: r.layer,
-                    framework: r.framework,
-                    trend: r.trend,
-                    patternWarning: r.patternWarning
-                  })),
+                  searchQuality,
+                  results: results.map((r) => {
+                    const relationships = enrichResult(r);
+                    return {
+                      summary: r.summary,
+                      snippet: r.snippet,
+                      filePath: `${r.filePath}:${r.startLine}-${r.endLine}`,
+                      score: r.score,
+                      relevanceReason: r.relevanceReason,
+                      componentType: r.componentType,
+                      layer: r.layer,
+                      framework: r.framework,
+                      trend: r.trend,
+                      patternWarning: r.patternWarning,
+                      ...(relationships && { relationships })
+                    };
+                  }),
                   totalResults: results.length,
                   ...(relatedMemories.length > 0 && {
                     relatedMemories: relatedMemories.slice(0, 5)
@@ -1269,6 +1424,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           } else if (category === 'state') {
             result.stateManagement = intelligence.patterns?.stateManagement;
           } else if (category === 'testing') {
+            result.unitTestFramework = intelligence.patterns?.unitTestFramework;
+            result.e2eFramework = intelligence.patterns?.e2eFramework;
             result.testingFramework = intelligence.patterns?.testingFramework;
             result.testMocking = intelligence.patterns?.testMocking;
           } else if (category === 'libraries') {
@@ -1306,7 +1463,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Detect pattern conflicts: primary < 80% and any alternative > 20%
           const conflicts: any[] = [];
           const patternsData = intelligence.patterns || {};
+          const hasUnitTestFramework = Boolean(patternsData.unitTestFramework?.primary);
           for (const [cat, data] of Object.entries<any>(patternsData)) {
+            if (shouldSkipLegacyTestingFrameworkCategory(cat, patternsData)) continue;
             if (category && category !== 'all' && cat !== category) continue;
             if (!data.primary || !data.alsoDetected?.length) continue;
 
@@ -1316,6 +1475,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             for (const alt of data.alsoDetected) {
               const altFreq = parseFloat(alt.frequency) || 0;
               if (altFreq < 20) continue;
+              if (isComplementaryPatternConflict(cat, data.primary.name, alt.name)) continue;
+              if (hasUnitTestFramework && cat === 'testingFramework') continue;
 
               conflicts.push({
                 category: cat,

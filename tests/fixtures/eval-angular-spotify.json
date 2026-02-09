@@ -1,0 +1,169 @@
+{
+  "description": "Generic eval set for Angular code search quality - 20 semantic queries",
+  "codebase": "angular-spotify",
+  "repository": "https://github.com/trungk18/angular-spotify",
+  "frozenDate": "2026-02-09",
+  "notes": "Queries designed to test SEMANTIC understanding, not keyword matching. Expected patterns are file name patterns that should match, not full paths.",
+  "queries": [
+    {
+      "id": 1,
+      "query": "skip to next song",
+      "category": "conceptual",
+      "expectedPatterns": ["player"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find player API with next() method. Tests understanding 'skip' -> 'next'"
+    },
+    {
+      "id": 2,
+      "query": "adjust audio volume",
+      "category": "conceptual",
+      "expectedPatterns": ["player"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find player API with setVolume() method. Tests 'adjust volume' concept"
+    },
+    {
+      "id": 3,
+      "query": "persist data across browser sessions",
+      "category": "conceptual",
+      "expectedPatterns": ["storage"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find local-storage service. Tests understanding persistence concept"
+    },
+    {
+      "id": 4,
+      "query": "add authorization token to API requests",
+      "category": "conceptual",
+      "expectedPatterns": ["auth", "interceptor"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find auth interceptor. Tests understanding of auth headers"
+    },
+    {
+      "id": 5,
+      "query": "handle side effects from user actions",
+      "category": "conceptual",
+      "expectedPatterns": ["effect"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find NgRx effects. Tests understanding of side effect pattern"
+    },
+    {
+      "id": 6,
+      "query": "switch playback to different device",
+      "category": "conceptual",
+      "expectedPatterns": ["player"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find player API with transferUserPlayback(). Tests device switching concept"
+    },
+    {
+      "id": 7,
+      "query": "remember user settings after page reload",
+      "category": "conceptual",
+      "expectedPatterns": ["storage", "settings"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find local-storage or settings services. Tests persistence concept"
+    },
+    {
+      "id": 8,
+      "query": "fetch recently played music",
+      "category": "conceptual",
+      "expectedPatterns": ["player", "recent"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find player API with getRecentPlayedTracks(). Tests history concept"
+    },
+    {
+      "id": 9,
+      "query": "track user interactions for analytics",
+      "category": "conceptual",
+      "expectedPatterns": ["analytics", "google"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find google-analytics service. Tests tracking concept"
+    },
+    {
+      "id": 10,
+      "query": "retrieve user's saved music collection",
+      "category": "conceptual",
+      "expectedPatterns": ["album", "api"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find album API with getUserSavedAlbums(). Tests library concept"
+    },
+    {
+      "id": 11,
+      "query": "handle unauthorized API responses",
+      "category": "multi-concept",
+      "expectedPatterns": ["unauthorized", "interceptor"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find unauthorized interceptor. Tests error handling + auth"
+    },
+    {
+      "id": 12,
+      "query": "manage application state for music albums",
+      "category": "multi-concept",
+      "expectedPatterns": ["album", "store"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find album store/reducer. Tests state management + domain"
+    },
+    {
+      "id": 13,
+      "query": "dispatch actions to update UI state",
+      "category": "multi-concept",
+      "expectedPatterns": ["action"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find *.action.ts files. Tests NgRx action concept"
+    },
+    {
+      "id": 14,
+      "query": "browse music categories from API",
+      "category": "multi-concept",
+      "expectedPatterns": ["browse", "categor"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find browse/categories API or store. Tests discovery + data fetching"
+    },
+    {
+      "id": 15,
+      "query": "select data from application store",
+      "category": "multi-concept",
+      "expectedPatterns": ["selector"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Should find *.selector.ts files. Tests NgRx selector concept"
+    },
+    {
+      "id": 16,
+      "query": "AlbumApiService",
+      "category": "exact-name",
+      "expectedPatterns": ["album", "api"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Exact class name lookup. Should find album-api.ts"
+    },
+    {
+      "id": 17,
+      "query": "PlaylistApiService",
+      "category": "exact-name",
+      "expectedPatterns": ["playlist", "api"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Exact class name lookup. Should find playlist-api.ts"
+    },
+    {
+      "id": 18,
+      "query": "LocalStorageService",
+      "category": "exact-name",
+      "expectedPatterns": ["storage"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Exact class name lookup. Should find local-storage.service.ts"
+    },
+    {
+      "id": 19,
+      "query": "ngrx effects implementation",
+      "category": "structural",
+      "expectedPatterns": ["effect"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Framework-specific pattern. Should find *.effect.ts files"
+    },
+    {
+      "id": 20,
+      "query": "http interceptor configuration",
+      "category": "structural",
+      "expectedPatterns": ["interceptor"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Framework-specific pattern. Should find *.interceptor.ts files"
+    }
+  ]
+}

@@ -131,6 +131,31 @@ Without this context, AI agents default to generic patterns: raw PrimeNG imports
 
 ## How It Works
 
+### Search Quality (v1.6.0)
+
+Codebase Context uses **weighted hybrid search** combining:
+- **BM25 keyword search** (30%) — Fast exact-match retrieval
+- **Vector semantic search** (70%) — Natural language understanding
+- **Reciprocal Rank Fusion (RRF)** — Robust rank-based score combination
+
+**Intent-Aware Classification:**
+Queries are classified into 5 types with optimized ranking:
+- `EXACT_NAME` — Literal class/function names → keyword-heavy
+- `CONCEPTUAL` — Natural language descriptions → semantic-heavy
+- `FLOW` — Action/navigation queries → boosts services/guards
+- `CONFIG` — Setup/wiring queries → boosts composition-root files
+- `WIRING` — DI/registration queries → boosts modules/providers
+
+**Quality Improvements in v1.6.0:**
+- 45% → 82% top-1 accuracy on intent/conceptual queries
+- 0% test-file contamination (hard-filtered before scoring)
+- Import-graph reranking (structural centrality boosts)
+- File-level deduplication (one best chunk per file)
+
+**⚠️ v1.6.0 requires full re-index** due to model and chunking changes.
+
+---
+
 The difference in practice:
 
 | Without second brain                     | With second brain                    |

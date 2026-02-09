@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.6.0](https://github.com/PatrickSys/codebase-context/compare/v1.5.1...v1.6.0) (2026-02-09)
+
+### Added
+
+- **Search Quality Overhaul** — 45% → 82% top-1 accuracy on intent/conceptual queries
+  - Intent-aware query classification (EXACT_NAME, CONCEPTUAL, FLOW, CONFIG, WIRING)
+  - Reciprocal Rank Fusion (RRF, k=60) replacing fragile CombSUM
+  - Hard test-file filtering (eliminates spec contamination)
+  - Import-graph proximity reranking (structural centrality)
+  - File-level deduplication (one best chunk per file)
+- **Evaluation Harness** — 11-query fixture with top-1 accuracy reporting (`tests/eval-harness.test.ts`)
+- **Embedding Upgrade** — Granite model support (47M params, 8192 context)
+- **Chunk Optimization** — 100→50 lines, overlap 10→0, merge small chunks
+
+### Changed
+
+- **Dependencies**: `@xenova/transformers` v2 → `@huggingface/transformers` v3
+- **Indexing**: Tighter chunks (50 lines) with zero overlap
+- **Search**: RRF fusion immune to score distribution differences
+
+### Fixed
+
+- Intent-blind search (conceptual queries now work correctly)
+- Spec file contamination (non-test queries no longer return test files)
+- Embedding truncation (granite's 8192 context eliminates limit)
+
+### BREAKING CHANGES
+
+**Re-index required** after upgrade due to model and chunking changes:
+- Existing `.codebase-context/` indices from v1.5.x incompatible
+- Run `refresh_index(incrementalOnly: false)` or delete `.codebase-context/` folder
+
 ## [1.5.1](https://github.com/PatrickSys/codebase-context/compare/v1.5.0...v1.5.1) (2026-02-08)
 
 

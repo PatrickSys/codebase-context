@@ -94,9 +94,7 @@ const PATHS = {
   vectorDb: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
 };
 
-// Legacy paths for migration
 const LEGACY_PATHS = {
-  // Pre-v1.5
   intelligence: path.join(ROOT_PATH, '.codebase-intelligence.json'),
   keywordIndex: path.join(ROOT_PATH, '.codebase-index.json'),
   vectorDb: path.join(ROOT_PATH, '.codebase-index')

@@ -147,10 +147,13 @@ Queries are classified into 5 types with optimized ranking:
 - `WIRING` — DI/registration queries → boosts modules/providers
 
 **Quality Improvements in v1.6.0:**
-- 45% → 82% top-1 accuracy on intent/conceptual queries
+- Intent-aware classification with optimized ranking per query type
 - 0% test-file contamination (hard-filtered before scoring)
 - Import-graph reranking (structural centrality boosts)
 - File-level deduplication (one best chunk per file)
+- Tighter chunking (100→50 lines, 0 overlap) with larger context models
+
+Early testing on internal and public codebases shows meaningful improvements in search quality, particularly for conceptual and intent-based queries.
 
 **⚠️ v1.6.0 requires full re-index** due to model and chunking changes.
 

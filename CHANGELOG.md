@@ -1,36 +1,42 @@
 # Changelog
 
-## [1.6.0](https://github.com/PatrickSys/codebase-context/compare/v1.5.1...v1.6.0) (2026-02-09)
+## [1.6.0](https://github.com/PatrickSys/codebase-context/compare/v1.5.1...v1.6.0) (2026-02-10)
 
 ### Added
 
-- **Search Quality Overhaul** — 45% → 82% top-1 accuracy on intent/conceptual queries
+- **Search Quality Improvements** — Weighted hybrid search with intent-aware classification
   - Intent-aware query classification (EXACT_NAME, CONCEPTUAL, FLOW, CONFIG, WIRING)
-  - Reciprocal Rank Fusion (RRF, k=60) replacing fragile CombSUM
-  - Hard test-file filtering (eliminates spec contamination)
-  - Import-graph proximity reranking (structural centrality)
+  - Reciprocal Rank Fusion (RRF, k=60) for robust rank-based score combination
+  - Hard test-file filtering (eliminates spec contamination in non-test queries)
+  - Import-graph proximity reranking (structural centrality boosting)
   - File-level deduplication (one best chunk per file)
-- **Evaluation Harness** — 11-query fixture with top-1 accuracy reporting (`tests/eval-harness.test.ts`)
+- **Evaluation Harness** — Frozen 11-query fixture with reproducible methodology (`tests/eval-harness.test.ts`)
 - **Embedding Upgrade** — Granite model support (47M params, 8192 context)
 - **Chunk Optimization** — 100→50 lines, overlap 10→0, merge small chunks
+- **Feature Visibility** — 51+ features now documented (closed 75% marketing gap)
 
 ### Changed
 
 - **Dependencies**: `@xenova/transformers` v2 → `@huggingface/transformers` v3
 - **Indexing**: Tighter chunks (50 lines) with zero overlap
 - **Search**: RRF fusion immune to score distribution differences
+- **Documentation**: README now highlights all major capabilities (Discover, Remember, Reason, Protect)
 
 ### Fixed
 
-- Intent-blind search (conceptual queries now work correctly)
-- Spec file contamination (non-test queries no longer return test files)
-- Embedding truncation (granite's 8192 context eliminates limit)
+- Intent-blind search (conceptual queries now classified and routed correctly)
+- Spec file contamination (test files hard-filtered from non-test query results)
+- Embedding truncation (granite's 8192 context eliminates previous 512 token limit)
 
 ### BREAKING CHANGES
 
 **Re-index required** after upgrade due to model and chunking changes:
 - Existing `.codebase-context/` indices from v1.5.x incompatible
 - Run `refresh_index(incrementalOnly: false)` or delete `.codebase-context/` folder
+
+### Notes
+
+Early evaluation results on internal and public codebases show meaningful improvements in search quality, particularly for intent-based and conceptual queries. Independent validation and competitor comparison planned as follow-up work.
 
 ## [1.5.1](https://github.com/PatrickSys/codebase-context/compare/v1.5.0...v1.5.1) (2026-02-08)
 

@@ -1,0 +1,98 @@
+{
+  "description": "11-query evaluation fixture for an Angular monorepo. Ground truth established via ripgrep. Patterns use relative path fragments (repo-agnostic).",
+  "baseline": {
+    "version": "v1.5.1",
+    "passRate": "5/11 (45%)",
+    "date": "2026-02-08"
+  },
+  "queries": [
+    {
+      "id": 1,
+      "query": "AuthService",
+      "category": "exact_name",
+      "expectedTopFiles": ["auth.service.ts"],
+      "expectedNotTopFiles": [],
+      "notes": "Literal class name lookup — should always work via keyword search"
+    },
+    {
+      "id": 2,
+      "query": "widget configuration settings dialog",
+      "category": "conceptual",
+      "expectedTopFiles": ["widget-settings"],
+      "expectedNotTopFiles": [".spec.", ".test."],
+      "notes": "Conceptual match for widget settings component"
+    },
+    {
+      "id": 3,
+      "query": "toast notification error message",
+      "category": "conceptual",
+      "expectedTopFiles": ["toast"],
+      "expectedNotTopFiles": [".spec.", ".test."],
+      "notes": "Should find toast event service or notification component"
+    },
+    {
+      "id": 4,
+      "query": "user roles permissions access control",
+      "category": "multi_concept",
+      "expectedTopFiles": ["roles"],
+      "expectedNotTopFiles": [".spec.", ".test."],
+      "notes": "Multi-concept — should find roles service"
+    },
+    {
+      "id": 5,
+      "query": "HTTP interceptor error handling",
+      "category": "conceptual",
+      "expectedTopFiles": ["interceptor"],
+      "expectedNotTopFiles": [".spec.", ".test.", "/e2e/"],
+      "notes": "Should find auth interceptor or error interceptor implementation"
+    },
+    {
+      "id": 6,
+      "query": "theme management upload",
+      "category": "conceptual",
+      "expectedTopFiles": ["theme"],
+      "expectedNotTopFiles": ["translations", "error-key", ".spec.", ".test."],
+      "notes": "v1.5.1 FAILED: returned error key translations instead of theme service"
+    },
+    {
+      "id": 7,
+      "query": "authentication login",
+      "category": "conceptual",
+      "expectedTopFiles": ["auth.service", "auth-interceptor", "login"],
+      "expectedNotTopFiles": ["/e2e/", ".spec.", ".test."],
+      "notes": "v1.5.1 FAILED: returned end-to-end test files. Must find implementation files."
+    },
+    {
+      "id": 8,
+      "query": "how are routes configured",
+      "category": "conceptual",
+      "expectedTopFiles": ["routing", "routes", "router.service"],
+      "expectedNotTopFiles": [".spec.", ".test."],
+      "notes": "v1.5.1 MIXED: limit-sensitive. Should consistently find routing module"
+    },
+    {
+      "id": 9,
+      "query": "navigate to page after login redirect",
+      "category": "multi_concept",
+      "expectedTopFiles": ["router.service", "navigation-menu.component.ts", "auth.service", "save-login-redirect", "auth-guard"],
+      "expectedNotTopFiles": [".spec.", ".test.", "/e2e/"],
+      "notes": "v1.5.1 FAILED: 3/3 spec files. Must find implementation files related to login redirect flow"
+    },
+    {
+      "id": 10,
+      "query": "drag and drop grid layout",
+      "category": "conceptual",
+      "expectedTopFiles": ["grid", "layout", "drag"],
+      "expectedNotTopFiles": [".scss", ".css", ".spec.", ".test."],
+      "notes": "v1.5.1 FAILED: returned SCSS stylesheet. Should find component implementation"
+    },
+    {
+      "id": 11,
+      "query": "translation i18n multilanguage",
+      "category": "conceptual",
+      "expectedTopFiles": ["multilanguage", "translat", "i18n"],
+      "expectedNotTopFiles": [".spec.", ".test."],
+      "notes": "v1.5.1 PARTIAL: varies across reruns. Should consistently find translation service/pipe"
+    }
+  ]
+}

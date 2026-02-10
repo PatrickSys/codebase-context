@@ -346,14 +346,9 @@ export interface SearchResult {
   layer?: ArchitecturalLayer;
   metadata: ChunkMetadata;
 
-  // v1.2: Pattern Momentum awareness
-  /** Pattern trend for this chunk: Rising (modern), Stable, or Declining (legacy) */
   trend?: 'Rising' | 'Stable' | 'Declining';
-  /** Warning if this result uses declining/legacy patterns */
   patternWarning?: string;
 
-  // v1.5: Relationship enrichment
-  /** Structured relationship data from the import graph and git history */
   relationships?: RelationshipData;
 
   // Optional detailed context (for agent to request if needed)

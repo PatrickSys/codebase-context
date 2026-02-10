@@ -21,7 +21,11 @@ import { AngularAnalyzer } from '../dist/analyzers/angular/index.js';
 import { GenericAnalyzer } from '../dist/analyzers/generic/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const evalFixture = JSON.parse(readFileSync(path.join(__dirname, '..', 'tests', 'fixtures', 'eval-queries.json'), 'utf-8'));
+const fixtureArg = process.argv.find(arg => arg.startsWith('--fixture='));
+const fixturePath = fixtureArg
+  ? path.resolve(fixtureArg.split('=')[1])
+  : path.join(__dirname, '..', 'tests', 'fixtures', 'eval-angular-spotify.json');
+const evalFixture = JSON.parse(readFileSync(fixturePath, 'utf-8'));
 
 // Register analyzers
 analyzerRegistry.register(new AngularAnalyzer());
@@ -104,13 +108,16 @@ async function main() {
     const top3Files = results.slice(0, 3).map(r => r.filePath);
     const topScore = results.length > 0 ? results[0].score : 0;
 
-    // Evaluate
+    // Evaluate (support both old and new fixture formats)
+    const expectedPatterns = q.expectedPatterns || q.expectedTopFiles || [];
+    const expectedNotPatterns = q.expectedNotPatterns || q.expectedNotTopFiles || [];
+
     const top1Ok = topFile !== null &&
-      matchesPattern(topFile, q.expectedTopFiles) &&
-      !matchesPattern(topFile, q.expectedNotTopFiles);
+      matchesPattern(topFile, expectedPatterns) &&
+      !matchesPattern(topFile, expectedNotPatterns);
 
     const top3Ok = top3Files.some(
-      f => matchesPattern(f, q.expectedTopFiles) && !matchesPattern(f, q.expectedNotTopFiles)
+      f => matchesPattern(f, expectedPatterns) && !matchesPattern(f, expectedNotPatterns)
     );
 
     const specCount = top3Files.filter(f => isTestFile(f)).length;
@@ -127,7 +134,7 @@ async function main() {
     console.log(`  ${statusIcon} [${q.category}] #${q.id} "${q.query}"`);
     console.log(`       -> ${topFileShort} (score: ${topScore.toFixed(3)})${contNote}`);
     if (!top1Ok && topFile) {
-      console.log(`       expected pattern: ${q.expectedTopFiles.join(' | ')}`);
+      console.log(`       expected pattern: ${expectedPatterns.join(' | ')}`);
     }
 
     // Show top 3 for failures

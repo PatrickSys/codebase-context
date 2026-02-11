@@ -18,7 +18,7 @@ import {
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import { isCodeFile, isBinaryFile } from '../utils/language-detection.js';
-import { getEmbeddingProvider } from '../embeddings/index.js';
+import { getEmbeddingProvider, DEFAULT_MODEL } from '../embeddings/index.js';
 import { getStorageProvider, CodeChunkWithEmbedding } from '../storage/index.js';
 import {
   LibraryUsageTracker,
@@ -27,6 +27,7 @@ import {
   InternalFileGraph,
   FileExport
 } from '../utils/usage-tracker.js';
+import { mergeSmallChunks } from '../utils/chunking.js';
 import { getFileCommitDates } from '../utils/git-dates.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
@@ -95,9 +96,9 @@ export class CodebaseIndexer {
       exclude: ['node_modules/**', 'dist/**', 'build/**', '.git/**', 'coverage/**'],
       respectGitignore: true,
       parsing: {
-        maxFileSize: 1048576, // 1MB
-        chunkSize: 100,
-        chunkOverlap: 10,
+        maxFileSize: 1048576,
+        chunkSize: 50,
+        chunkOverlap: 0,
         parseTests: true,
         parseNodeModules: false
       },
@@ -113,8 +114,8 @@ export class CodebaseIndexer {
       },
       embedding: {
         provider: 'transformers',
-        model: 'Xenova/bge-small-en-v1.5',
-        batchSize: 100
+        model: DEFAULT_MODEL,
+        batchSize: 32
       },
       skipEmbedding: false,
       storage: {
@@ -310,9 +311,11 @@ export class CodebaseIndexer {
           if (result) {
             const isFileChanged = !filesToProcessSet || filesToProcessSet.has(file);
 
-            allChunks.push(...result.chunks);
+            const mergedChunks = mergeSmallChunks(result.chunks, 15);
+
+            allChunks.push(...mergedChunks);
             if (isFileChanged) {
-              changedChunks.push(...result.chunks);
+              changedChunks.push(...mergedChunks);
             }
             stats.indexedFiles++;
             stats.totalLines += content.split('\n').length;
@@ -482,20 +485,28 @@ export class CodebaseIndexer {
         const embeddingProvider = await getEmbeddingProvider(this.config.embedding);
 
         // Generate embeddings for all chunks
-        const batchSize = this.config.embedding?.batchSize || 32;
+        // Outer batch size controls how many chunks we collect before calling embedBatch.
+        // embedBatch internally sub-batches further based on model context size.
+        const batchSize = Math.min(this.config.embedding?.batchSize || 32, 32);
 
         for (let i = 0; i < chunksToEmbed.length; i += batchSize) {
           const batch = chunksToEmbed.slice(i, i + batchSize);
           const texts = batch.map((chunk) => {
-            // Create a searchable text representation
-            const parts = [chunk.content];
+            const meta: string[] = [];
+            if (chunk.relativePath) {
+              meta.push(`path:${chunk.relativePath}`);
+            }
+            if (chunk.componentType && chunk.componentType !== 'unknown') {
+              meta.push(`type:${chunk.componentType}`);
+            }
             if (chunk.metadata?.componentName) {
-              parts.unshift(`Component: ${chunk.metadata.componentName}`);
+              meta.push(`component:${chunk.metadata.componentName}`);
             }
-            if (chunk.componentType) {
-              parts.unshift(`Type: ${chunk.componentType}`);
+            if (chunk.layer && chunk.layer !== 'unknown') {
+              meta.push(`layer:${chunk.layer}`);
             }
-            return parts.join('\n');
+            const prefix = meta.length > 0 ? meta.join(' ') + '\n' : '';
+            return prefix + chunk.content;
           });
 
           const embeddings = await embeddingProvider.embedBatch(texts);

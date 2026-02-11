@@ -432,11 +432,9 @@ export class PatternDetector {
     const exampleKey = `${category}:${primaryName}`;
     const canonicalExample = this.canonicalExamples.get(exampleKey);
 
-    // v1.2 Fix: Use P90 robust date instead of raw max date
     const primaryDate = this.getRobustDate(category, primaryName);
     const primaryTrend = calculateTrend(primaryDate);
 
-    // v1.2 Fix: Detect if any alternative is Rising to inform primary guidance
     let hasRisingAlternative = false;
     let alternatives: Array<{
       name: string;

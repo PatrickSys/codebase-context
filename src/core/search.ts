@@ -13,6 +13,7 @@ import { analyzerRegistry } from './analyzer-registry.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import { isTestingRelatedQuery } from '../preflight/query-scope.js';
 import { assessSearchQuality } from './search-quality.js';
+import { rerank } from './reranker.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -29,24 +30,35 @@ export interface SearchOptions {
   enableQueryExpansion?: boolean;
   enableLowConfidenceRescue?: boolean;
   candidateFloor?: number;
+  /** Enable stage-2 cross-encoder reranking when top scores are ambiguous. Default: true. */
+  enableReranker?: boolean;
 }
 
 export type SearchIntentProfile = 'explore' | 'edit' | 'refactor' | 'migrate';
+
+type QueryIntent = 'EXACT_NAME' | 'CONCEPTUAL' | 'FLOW' | 'CONFIG' | 'WIRING';
 
 interface QueryVariant {
   query: string;
   weight: number;
 }
 
+interface IntentWeights {
+  semantic: number;
+  keyword: number;
+}
+
 const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   useSemanticSearch: true,
   useKeywordSearch: true,
-  semanticWeight: 0.7,
-  keywordWeight: 0.3,
+  // semanticWeight/keywordWeight intentionally omitted —
+  // intent classification provides per-query weights.
+  // Callers can still override by passing explicit values.
   profile: 'explore',
   enableQueryExpansion: true,
   enableLowConfidenceRescue: true,
-  candidateFloor: 30
+  candidateFloor: 30,
+  enableReranker: true
 };
 
 const QUERY_EXPANSION_HINTS: Array<{ pattern: RegExp; terms: string[] }> = [
@@ -108,12 +120,14 @@ export class CodebaseSearcher {
 
   private initialized = false;
 
-  // v1.2: Pattern intelligence for trend detection
+  // Pattern intelligence for trend detection
   private patternIntelligence: {
     decliningPatterns: Set<string>;
     risingPatterns: Set<string>;
     patternWarnings: Map<string, string>;
   } | null = null;
+
+  private importCentrality: Map<string, number> | null = null;
 
   constructor(rootPath: string) {
     this.rootPath = rootPath;
@@ -171,7 +185,7 @@ export class CodebaseSearcher {
   }
 
   /**
-   * v1.2: Load pattern intelligence for trend detection and warnings
+   * Load pattern intelligence for trend detection and warnings
    */
   private async loadPatternIntelligence(): Promise<void> {
     try {
@@ -218,17 +232,41 @@ export class CodebaseSearcher {
       console.error(
         `[search] Loaded pattern intelligence: ${decliningPatterns.size} declining, ${risingPatterns.size} rising patterns`
       );
+
+      this.importCentrality = new Map<string, number>();
+      if (intelligence.internalFileGraph && intelligence.internalFileGraph.imports) {
+        // Count how many files import each file (in-degree centrality)
+        const importCounts = new Map<string, number>();
+
+        for (const [_importingFile, importedFiles] of Object.entries(
+          intelligence.internalFileGraph.imports
+        )) {
+          const imports = importedFiles as string[];
+          for (const imported of imports) {
+            importCounts.set(imported, (importCounts.get(imported) || 0) + 1);
+          }
+        }
+
+        // Normalize centrality to 0-1 range
+        const maxImports = Math.max(...Array.from(importCounts.values()), 1);
+        for (const [file, count] of importCounts) {
+          this.importCentrality.set(file, count / maxImports);
+        }
+
+        console.error(`[search] Computed import centrality for ${importCounts.size} files`);
+      }
     } catch (error) {
       console.warn(
         'Pattern intelligence load failed (will proceed without trend detection):',
         error
       );
       this.patternIntelligence = null;
+      this.importCentrality = null;
     }
   }
 
   /**
-   * v1.2: Detect pattern trend from chunk content
+   * Detect pattern trend from chunk content
    */
   private detectChunkTrend(chunk: CodeChunk): {
     trend: 'Rising' | 'Stable' | 'Declining' | undefined;
@@ -278,6 +316,78 @@ export class CodebaseSearcher {
       .filter((term) => term.length > 2 && !QUERY_STOP_WORDS.has(term));
   }
 
+  /**
+   * Classify query intent based on heuristic patterns
+   */
+  private classifyQueryIntent(query: string): { intent: QueryIntent; weights: IntentWeights } {
+    const lowerQuery = query.toLowerCase();
+
+    // EXACT_NAME: Contains PascalCase or camelCase tokens (literal class/component names)
+    if (/[A-Z][a-z]+[A-Z]/.test(query) || /[a-z][A-Z]/.test(query)) {
+      return {
+        intent: 'EXACT_NAME',
+        weights: { semantic: 0.4, keyword: 0.6 } // Keyword search dominates for exact names
+      };
+    }
+
+    // CONFIG: Configuration/setup queries
+    const configKeywords = [
+      'config',
+      'setup',
+      'routing',
+      'providers',
+      'configuration',
+      'bootstrap'
+    ];
+    if (configKeywords.some((kw) => lowerQuery.includes(kw))) {
+      return {
+        intent: 'CONFIG',
+        weights: { semantic: 0.5, keyword: 0.5 } // Balanced
+      };
+    }
+
+    // WIRING: DI/registration queries
+    const wiringKeywords = [
+      'provide',
+      'inject',
+      'dependency',
+      'register',
+      'wire',
+      'bootstrap',
+      'module'
+    ];
+    if (wiringKeywords.some((kw) => lowerQuery.includes(kw))) {
+      return {
+        intent: 'WIRING',
+        weights: { semantic: 0.5, keyword: 0.5 } // Balanced
+      };
+    }
+
+    // FLOW: Action/navigation queries
+    const flowVerbs = [
+      'navigate',
+      'redirect',
+      'route',
+      'handle',
+      'process',
+      'execute',
+      'trigger',
+      'dispatch'
+    ];
+    if (flowVerbs.some((verb) => lowerQuery.includes(verb))) {
+      return {
+        intent: 'FLOW',
+        weights: { semantic: 0.6, keyword: 0.4 } // Semantic helps with flow understanding
+      };
+    }
+
+    // CONCEPTUAL: Natural language without code tokens (default)
+    return {
+      intent: 'CONCEPTUAL',
+      weights: { semantic: 0.7, keyword: 0.3 } // Semantic dominates for concepts
+    };
+  }
+
   private buildQueryVariants(query: string, maxExpansions: number): QueryVariant[] {
     const variants: QueryVariant[] = [{ query, weight: 1 }];
     if (maxExpansions <= 0) return variants;
@@ -310,6 +420,11 @@ export class CodebaseSearcher {
     }
 
     return variants.slice(0, 1 + maxExpansions);
+  }
+
+  private isTemplateOrStyleFile(filePath: string): boolean {
+    const ext = path.extname(filePath).toLowerCase();
+    return ['.html', '.scss', '.css', '.less', '.sass', '.styl'].includes(ext);
   }
 
   private isCompositionRootFile(filePath: string): boolean {
@@ -364,38 +479,96 @@ export class CodebaseSearcher {
   private scoreAndSortResults(
     query: string,
     limit: number,
-    results: Map<string, { chunk: CodeChunk; scores: number[] }>,
-    profile: SearchIntentProfile
+    results: {
+      semantic: Map<string, { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> }>;
+      keyword: Map<string, { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> }>;
+    },
+    profile: SearchIntentProfile,
+    intent: QueryIntent,
+    totalVariantWeight: number
   ): SearchResult[] {
     const likelyWiringQuery = this.isLikelyWiringOrFlowQuery(query);
     const actionQuery = this.isActionOrHowQuery(query);
 
-    return Array.from(results.entries())
-      .map(([_id, { chunk, scores }]) => {
-        // Calculate base combined score
-        let combinedScore = scores.reduce((sum, score) => sum + score, 0);
+    // RRF: k=60 is the standard parameter (proven robust in Elasticsearch + TOSS paper arXiv:2208.11274)
+    const RRF_K = 60;
 
-        // Normalize to 0-1 range (scores are already weighted)
-        // If both semantic and keyword matched, max possible is ~1.0
-        combinedScore = Math.min(1.0, combinedScore);
+    // Collect all unique chunks from both retrieval channels
+    const allChunks = new Map<string, CodeChunk>();
+    const rrfScores = new Map<string, number>();
+
+    // Gather all chunks
+    for (const [id, entry] of results.semantic) {
+      allChunks.set(id, entry.chunk);
+    }
+    for (const [id, entry] of results.keyword) {
+      if (!allChunks.has(id)) {
+        allChunks.set(id, entry.chunk);
+      }
+    }
+
+    // Calculate RRF scores: RRF(d) = SUM(weight_i / (k + rank_i))
+    for (const [id] of allChunks) {
+      let rrfScore = 0;
+
+      // Add contributions from semantic ranks
+      const semanticEntry = results.semantic.get(id);
+      if (semanticEntry) {
+        for (const { rank, weight } of semanticEntry.ranks) {
+          rrfScore += weight / (RRF_K + rank);
+        }
+      }
+
+      // Add contributions from keyword ranks
+      const keywordEntry = results.keyword.get(id);
+      if (keywordEntry) {
+        for (const { rank, weight } of keywordEntry.ranks) {
+          rrfScore += weight / (RRF_K + rank);
+        }
+      }
+
+      rrfScores.set(id, rrfScore);
+    }
+
+    // Normalize by theoretical maximum (rank-0 in every list), NOT by actual max.
+    // Using actual max makes top result always 1.0, breaking quality confidence gating.
+    const theoreticalMaxRrf = totalVariantWeight / (RRF_K + 0);
+    const maxRrfScore = Math.max(theoreticalMaxRrf, 0.01);
+
+    // Separate test files from implementation files before scoring
+    const isNonTestQuery = !isTestingRelatedQuery(query);
+    const implementationChunks: Array<[string, CodeChunk]> = [];
+    const testChunks: Array<[string, CodeChunk]> = [];
+
+    for (const [id, chunk] of allChunks.entries()) {
+      if (this.isTestFile(chunk.filePath)) {
+        testChunks.push([id, chunk]);
+      } else {
+        implementationChunks.push([id, chunk]);
+      }
+    }
+
+    // For non-test queries: filter test files from candidate pool, keep max 1 test file only if < 3 implementation matches
+    const chunksToScore = isNonTestQuery ? implementationChunks : Array.from(allChunks.entries());
+
+    const scoredResults = chunksToScore
+      .map(([id, chunk]) => {
+        // RRF score normalized to [0,1] range. Boosts below are unclamped
+        // to preserve score differentiation — only relative ordering matters.
+        let combinedScore = rrfScores.get(id)! / maxRrfScore;
 
         // Slight boost when analyzer identified a concrete component type
         if (chunk.componentType && chunk.componentType !== 'unknown') {
-          combinedScore = Math.min(1.0, combinedScore * 1.1);
+          combinedScore *= 1.1;
         }
 
         // Boost if layer is detected
         if (chunk.layer && chunk.layer !== 'unknown') {
-          combinedScore = Math.min(1.0, combinedScore * 1.1);
-        }
-
-        // Query-aware reranking to reduce noisy matches in practical workflows.
-        if (!isTestingRelatedQuery(query) && this.isTestFile(chunk.filePath)) {
-          combinedScore = combinedScore * 0.75;
+          combinedScore *= 1.1;
         }
 
         if (actionQuery && this.isDefinitionHeavyResult(chunk)) {
-          combinedScore = combinedScore * 0.82;
+          combinedScore *= 0.82;
         }
 
         if (
@@ -404,27 +577,75 @@ export class CodebaseSearcher {
             (chunk.componentType || '').toLowerCase()
           )
         ) {
-          combinedScore = Math.min(1.0, combinedScore * 1.06);
+          combinedScore *= 1.06;
+        }
+
+        // Demote template/style files for behavioral queries — they describe
+        // structure/presentation, not implementation logic.
+        if (
+          (intent === 'FLOW' || intent === 'WIRING' || actionQuery) &&
+          this.isTemplateOrStyleFile(chunk.filePath)
+        ) {
+          combinedScore *= 0.75;
         }
 
         // Light intent-aware boost for likely wiring/configuration queries.
         if (likelyWiringQuery && profile !== 'explore') {
           if (this.isCompositionRootFile(chunk.filePath)) {
-            combinedScore = Math.min(1.0, combinedScore * 1.12);
+            combinedScore *= 1.12;
+          }
+        }
+
+        if (intent === 'FLOW') {
+          // Boost service/guard/interceptor files for action/navigation queries
+          if (
+            ['service', 'guard', 'interceptor', 'middleware'].includes(
+              (chunk.componentType || '').toLowerCase()
+            )
+          ) {
+            combinedScore *= 1.15;
+          }
+        } else if (intent === 'CONFIG') {
+          // Boost composition-root files for configuration queries
+          if (this.isCompositionRootFile(chunk.filePath)) {
+            combinedScore *= 1.2;
+          }
+        } else if (intent === 'WIRING') {
+          // Boost DI/module files for wiring queries
+          if (
+            ['module', 'provider', 'config'].some((type) =>
+              (chunk.componentType || '').toLowerCase().includes(type)
+            )
+          ) {
+            combinedScore *= 1.18;
+          }
+          if (this.isCompositionRootFile(chunk.filePath)) {
+            combinedScore *= 1.22;
           }
         }
 
         const pathOverlap = this.queryPathTokenOverlap(chunk.filePath, query);
         if (pathOverlap >= 2) {
-          combinedScore = Math.min(1.0, combinedScore * 1.08);
+          combinedScore *= 1.08;
         }
 
-        // v1.2: Detect pattern trend and apply momentum boost
+        if (this.importCentrality) {
+          const normalizedRoot = this.rootPath.replace(/\\/g, '/').replace(/\/?$/, '/');
+          const normalizedPath = chunk.filePath.replace(/\\/g, '/').replace(normalizedRoot, '');
+          const centrality = this.importCentrality.get(normalizedPath);
+          if (centrality !== undefined && centrality > 0.1) {
+            // Boost files with high centrality (many imports)
+            const centralityBoost = 1.0 + centrality * 0.15; // Up to +15% for max centrality
+            combinedScore *= centralityBoost;
+          }
+        }
+
+        // Detect pattern trend and apply momentum boost
         const { trend, warning } = this.detectChunkTrend(chunk);
         if (trend === 'Rising') {
-          combinedScore = Math.min(1.0, combinedScore * 1.15); // +15% for modern patterns
+          combinedScore *= 1.15; // +15% for modern patterns
         } else if (trend === 'Declining') {
-          combinedScore = combinedScore * 0.9; // -10% for legacy patterns
+          combinedScore *= 0.9; // -10% for legacy patterns
         }
 
         const summary = this.generateSummary(chunk);
@@ -443,13 +664,64 @@ export class CodebaseSearcher {
           componentType: chunk.componentType,
           layer: chunk.layer,
           metadata: chunk.metadata,
-          // v1.2: Pattern momentum awareness
           trend,
           patternWarning: warning
         } as SearchResult;
       })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+      .sort((a, b) => b.score - a.score);
+
+    const seenFiles = new Set<string>();
+    const deduped: SearchResult[] = [];
+    for (const result of scoredResults) {
+      const normalizedPath = result.filePath.toLowerCase().replace(/\\/g, '/');
+      if (seenFiles.has(normalizedPath)) continue;
+      seenFiles.add(normalizedPath);
+      deduped.push(result);
+      if (deduped.length >= limit) break;
+    }
+    const finalResults = deduped;
+
+    if (
+      isNonTestQuery &&
+      finalResults.length < 3 &&
+      finalResults.length < limit &&
+      testChunks.length > 0
+    ) {
+      // Find the highest-scoring test file
+      const bestTestChunk = testChunks
+        .map(([id, chunk]) => ({
+          id,
+          chunk,
+          score: rrfScores.get(id)! / maxRrfScore
+        }))
+        .sort((a, b) => b.score - a.score)[0];
+
+      if (bestTestChunk) {
+        const { trend, warning } = this.detectChunkTrend(bestTestChunk.chunk);
+        const summary = this.generateSummary(bestTestChunk.chunk);
+        const snippet = this.generateSnippet(bestTestChunk.chunk.content);
+
+        finalResults.push({
+          summary,
+          snippet,
+          filePath: bestTestChunk.chunk.filePath,
+          startLine: bestTestChunk.chunk.startLine,
+          endLine: bestTestChunk.chunk.endLine,
+          score: bestTestChunk.score * 0.5, // Demote below implementation files
+          relevanceReason:
+            this.generateRelevanceReason(bestTestChunk.chunk, query) + ' (test file)',
+          language: bestTestChunk.chunk.language,
+          framework: bestTestChunk.chunk.framework,
+          componentType: bestTestChunk.chunk.componentType,
+          layer: bestTestChunk.chunk.layer,
+          metadata: bestTestChunk.chunk.metadata,
+          trend,
+          patternWarning: warning
+        } as SearchResult);
+      }
+    }
+
+    return finalResults;
   }
 
   private pickBetterResultSet(
@@ -483,25 +755,38 @@ export class CodebaseSearcher {
     useKeywordSearch: boolean,
     semanticWeight: number,
     keywordWeight: number
-  ): Promise<Map<string, { chunk: CodeChunk; scores: number[] }>> {
-    const results: Map<string, { chunk: CodeChunk; scores: number[] }> = new Map();
+  ): Promise<{
+    semantic: Map<string, { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> }>;
+    keyword: Map<string, { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> }>;
+  }> {
+    const semanticRanks: Map<
+      string,
+      { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> }
+    > = new Map();
+    const keywordRanks: Map<
+      string,
+      { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> }
+    > = new Map();
 
+    // RRF uses ranks instead of scores for fusion robustness
     if (useSemanticSearch && this.embeddingProvider && this.storageProvider) {
       try {
         for (const variant of queryVariants) {
           const vectorResults = await this.semanticSearch(variant.query, candidateLimit, filters);
 
-          vectorResults.forEach((result) => {
+          // Assign ranks based on retrieval order (0-indexed)
+          vectorResults.forEach((result, index) => {
             const id = result.chunk.id;
-            const weightedScore = result.score * semanticWeight * variant.weight;
-            const existing = results.get(id);
+            const rank = index; // 0-indexed rank
+            const weight = semanticWeight * variant.weight;
+            const existing = semanticRanks.get(id);
 
             if (existing) {
-              existing.scores.push(weightedScore);
+              existing.ranks.push({ rank, weight });
             } else {
-              results.set(id, {
+              semanticRanks.set(id, {
                 chunk: result.chunk,
-                scores: [weightedScore]
+                ranks: [{ rank, weight }]
               });
             }
           });
@@ -519,17 +804,19 @@ export class CodebaseSearcher {
         for (const variant of queryVariants) {
           const keywordResults = await this.keywordSearch(variant.query, candidateLimit, filters);
 
-          keywordResults.forEach((result) => {
+          // Assign ranks based on retrieval order (0-indexed)
+          keywordResults.forEach((result, index) => {
             const id = result.chunk.id;
-            const weightedScore = result.score * keywordWeight * variant.weight;
-            const existing = results.get(id);
+            const rank = index; // 0-indexed rank
+            const weight = keywordWeight * variant.weight;
+            const existing = keywordRanks.get(id);
 
             if (existing) {
-              existing.scores.push(weightedScore);
+              existing.ranks.push({ rank, weight });
             } else {
-              results.set(id, {
+              keywordRanks.set(id, {
                 chunk: result.chunk,
-                scores: [weightedScore]
+                ranks: [{ rank, weight }]
               });
             }
           });
@@ -539,7 +826,7 @@ export class CodebaseSearcher {
       }
     }
 
-    return results;
+    return { semantic: semanticRanks, keyword: keywordRanks };
   }
 
   async search(
@@ -552,19 +839,24 @@ export class CodebaseSearcher {
       await this.initialize();
     }
 
-    const {
-      useSemanticSearch,
-      useKeywordSearch,
-      semanticWeight,
-      keywordWeight,
-      profile,
-      enableQueryExpansion,
-      enableLowConfidenceRescue,
-      candidateFloor
-    } = {
+    const merged = {
       ...DEFAULT_SEARCH_OPTIONS,
       ...options
     };
+    const {
+      useSemanticSearch,
+      useKeywordSearch,
+      profile,
+      enableQueryExpansion,
+      enableLowConfidenceRescue,
+      candidateFloor,
+      enableReranker
+    } = merged;
+
+    const { intent, weights: intentWeights } = this.classifyQueryIntent(query);
+    // Intent weights are the default; caller-supplied weights override them
+    const finalSemanticWeight = merged.semanticWeight ?? intentWeights.semantic;
+    const finalKeywordWeight = merged.keywordWeight ?? intentWeights.keyword;
 
     const candidateLimit = Math.max(limit * 2, candidateFloor || 30);
     const primaryVariants = this.buildQueryVariants(query, enableQueryExpansion ? 1 : 0);
@@ -575,52 +867,71 @@ export class CodebaseSearcher {
       filters,
       Boolean(useSemanticSearch),
       Boolean(useKeywordSearch),
-      semanticWeight || 0.7,
-      keywordWeight || 0.3
+      finalSemanticWeight,
+      finalKeywordWeight
     );
 
+    const primaryTotalWeight =
+      primaryVariants.reduce((sum, v) => sum + v.weight, 0) *
+      (finalSemanticWeight + finalKeywordWeight);
     const primaryResults = this.scoreAndSortResults(
       query,
       limit,
       primaryMatches,
-      (profile || 'explore') as SearchIntentProfile
+      (profile || 'explore') as SearchIntentProfile,
+      intent,
+      primaryTotalWeight
     );
 
-    if (!enableLowConfidenceRescue) {
-      return primaryResults;
+    let bestResults = primaryResults;
+
+    if (enableLowConfidenceRescue) {
+      const primaryQuality = assessSearchQuality(query, primaryResults);
+      if (primaryQuality.status === 'low_confidence') {
+        const rescueVariants = this.buildQueryVariants(query, 2).slice(1);
+        if (rescueVariants.length > 0) {
+          const rescueMatches = await this.collectHybridMatches(
+            rescueVariants.map((variant, index) => ({
+              query: variant.query,
+              weight: index === 0 ? 1 : 0.8
+            })),
+            candidateLimit,
+            filters,
+            Boolean(useSemanticSearch),
+            Boolean(useKeywordSearch),
+            finalSemanticWeight,
+            finalKeywordWeight
+          );
+
+          const rescueVariantWeights = rescueVariants.map((_, i) => (i === 0 ? 1 : 0.8));
+          const rescueTotalWeight =
+            rescueVariantWeights.reduce((sum, w) => sum + w, 0) *
+            (finalSemanticWeight + finalKeywordWeight);
+          const rescueResults = this.scoreAndSortResults(
+            query,
+            limit,
+            rescueMatches,
+            (profile || 'explore') as SearchIntentProfile,
+            intent,
+            rescueTotalWeight
+          );
+
+          bestResults = this.pickBetterResultSet(query, primaryResults, rescueResults);
+        }
+      }
     }
 
-    const primaryQuality = assessSearchQuality(query, primaryResults);
-    if (primaryQuality.status !== 'low_confidence') {
-      return primaryResults;
+    // Stage-2: cross-encoder reranking when top scores are ambiguous
+    if (enableReranker) {
+      try {
+        bestResults = await rerank(query, bestResults);
+      } catch (error) {
+        // Reranker is non-critical — log and return unranked results
+        console.warn('[reranker] Failed, returning original order:', error);
+      }
     }
 
-    const rescueVariants = this.buildQueryVariants(query, 2).slice(1);
-    if (rescueVariants.length === 0) {
-      return primaryResults;
-    }
-
-    const rescueMatches = await this.collectHybridMatches(
-      rescueVariants.map((variant, index) => ({
-        query: variant.query,
-        weight: index === 0 ? 1 : 0.8
-      })),
-      candidateLimit,
-      filters,
-      Boolean(useSemanticSearch),
-      Boolean(useKeywordSearch),
-      semanticWeight || 0.7,
-      keywordWeight || 0.3
-    );
-
-    const rescueResults = this.scoreAndSortResults(
-      query,
-      limit,
-      rescueMatches,
-      (profile || 'explore') as SearchIntentProfile
-    );
-
-    return this.pickBetterResultSet(query, primaryResults, rescueResults);
+    return bestResults;
   }
 
   private generateSummary(chunk: CodeChunk): string {

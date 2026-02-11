@@ -14,8 +14,8 @@ export interface ChunkingOptions {
 }
 
 const DEFAULT_OPTIONS: ChunkingOptions = {
-  maxChunkSize: 100,
-  overlapSize: 10,
+  maxChunkSize: 50,
+  overlapSize: 0,
   preserveBoundaries: true
 };
 

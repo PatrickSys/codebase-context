@@ -76,7 +76,7 @@ Ordered by execution:
 
 - **Chunk size**: 50 lines, 0 overlap
 - **Reranker trigger**: activates when top-3 results are within 0.08 score of each other
-- **Embedding model**: Granite (`ibm-granite/granite-embedding-30m-english`, 8192 token context) via `@huggingface/transformers` v3
+- **Embedding model**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@xenova/transformers`. Override: `EMBEDDING_MODEL=ibm-granite/granite-embedding-30m-english` for Granite (8192 ctx, slower).
 - **Vector DB**: LanceDB with cosine distance
 
 ## Decision Card (Edit Intent)

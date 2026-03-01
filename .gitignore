@@ -20,7 +20,9 @@ nul
 .codebase-intelligence.json
 .cursor/
 .planning/*
-
+.planning-archive/*
+.codex/
 grammars/*.wasm
 
 .tmp-research-repos/
+docs/visuals.md

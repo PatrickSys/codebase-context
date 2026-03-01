@@ -57,7 +57,7 @@ Add `.vscode/mcp.json` to your project root:
   "servers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context", "/path/to/your/project"] // Or "${workspaceFolder}"if your workspace is one project only
+      "args": ["-y", "codebase-context", "/path/to/your/project"] // Or "${workspaceFolder}" if your workspace is one project only
     }
   }
 }
@@ -140,6 +140,41 @@ $ npx -y codebase-context search --query "file watcher" --intent edit --limit 1
 │ Ready to edit: YES                                                   │
 │                                                                      │
 │ Best example: index.ts                                               │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+```text
+$ npx -y codebase-context metadata
+┌─ codebase-context [monorepo] ────────────────────────────────────────┐
+│                                                                      │
+│ Framework: Angular unknown   Architecture: mixed                     │
+│ 130 files · 24,211 lines · 1077 components                           │
+│                                                                      │
+│ Dependencies: @huggingface/transformers · @lancedb/lancedb ·         │
+│ @modelcontextprotocol/sdk · @typescript-eslint/typescript-estree ·   │
+│ chokidar · fuse.js (+14 more)                                        │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+```text
+$ npx -y codebase-context refs --symbol "startFileWatcher"
+┌─ startFileWatcher ─── 11 references ─── static analysis ─────────────┐
+│                                                                      │
+│ startFileWatcher                                                     │
+│ │                                                                    │
+│ ├─ file-watcher.test.ts:5                                            │
+│ │   import { startFileWatcher } from '../src/core/file-watcher....   │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+```text
+$ npx -y codebase-context cycles
+┌─ Circular Dependencies ──────────────────────────────────────────────┐
+│                                                                      │
+│ No cycles found  ·  98 files  ·  260 edges  ·  2.7 avg deps          │
+│                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -273,6 +308,7 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 | `OPENAI_API_KEY`         | -              | Required only if using `openai` provider                  |
 | `CODEBASE_ROOT`          | -              | Project root (CLI arg takes precedence)                   |
 | `CODEBASE_CONTEXT_DEBUG` | -              | Set to `1` for verbose logging                            |
+| `EMBEDDING_MODEL`        | `Xenova/bge-small-en-v1.5` | Local embedding model override (e.g. `ibm-granite/granite-embedding-30m-english` for Granite) |
 
 ## Performance
 

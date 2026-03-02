@@ -11,7 +11,9 @@ interface OpenAIEmbeddingResponse {
  */
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   readonly name = 'openai';
-  readonly dimensions = 1536; // Default for text-embedding-3-small
+  get dimensions(): number {
+    return this.modelName.includes('large') ? 3072 : 1536;
+  }
 
   constructor(
     readonly modelName: string = 'text-embedding-3-small',

@@ -84,8 +84,12 @@ describe('getConfiguredDimensions', () => {
     ).toBe(384);
   });
 
-  it('returns 1536 for openai provider regardless of model', () => {
+  it('returns 1536 for text-embedding-3-small', () => {
     expect(getConfiguredDimensions({ provider: 'openai', model: 'text-embedding-3-small' })).toBe(1536);
+  });
+
+  it('returns 3072 for text-embedding-3-large', () => {
+    expect(getConfiguredDimensions({ provider: 'openai', model: 'text-embedding-3-large' })).toBe(3072);
   });
 
   it('returns 384 as fallback for unknown transformers model', () => {

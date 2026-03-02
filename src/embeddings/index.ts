@@ -20,7 +20,7 @@ import { TransformersEmbeddingProvider, MODEL_CONFIGS } from './transformers.js'
 export function getConfiguredDimensions(config: Partial<EmbeddingConfig> = {}): number {
   const provider = config.provider ?? parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers';
   const model = config.model ?? process.env.EMBEDDING_MODEL ?? DEFAULT_MODEL;
-  if (provider === 'openai') return 1536; // text-embedding-3-small / ada-002
+  if (provider === 'openai') return model.includes('large') ? 3072 : 1536; // text-embedding-3-large: 3072, all others: 1536
   // Look up from the same MODEL_CONFIGS the provider uses — avoids stale hardcoded guesses
   return MODEL_CONFIGS[model]?.dimensions ?? 384;
 }

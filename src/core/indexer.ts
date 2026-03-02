@@ -248,6 +248,14 @@ export class CodebaseIndexer {
     const defaultEmbeddingProvider =
       parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers';
 
+    // When provider=openai and EMBEDDING_MODEL is not set, DEFAULT_MODEL resolves to the
+    // transformers fallback (Xenova/bge-small-en-v1.5), which the OpenAI API rejects.
+    // Use a sane OpenAI default instead.
+    const defaultModel =
+      defaultEmbeddingProvider === 'openai' && !process.env.EMBEDDING_MODEL
+        ? 'text-embedding-3-small'
+        : DEFAULT_MODEL;
+
     const defaultConfig: CodebaseConfig = {
       analyzers: {
         angular: { enabled: true, priority: 100 },
@@ -287,7 +295,7 @@ export class CodebaseIndexer {
       },
       embedding: {
         provider: defaultEmbeddingProvider,
-        model: DEFAULT_MODEL,
+        model: defaultModel,
         batchSize: 32
       },
       skipEmbedding: false,

@@ -1,7 +1,13 @@
 export * from './types.js';
 export * from './transformers.js';
 
-import { EmbeddingProvider, EmbeddingConfig, DEFAULT_EMBEDDING_CONFIG, DEFAULT_MODEL } from './types.js';
+import {
+  EmbeddingProvider,
+  EmbeddingConfig,
+  DEFAULT_EMBEDDING_CONFIG,
+  DEFAULT_MODEL,
+  parseEmbeddingProviderName
+} from './types.js';
 import { TransformersEmbeddingProvider, MODEL_CONFIGS } from './transformers.js';
 
 /**
@@ -12,7 +18,7 @@ import { TransformersEmbeddingProvider, MODEL_CONFIGS } from './transformers.js'
  * implementation) so new models are automatically handled without updating this function.
  */
 export function getConfiguredDimensions(config: Partial<EmbeddingConfig> = {}): number {
-  const provider = config.provider ?? (process.env.EMBEDDING_PROVIDER as string) ?? 'transformers';
+  const provider = config.provider ?? parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers';
   const model = config.model ?? process.env.EMBEDDING_MODEL ?? DEFAULT_MODEL;
   if (provider === 'openai') return 1536; // text-embedding-3-small / ada-002
   // Look up from the same MODEL_CONFIGS the provider uses — avoids stale hardcoded guesses

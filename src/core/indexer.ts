@@ -21,7 +21,12 @@ import {
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import { isCodeFile, isBinaryFile } from '../utils/language-detection.js';
-import { getEmbeddingProvider, getConfiguredDimensions, DEFAULT_MODEL } from '../embeddings/index.js';
+import {
+  getEmbeddingProvider,
+  getConfiguredDimensions,
+  DEFAULT_MODEL,
+  parseEmbeddingProviderName
+} from '../embeddings/index.js';
 import { getStorageProvider, CodeChunkWithEmbedding } from '../storage/index.js';
 import {
   LibraryUsageTracker,
@@ -240,14 +245,8 @@ export class CodebaseIndexer {
   }
 
   private mergeConfig(userConfig?: Partial<CodebaseConfig>): CodebaseConfig {
-    const envEmbeddingProvider = process.env.EMBEDDING_PROVIDER;
     const defaultEmbeddingProvider =
-      envEmbeddingProvider === 'openai' ||
-      envEmbeddingProvider === 'transformers' ||
-      envEmbeddingProvider === 'ollama' ||
-      envEmbeddingProvider === 'custom'
-        ? envEmbeddingProvider
-        : 'transformers';
+      parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers';
 
     const defaultConfig: CodebaseConfig = {
       analyzers: {

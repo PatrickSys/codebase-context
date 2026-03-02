@@ -18,7 +18,9 @@ export interface EmbeddingConfig {
   apiEndpoint?: string;
 }
 
-export function parseEmbeddingProviderName(value: unknown): EmbeddingConfig['provider'] | undefined {
+export function parseEmbeddingProviderName(
+  value: unknown
+): EmbeddingConfig['provider'] | undefined {
   if (value === 'transformers' || value === 'ollama' || value === 'openai' || value === 'custom') {
     return value;
   }

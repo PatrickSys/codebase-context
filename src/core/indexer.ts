@@ -274,7 +274,14 @@ export class CodebaseIndexer {
         '**/*.{sql,graphql,gql}',
         '**/*.{json,jsonc,yaml,yml,toml,xml}'
       ],
-      exclude: ['node_modules/**', 'dist/**', 'build/**', '.git/**', 'coverage/**', '.codebase-context/**'],
+      exclude: [
+        'node_modules/**',
+        'dist/**',
+        'build/**',
+        '.git/**',
+        'coverage/**',
+        '.codebase-context/**'
+      ],
       respectGitignore: true,
       parsing: {
         maxFileSize: 1048576,
@@ -427,7 +434,12 @@ export class CodebaseIndexer {
         }
 
         // Short-circuit: nothing changed
-        if (diff && diff.added.length === 0 && diff.changed.length === 0 && diff.deleted.length === 0) {
+        if (
+          diff &&
+          diff.added.length === 0 &&
+          diff.changed.length === 0 &&
+          diff.deleted.length === 0
+        ) {
           console.error('No files changed - skipping re-index.');
           this.updateProgress('complete', 100);
           stats.duration = Date.now() - startTime;

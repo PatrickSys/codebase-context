@@ -6,7 +6,7 @@ interface ModelConfig {
   maxContext: number; // token context window — used to auto-scale batch size
 }
 
-const MODEL_CONFIGS: Record<string, ModelConfig> = {
+export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   'Xenova/bge-small-en-v1.5': { dimensions: 384, maxContext: 512 },
   'Xenova/all-MiniLM-L6-v2': { dimensions: 384, maxContext: 512 },
   'Xenova/bge-base-en-v1.5': { dimensions: 768, maxContext: 512 },

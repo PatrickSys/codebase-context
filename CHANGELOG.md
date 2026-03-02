@@ -2,43 +2,41 @@
 
 ## [1.7.0](https://github.com/PatrickSys/codebase-context/compare/v1.6.1...v1.7.0) (2026-02-21)
 
-
 ### Features
 
-* **02-03:** implement keyword-index symbol reference lookup ([ccfc564](https://github.com/PatrickSys/codebase-context/commit/ccfc5649a3f4e321bbd3770e5945f83213e103a6))
-* **02-03:** register get_symbol_references MCP tool ([6f6bc3a](https://github.com/PatrickSys/codebase-context/commit/6f6bc3ae3bfa9af13c404028c1307d774b69291c))
-* **03-01:** add frozen controlled eval fixture and local codebase ([46736ed](https://github.com/PatrickSys/codebase-context/commit/46736ed4c4681767164682a774e1ddf08ee81768))
-* **03-03:** add multi-codebase eval runner command ([b065042](https://github.com/PatrickSys/codebase-context/commit/b065042f9a689d82485532872009af571d22db44))
-* **03-03:** centralize eval harness scoring logic ([5c5319b](https://github.com/PatrickSys/codebase-context/commit/5c5319b4a3c9caf30f7b31de3ee210bc153ee58c))
-* **04-01:** add curated grammar manifest, sync script, and publish inclusion ([908f39a](https://github.com/PatrickSys/codebase-context/commit/908f39a2c82a9630150262299ec8ae1f25c269ab))
-* **04-01:** update tree-sitter loader to resolve packaged grammars and fail closed ([458520f](https://github.com/PatrickSys/codebase-context/commit/458520ff3d24bd9ff6399b6bedfe1b6776fc6579))
-* **04-02:** add manifest-driven grammar CI test with fail-closed fallback ([2559405](https://github.com/PatrickSys/codebase-context/commit/2559405007e17bad6fffcf6ea61b97475f0da1e6))
-* **05-01:** create AST-aligned chunking engine with symbol tree builder ([f865abc](https://github.com/PatrickSys/codebase-context/commit/f865abc0a3877441b492695c02ddca12fe9b36c6))
-* **05-01:** wire AST-aligned chunker into GenericAnalyzer with 21 unit tests ([68a2d6d](https://github.com/PatrickSys/codebase-context/commit/68a2d6da844a9ffdb6104670c565f338487d2199))
-* **05-02:** add scope-aware prefix generation to AST chunks ([3dbd43e](https://github.com/PatrickSys/codebase-context/commit/3dbd43eec1d6cdf63ec4d5094c870bf2ee6b164d))
-* **06-01:** add index format metadata and headers ([a216c6d](https://github.com/PatrickSys/codebase-context/commit/a216c6dd2c7614b705525bc30ba8fddf918c7cf3))
-* **06-01:** gate index consumers on IndexMeta validation ([6a52c0d](https://github.com/PatrickSys/codebase-context/commit/6a52c0d33d408a7463e036eac8a650c461c86a43))
-* **06-02:** implement staging directory build and atomic swap for full rebuild ([d719801](https://github.com/PatrickSys/codebase-context/commit/d71980128795bdf8e7c7ab16beb350729a85e306))
-* **AST indexing:** Implement relationship index  ([#38](https://github.com/PatrickSys/codebase-context/issues/38)) ([5b05092](https://github.com/PatrickSys/codebase-context/commit/5b05092b4d5a4a08b117fdc06a3292afdcc8764e))
-* expose all 10 MCP tools via CLI + document them ([#42](https://github.com/PatrickSys/codebase-context/issues/42)) ([7581fba](https://github.com/PatrickSys/codebase-context/commit/7581fbac5b4fd5bc52abc56d946bf55962870566))
-* references confidence, remove get_component_usage, ranked search hints ([#39](https://github.com/PatrickSys/codebase-context/issues/39)) ([33616aa](https://github.com/PatrickSys/codebase-context/commit/33616aa48b165d5cfd95c44bc416cb74c4fd5cbf))
-* rework decision-card to make it based on AST parsing ([#41](https://github.com/PatrickSys/codebase-context/issues/41)) ([ac4389d](https://github.com/PatrickSys/codebase-context/commit/ac4389d6cc55b7f8efc310a6e020bcd184a70adc))
-* symbol ranking, smart snippets, and edit decision card ([#40](https://github.com/PatrickSys/codebase-context/issues/40)) ([03964b3](https://github.com/PatrickSys/codebase-context/commit/03964b3f40cc0fa0caf9768747a39fb559daaa8e))
-* use tree-sitter symbols in generic analyzer ([b470709](https://github.com/PatrickSys/codebase-context/commit/b470709aa77f02325ed5a4e2b0710017020565da))
-
+- **02-03:** implement keyword-index symbol reference lookup ([ccfc564](https://github.com/PatrickSys/codebase-context/commit/ccfc5649a3f4e321bbd3770e5945f83213e103a6))
+- **02-03:** register get_symbol_references MCP tool ([6f6bc3a](https://github.com/PatrickSys/codebase-context/commit/6f6bc3ae3bfa9af13c404028c1307d774b69291c))
+- **03-01:** add frozen controlled eval fixture and local codebase ([46736ed](https://github.com/PatrickSys/codebase-context/commit/46736ed4c4681767164682a774e1ddf08ee81768))
+- **03-03:** add multi-codebase eval runner command ([b065042](https://github.com/PatrickSys/codebase-context/commit/b065042f9a689d82485532872009af571d22db44))
+- **03-03:** centralize eval harness scoring logic ([5c5319b](https://github.com/PatrickSys/codebase-context/commit/5c5319b4a3c9caf30f7b31de3ee210bc153ee58c))
+- **04-01:** add curated grammar manifest, sync script, and publish inclusion ([908f39a](https://github.com/PatrickSys/codebase-context/commit/908f39a2c82a9630150262299ec8ae1f25c269ab))
+- **04-01:** update tree-sitter loader to resolve packaged grammars and fail closed ([458520f](https://github.com/PatrickSys/codebase-context/commit/458520ff3d24bd9ff6399b6bedfe1b6776fc6579))
+- **04-02:** add manifest-driven grammar CI test with fail-closed fallback ([2559405](https://github.com/PatrickSys/codebase-context/commit/2559405007e17bad6fffcf6ea61b97475f0da1e6))
+- **05-01:** create AST-aligned chunking engine with symbol tree builder ([f865abc](https://github.com/PatrickSys/codebase-context/commit/f865abc0a3877441b492695c02ddca12fe9b36c6))
+- **05-01:** wire AST-aligned chunker into GenericAnalyzer with 21 unit tests ([68a2d6d](https://github.com/PatrickSys/codebase-context/commit/68a2d6da844a9ffdb6104670c565f338487d2199))
+- **05-02:** add scope-aware prefix generation to AST chunks ([3dbd43e](https://github.com/PatrickSys/codebase-context/commit/3dbd43eec1d6cdf63ec4d5094c870bf2ee6b164d))
+- **06-01:** add index format metadata and headers ([a216c6d](https://github.com/PatrickSys/codebase-context/commit/a216c6dd2c7614b705525bc30ba8fddf918c7cf3))
+- **06-01:** gate index consumers on IndexMeta validation ([6a52c0d](https://github.com/PatrickSys/codebase-context/commit/6a52c0d33d408a7463e036eac8a650c461c86a43))
+- **06-02:** implement staging directory build and atomic swap for full rebuild ([d719801](https://github.com/PatrickSys/codebase-context/commit/d71980128795bdf8e7c7ab16beb350729a85e306))
+- **AST indexing:** Implement relationship index ([#38](https://github.com/PatrickSys/codebase-context/issues/38)) ([5b05092](https://github.com/PatrickSys/codebase-context/commit/5b05092b4d5a4a08b117fdc06a3292afdcc8764e))
+- expose all 10 MCP tools via CLI + document them ([#42](https://github.com/PatrickSys/codebase-context/issues/42)) ([7581fba](https://github.com/PatrickSys/codebase-context/commit/7581fbac5b4fd5bc52abc56d946bf55962870566))
+- references confidence, remove get_component_usage, ranked search hints ([#39](https://github.com/PatrickSys/codebase-context/issues/39)) ([33616aa](https://github.com/PatrickSys/codebase-context/commit/33616aa48b165d5cfd95c44bc416cb74c4fd5cbf))
+- rework decision-card to make it based on AST parsing ([#41](https://github.com/PatrickSys/codebase-context/issues/41)) ([ac4389d](https://github.com/PatrickSys/codebase-context/commit/ac4389d6cc55b7f8efc310a6e020bcd184a70adc))
+- symbol ranking, smart snippets, and edit decision card ([#40](https://github.com/PatrickSys/codebase-context/issues/40)) ([03964b3](https://github.com/PatrickSys/codebase-context/commit/03964b3f40cc0fa0caf9768747a39fb559daaa8e))
+- use tree-sitter symbols in generic analyzer ([b470709](https://github.com/PatrickSys/codebase-context/commit/b470709aa77f02325ed5a4e2b0710017020565da))
 
 ### Bug Fixes
 
-* **02-01:** fall back when tree-sitter parse has errors ([8a7cd92](https://github.com/PatrickSys/codebase-context/commit/8a7cd92cab25b045b5108b1cba04773f644eab10))
-* **02-tree-sitter-02:** prevent symbol-aware chunk merging ([fd02625](https://github.com/PatrickSys/codebase-context/commit/fd0262516e262eff0c17646eaca021d6288c6647))
-* **03-02:** add regression guardrails for extraction and large-file safety ([a1c71de](https://github.com/PatrickSys/codebase-context/commit/a1c71de070b434f326dc80e627964c1540eea93f))
-* **03-02:** harden tree-sitter extraction against byte-offset and parser failures ([375a48f](https://github.com/PatrickSys/codebase-context/commit/375a48f231c85d72157aa74ea964db27bf9a983e))
+- **02-01:** fall back when tree-sitter parse has errors ([8a7cd92](https://github.com/PatrickSys/codebase-context/commit/8a7cd92cab25b045b5108b1cba04773f644eab10))
+- **02-tree-sitter-02:** prevent symbol-aware chunk merging ([fd02625](https://github.com/PatrickSys/codebase-context/commit/fd0262516e262eff0c17646eaca021d6288c6647))
+- **03-02:** add regression guardrails for extraction and large-file safety ([a1c71de](https://github.com/PatrickSys/codebase-context/commit/a1c71de070b434f326dc80e627964c1540eea93f))
+- **03-02:** harden tree-sitter extraction against byte-offset and parser failures ([375a48f](https://github.com/PatrickSys/codebase-context/commit/375a48f231c85d72157aa74ea964db27bf9a983e))
 
 ## [Unreleased]
 
 ### Added
 
-- **Definition-first ranking**: Exact-name searches now show the file that *defines* a symbol before files that use it. For example, searching `parseConfig` shows the function definition first, then callers.
+- **Definition-first ranking**: Exact-name searches now show the file that _defines_ a symbol before files that use it. For example, searching `parseConfig` shows the function definition first, then callers.
 
 ### Refactored
 
@@ -63,16 +61,26 @@
 - Shared eval scoring/reporting module (`src/eval/*`) used by both the CLI runner and the test suite.
 - Second frozen eval fixture plus an in-repo controlled TypeScript codebase for fully-offline eval runs.
 - Regression tests covering Tree-sitter Unicode slicing, parser cleanup/reset behavior, and large/generated file skipping.
+- **Tree-sitter symbol references** (PR #49): identifier scan excludes comment/string nodes; `confidence: "syntactic"` returned; `usageCount` reflects real AST occurrences, not regex matches.
+- **Import edge details** (PR #50): `importDetails` per edge (line number + imported symbols) persisted in `relationships.json`. Backward-compatible with existing `imports` field.
+- **2-hop transitive impact** (PR #50): `search --intent edit` impact now shows direct importers (hop 1) and their importers (hop 2), each labeled with distance. Capped at 20.
+- **Chokidar file watcher** (PR #52): index auto-refreshes in MCP server mode on file save (2 s debounce). No manual `reindex` needed during active editing sessions.
+- **CLI human formatters** (PR #48): all 9 commands now render as structured human-readable output. `--json` flag on every command for agent/pipe consumption.
+- **`status` + `reindex` formatters** (PR #56): status box with index health, progress, and last-built time. ASCII fallback via `CODEBASE_CONTEXT_ASCII=1`.
+- **`docs/cli.md` gallery** (PR #56): command reference with output previews for all 9 CLI commands.
 
 ### Changed
 
 - **Preflight response shape**: Renamed `reason` to `nextAction` for clarity. Removed internal fields (`evidenceLock`, `riskLevel`, `confidence`) so the output is stable and doesn't change shape unexpectedly.
- 
+
 ### Fixed
 
 - Null-pointer crash in GenericAnalyzer when chunk content is undefined.
 - Tree-sitter symbol extraction now treats node offsets as UTF-8 byte ranges and evicts cached parsers on failures/timeouts.
 - **Post-merge integration gaps** (v1.8 audit): Removed orphaned `get_component_usage` source file, deleted phantom allowlist entry, removed dead guidance strings referencing the deleted tool. Added fallback decision card when `intelligence.json` is absent during edit-intent searches, now returns `ready: false` with actionable guidance instead of silently skipping.
+- Watcher initialization race: `onReady` hook ensures tests wait for chokidar readiness before asserting (PR #55).
+- Windows temp dir cleanup hardened with retry/backoff to fix `ENOTEMPTY`/`EPERM` test flakes (PR #55).
+- `--json` output now always pure JSON on stdout; status lines go to stderr (PR #48).
 
 ## [1.6.2] - 2026-02-17
 

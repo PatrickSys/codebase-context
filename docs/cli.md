@@ -153,7 +153,7 @@ Example output:
 │ State: ready                                                         │
 │ Root:  /path/to/repo                                                 │
 │                                                                      │
-│ → Use refresh_index to manually trigger re-indexing when needed.     │
+│ → Run `reindex` to re-index (`--incremental` skips unchanged).       │
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -164,6 +164,8 @@ Example output:
 npx -y codebase-context reindex
 npx -y codebase-context reindex --incremental --reason "changed watcher logic"
 ```
+
+> **MCP server mode**: if you're running codebase-context as an MCP server (long-running process), the index auto-refreshes via a file watcher — you don't need to call `reindex` between edits. Use `reindex` for one-shot CLI runs or to force a full rebuild.
 
 ## `style-guide`
 

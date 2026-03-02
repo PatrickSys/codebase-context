@@ -32,7 +32,8 @@ const LANGUAGE_FIXTURE_FILE: Record<string, string> = {
   java: 'java.java',
   c: 'c.c',
   cpp: 'cpp.cpp',
-  csharp: 'csharp.cs'
+  csharp: 'csharp.cs',
+  kotlin: 'kotlin.kt'
 };
 
 const fixturesDir = path.join(__dirname, 'fixtures', 'grammars');

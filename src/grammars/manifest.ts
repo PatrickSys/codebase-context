@@ -15,7 +15,8 @@ export const CURATED_LANGUAGE_TO_WASM: Record<string, string> = {
   java: 'tree-sitter-java.wasm',
   c: 'tree-sitter-c.wasm',
   cpp: 'tree-sitter-cpp.wasm',
-  csharp: 'tree-sitter-c_sharp.wasm'
+  csharp: 'tree-sitter-c_sharp.wasm',
+  kotlin: 'tree-sitter-kotlin.wasm'
 };
 
 /**

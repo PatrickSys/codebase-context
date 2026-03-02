@@ -42,7 +42,7 @@ npx codebase-context reindex --incremental
 | ----------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` + decision card (`ready`, `nextAction`, `patterns`, `bestExample`, `impact`, `whatWouldHelp`) when `intent="edit"`. Hints capped at 3 per category. |
 | `get_team_patterns`     | optional `category`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
-| `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). Replaces the removed `get_component_usage`. |
+| `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`. |
 | `remember`              | `type`, `category`, `memory`, `reason`                            | Persists to `.codebase-context/memory.json`                                                                                                                                          |
 | `get_memory`            | optional `category`, `type`, `query`, `limit`                     | Memories with confidence decay scoring                                                                                                                                               |
 
@@ -76,7 +76,7 @@ Ordered by execution:
 
 - **Chunk size**: 50 lines, 0 overlap
 - **Reranker trigger**: activates when top-3 results are within 0.08 score of each other
-- **Embedding model**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@xenova/transformers`. Override: `EMBEDDING_MODEL=ibm-granite/granite-embedding-30m-english` for Granite (8192 ctx, slower).
+- **Embedding model**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@huggingface/transformers`. Override: `EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX` for Granite (8192 ctx, slower).
 - **Vector DB**: LanceDB with cosine distance
 
 ## Decision Card (Edit Intent)
@@ -103,6 +103,8 @@ Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`
   whatWouldHelp?: string[];   // Concrete next steps (max 4) when ready=false
 }
 ```
+
+Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2), each labeled with distance. Capped at 20 files to avoid noise.
 
 **Fields explained:**
 
@@ -144,10 +146,11 @@ Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`
 
 - Initial: full scan → chunking (50 lines, 0 overlap) → embedding → vector DB (LanceDB) + keyword index (Fuse.js)
 - Incremental: SHA-256 manifest diffing, selective embed/delete, full intelligence regeneration
+- Auto-refresh (MCP server mode only): chokidar file watcher triggers incremental reindex after a debounce on any source file change — `node_modules/`, `.git/`, `dist/`, and `.codebase-context/` are excluded. One-shot CLI runs skip the watcher entirely.
 - Version gating: `index-meta.json` tracks format version; mismatches trigger automatic rebuild
 - Crash-safe rebuilds: full rebuilds write to `.staging/` and swap atomically only on success
 - Auto-heal: corrupted index triggers automatic full re-index on next search
-- Relationships sidecar: `relationships.json` contains file import graph and symbol export index
+- Relationships sidecar: `relationships.json` contains file import graph, symbol export index, and per-edge import details (`importDetails`: line number + imported symbol names where available)
 - Storage: `.codebase-context/` directory (memory.json + generated files)
 
 ## Analyzers
@@ -170,3 +173,11 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/
   - `tests/fixtures/eval-angular-spotify.json` (real-world)
   - `tests/fixtures/eval-controlled.json` + `tests/fixtures/codebases/eval-controlled/` (offline controlled)
 - **Reported metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a gate pass/fail
+
+## Limitations
+
+- **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
+- **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
+- **Angular is the only framework with a rich dedicated analyzer.** All other languages go through the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
+- **Default embedding model is `bge-small-en-v1.5` (512-token context).** Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
+- **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

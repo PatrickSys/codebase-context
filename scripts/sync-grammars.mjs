@@ -20,7 +20,8 @@ const CURATED_WASMS = [
   'tree-sitter-java.wasm',
   'tree-sitter-c.wasm',
   'tree-sitter-cpp.wasm',
-  'tree-sitter-c_sharp.wasm'
+  'tree-sitter-c_sharp.wasm',
+  'tree-sitter-kotlin.wasm'
 ];
 
 const sourceDir = path.join(path.dirname(require.resolve('tree-sitter-wasms/package.json')), 'out');

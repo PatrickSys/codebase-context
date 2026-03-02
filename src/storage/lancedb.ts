@@ -41,8 +41,12 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
    * @param storagePath - Directory path for LanceDB storage
    * @param options - Optional configuration
    * @param options.expectExisting - If true, throws IndexCorruptedError if table doesn't exist
+   * @param options.expectedDimensions - If set, verifies the stored vector column has this many dimensions
    */
-  async initialize(storagePath: string, options?: { expectExisting?: boolean }): Promise<void> {
+  async initialize(
+    storagePath: string,
+    options?: { expectExisting?: boolean; expectedDimensions?: number }
+  ): Promise<void> {
     if (this.initialized) return;
 
     try {
@@ -63,6 +67,18 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         if (!hasVectorColumn) {
           throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
         }
+
+        // Check vector dimensions if caller specifies expected dims (e.g. switching providers)
+        if (options?.expectedDimensions !== undefined) {
+          const vectorField = schema.fields.find((f: { name: string }) => f.name === 'vector');
+          const storedDims = (vectorField?.type as { listSize?: number } | undefined)?.listSize;
+          if (storedDims !== undefined && storedDims !== options.expectedDimensions) {
+            throw new IndexCorruptedError(
+              `LanceDB dimension mismatch: stored=${storedDims}, expected=${options.expectedDimensions} (rebuild required)`
+            );
+          }
+        }
+
         if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('Opened existing LanceDB table');
       } else if (options?.expectExisting) {
         throw new IndexCorruptedError(

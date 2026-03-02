@@ -13,12 +13,13 @@ import { LanceDBStorageProvider } from './lancedb.js';
  * Get a storage provider based on configuration
  */
 export async function getStorageProvider(
-  config: Partial<StorageConfig> = {}
+  config: Partial<StorageConfig> = {},
+  options?: { expectExisting?: boolean; expectedDimensions?: number }
 ): Promise<VectorStorageProvider> {
   const mergedConfig = { ...DEFAULT_STORAGE_CONFIG, ...config };
 
   const provider = new LanceDBStorageProvider();
-  await provider.initialize(mergedConfig.path);
+  await provider.initialize(mergedConfig.path, options);
 
   return provider;
 }

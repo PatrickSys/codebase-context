@@ -22,8 +22,32 @@ One tool call returns all of it. Local-first - your code never leaves your machi
 
 The index auto-refreshes as you edit - a file watcher triggers incremental reindex in the background when the MCP server is running. No stale context between tool calls.
 
-<!-- TODO: Add demo GIF: search_codebase("How does this app attach the auth token to outgoing API calls?") -> AuthInterceptor top result + preflight + agent proceeds or asks -->
-<!-- ![Demo](./docs/assets/demo.gif) -->
+### What it looks like
+
+Real CLI output against `angular-spotify`, the repo used for the launch screenshots.
+
+<table>
+  <tr>
+    <td width="50%">
+      <strong>Patterns and team drift</strong><br />
+      <img src="https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/patterns.png" alt="codebase-context patterns screenshot" />
+    </td>
+    <td width="50%">
+      <strong>Edit preflight</strong><br />
+      <img src="https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/search-query.png" alt="codebase-context search preflight screenshot" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <strong>Symbol references</strong><br />
+      <img src="https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/refs-symbol.png" alt="codebase-context symbol references screenshot" />
+    </td>
+    <td width="50%">
+      <strong>Codebase overview</strong><br />
+      <img src="https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/metadata.png" alt="codebase-context metadata screenshot" />
+    </td>
+  </tr>
+</table>
 
 ## Quick Start
 

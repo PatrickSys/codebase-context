@@ -103,7 +103,6 @@
   },
   "license": "MIT",
   "scripts": {
-    "preinstall": "npx only-allow pnpm",
     "sync:grammars": "node scripts/sync-grammars.mjs",
     "prebuild": "pnpm run sync:grammars",
     "build": "tsc",

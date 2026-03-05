@@ -75,6 +75,10 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- restore `npx` / `npm exec` installs by removing the published pnpm-only `preinstall` guard
+
 ### Added
 
 - **Definition-first ranking**: Exact-name searches now show the file that _defines_ a symbol before files that use it. For example, searching `parseConfig` shows the function definition first, then callers.

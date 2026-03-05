@@ -126,12 +126,12 @@
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "@lancedb/lancedb": "^0.4.0",
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "@typescript-eslint/typescript-estree": "^7.0.0",
     "chokidar": "^3.6.0",
     "fuse.js": "^7.0.0",
     "glob": "^10.3.10",
-    "hono": "^4.12.2",
+    "hono": "^4.12.5",
     "ignore": "^5.3.1",
     "typescript": "^5.3.3",
     "uuid": "^9.0.1",
@@ -154,7 +154,7 @@
     "tree-sitter-wasms": "^0.1.13",
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.51.0",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -165,7 +165,10 @@
     ],
     "overrides": {
       "@modelcontextprotocol/sdk>ajv": "8.18.0",
-      "minimatch": "10.2.3"
+      "@modelcontextprotocol/sdk>@hono/node-server": "1.19.11",
+      "@huggingface/transformers>onnxruntime-node": "1.24.2",
+      "minimatch": "10.2.3",
+      "rollup": "4.59.0"
     }
   }
 }

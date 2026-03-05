@@ -43,7 +43,13 @@ export async function handle(
     const result: Record<string, unknown> = { status: 'success' };
 
     if (category === 'all' || !category) {
-      result.patterns = intel.patterns || {};
+      const rawPatterns = intel.patterns || {};
+      const filtered: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(rawPatterns)) {
+        if (shouldSkipLegacyTestingFrameworkCategory(k, rawPatterns)) continue;
+        filtered[k] = v;
+      }
+      result.patterns = filtered;
       result.goldenFiles = intel.goldenFiles || [];
       if (intel.tsconfigPaths) {
         result.tsconfigPaths = intel.tsconfigPaths;

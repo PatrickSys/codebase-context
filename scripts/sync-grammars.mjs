@@ -45,7 +45,22 @@ for (const wasm of CURATED_WASMS) {
   // Atomic copy: write to temp name then rename to avoid partial files
   const tmp = dest + '.tmp-' + randomBytes(4).toString('hex');
   fs.copyFileSync(src, tmp);
-  fs.renameSync(tmp, dest);
+
+  try {
+    fs.renameSync(tmp, dest);
+  } catch (error) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // Best-effort cleanup; ignore if removal fails
+    }
+
+    if (error && typeof error === 'object' && 'code' in error && (error.code === 'EPERM' || error.code === 'EBUSY')) {
+      console.warn(`sync-grammars: skipped updating ${wasm} due to file lock (${error.code})`);
+    } else {
+      throw error;
+    }
+  }
   copied++;
 }
 

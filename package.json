@@ -120,7 +120,8 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
     "mcp:inspect": "npx -y @modelcontextprotocol/inspector node dist/index.js .",
-    "eval": "pnpm run build && node scripts/run-eval.mjs"
+    "eval": "pnpm run build && node scripts/run-eval.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
@@ -148,6 +149,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
     "globals": "^17.0.0",
+    "husky": "^9.1.7",
     "prettier": "^3.7.4",
     "tree-sitter-wasms": "^0.1.13",
     "tsx": "^4.21.0",

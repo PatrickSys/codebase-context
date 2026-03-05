@@ -15,7 +15,6 @@ import type {
   CyclesResponse,
   CycleItem,
   MetadataResponse,
-  MetadataDependency,
   StyleGuideResponse
 } from './tools/types.js';
 

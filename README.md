@@ -26,28 +26,23 @@ The index auto-refreshes as you edit - a file watcher triggers incremental reind
 
 Real CLI output against `angular-spotify`, the repo used for the launch screenshots.
 
-<table>
-  <tr>
-    <td width="50%">
-      <strong>Patterns and team drift</strong><br />
-      <img src="https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/patterns.png" alt="codebase-context patterns screenshot" />
-    </td>
-    <td width="50%">
-      <strong>Edit preflight</strong><br />
-      <img src="https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/search-query.png" alt="codebase-context search preflight screenshot" />
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <strong>Symbol references</strong><br />
-      <img src="https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/refs-symbol.png" alt="codebase-context symbol references screenshot" />
-    </td>
-    <td width="50%">
-      <strong>Codebase overview</strong><br />
-      <img src="https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/metadata.png" alt="codebase-context metadata screenshot" />
-    </td>
-  </tr>
-</table>
+**Lead signal: pattern drift and golden files**
+
+![codebase-context patterns screenshot](https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/patterns.png)
+
+This is the part most tools miss: what the team is doing now, what it is moving away from, and which files are the best examples to follow.
+
+**Before editing: preflight and impact**
+
+![codebase-context search preflight screenshot](https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/search-query.png)
+
+When the agent searches with edit intent, it gets a compact decision card: confidence, whether it's safe to proceed, which patterns apply, the best example, and which files are likely to be affected.
+
+More CLI examples:
+
+- `refs --symbol "ComponentStore"` for concrete static references
+- `metadata` for a quick codebase overview
+- Full gallery in `docs/cli.md`
 
 ## Quick Start
 

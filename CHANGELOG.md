@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.8.1](https://github.com/PatrickSys/codebase-context/compare/v1.8.0...v1.8.1) (2026-03-05)
+
+
+### Bug Fixes
+
+* **get-team-patterns:** filter out legacy testing framework categories from patterns ([ed5c858](https://github.com/PatrickSys/codebase-context/commit/ed5c858063493efe328fb2ce03f95404efd34ad4))
+* **git:** run tests only on pre-push ([785d28b](https://github.com/PatrickSys/codebase-context/commit/785d28b3adfb4e5bebe946c2af17f958ac0c7022))
+* **git:** tighten pre-push formatting enforcement ([a6d95fc](https://github.com/PatrickSys/codebase-context/commit/a6d95fc297cd5dcdaba2244b9413cd5353f6f273))
+
 ## [1.8.0](https://github.com/PatrickSys/codebase-context/compare/v1.7.0...v1.8.0) (2026-03-05)
 
 

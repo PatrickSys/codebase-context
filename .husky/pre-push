@@ -1,0 +1,5 @@
+echo "Checking formatting before push..."
+pnpm format:check
+echo "Running tests before push..."
+pnpm test
+

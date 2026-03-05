@@ -32,6 +32,7 @@ const destDir = path.resolve('grammars');
 fs.mkdirSync(destDir, { recursive: true });
 
 let copied = 0;
+let skipped = 0;
 
 for (const wasm of CURATED_WASMS) {
   const src = path.join(sourceDir, wasm);
@@ -45,8 +46,29 @@ for (const wasm of CURATED_WASMS) {
   // Atomic copy: write to temp name then rename to avoid partial files
   const tmp = dest + '.tmp-' + randomBytes(4).toString('hex');
   fs.copyFileSync(src, tmp);
-  fs.renameSync(tmp, dest);
-  copied++;
+
+  try {
+    fs.renameSync(tmp, dest);
+    copied++;
+  } catch (error) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // Best-effort cleanup; ignore if removal fails
+    }
+
+    if (error && typeof error === 'object' && 'code' in error && (error.code === 'EPERM' || error.code === 'EBUSY')) {
+      skipped++;
+      console.warn(`sync-grammars: skipped updating ${wasm} due to file lock (${error.code})`);
+    } else {
+      throw error;
+    }
+  }
 }
 
-console.log(`sync-grammars: ${copied} wasm files → ${destDir}`);
+const summary =
+  skipped > 0
+    ? `sync-grammars: ${copied} wasm files updated, ${skipped} skipped → ${destDir}`
+    : `sync-grammars: ${copied} wasm files → ${destDir}`;
+
+console.log(summary);

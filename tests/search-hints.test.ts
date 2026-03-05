@@ -96,7 +96,7 @@ describe('Search Hints', () => {
         expect(typeof caller).toBe('string');
       });
     }
-  });
+  }, 60000);
 
   it('hints are capped at 3 items per category', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');

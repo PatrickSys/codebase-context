@@ -390,6 +390,7 @@ export function formatSearch(
       const metaParts = [`confidence: ${scoreBar(scoreValue)} ${score}`];
       if (typePart) metaParts.push(typePart);
       if (trendPart) metaParts.push(trendPart);
+      if (r.relationships?.hasTests) metaParts.push('has tests');
 
       console.log(`${i + 1}.  ${file}`);
       console.log(`    ${metaParts.join(` ${g.dot} `)}`);
@@ -410,6 +411,10 @@ export function formatSearch(
         const total = r.relationships?.importedByCount ?? hints.callers.length;
         const more = total > 3 ? ` (+${total - 3} more)` : '';
         console.log(`    used by: ${shortCallers.join(', ')}${more}`);
+      }
+      if (hints?.tests && hints.tests.length > 0) {
+        const shortTests = hints.tests.slice(0, 2).map((t) => shortPath(t, rootPath));
+        console.log(`    tested:  ${shortTests.join(', ')}`);
       }
 
       const snippet = r.snippet ?? '';
@@ -472,6 +477,11 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
         lines.push(g.tree.pipe);
       }
     }
+  }
+
+  if (data.isComplete === false) {
+    lines.push('');
+    lines.push(`${g.arrow} results capped at limit — use --limit to see more`);
   }
 
   lines.push('');
@@ -594,16 +604,30 @@ export function formatMetadata(data: MetadataResponse): void {
     if (statParts.length > 0) lines.push(statParts.join(` ${g.dot} `));
   }
 
-  // Dependencies
-  const deps = m.dependencies ?? [];
-  if (deps.length > 0) {
-    lines.push('');
-    lines.push(
-      `Dependencies: ${deps
-        .slice(0, 6)
-        .map((d: MetadataDependency) => d.name)
-        .join(` ${g.dot} `)}${deps.length > 6 ? ` (+${deps.length - 6} more)` : ''}`
-    );
+  // Component breakdown by type (e.g. module 199  component 53  service 31)
+  const byType = stats?.componentsByType;
+  if (byType) {
+    const entries = Object.entries(byType)
+      .filter(([, v]) => v > 0)
+      .sort(([, a], [, b]) => b - a);
+    if (entries.length > 0) {
+      const shown = entries.slice(0, 3);
+      const more = entries.length > 3 ? `  (+${entries.length - 3} more)` : '';
+      const str = shown.map(([k, v]) => `${k} ${v}`).join('  ');
+      lines.push(`By type:   ${str}${more}`);
+    }
+  }
+
+  // Layer breakdown — skip zero-count and 'unknown' (e.g. presentation 57  business 23)
+  const layers = m.architecture?.layers;
+  if (layers) {
+    const entries = Object.entries(layers)
+      .filter(([k, v]) => v > 0 && k !== 'unknown')
+      .sort(([, a], [, b]) => b - a);
+    if (entries.length > 0) {
+      const str = entries.map(([k, v]) => `${k} ${v}`).join('  ');
+      lines.push(`By layer:  ${str}`);
+    }
   }
 
   // Framework extras: state, testing, ui
@@ -621,6 +645,31 @@ export function formatMetadata(data: MetadataResponse): void {
     if (extras.length > 0) {
       lines.push('');
       for (const e of extras) lines.push(e);
+    }
+  }
+
+  // Dependencies grouped by category (framework / state / other)
+  const deps = m.dependencies ?? [];
+  if (deps.length > 0) {
+    lines.push('');
+    const grouped: Record<string, string[]> = {};
+    for (const d of deps) {
+      const cat = d.category ?? 'other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(d.name);
+    }
+    const catOrder = ['framework', 'state', 'testing', 'other'];
+    const cats = [
+      ...catOrder.filter((c) => grouped[c]),
+      ...Object.keys(grouped).filter((c) => !catOrder.includes(c)),
+    ];
+    for (const cat of cats) {
+      const names = grouped[cat];
+      if (!names || names.length === 0) continue;
+      const label = padRight(cat, 9);
+      const shown = names.slice(0, 2).join(` ${g.dot} `);
+      const more = names.length > 2 ? ` (+${names.length - 2} more)` : '';
+      lines.push(`  ${label}  ${shown}${more}`);
     }
   }
 

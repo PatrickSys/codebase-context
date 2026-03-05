@@ -207,7 +207,7 @@ This is where it all comes together. One call returns:
 - **Relationships** per result: `importedByCount` and `hasTests` (condensed) + **hints** (capped ranked callers, consumers, tests) — so you see suggested next reads and know what you haven't looked at yet
 - **Related memories**: up to 3 team decisions, gotchas, and failures matched to the query
 - **Search quality**: `ok` or `low_confidence` with confidence score and `hint` when low
-- **Preflight**: `ready` (boolean) with decision card when `intent="edit"|"refactor"|"migrate"`. Shows `nextAction` (if not ready), `warnings`, `patterns` (do/avoid), `bestExample`, `impact` (caller coverage), and `whatWouldHelp` (next steps). If search quality is low, `ready` is always `false`.
+- **Preflight**: `ready` (boolean) with decision card when `intent="edit"|"refactor"|"migrate"`. Shows `nextAction` (if not ready), `warnings`, `patterns` (do/avoid), `bestExample`, `impact` (import-graph coverage — how many files that import or reference the result are in your search), and `whatWouldHelp` (next steps). If search quality is low, `ready` is always `false`.
 
 Snippets are optional (`includeSnippets: true`). When enabled, snippets that have symbol metadata (e.g. from the Generic analyzer's AST chunking or Angular component chunks) start with a scope header so you know where the code lives (e.g. `// AuthService.getToken()` or `// SpotifyApiService`). Example:
 
@@ -246,7 +246,7 @@ Record a decision once. It surfaces automatically in search results and prefligh
 
 | Tool                           | What it does                                                                                                                                            |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_codebase`              | Hybrid search + decision card. Pass `intent="edit"` to get `ready`, `nextAction`, patterns, caller coverage, and `whatWouldHelp`.                       |
+| `search_codebase`              | Hybrid search + decision card. Pass `intent="edit"` to get `ready`, `nextAction`, patterns, import-graph coverage, and `whatWouldHelp`.                 |
 | `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                                                                                   |
 | `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets). `confidence: "syntactic"` = static/source-based only; no runtime or dynamic dispatch. |
 | `remember`                     | Record a convention, decision, gotcha, or failure                                                                                                       |

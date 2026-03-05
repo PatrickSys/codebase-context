@@ -145,6 +145,8 @@ export interface MetadataStatistics {
   totalFiles?: number;
   totalLines?: number;
   totalComponents?: number;
+  componentsByType?: Record<string, number>;
+  componentsByLayer?: Record<string, number>;
 }
 
 export interface MetadataInner {
@@ -152,9 +154,17 @@ export interface MetadataInner {
   framework?: MetadataFramework;
   languages?: MetadataLanguage[];
   dependencies?: MetadataDependency[];
-  architecture?: { type?: string; modules?: Array<{ name: string }> };
-  projectStructure?: { type?: string };
+  architecture?: {
+    type?: string;
+    layers?: Record<string, number>;
+    patterns?: unknown[];
+    modules?: Array<{ name: string }>;
+  };
+  projectStructure?: { type?: string; workspaces?: string[] };
   statistics?: MetadataStatistics;
+  // teamPatterns mirrors the shape from get_team_patterns — not rendered here
+  // since the `patterns` command covers it; modelled so the field isn't invisible
+  teamPatterns?: Record<string, unknown>;
 }
 
 export interface MetadataResponse {
@@ -188,6 +198,7 @@ export interface CycleItem {
   files?: string[];
   cycle?: string[];
   severity?: string;
+  length?: number;
 }
 
 export interface GraphStats {
@@ -197,8 +208,13 @@ export interface GraphStats {
 }
 
 export interface CyclesResponse {
+  status?: string;
+  message?: string;
+  scope?: string;
   cycles?: CycleItem[];
+  count?: number;
   graphStats?: GraphStats;
+  advice?: string;
 }
 
 // --- Refs response types ---
@@ -209,8 +225,11 @@ export interface RefsUsage {
 }
 
 export interface RefsResponse {
+  status?: string;
   symbol: string;
   usageCount: number;
   confidence: string;
   usages: RefsUsage[];
+  /** false when results were capped at limit — more references exist */
+  isComplete?: boolean;
 }

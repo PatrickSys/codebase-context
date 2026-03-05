@@ -660,7 +660,7 @@ export function formatMetadata(data: MetadataResponse): void {
     const catOrder = ['framework', 'state', 'testing', 'other'];
     const cats = [
       ...catOrder.filter((c) => grouped[c]),
-      ...Object.keys(grouped).filter((c) => !catOrder.includes(c)),
+      ...Object.keys(grouped).filter((c) => !catOrder.includes(c))
     ];
     for (const cat of cats) {
       const names = grouped[cat];

@@ -21,7 +21,12 @@ import {
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import { isCodeFile, isBinaryFile } from '../utils/language-detection.js';
-import { getEmbeddingProvider, DEFAULT_MODEL } from '../embeddings/index.js';
+import {
+  getEmbeddingProvider,
+  getConfiguredDimensions,
+  DEFAULT_MODEL,
+  parseEmbeddingProviderName
+} from '../embeddings/index.js';
 import { getStorageProvider, CodeChunkWithEmbedding } from '../storage/index.js';
 import {
   LibraryUsageTracker,
@@ -56,6 +61,7 @@ import {
   type FileManifest,
   type ManifestDiff
 } from './manifest.js';
+import { readIndexMeta, checkEmbeddingMismatch } from './index-meta.js';
 
 let cachedToolVersion: string | null = null;
 
@@ -239,6 +245,17 @@ export class CodebaseIndexer {
   }
 
   private mergeConfig(userConfig?: Partial<CodebaseConfig>): CodebaseConfig {
+    const defaultEmbeddingProvider =
+      parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers';
+
+    // When provider=openai and EMBEDDING_MODEL is not set, DEFAULT_MODEL resolves to the
+    // transformers fallback (Xenova/bge-small-en-v1.5), which the OpenAI API rejects.
+    // Use a sane OpenAI default instead.
+    const defaultModel =
+      defaultEmbeddingProvider === 'openai' && !process.env.EMBEDDING_MODEL
+        ? 'text-embedding-3-small'
+        : DEFAULT_MODEL;
+
     const defaultConfig: CodebaseConfig = {
       analyzers: {
         angular: { enabled: true, priority: 100 },
@@ -246,8 +263,25 @@ export class CodebaseIndexer {
         vue: { enabled: false, priority: 90 },
         generic: { enabled: true, priority: 10 }
       },
-      include: ['**/*.{ts,tsx,js,jsx,html,css,scss,sass,less}'],
-      exclude: ['node_modules/**', 'dist/**', 'build/**', '.git/**', 'coverage/**'],
+      include: [
+        '**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
+        '**/*.{html,htm,css,scss,sass,less}',
+        '**/*.{py,pyi,rb,php}',
+        '**/*.{java,kt,kts,scala,swift,cs}',
+        '**/*.{go,rs}',
+        '**/*.{c,cpp,cc,cxx,h,hpp}',
+        '**/*.{sh,bash,zsh,ps1}',
+        '**/*.{sql,graphql,gql}',
+        '**/*.{json,jsonc,yaml,yml,toml,xml}'
+      ],
+      exclude: [
+        'node_modules/**',
+        'dist/**',
+        'build/**',
+        '.git/**',
+        'coverage/**',
+        '.codebase-context/**'
+      ],
       respectGitignore: true,
       parsing: {
         maxFileSize: 1048576,
@@ -267,8 +301,8 @@ export class CodebaseIndexer {
         includeChangelogs: false
       },
       embedding: {
-        provider: 'transformers',
-        model: DEFAULT_MODEL,
+        provider: defaultEmbeddingProvider,
+        model: defaultModel,
         batchSize: 32
       },
       skipEmbedding: false,
@@ -382,8 +416,30 @@ export class CodebaseIndexer {
           unchanged: diff.unchanged.length
         };
 
+        // Check for embedding provider/model mismatch — forces full rebuild to avoid
+        // silent vector dimension mismatch when switching providers or models.
+        try {
+          const existingMeta = await readIndexMeta(this.rootPath);
+          const currentProvider = this.config.embedding?.provider ?? 'transformers';
+          const currentModel = this.config.embedding?.model ?? DEFAULT_MODEL;
+          if (checkEmbeddingMismatch(existingMeta, currentProvider, currentModel)) {
+            const stored = existingMeta.artifacts.vectorDb;
+            console.error(
+              `Embedding provider/model changed (stored: ${stored.embeddingProvider}:${stored.embeddingModel}, current: ${currentProvider}:${currentModel}) — forcing full rebuild`
+            );
+            diff = null;
+          }
+        } catch {
+          // No meta yet or legacy index without embedding fields — proceed with incremental
+        }
+
         // Short-circuit: nothing changed
-        if (diff.added.length === 0 && diff.changed.length === 0 && diff.deleted.length === 0) {
+        if (
+          diff &&
+          diff.added.length === 0 &&
+          diff.changed.length === 0 &&
+          diff.deleted.length === 0
+        ) {
           console.error('No files changed - skipping re-index.');
           this.updateProgress('complete', 100);
           stats.duration = Date.now() - startTime;
@@ -731,7 +787,10 @@ export class CodebaseIndexer {
 
       if (!this.config.skipEmbedding) {
         const storagePath = path.join(activeContextDir, VECTOR_DB_DIRNAME);
-        const storageProvider = await getStorageProvider({ path: storagePath });
+        const storageProvider = await getStorageProvider(
+          { path: storagePath },
+          diff ? { expectedDimensions: getConfiguredDimensions(this.config.embedding) } : undefined
+        );
 
         if (diff) {
           // Incremental: delete old chunks for changed + deleted files, then add new
@@ -899,7 +958,12 @@ export class CodebaseIndexer {
             toolVersion,
             artifacts: {
               keywordIndex: { path: KEYWORD_INDEX_FILENAME },
-              vectorDb: { path: VECTOR_DB_DIRNAME, provider: 'lancedb' },
+              vectorDb: {
+                path: VECTOR_DB_DIRNAME,
+                provider: 'lancedb',
+                embeddingProvider: this.config.embedding?.provider ?? 'transformers',
+                embeddingModel: this.config.embedding?.model ?? DEFAULT_MODEL
+              },
               intelligence: { path: INTELLIGENCE_FILENAME },
               manifest: { path: MANIFEST_FILENAME },
               indexingStats: { path: INDEXING_STATS_FILENAME },

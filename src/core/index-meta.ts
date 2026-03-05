@@ -54,7 +54,9 @@ export const IndexMetaSchema = z.object({
       }),
       vectorDb: z.object({
         path: z.string().min(1),
-        provider: z.string().min(1)
+        provider: z.string().min(1),
+        embeddingProvider: z.string().optional(),
+        embeddingModel: z.string().optional()
       }),
       intelligence: z
         .object({
@@ -66,6 +68,16 @@ export const IndexMetaSchema = z.object({
 });
 
 export type IndexMeta = z.infer<typeof IndexMetaSchema>;
+
+export function checkEmbeddingMismatch(
+  meta: IndexMeta,
+  currentProvider: string,
+  currentModel: string
+): boolean {
+  const stored = meta.artifacts.vectorDb;
+  if (!stored.embeddingProvider || !stored.embeddingModel) return false; // legacy index, no info
+  return stored.embeddingProvider !== currentProvider || stored.embeddingModel !== currentModel;
+}
 
 async function pathExists(targetPath: string): Promise<boolean> {
   try {

@@ -6,7 +6,7 @@ import Fuse from 'fuse.js';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { CodeChunk, SearchResult, SearchFilters, IntelligenceData } from '../types/index.js';
-import { EmbeddingProvider, getEmbeddingProvider } from '../embeddings/index.js';
+import { EmbeddingProvider, EmbeddingConfig, getEmbeddingProvider } from '../embeddings/index.js';
 import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import { IndexCorruptedError } from '../errors/index.js';
@@ -147,7 +147,15 @@ export class CodebaseSearcher {
       await this.loadKeywordIndex();
       await this.loadPatternIntelligence();
 
-      this.embeddingProvider = await getEmbeddingProvider();
+      // Use the embedding config the index was built with, not the current env-var defaults.
+      // This ensures query vectors are in the same space as stored vectors.
+      // Legacy indexes (no embeddingProvider stored) fall back to env-var defaults.
+      const storedProvider = this.indexMeta.artifacts.vectorDb.embeddingProvider;
+      const storedModel = this.indexMeta.artifacts.vectorDb.embeddingModel;
+      const embeddingConfig: Partial<EmbeddingConfig> = storedProvider
+        ? { provider: storedProvider as EmbeddingConfig['provider'], model: storedModel }
+        : {};
+      this.embeddingProvider = await getEmbeddingProvider(embeddingConfig);
       this.storageProvider = await getStorageProvider({
         path: this.storagePath
       });

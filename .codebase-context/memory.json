@@ -129,5 +129,122 @@
     "memory": "Never commit .planning/** or use gsd-tools commit; always use plain git commits with explicit messages",
     "reason": "We accidentally committed ignored .planning files and created pushed placeholder commits (e.g., --help). This is explicitly disallowed in this repo.",
     "date": "2026-02-20T19:08:22.195Z"
+  },
+  {
+    "id": "d4d3b072ea53",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(watcher-tests): await ready + harden Windows cleanup (#55)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-01T15:52:27.000Z",
+    "source": "git"
+  },
+  {
+    "id": "8821f0a1affe",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(watcher): allow debounce 0 and harden test",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-28T17:16:59.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c06d7e79009f",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(watcher): queue refresh during indexing",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-28T17:12:35.000Z",
+    "source": "git"
+  },
+  {
+    "id": "73638343a916",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(refs): prevent out-of-root file reads from index",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-28T15:58:03.000Z",
+    "source": "git"
+  },
+  {
+    "id": "8a0f5410d2e2",
+    "type": "decision",
+    "category": "architecture",
+    "memory": "refactor: eliminate all any types and consolidate type definitions (#46)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-22T19:45:41.000Z",
+    "source": "git"
+  },
+  {
+    "id": "6a5bf4f56124",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: close v1.8 post-merge integration gaps (#44)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-22T17:58:51.000Z",
+    "source": "git"
+  },
+  {
+    "id": "8e014f2b09cd",
+    "type": "decision",
+    "category": "architecture",
+    "memory": "refactor: clean up formatting and improve readability in multiple files",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-21T12:50:44.000Z",
+    "source": "git"
+  },
+  {
+    "id": "3125c037fc40",
+    "type": "decision",
+    "category": "architecture",
+    "memory": "refactor: extract 11 MCP tool handlers into src/tools/ (#37)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-20T22:21:55.000Z",
+    "source": "git"
+  },
+  {
+    "id": "6ae00519485a",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(03-02): add regression guardrails for extraction and large-file safety",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-20T18:35:47.000Z",
+    "source": "git"
+  },
+  {
+    "id": "0080c6e64d64",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(03-02): harden tree-sitter extraction against byte-offset and parser failures",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-20T18:33:19.000Z",
+    "source": "git"
+  },
+  {
+    "id": "92493e34e3e1",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(02-tree-sitter-02): prevent symbol-aware chunk merging",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-20T14:41:29.000Z",
+    "source": "git"
+  },
+  {
+    "id": "32c95757f1b3",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(02-01): fall back when tree-sitter parse has errors",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-20T14:38:35.000Z",
+    "source": "git"
+  },
+  {
+    "id": "a597568f48c2",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: guard null chunk.content crash + docs rewrite for v1.6.1",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-15T13:04:10.000Z",
+    "source": "git"
   }
 ]

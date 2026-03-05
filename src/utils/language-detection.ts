@@ -149,7 +149,12 @@ const codeExtensions = new Set([
   '.cc',
   '.cxx',
   '.h',
-  '.hpp'
+  '.hpp',
+  '.sh',
+  '.bash',
+  '.zsh',
+  '.ps1',
+  '.sql'
 ]);
 
 /**

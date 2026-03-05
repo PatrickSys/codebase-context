@@ -18,13 +18,22 @@ export interface EmbeddingConfig {
   apiEndpoint?: string;
 }
 
+export function parseEmbeddingProviderName(
+  value: unknown
+): EmbeddingConfig['provider'] | undefined {
+  if (value === 'transformers' || value === 'ollama' || value === 'openai' || value === 'custom') {
+    return value;
+  }
+  return undefined;
+}
+
 // Default: bge-small (fast, ~2min indexing, consumer-hardware safe)
 // Opt-in: set EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX for
 // better conceptual search at the cost of 5-10x slower indexing and higher RAM usage
 export const DEFAULT_MODEL = process.env.EMBEDDING_MODEL || 'Xenova/bge-small-en-v1.5';
 
 export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
-  provider: (process.env.EMBEDDING_PROVIDER as EmbeddingConfig['provider']) || 'transformers',
+  provider: parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers',
   model: DEFAULT_MODEL,
   batchSize: 32,
   maxRetries: 3,

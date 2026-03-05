@@ -16,9 +16,11 @@ Here's what codebase-context does:
 
 **Remembers across sessions** - Decisions, failures, workarounds that look wrong but exist for a reason - the battle scars that aren't in the comments. Recorded once, surfaced automatically so the agent doesn't "clean up" something you spent a week getting right. Conventional git commits (`refactor:`, `migrate:`, `fix:`) auto-extract into memory with zero effort. Stale memories decay and get flagged instead of blindly trusted.
 
-**Checks before editing** - Before editing something, you get a decision card showing whether there's enough evidence to proceed. If a symbol has four callers and only two appear in your search results, the card shows that coverage gap. If coverage is low, `whatWouldHelp` lists the specific searches to run before you touch anything. When code, team memories, and patterns contradict each other, it tells you to look deeper instead of guessing.
+**Checks before editing** - Before editing something, you get a decision card showing whether there's enough evidence to proceed. If a symbol has four callers (files that import or reference it) and only two appear in your search results, the card shows that coverage gap. If coverage is low, `whatWouldHelp` lists the specific searches to run before you touch anything. When code, team memories, and patterns contradict each other, it tells you to look deeper instead of guessing.
 
-One tool call returns all of it. Local-first - your code never leaves your machine.
+One tool call returns all of it. Local-first - your code never leaves your machine by default. Opt into `EMBEDDING_PROVIDER=openai` for cloud speed, but then code is sent externally.
+
+The index auto-refreshes as you edit - a file watcher triggers incremental reindex in the background when the MCP server is running. No stale context between tool calls.
 
 <!-- TODO: Add demo GIF: search_codebase("How does this app attach the auth token to outgoing API calls?") -> AuthInterceptor top result + preflight + agent proceeds or asks -->
 <!-- ![Demo](./docs/assets/demo.gif) -->
@@ -302,13 +304,13 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 
 ## Configuration
 
-| Variable                 | Default        | Description                                               |
-| ------------------------ | -------------- | --------------------------------------------------------- |
-| `EMBEDDING_PROVIDER`     | `transformers` | `openai` (fast, cloud) or `transformers` (local, private) |
-| `OPENAI_API_KEY`         | -              | Required only if using `openai` provider                  |
-| `CODEBASE_ROOT`          | -              | Project root (CLI arg takes precedence)                   |
-| `CODEBASE_CONTEXT_DEBUG` | -              | Set to `1` for verbose logging                            |
-| `EMBEDDING_MODEL`        | `Xenova/bge-small-en-v1.5` | Local embedding model override (e.g. `ibm-granite/granite-embedding-30m-english` for Granite) |
+| Variable                 | Default                    | Description                                                                                   |
+| ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------- |
+| `EMBEDDING_PROVIDER`     | `transformers`             | `openai` (fast, cloud) or `transformers` (local, private)                                     |
+| `OPENAI_API_KEY`         | -                          | Required only if using `openai` provider                                                      |
+| `CODEBASE_ROOT`          | -                          | Project root (CLI arg takes precedence)                                                       |
+| `CODEBASE_CONTEXT_DEBUG` | -                          | Set to `1` for verbose logging                                                                |
+| `EMBEDDING_MODEL`        | `Xenova/bge-small-en-v1.5` | Local embedding model override (e.g. `onnx-community/granite-embedding-small-english-r2-ONNX` for Granite) |
 
 ## Performance
 

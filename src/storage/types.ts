@@ -11,7 +11,10 @@ export interface VectorStorageProvider {
   /**
    * Initialize the storage (create database, tables, etc.)
    */
-  initialize(storagePath: string): Promise<void>;
+  initialize(
+    storagePath: string,
+    options?: { expectExisting?: boolean; expectedDimensions?: number }
+  ): Promise<void>;
 
   /**
    * Store code chunks with their embeddings

@@ -16,11 +16,6 @@ describe('Incremental Indexing', () => {
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'incremental-test-'));
-    // Create a minimal project
-    await fs.writeFile(
-      path.join(tempDir, 'package.json'),
-      JSON.stringify({ name: 'test-project', dependencies: {} })
-    );
   });
 
   afterEach(async () => {

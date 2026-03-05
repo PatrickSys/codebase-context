@@ -39,7 +39,8 @@
     "grammars",
     "README.md",
     "LICENSE",
-    "docs"
+    "docs/cli.md",
+    "docs/capabilities.md"
   ],
   "packageManager": "pnpm@10.27.0",
   "engines": {

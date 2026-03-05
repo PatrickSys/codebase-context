@@ -1,6 +1,6 @@
 {
   "name": "codebase-context",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Second brain for AI agents working on your codebase - team coding patterns detection, persistent memory, edit readiness checks, and hybrid search with evidence scoring. Local-first MCP server",
   "type": "module",
   "main": "./dist/lib.js",

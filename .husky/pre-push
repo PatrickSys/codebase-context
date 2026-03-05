@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-echo "Running pnpm format before push..."
-pnpm format
+echo "Checking formatting before push..."
+pnpm format:check
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/PatrickSys/codebase-context/compare/v1.8.1...v1.8.2) (2026-03-05)
+
+
+### Bug Fixes
+
+* restore npx installs for published package ([107bc14](https://github.com/PatrickSys/codebase-context/commit/107bc14ff3a3b918d39df28703c739b3598b0cd8))
+
 ## [1.8.1](https://github.com/PatrickSys/codebase-context/compare/v1.8.0...v1.8.1) (2026-03-05)
 
 

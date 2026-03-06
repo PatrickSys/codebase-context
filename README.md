@@ -114,6 +114,25 @@ Open Settings > MCP and add:
 }
 ```
 
+### OpenCode
+
+Add `opencode.json` to your project root:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "codebase-context": {
+      "type": "local",
+      "command": ["npx", "-y", "codebase-context", "/path/to/your/project"],
+      "enabled": true
+    }
+  }
+}
+```
+
+OpenCode also supports interactive setup via `opencode mcp add`.
+
 ### Codex
 
 ```bash

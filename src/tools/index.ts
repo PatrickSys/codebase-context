@@ -44,9 +44,7 @@ function withProjectDirectory(definition: Tool): Tool {
   };
 }
 
-export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10].map(
-  withProjectDirectory
-);
+export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10].map(withProjectDirectory);
 
 export async function dispatchTool(
   name: string,

@@ -625,10 +625,7 @@ async function performIndexingOnce(
   }
 }
 
-async function performIndexing(
-  project: ProjectState,
-  incrementalOnly?: boolean
-): Promise<void> {
+async function performIndexing(project: ProjectState, incrementalOnly?: boolean): Promise<void> {
   let nextMode = incrementalOnly;
   for (;;) {
     await performIndexingOnce(project, nextMode);
@@ -771,10 +768,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
       indexSignal = await ensureValidIndexOrAutoHeal(project);
-      if (
-        indexSignal.action === 'rebuild-started' ||
-        indexSignal.action === 'rebuild-failed'
-      ) {
+      if (indexSignal.action === 'rebuild-started' || indexSignal.action === 'rebuild-failed') {
         return {
           content: [
             {

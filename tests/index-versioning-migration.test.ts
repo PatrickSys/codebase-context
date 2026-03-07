@@ -206,17 +206,21 @@ describe('index versioning migration (MIGR-01)', () => {
   });
 
   afterEach(async () => {
+    const { clearProjects } = await import('../src/project-state.js');
+    clearProjects();
+
     if (originalArgv) process.argv = originalArgv;
     if (originalEnvRoot === undefined) delete process.env.CODEBASE_ROOT;
     else process.env.CODEBASE_ROOT = originalEnvRoot;
 
     if (tempRoot) {
-      await fs.rm(tempRoot, { recursive: true, force: true });
+      // Background indexing (fire-and-forget) may still be writing — retry on ENOTEMPTY
+      await fs.rm(tempRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
       tempRoot = null;
     }
   });
 
-  it('refuses legacy indexes without index-meta.json and triggers auto-heal rebuild', async () => {
+  it('refuses legacy indexes without index-meta.json and triggers background rebuild', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
@@ -241,14 +245,14 @@ describe('index versioning migration (MIGR-01)', () => {
     });
 
     const payload = JSON.parse(response.content[0].text);
-    expect(payload.status).toBe('success');
+    expect(payload.status).toBe('indexing');
+    expect(payload.message).toContain('retry');
     expect(payload.index).toBeTruthy();
-    expect(payload.index.action).toBe('rebuilt-and-served');
+    expect(payload.index.action).toBe('rebuild-started');
     expect(String(payload.index.reason || '')).toContain('Index meta');
-    expect(indexerMocks.index).toHaveBeenCalledTimes(1);
   });
 
-  it('detects keyword index header mismatch and triggers rebuild (no silent empty results)', async () => {
+  it('detects keyword index header mismatch and triggers background rebuild', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
@@ -302,13 +306,13 @@ describe('index versioning migration (MIGR-01)', () => {
     });
 
     const payload = JSON.parse(response.content[0].text);
-    expect(payload.status).toBe('success');
-    expect(payload.index.action).toBe('rebuilt-and-served');
+    expect(payload.status).toBe('indexing');
+    expect(payload.message).toContain('retry');
+    expect(payload.index.action).toBe('rebuild-started');
     expect(String(payload.index.reason || '')).toContain('Keyword index');
-    expect(indexerMocks.index).toHaveBeenCalledTimes(1);
   });
 
-  it('detects vector DB build marker mismatch and triggers rebuild', async () => {
+  it('detects vector DB build marker mismatch and triggers background rebuild', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
@@ -362,10 +366,10 @@ describe('index versioning migration (MIGR-01)', () => {
     });
 
     const payload = JSON.parse(response.content[0].text);
-    expect(payload.status).toBe('success');
-    expect(payload.index.action).toBe('rebuilt-and-served');
+    expect(payload.status).toBe('indexing');
+    expect(payload.message).toContain('retry');
+    expect(payload.index.action).toBe('rebuild-started');
     expect(String(payload.index.reason || '')).toContain('Vector DB');
-    expect(indexerMocks.index).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -382,9 +386,47 @@ describe('index-consuming allowlist enforcement', () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'index-versioning-allowlist-'));
     process.env.CODEBASE_ROOT = tempRoot;
     process.argv[2] = tempRoot;
+
+    const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
+    const buildId = 'allowlist-build';
+    const generatedAt = new Date().toISOString();
+
+    await fs.mkdir(path.join(ctxDir, VECTOR_DB_DIRNAME), { recursive: true });
+    await fs.writeFile(
+      path.join(ctxDir, VECTOR_DB_DIRNAME, 'index-build.json'),
+      JSON.stringify({ buildId, formatVersion: INDEX_FORMAT_VERSION }),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(ctxDir, KEYWORD_INDEX_FILENAME),
+      JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks: [] }),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(ctxDir, INDEX_META_FILENAME),
+      JSON.stringify(
+        {
+          metaVersion: INDEX_META_VERSION,
+          formatVersion: INDEX_FORMAT_VERSION,
+          buildId,
+          generatedAt,
+          toolVersion: 'test',
+          artifacts: {
+            keywordIndex: { path: KEYWORD_INDEX_FILENAME },
+            vectorDb: { path: VECTOR_DB_DIRNAME, provider: 'lancedb' }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
   });
 
   afterEach(async () => {
+    const { clearProjects } = await import('../src/project-state.js');
+    clearProjects();
+
     if (originalArgv) process.argv = originalArgv;
     if (originalEnvRoot === undefined) delete process.env.CODEBASE_ROOT;
     else process.env.CODEBASE_ROOT = originalEnvRoot;

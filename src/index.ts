@@ -8,6 +8,7 @@
 import { promises as fs } from 'fs';
 
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -15,11 +16,11 @@ import {
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  RootsListChangedNotificationSchema,
   Resource
 } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
 import type {
-  IndexingStats,
   IntelligenceData,
   PatternsData,
   PatternEntry,
@@ -29,17 +30,9 @@ import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { IndexCorruptedError } from './errors/index.js';
-import {
-  CODEBASE_CONTEXT_DIRNAME,
-  MEMORY_FILENAME,
-  INTELLIGENCE_FILENAME,
-  KEYWORD_INDEX_FILENAME,
-  VECTOR_DB_DIRNAME
-} from './constants/codebase-context.js';
 import { appendMemoryFile } from './memory/store.js';
 import { handleCliCommand } from './cli.js';
 import { startFileWatcher } from './core/file-watcher.js';
-import { createAutoRefreshController } from './core/auto-refresh.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
   isComplementaryPatternCategory,
@@ -47,7 +40,16 @@ import {
 } from './patterns/semantics.js';
 import { CONTEXT_RESOURCE_URI, isContextResourceUri } from './resources/uri.js';
 import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
-import { TOOLS, dispatchTool, type ToolContext } from './tools/index.js';
+import { TOOLS, dispatchTool, type ToolContext, type ToolResponse } from './tools/index.js';
+import type { ToolPaths } from './tools/types.js';
+import {
+  getOrCreateProject,
+  getAllProjects,
+  makeLegacyPaths,
+  normalizeRootKey,
+  removeProject,
+  type ProjectState
+} from './project-state.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -70,22 +72,94 @@ function resolveRootPath(): string {
   return rootPath;
 }
 
-const ROOT_PATH = resolveRootPath();
+const primaryRootPath = resolveRootPath();
+const primaryProject = getOrCreateProject(primaryRootPath);
+const toolNames = new Set(TOOLS.map((tool) => tool.name));
+const knownRoots = new Map<string, string>();
+let clientRootsEnabled = false;
+const debounceEnv = Number.parseInt(process.env.CODEBASE_CONTEXT_DEBOUNCE_MS ?? '', 10);
+const watcherDebounceMs = Number.isFinite(debounceEnv) && debounceEnv >= 0 ? debounceEnv : 2000;
 
-// File paths (new structure)
-const PATHS = {
-  baseDir: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME),
-  memory: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
-  intelligence: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
-  keywordIndex: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
-  vectorDb: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
-};
+type ProjectResolution =
+  | { ok: true; project: ProjectState }
+  | { ok: false; response: ToolResponse };
 
-const LEGACY_PATHS = {
-  intelligence: path.join(ROOT_PATH, '.codebase-intelligence.json'),
-  keywordIndex: path.join(ROOT_PATH, '.codebase-index.json'),
-  vectorDb: path.join(ROOT_PATH, '.codebase-index')
-};
+function registerKnownRoot(rootPath: string): string {
+  const resolvedRootPath = path.resolve(rootPath);
+  knownRoots.set(normalizeRootKey(resolvedRootPath), resolvedRootPath);
+  return resolvedRootPath;
+}
+
+function getKnownRootPaths(): string[] {
+  return Array.from(knownRoots.values()).sort((a, b) => a.localeCompare(b));
+}
+
+function syncKnownRoots(rootPaths: string[]): void {
+  const nextRoots = new Map<string, string>();
+  const normalizedRoots = rootPaths.length > 0 ? rootPaths : [primaryRootPath];
+
+  for (const rootPath of normalizedRoots) {
+    const resolvedRootPath = path.resolve(rootPath);
+    nextRoots.set(normalizeRootKey(resolvedRootPath), resolvedRootPath);
+  }
+
+  for (const [rootKey, existingRootPath] of knownRoots.entries()) {
+    if (!nextRoots.has(rootKey)) {
+      removeProject(existingRootPath);
+    }
+  }
+
+  knownRoots.clear();
+  for (const [rootKey, rootPath] of nextRoots.entries()) {
+    knownRoots.set(rootKey, rootPath);
+  }
+}
+
+function parseProjectDirectory(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return undefined;
+
+  return trimmedValue.startsWith('file://')
+    ? path.resolve(fileURLToPath(trimmedValue))
+    : path.resolve(trimmedValue);
+}
+
+function buildProjectSelectionError(
+  errorCode: 'ambiguous_project' | 'unknown_project',
+  message: string
+): ToolResponse {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            status: 'error',
+            errorCode,
+            message,
+            availableRoots: getKnownRootPaths()
+          },
+          null,
+          2
+        )
+      }
+    ],
+    isError: true
+  };
+}
+
+function createToolContext(project: ProjectState): ToolContext {
+  return {
+    indexState: project.indexState,
+    paths: project.paths,
+    rootPath: project.rootPath,
+    performIndexing: (incrementalOnly?: boolean) => performIndexing(project, incrementalOnly)
+  };
+}
+
+registerKnownRoot(primaryRootPath);
 
 export const INDEX_CONSUMING_TOOL_NAMES = [
   'search_codebase',
@@ -108,12 +182,12 @@ export type IndexSignal = {
   reason?: string;
 };
 
-async function requireValidIndex(rootPath: string): Promise<IndexSignal> {
+async function requireValidIndex(rootPath: string, paths: ToolPaths): Promise<IndexSignal> {
   const meta = await readIndexMeta(rootPath);
   await validateIndexArtifacts(rootPath, meta);
 
   // Optional artifact presence informs confidence.
-  const hasIntelligence = await fileExists(PATHS.intelligence);
+  const hasIntelligence = await fileExists(paths.intelligence);
 
   return {
     status: 'ready',
@@ -123,8 +197,8 @@ async function requireValidIndex(rootPath: string): Promise<IndexSignal> {
   };
 }
 
-async function ensureValidIndexOrAutoHeal(): Promise<IndexSignal> {
-  if (indexState.status === 'indexing') {
+async function ensureValidIndexOrAutoHeal(project: ProjectState): Promise<IndexSignal> {
+  if (project.indexState.status === 'indexing') {
     return {
       status: 'indexing',
       confidence: 'low',
@@ -134,37 +208,21 @@ async function ensureValidIndexOrAutoHeal(): Promise<IndexSignal> {
   }
 
   try {
-    return await requireValidIndex(ROOT_PATH);
+    return await requireValidIndex(project.rootPath, project.paths);
   } catch (error) {
     if (error instanceof IndexCorruptedError) {
       const reason = error.message;
       console.error(`[Index] ${reason}`);
-      console.error('[Auto-Heal] Triggering full re-index...');
+      console.error('[Auto-Heal] Triggering background re-index...');
 
-      await performIndexing();
-
-      if (indexState.status === 'ready') {
-        try {
-          let validated = await requireValidIndex(ROOT_PATH);
-          validated = { ...validated, action: 'rebuilt-and-served', reason };
-          return validated;
-        } catch (revalidateError) {
-          const msg =
-            revalidateError instanceof Error ? revalidateError.message : String(revalidateError);
-          return {
-            status: 'rebuild-required',
-            confidence: 'low',
-            action: 'rebuild-failed',
-            reason: `Auto-heal completed but index did not validate: ${msg}`
-          };
-        }
-      }
+      // Fire-and-forget: don't block the tool call
+      void performIndexing(project);
 
       return {
-        status: 'rebuild-required',
+        status: 'indexing',
         confidence: 'low',
-        action: 'rebuild-failed',
-        reason: `Auto-heal failed: ${indexState.error || reason}`
+        action: 'rebuild-started',
+        reason: `Auto-heal triggered: ${reason}`
       };
     }
 
@@ -188,16 +246,19 @@ async function fileExists(filePath: string): Promise<boolean> {
  * Migrate legacy file structure to .codebase-context/ folder.
  * Idempotent, fail-safe. Rollback compatibility is not required.
  */
-async function migrateToNewStructure(): Promise<boolean> {
+async function migrateToNewStructure(
+  paths: ToolPaths,
+  legacyPaths: ReturnType<typeof makeLegacyPaths>
+): Promise<boolean> {
   let migrated = false;
 
   try {
-    await fs.mkdir(PATHS.baseDir, { recursive: true });
+    await fs.mkdir(paths.baseDir, { recursive: true });
 
     // intelligence.json
-    if (!(await fileExists(PATHS.intelligence))) {
-      if (await fileExists(LEGACY_PATHS.intelligence)) {
-        await fs.copyFile(LEGACY_PATHS.intelligence, PATHS.intelligence);
+    if (!(await fileExists(paths.intelligence))) {
+      if (await fileExists(legacyPaths.intelligence)) {
+        await fs.copyFile(legacyPaths.intelligence, paths.intelligence);
         migrated = true;
         if (process.env.CODEBASE_CONTEXT_DEBUG) {
           console.error('[DEBUG] Migrated intelligence.json');
@@ -206,9 +267,9 @@ async function migrateToNewStructure(): Promise<boolean> {
     }
 
     // index.json (keyword index)
-    if (!(await fileExists(PATHS.keywordIndex))) {
-      if (await fileExists(LEGACY_PATHS.keywordIndex)) {
-        await fs.copyFile(LEGACY_PATHS.keywordIndex, PATHS.keywordIndex);
+    if (!(await fileExists(paths.keywordIndex))) {
+      if (await fileExists(legacyPaths.keywordIndex)) {
+        await fs.copyFile(legacyPaths.keywordIndex, paths.keywordIndex);
         migrated = true;
         if (process.env.CODEBASE_CONTEXT_DEBUG) {
           console.error('[DEBUG] Migrated index.json');
@@ -217,9 +278,9 @@ async function migrateToNewStructure(): Promise<boolean> {
     }
 
     // Vector DB directory
-    if (!(await fileExists(PATHS.vectorDb))) {
-      if (await fileExists(LEGACY_PATHS.vectorDb)) {
-        await fs.rename(LEGACY_PATHS.vectorDb, PATHS.vectorDb);
+    if (!(await fileExists(paths.vectorDb))) {
+      if (await fileExists(legacyPaths.vectorDb)) {
+        await fs.rename(legacyPaths.vectorDb, paths.vectorDb);
         migrated = true;
         if (process.env.CODEBASE_CONTEXT_DEBUG) {
           console.error('[DEBUG] Migrated vector database');
@@ -236,24 +297,12 @@ async function migrateToNewStructure(): Promise<boolean> {
   }
 }
 
-export interface IndexState {
-  status: 'idle' | 'indexing' | 'ready' | 'error';
-  lastIndexed?: Date;
-  stats?: IndexingStats;
-  error?: string;
-  indexer?: CodebaseIndexer;
-}
+export type { IndexState } from './tools/types.js';
 
 // Read version from package.json so it never drifts
 const PKG_VERSION: string = JSON.parse(
   await fs.readFile(new URL('../package.json', import.meta.url), 'utf-8')
 ).version;
-
-const indexState: IndexState = {
-  status: 'idle'
-};
-
-const autoRefresh = createAutoRefreshController();
 
 const server: Server = new Server(
   {
@@ -288,10 +337,10 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
   return { resources: RESOURCES };
 });
 
-async function generateCodebaseContext(): Promise<string> {
-  const intelligencePath = PATHS.intelligence;
+async function generateCodebaseContext(project: ProjectState): Promise<string> {
+  const intelligencePath = project.paths.intelligence;
 
-  const index = await ensureValidIndexOrAutoHeal();
+  const index = await ensureValidIndexOrAutoHeal(project);
   if (index.status === 'indexing') {
     return (
       '# Codebase Intelligence\n\n' +
@@ -460,7 +509,11 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri;
 
   if (isContextResourceUri(uri)) {
-    const content = await generateCodebaseContext();
+    const project = await resolveProjectForResource();
+    const content = project
+      ? await generateCodebaseContext(project)
+      : '# Codebase Intelligence\n\n' +
+        'Multiple project roots are available. Use a tool call with `project_directory` to choose a project.';
 
     return {
       contents: [
@@ -480,9 +533,9 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
  * Extract memories from conventional git commits (refactor:, migrate:, fix:, revert:).
  * Scans last 90 days. Deduplicates via content hash. Zero friction alternative to manual memory.
  */
-async function extractGitMemories(): Promise<number> {
+async function extractGitMemories(rootPath: string, memoryPath: string): Promise<number> {
   // Quick check: skip if not a git repo
-  if (!(await fileExists(path.join(ROOT_PATH, '.git')))) return 0;
+  if (!(await fileExists(path.join(rootPath, '.git')))) return 0;
 
   const { execSync } = await import('child_process');
 
@@ -490,7 +543,7 @@ async function extractGitMemories(): Promise<number> {
   try {
     // Format: ISO-date<TAB>hash subject  (e.g. "2026-01-15T10:00:00+00:00\tabc1234 fix: race condition")
     log = execSync('git log --format="%aI\t%h %s" --since="90 days ago" --no-merges', {
-      cwd: ROOT_PATH,
+      cwd: rootPath,
       encoding: 'utf-8',
       timeout: 5000
     }).trim();
@@ -508,22 +561,25 @@ async function extractGitMemories(): Promise<number> {
     const parsedMemory = parseGitLogLineToMemory(line);
     if (!parsedMemory) continue;
 
-    const result = await appendMemoryFile(PATHS.memory, parsedMemory);
+    const result = await appendMemoryFile(memoryPath, parsedMemory);
     if (result.status === 'added') added++;
   }
 
   return added;
 }
 
-async function performIndexingOnce(incrementalOnly?: boolean): Promise<void> {
-  indexState.status = 'indexing';
+async function performIndexingOnce(
+  project: ProjectState,
+  incrementalOnly?: boolean
+): Promise<void> {
+  project.indexState.status = 'indexing';
   const mode = incrementalOnly ? 'incremental' : 'full';
-  console.error(`Indexing (${mode}): ${ROOT_PATH}`);
+  console.error(`Indexing (${mode}): ${project.rootPath}`);
 
   try {
     let lastLoggedProgress = { phase: '', percentage: -1 };
     const indexer = new CodebaseIndexer({
-      rootPath: ROOT_PATH,
+      rootPath: project.rootPath,
       incrementalOnly,
       onProgress: (progress) => {
         // Only log when phase or percentage actually changes (prevents duplicate logs)
@@ -538,12 +594,12 @@ async function performIndexingOnce(incrementalOnly?: boolean): Promise<void> {
       }
     });
 
-    indexState.indexer = indexer;
+    project.indexState.indexer = indexer;
     const stats = await indexer.index();
 
-    indexState.status = 'ready';
-    indexState.lastIndexed = new Date();
-    indexState.stats = stats;
+    project.indexState.status = 'ready';
+    project.indexState.lastIndexed = new Date();
+    project.indexState.stats = stats;
 
     console.error(
       `Complete: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(
@@ -553,7 +609,7 @@ async function performIndexingOnce(incrementalOnly?: boolean): Promise<void> {
 
     // Auto-extract memories from git history (non-blocking, best-effort)
     try {
-      const gitMemories = await extractGitMemories();
+      const gitMemories = await extractGitMemories(project.rootPath, project.paths.memory);
       if (gitMemories > 0) {
         console.error(
           `[git-memory] Extracted ${gitMemories} new memor${gitMemories === 1 ? 'y' : 'ies'} from git history`
@@ -563,18 +619,23 @@ async function performIndexingOnce(incrementalOnly?: boolean): Promise<void> {
       // Git memory extraction is optional — never fail indexing over it
     }
   } catch (error) {
-    indexState.status = 'error';
-    indexState.error = error instanceof Error ? error.message : String(error);
-    console.error('Indexing failed:', indexState.error);
+    project.indexState.status = 'error';
+    project.indexState.error = error instanceof Error ? error.message : String(error);
+    console.error('Indexing failed:', project.indexState.error);
   }
 }
 
-async function performIndexing(incrementalOnly?: boolean): Promise<void> {
+async function performIndexing(
+  project: ProjectState,
+  incrementalOnly?: boolean
+): Promise<void> {
   let nextMode = incrementalOnly;
   for (;;) {
-    await performIndexingOnce(nextMode);
+    await performIndexingOnce(project, nextMode);
 
-    const shouldRunQueuedRefresh = autoRefresh.consumeQueuedRefresh(indexState.status);
+    const shouldRunQueuedRefresh = project.autoRefresh.consumeQueuedRefresh(
+      project.indexState.status
+    );
     if (!shouldRunQueuedRefresh) return;
 
     if (process.env.CODEBASE_CONTEXT_DEBUG) {
@@ -584,24 +645,106 @@ async function performIndexing(incrementalOnly?: boolean): Promise<void> {
   }
 }
 
-async function shouldReindex(): Promise<boolean> {
-  const indexPath = PATHS.keywordIndex;
+async function shouldReindex(paths: ToolPaths): Promise<boolean> {
   try {
-    await fs.access(indexPath);
+    await fs.access(paths.keywordIndex);
     return false;
   } catch {
     return true;
   }
 }
 
+async function refreshKnownRootsFromClient(): Promise<void> {
+  try {
+    const { roots } = await server.listRoots();
+    const fileRoots = roots
+      .map((root) => root.uri)
+      .filter((uri) => uri.startsWith('file://'))
+      .map((uri) => fileURLToPath(uri));
+
+    clientRootsEnabled = fileRoots.length > 0;
+    syncKnownRoots(fileRoots);
+  } catch {
+    clientRootsEnabled = false;
+    syncKnownRoots([primaryRootPath]);
+  }
+}
+
+async function resolveProjectForTool(args: Record<string, unknown>): Promise<ProjectResolution> {
+  const requestedProjectDirectory = parseProjectDirectory(args.project_directory);
+  const availableRoots = getKnownRootPaths();
+
+  if (requestedProjectDirectory) {
+    const requestedRootKey = normalizeRootKey(requestedProjectDirectory);
+    const knownRootPath = knownRoots.get(requestedRootKey);
+
+    if (clientRootsEnabled && availableRoots.length > 0 && !knownRootPath) {
+      return {
+        ok: false,
+        response: buildProjectSelectionError(
+          'unknown_project',
+          'Requested project is not part of the active MCP roots.'
+        )
+      };
+    }
+
+    const rootPath = knownRootPath ?? registerKnownRoot(requestedProjectDirectory);
+    const project = getOrCreateProject(rootPath);
+    await initProject(project.rootPath, watcherDebounceMs);
+    return { ok: true, project };
+  }
+
+  if (availableRoots.length !== 1) {
+    return {
+      ok: false,
+      response: buildProjectSelectionError(
+        'ambiguous_project',
+        'Multiple project roots are available. Pass project_directory to choose one.'
+      )
+    };
+  }
+
+  const [rootPath] = availableRoots;
+  const project = getOrCreateProject(rootPath);
+  await initProject(project.rootPath, watcherDebounceMs);
+  return { ok: true, project };
+}
+
+async function resolveProjectForResource(): Promise<ProjectState | undefined> {
+  const availableRoots = getKnownRootPaths();
+  if (availableRoots.length !== 1) {
+    return undefined;
+  }
+
+  const [rootPath] = availableRoots;
+  const project = getOrCreateProject(rootPath);
+  await initProject(project.rootPath, watcherDebounceMs);
+  return project;
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  const normalizedArgs =
+    args && typeof args === 'object' && !Array.isArray(args)
+      ? (args as Record<string, unknown>)
+      : {};
 
   try {
+    if (!toolNames.has(name)) {
+      return await dispatchTool(name, normalizedArgs, createToolContext(primaryProject));
+    }
+
+    const projectResolution = await resolveProjectForTool(normalizedArgs);
+    if (!projectResolution.ok) {
+      return projectResolution.response;
+    }
+
+    const project = projectResolution.project;
+
     // Gate INDEX_CONSUMING tools on a valid, healthy index
     let indexSignal: IndexSignal | undefined;
     if ((INDEX_CONSUMING_TOOL_NAMES as readonly string[]).includes(name)) {
-      if (indexState.status === 'indexing') {
+      if (project.indexState.status === 'indexing') {
         return {
           content: [
             {
@@ -614,44 +757,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ]
         };
       }
-      if (indexState.status === 'error') {
+      if (project.indexState.status === 'error') {
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
                 status: 'error',
-                message: `Indexer error: ${indexState.error}`
+                message: `Indexer error: ${project.indexState.error}`
               })
             }
           ]
         };
       }
-      indexSignal = await ensureValidIndexOrAutoHeal();
-      if (indexSignal.action === 'rebuild-failed') {
+      indexSignal = await ensureValidIndexOrAutoHeal(project);
+      if (
+        indexSignal.action === 'rebuild-started' ||
+        indexSignal.action === 'rebuild-failed'
+      ) {
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
-                error: 'Index is corrupt and could not be rebuilt automatically.',
+                status: 'indexing',
+                message: 'Index rebuild in progress — please retry shortly',
                 index: indexSignal
               })
             }
-          ],
-          isError: true
+          ]
         };
       }
     }
 
-    const ctx: ToolContext = {
-      indexState,
-      paths: PATHS,
-      rootPath: ROOT_PATH,
-      performIndexing
-    };
-
-    const result = await dispatchTool(name, args ?? {}, ctx);
+    const result = await dispatchTool(name, normalizedArgs, createToolContext(project));
 
     // Inject IndexSignal into response so callers can inspect index health
     if (indexSignal !== undefined && result.content?.[0]) {
@@ -680,38 +819,93 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+/**
+ * Initialize a project: migrate legacy structure, check index, start watcher.
+ * Deduplicates via normalized root key.
+ */
+async function initProject(rootPath: string, debounceMs: number): Promise<void> {
+  const project = getOrCreateProject(rootPath);
+
+  // Skip if already initialized
+  if (
+    project.indexState.status === 'indexing' ||
+    project.indexState.status === 'ready' ||
+    project.stopWatcher
+  ) {
+    return;
+  }
+
+  // Migrate legacy structure
+  try {
+    const legacyPaths = makeLegacyPaths(project.rootPath);
+    const migrated = await migrateToNewStructure(project.paths, legacyPaths);
+    if (migrated && process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error(`[DEBUG] Migrated to .codebase-context/ structure: ${project.rootPath}`);
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  // Check if indexing is needed
+  const needsIndex = await shouldReindex(project.paths);
+  if (needsIndex) {
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error(`[DEBUG] Starting indexing: ${project.rootPath}`);
+    }
+    void performIndexing(project);
+  } else {
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error(`[DEBUG] Index found. Ready: ${project.rootPath}`);
+    }
+    project.indexState.status = 'ready';
+    project.indexState.lastIndexed = new Date();
+  }
+
+  // Start file watcher
+  project.stopWatcher = startFileWatcher({
+    rootPath: project.rootPath,
+    debounceMs,
+    onChanged: () => {
+      const shouldRunNow = project.autoRefresh.onFileChange(
+        project.indexState.status === 'indexing'
+      );
+      if (!shouldRunNow) {
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error(
+            `[file-watcher] Index in progress — queueing auto-refresh: ${project.rootPath}`
+          );
+        }
+        return;
+      }
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error(
+          `[file-watcher] Changes detected — incremental reindex starting: ${project.rootPath}`
+        );
+      }
+      void performIndexing(project, true);
+    }
+  });
+}
+
 async function main() {
   // Validate root path exists and is a directory
   try {
-    const stats = await fs.stat(ROOT_PATH);
+    const stats = await fs.stat(primaryRootPath);
     if (!stats.isDirectory()) {
-      console.error(`ERROR: Root path is not a directory: ${ROOT_PATH}`);
+      console.error(`ERROR: Root path is not a directory: ${primaryRootPath}`);
       console.error(`Please specify a valid project directory.`);
       process.exit(1);
     }
   } catch (_error) {
-    console.error(`ERROR: Root path does not exist: ${ROOT_PATH}`);
+    console.error(`ERROR: Root path does not exist: ${primaryRootPath}`);
     console.error(`Please specify a valid project directory.`);
     process.exit(1);
-  }
-
-  // Migrate legacy structure before server starts
-  try {
-    const migrated = await migrateToNewStructure();
-    if (migrated && process.env.CODEBASE_CONTEXT_DEBUG) {
-      console.error('[DEBUG] Migrated to .codebase-context/ structure');
-    }
-  } catch (error) {
-    // Non-fatal: continue with current paths
-    if (process.env.CODEBASE_CONTEXT_DEBUG) {
-      console.error('[DEBUG] Migration failed:', error);
-    }
   }
 
   // Server startup banner (guarded to avoid stderr during MCP STDIO handshake)
   if (process.env.CODEBASE_CONTEXT_DEBUG) {
     console.error('[DEBUG] Codebase Context MCP Server');
-    console.error(`[DEBUG] Root: ${ROOT_PATH}`);
+    console.error(`[DEBUG] Root: ${primaryRootPath}`);
     console.error(
       `[DEBUG] Analyzers: ${analyzerRegistry
         .getAll()
@@ -723,22 +917,11 @@ async function main() {
   // Check for package.json to confirm it's a project root (guarded to avoid stderr during handshake)
   if (process.env.CODEBASE_CONTEXT_DEBUG) {
     try {
-      await fs.access(path.join(ROOT_PATH, 'package.json'));
-      console.error(`[DEBUG] Project detected: ${path.basename(ROOT_PATH)}`);
+      await fs.access(path.join(primaryRootPath, 'package.json'));
+      console.error(`[DEBUG] Project detected: ${path.basename(primaryRootPath)}`);
     } catch {
       console.error(`[DEBUG] WARNING: No package.json found. This may not be a project root.`);
     }
-  }
-
-  const needsIndex = await shouldReindex();
-
-  if (needsIndex) {
-    if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Starting indexing...');
-    performIndexing();
-  } else {
-    if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Index found. Ready.');
-    indexState.status = 'ready';
-    indexState.lastIndexed = new Date();
   }
 
   const transport = new StdioServerTransport();
@@ -746,40 +929,44 @@ async function main() {
 
   if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
 
-  // Auto-refresh: watch for file changes and trigger incremental reindex
-  const debounceEnv = Number.parseInt(process.env.CODEBASE_CONTEXT_DEBOUNCE_MS ?? '', 10);
-  const debounceMs = Number.isFinite(debounceEnv) && debounceEnv >= 0 ? debounceEnv : 2000;
-  const stopWatcher = startFileWatcher({
-    rootPath: ROOT_PATH,
-    debounceMs,
-    onChanged: () => {
-      const shouldRunNow = autoRefresh.onFileChange(indexState.status === 'indexing');
-      if (!shouldRunNow) {
-        if (process.env.CODEBASE_CONTEXT_DEBUG) {
-          console.error('[file-watcher] Index in progress — queueing auto-refresh');
-        }
-        return;
-      }
-      if (process.env.CODEBASE_CONTEXT_DEBUG) {
-        console.error('[file-watcher] Changes detected — incremental reindex starting');
-      }
-      void performIndexing(true);
+  await refreshKnownRootsFromClient();
+
+  // Preserve current single-project startup behavior without eagerly indexing every root.
+  const startupRoots = getKnownRootPaths();
+  if (startupRoots.length === 1) {
+    await initProject(startupRoots[0], watcherDebounceMs);
+  }
+
+  // Subscribe to root changes
+  server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+    try {
+      await refreshKnownRootsFromClient();
+    } catch {
+      /* best-effort */
     }
   });
 
-  process.once('exit', stopWatcher);
+  // Cleanup all watchers on exit
+  const stopAllWatchers = () => {
+    for (const project of getAllProjects()) {
+      project.stopWatcher?.();
+    }
+  };
+
+  process.once('exit', stopAllWatchers);
   process.once('SIGINT', () => {
-    stopWatcher();
+    stopAllWatchers();
     process.exit(0);
   });
   process.once('SIGTERM', () => {
-    stopWatcher();
+    stopAllWatchers();
     process.exit(0);
   });
 }
 
 // Export server components for programmatic use
-export { server, performIndexing, resolveRootPath, shouldReindex, TOOLS };
+export { server, resolveRootPath, shouldReindex, TOOLS };
+export { performIndexing };
 
 // Only auto-start when run directly as CLI (not when imported as module)
 // Check if this module is the entry point

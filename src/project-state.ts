@@ -15,6 +15,7 @@ export interface ProjectState {
   paths: ToolPaths;
   indexState: IndexState;
   autoRefresh: AutoRefreshController;
+  initPromise?: Promise<void>;
   stopWatcher?: () => void;
 }
 

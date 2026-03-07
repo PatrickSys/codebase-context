@@ -33,7 +33,10 @@ interface ResourceReadResponse {
 }
 
 interface TestServer {
-  _requestHandlers: Map<string, (request: unknown) => Promise<ToolCallResponse | ResourceReadResponse>>;
+  _requestHandlers: Map<
+    string,
+    (request: unknown) => Promise<ToolCallResponse | ResourceReadResponse>
+  >;
 }
 
 const searchMocks = vi.hoisted(() => ({
@@ -160,7 +163,9 @@ describe('multi-project routing', () => {
     await seedValidIndex(secondaryRoot);
 
     watcherMocks.start.mockImplementation(
-      ({ rootPath }: { rootPath: string }) => () => `stopped:${rootPath}`
+      ({ rootPath }: { rootPath: string }) =>
+        () =>
+          `stopped:${rootPath}`
     );
 
     searchMocks.search.mockImplementation(
@@ -214,9 +219,7 @@ describe('multi-project routing', () => {
 
     expect(searchMocks.search).toHaveBeenCalledTimes(1);
     expect(searchMocks.search.mock.calls[0]?.[0]).toBe(secondaryRoot);
-    expect(watcherMocks.start).toHaveBeenCalledWith(
-      expect.objectContaining({ rootPath: secondaryRoot })
-    );
+    expect(watcherMocks.start).not.toHaveBeenCalled();
 
     const payload = JSON.parse(response.content[0].text) as {
       status: string;
@@ -227,7 +230,7 @@ describe('multi-project routing', () => {
     expect(payload.results[0]?.file).toContain('feature.ts');
   });
 
-  it('returns an ambiguity error after multiple projects are known', async () => {
+  it('keeps ad-hoc project_directory requests scoped to the current call', async () => {
     const { server } = await import('../src/index.js');
     const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
 
@@ -255,22 +258,85 @@ describe('multi-project routing', () => {
       }
     })) as ToolCallResponse;
 
+    expect(response.isError).not.toBe(true);
+    const payload = JSON.parse(response.content[0].text) as {
+      status: string;
+      results: Array<{ file: string }>;
+    };
+
+    expect(payload.status).toBe('success');
+    expect(searchMocks.search).toHaveBeenCalledTimes(2);
+    expect(searchMocks.search.mock.calls[1]?.[0]).toBe(primaryRoot);
+    expect(payload.results[0]?.file).toContain('feature.ts');
+  });
+
+  it('rejects unknown project_directory values before initialization starts', async () => {
+    const { server } = await import('../src/index.js');
+    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+
+    if (!handler) {
+      throw new Error('tools/call handler not registered');
+    }
+
+    const missingRoot = path.join(primaryRoot, 'does-not-exist');
+    const response = (await handler({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'feature', project_directory: missingRoot }
+      }
+    })) as ToolCallResponse;
+
     expect(response.isError).toBe(true);
+    expect(searchMocks.search).not.toHaveBeenCalled();
+    expect(watcherMocks.start).not.toHaveBeenCalled();
+
     const payload = JSON.parse(response.content[0].text) as {
       status: string;
       errorCode: string;
-      availableRoots: string[];
+      message: string;
     };
 
     expect(payload.status).toBe('error');
-    expect(payload.errorCode).toBe('ambiguous_project');
-    expect(payload.availableRoots).toEqual(expect.arrayContaining([primaryRoot, secondaryRoot]));
+    expect(payload.errorCode).toBe('unknown_project');
+    expect(payload.message).toContain('does not exist');
   });
 
-  it('refuses ambiguous resource reads instead of serving the primary project', async () => {
+  it('serializes concurrent initialization for the same known root', async () => {
+    const { server } = await import('../src/index.js');
+    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+
+    if (!handler) {
+      throw new Error('tools/call handler not registered');
+    }
+
+    const makeRequest = (id: number) =>
+      handler({
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: {
+          name: 'get_indexing_status',
+          arguments: {}
+        }
+      });
+
+    await Promise.all([makeRequest(4), makeRequest(5)]);
+
+    expect(watcherMocks.start).toHaveBeenCalledTimes(1);
+    expect(watcherMocks.start).toHaveBeenCalledWith(
+      expect.objectContaining({ rootPath: primaryRoot })
+    );
+  });
+
+  it('keeps resource reads pinned to known roots after ad-hoc project selection', async () => {
     const { server } = await import('../src/index.js');
     const requestHandler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
-    const resourceHandler = (server as unknown as TestServer)._requestHandlers.get('resources/read');
+    const resourceHandler = (server as unknown as TestServer)._requestHandlers.get(
+      'resources/read'
+    );
 
     if (!requestHandler || !resourceHandler) {
       throw new Error('required handlers not registered');
@@ -294,6 +360,7 @@ describe('multi-project routing', () => {
     })) as ResourceReadResponse;
 
     expect(response.contents[0]?.uri).toBe(CONTEXT_RESOURCE_URI);
-    expect(response.contents[0]?.text).toContain('Multiple project roots are available');
+    expect(response.contents[0]?.text).toContain('# Codebase Intelligence');
+    expect(response.contents[0]?.text).not.toContain('Multiple project roots are available');
   });
 });

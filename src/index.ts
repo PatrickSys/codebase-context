@@ -173,7 +173,7 @@ export const INDEX_CONSUMING_RESOURCE_NAMES = ['Codebase Intelligence'] as const
 
 type IndexStatus = 'ready' | 'rebuild-required' | 'indexing' | 'unknown';
 type IndexConfidence = 'high' | 'low';
-type IndexAction = 'served' | 'rebuild-started' | 'rebuilt-and-served' | 'rebuild-failed';
+type IndexAction = 'served' | 'rebuild-started' | 'rebuilt-and-served';
 
 export type IndexSignal = {
   status: IndexStatus;
@@ -227,6 +227,25 @@ async function ensureValidIndexOrAutoHeal(project: ProjectState): Promise<IndexS
     }
 
     throw error;
+  }
+}
+
+async function validateProjectDirectory(rootPath: string): Promise<ToolResponse | undefined> {
+  try {
+    const stats = await fs.stat(rootPath);
+    if (stats.isDirectory()) {
+      return undefined;
+    }
+
+    return buildProjectSelectionError(
+      'unknown_project',
+      `project_directory is not a directory: ${rootPath}`
+    );
+  } catch {
+    return buildProjectSelectionError(
+      'unknown_project',
+      `project_directory does not exist: ${rootPath}`
+    );
   }
 }
 
@@ -345,14 +364,6 @@ async function generateCodebaseContext(project: ProjectState): Promise<string> {
     return (
       '# Codebase Intelligence\n\n' +
       'Index is still being built. Retry in a moment.\n\n' +
-      `Index: ${index.status} (${index.confidence}, ${index.action})` +
-      (index.reason ? `\nReason: ${index.reason}` : '')
-    );
-  }
-  if (index.action === 'rebuild-failed') {
-    return (
-      '# Codebase Intelligence\n\n' +
-      'Index rebuild required before intelligence can be served.\n\n' +
       `Index: ${index.status} (${index.confidence}, ${index.action})` +
       (index.reason ? `\nReason: ${index.reason}` : '')
     );
@@ -685,9 +696,16 @@ async function resolveProjectForTool(args: Record<string, unknown>): Promise<Pro
       };
     }
 
-    const rootPath = knownRootPath ?? registerKnownRoot(requestedProjectDirectory);
+    const rootPath = knownRootPath ?? requestedProjectDirectory;
+    const invalidProjectResponse = await validateProjectDirectory(rootPath);
+    if (invalidProjectResponse) {
+      return { ok: false, response: invalidProjectResponse };
+    }
+
     const project = getOrCreateProject(rootPath);
-    await initProject(project.rootPath, watcherDebounceMs);
+    await initProject(project.rootPath, watcherDebounceMs, {
+      enableWatcher: knownRootPath !== undefined
+    });
     return { ok: true, project };
   }
 
@@ -703,7 +721,7 @@ async function resolveProjectForTool(args: Record<string, unknown>): Promise<Pro
 
   const [rootPath] = availableRoots;
   const project = getOrCreateProject(rootPath);
-  await initProject(project.rootPath, watcherDebounceMs);
+  await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
   return { ok: true, project };
 }
 
@@ -715,7 +733,7 @@ async function resolveProjectForResource(): Promise<ProjectState | undefined> {
 
   const [rootPath] = availableRoots;
   const project = getOrCreateProject(rootPath);
-  await initProject(project.rootPath, watcherDebounceMs);
+  await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
   return project;
 }
 
@@ -768,7 +786,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
       indexSignal = await ensureValidIndexOrAutoHeal(project);
-      if (indexSignal.action === 'rebuild-started' || indexSignal.action === 'rebuild-failed') {
+      if (indexSignal.action === 'rebuild-started') {
         return {
           content: [
             {
@@ -817,45 +835,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * Initialize a project: migrate legacy structure, check index, start watcher.
  * Deduplicates via normalized root key.
  */
-async function initProject(rootPath: string, debounceMs: number): Promise<void> {
-  const project = getOrCreateProject(rootPath);
+type InitProjectOptions = {
+  enableWatcher: boolean;
+};
 
-  // Skip if already initialized
-  if (
-    project.indexState.status === 'indexing' ||
-    project.indexState.status === 'ready' ||
-    project.stopWatcher
-  ) {
+async function ensureProjectInitialized(project: ProjectState): Promise<void> {
+  if (project.initPromise) {
+    await project.initPromise;
     return;
   }
 
-  // Migrate legacy structure
-  try {
-    const legacyPaths = makeLegacyPaths(project.rootPath);
-    const migrated = await migrateToNewStructure(project.paths, legacyPaths);
-    if (migrated && process.env.CODEBASE_CONTEXT_DEBUG) {
-      console.error(`[DEBUG] Migrated to .codebase-context/ structure: ${project.rootPath}`);
-    }
-  } catch {
-    // Non-fatal
+  if (project.indexState.status !== 'idle') {
+    return;
   }
 
-  // Check if indexing is needed
-  const needsIndex = await shouldReindex(project.paths);
-  if (needsIndex) {
-    if (process.env.CODEBASE_CONTEXT_DEBUG) {
-      console.error(`[DEBUG] Starting indexing: ${project.rootPath}`);
+  project.initPromise = (async () => {
+    // Migrate legacy structure
+    try {
+      const legacyPaths = makeLegacyPaths(project.rootPath);
+      const migrated = await migrateToNewStructure(project.paths, legacyPaths);
+      if (migrated && process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error(`[DEBUG] Migrated to .codebase-context/ structure: ${project.rootPath}`);
+      }
+    } catch {
+      // Non-fatal
     }
-    void performIndexing(project);
-  } else {
-    if (process.env.CODEBASE_CONTEXT_DEBUG) {
-      console.error(`[DEBUG] Index found. Ready: ${project.rootPath}`);
+
+    // Check if indexing is needed
+    const needsIndex = await shouldReindex(project.paths);
+    if (needsIndex) {
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error(`[DEBUG] Starting indexing: ${project.rootPath}`);
+      }
+      void performIndexing(project);
+    } else {
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error(`[DEBUG] Index found. Ready: ${project.rootPath}`);
+      }
+      project.indexState.status = 'ready';
+      project.indexState.lastIndexed = new Date();
     }
-    project.indexState.status = 'ready';
-    project.indexState.lastIndexed = new Date();
+  })().finally(() => {
+    project.initPromise = undefined;
+  });
+
+  await project.initPromise;
+}
+
+function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
+  if (project.stopWatcher) {
+    return;
   }
 
-  // Start file watcher
   project.stopWatcher = startFileWatcher({
     rootPath: project.rootPath,
     debounceMs,
@@ -879,6 +910,19 @@ async function initProject(rootPath: string, debounceMs: number): Promise<void> 
       void performIndexing(project, true);
     }
   });
+}
+
+async function initProject(
+  rootPath: string,
+  debounceMs: number,
+  options: InitProjectOptions
+): Promise<void> {
+  const project = getOrCreateProject(rootPath);
+  await ensureProjectInitialized(project);
+
+  if (options.enableWatcher) {
+    ensureProjectWatcher(project, debounceMs);
+  }
 }
 
 async function main() {
@@ -928,7 +972,7 @@ async function main() {
   // Preserve current single-project startup behavior without eagerly indexing every root.
   const startupRoots = getKnownRootPaths();
   if (startupRoots.length === 1) {
-    await initProject(startupRoots[0], watcherDebounceMs);
+    await initProject(startupRoots[0], watcherDebounceMs, { enableWatcher: true });
   }
 
   // Subscribe to root changes

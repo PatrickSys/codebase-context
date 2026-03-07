@@ -18,7 +18,7 @@ import type { ToolContext, ToolResponse } from './types.js';
 const PROJECT_DIRECTORY_PROPERTY: Record<string, string> = {
   type: 'string',
   description:
-    'Optional absolute path or file:// URI for the project root to use when multiple roots are available.'
+    'Optional absolute path or file:// URI for the project root to use for this call. Must point to an existing directory.'
 };
 
 function withProjectDirectory(definition: Tool): Tool {

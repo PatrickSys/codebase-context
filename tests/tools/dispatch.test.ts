@@ -38,6 +38,17 @@ describe('Tool Dispatch', () => {
     });
   });
 
+  it('all tools expose project_directory for multi-root routing', () => {
+    TOOLS.forEach((tool) => {
+      expect(tool.inputSchema.type).toBe('object');
+      expect(tool.inputSchema.properties).toMatchObject({
+        project_directory: expect.objectContaining({
+          type: 'string'
+        })
+      });
+    });
+  });
+
   it('dispatchTool returns error for unknown tool', async () => {
     const mockCtx: ToolContext = {
       indexState: { status: 'idle' },

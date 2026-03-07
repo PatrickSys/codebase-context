@@ -177,57 +177,25 @@ export async function handle(
     });
   } catch (error) {
     if (error instanceof IndexCorruptedError) {
-      console.error('[Auto-Heal] Index corrupted. Triggering full re-index...');
-
-      await ctx.performIndexing();
-
-      if (ctx.indexState.status === 'ready') {
-        console.error('[Auto-Heal] Success. Retrying search...');
-        const freshSearcher = new CodebaseSearcher(ctx.rootPath);
-        try {
-          results = await freshSearcher.search(queryStr, limit || 5, filters, {
-            profile: searchProfile
-          });
-        } catch (retryError) {
-          return {
-            content: [
+      console.error('[Auto-Heal] Index corrupted. Triggering background re-index...');
+      void ctx.performIndexing();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
               {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    status: 'error',
-                    message: `Auto-heal retry failed: ${
-                      retryError instanceof Error ? retryError.message : String(retryError)
-                    }`
-                  },
-                  null,
-                  2
-                )
-              }
-            ]
-          };
-        }
-      } else {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  status: 'error',
-                  message: `Auto-heal failed: Indexing ended with status '${ctx.indexState.status}'`,
-                  error: ctx.indexState.error
-                },
-                null,
-                2
-              )
-            }
-          ]
-        };
-      }
-    } else {
-      throw error; // Propagate unexpected errors
+                status: 'indexing',
+                message: 'Index was corrupt. Rebuild started — retry shortly.'
+              },
+              null,
+              2
+            )
+          }
+        ]
+      };
     }
+    throw error;
   }
 
   // Load memories for keyword matching, enriched with confidence

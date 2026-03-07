@@ -143,25 +143,12 @@ describe('search_codebase auto-heal', () => {
     }
   });
 
-  it('triggers indexing and retries when IndexCorruptedError is thrown', async () => {
+  it('fires background re-index and returns retry message when IndexCorruptedError is thrown', async () => {
     const { IndexCorruptedError } = await import('../src/errors/index.js');
 
-    searchMocks.search
-      .mockRejectedValueOnce(
-        new IndexCorruptedError('LanceDB index corrupted: missing vector column')
-      )
-      .mockResolvedValueOnce([
-        {
-          summary: 'Test summary',
-          snippet: 'Test snippet',
-          filePath: '/tmp/file.ts',
-          startLine: 1,
-          endLine: 2,
-          score: 0.9,
-          language: 'ts',
-          metadata: {}
-        }
-      ]);
+    searchMocks.search.mockRejectedValueOnce(
+      new IndexCorruptedError('LanceDB index corrupted: missing vector column')
+    );
 
     const { server } = await import('../src/index.js');
     const handler = (server as any)._requestHandlers.get('tools/call');
@@ -179,10 +166,9 @@ describe('search_codebase auto-heal', () => {
     });
 
     const payload = JSON.parse(response.content[0].text);
-    expect(payload.status).toBe('success');
-    expect(payload.results).toHaveLength(1);
-    expect(searchMocks.search).toHaveBeenCalledTimes(2);
-    expect(indexerMocks.index).toHaveBeenCalledTimes(1);
+    expect(payload.status).toBe('indexing');
+    expect(payload.message).toContain('retry');
+    expect(searchMocks.search).toHaveBeenCalledTimes(1);
   }, 15000);
 
   it('returns invalid_params when search_codebase query is missing', async () => {

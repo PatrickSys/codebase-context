@@ -4,7 +4,8 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 ## CLI Reference
 
-All shipped capabilities are available locally via the CLI (human-readable by default, `--json` for automation).
+Repo-scoped capabilities are available locally via the CLI (human-readable by default, `--json` for automation).
+Multi-project selection is MCP-only because the CLI already targets one root per invocation.
 For a “gallery” of commands and examples, see `docs/cli.md`.
 
 | Command | Flags | Maps to |
@@ -34,17 +35,24 @@ npx codebase-context reindex --incremental
 
 ## Tool Surface
 
-10 MCP tools + 1 optional resource (`codebase://context`). **Migration:** `get_component_usage` was removed; use `get_symbol_references` for symbol usage evidence.
+10 MCP tools + active/project-scoped context resources.
+
+Shared selector inputs:
+
+- `project` (preferred): project root path, file path, `file://` URI, or relative subproject path under a configured root
+- `project_directory` (compatibility alias): deprecated alias for `project`
+
+**Migration:** `get_component_usage` was removed; use `get_symbol_references` for symbol usage evidence.
 
 ### Core Tools
 
 | Tool                    | Input                                                             | Output                                                                                                                                                                                                                  |
 | ----------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` + decision card (`ready`, `nextAction`, `patterns`, `bestExample`, `impact`, `whatWouldHelp`) when `intent="edit"`. Hints capped at 3 per category. |
-| `get_team_patterns`     | optional `category`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
-| `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`. |
-| `remember`              | `type`, `category`, `memory`, `reason`                            | Persists to `.codebase-context/memory.json`                                                                                                                                          |
-| `get_memory`            | optional `category`, `type`, `query`, `limit`                     | Memories with confidence decay scoring                                                                                                                                               |
+| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets`, shared `project`/`project_directory` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` + decision card (`ready`, `nextAction`, `patterns`, `bestExample`, `impact`, `whatWouldHelp`) when `intent="edit"`. Hints capped at 3 per category. |
+| `get_team_patterns`     | optional `category`, shared `project`/`project_directory`     | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
+| `get_symbol_references` | `symbol`, optional `limit`, shared `project`/`project_directory` | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`. |
+| `remember`              | `type`, `category`, `memory`, `reason`, shared `project`/`project_directory` | Persists to `.codebase-context/memory.json`                                                                                                                                          |
+| `get_memory`            | optional `category`, `type`, `query`, `limit`, shared `project`/`project_directory` | Memories with confidence decay scoring                                                                                                                                               |
 
 ### Utility Tools
 
@@ -55,6 +63,28 @@ npx codebase-context reindex --incremental
 | `detect_circular_dependencies` | Import cycles in the file graph                      |
 | `refresh_index`                | Full or incremental re-index + git memory extraction |
 | `get_indexing_status`          | Index state, progress, last stats                    |
+
+## Project Routing
+
+Behavior matrix:
+
+| Situation | Server behavior |
+| --- | --- |
+| One known project | Automatic routing |
+| Multiple known projects + active project already set | Automatic routing to the active project |
+| Multiple known projects + no active project | `selection_required` |
+| No workspace context and no bootstrap path | `selection_required` until the caller passes `project` |
+
+Rules:
+
+- If the client provides workspace context, that becomes the trusted workspace boundary for the session. In practice this usually comes from MCP roots.
+- If the server still cannot tell which project to use, a bootstrap path or explicit absolute `project` path remains the fallback.
+- `project` is the canonical explicit selector when routing is ambiguous.
+- `project` may point at a project path, file path, `file://` URI, or relative subproject path.
+- Later tool calls may omit `project`; the server falls back to the active project when one has already been established.
+- The server does not rely on `cwd` walk-up in MCP mode.
+- `codebase://context` serves the active project. Before selection in an unresolved multi-project session, it returns a workspace overview with candidate projects, readiness state, and project-scoped resource URIs.
+- `codebase://context/project/<encoded-project-path>` serves a specific project directly and also makes that project active for later tool calls.
 
 ## Retrieval Pipeline
 

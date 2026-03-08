@@ -38,10 +38,13 @@ describe('Tool Dispatch', () => {
     });
   });
 
-  it('all tools expose project_directory for multi-root routing', () => {
+  it('all tools expose project and project_directory for multi-root routing', () => {
     TOOLS.forEach((tool) => {
       expect(tool.inputSchema.type).toBe('object');
       expect(tool.inputSchema.properties).toMatchObject({
+        project: expect.objectContaining({
+          type: 'string'
+        }),
         project_directory: expect.objectContaining({
           type: 'string'
         })

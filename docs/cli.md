@@ -1,12 +1,14 @@
 # CLI Gallery (Human-readable)
 
-`codebase-context` exposes its MCP tools as a local CLI so humans can:
+`codebase-context` exposes its tools as a local CLI so humans can:
 
 - Onboard themselves onto an unfamiliar repo
 - Debug what the MCP server is doing
 - Use outputs in CI/scripts (via `--json`)
 
 > Output depends on the repo you run it against. The examples below are illustrative (paths, counts, and detected frameworks will vary).
+>
+> The CLI is intentionally single-project per invocation. MCP multi-project routing and trusted-root auto-discovery are only for the MCP server; the CLI still targets one root via `CODEBASE_ROOT` or the current working directory.
 
 ## How to run
 

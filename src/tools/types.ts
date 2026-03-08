@@ -26,6 +26,16 @@ export interface ToolPaths {
   vectorDb: string;
 }
 
+export interface ProjectDescriptor {
+  project: string;
+  label: string;
+  rootPath: string;
+  relativePath?: string;
+  active: boolean;
+  source: 'root' | 'subdirectory' | 'ad_hoc';
+  indexStatus: 'idle' | 'indexing' | 'ready' | 'error';
+}
+
 export interface IndexState {
   status: 'idle' | 'indexing' | 'ready' | 'error';
   lastIndexed?: Date;
@@ -38,7 +48,10 @@ export interface ToolContext {
   indexState: IndexState;
   paths: ToolPaths;
   rootPath: string;
+  project?: ProjectDescriptor;
   performIndexing: (incrementalOnly?: boolean, reason?: string) => void;
+  listProjects?: () => ProjectDescriptor[];
+  getActiveProject?: () => ProjectDescriptor | undefined;
 }
 
 export interface ToolResponse {

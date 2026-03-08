@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INDEX_FORMAT_VERSION,
@@ -10,7 +11,10 @@ import {
   KEYWORD_INDEX_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../src/constants/codebase-context.js';
-import { CONTEXT_RESOURCE_URI } from '../src/resources/uri.js';
+import {
+  CONTEXT_RESOURCE_URI,
+  buildProjectContextResourceUri
+} from '../src/resources/uri.js';
 
 interface SearchResultRow {
   summary: string;
@@ -140,9 +144,28 @@ async function seedValidIndex(rootPath: string): Promise<void> {
   );
 }
 
+function parsePayload(response: ToolCallResponse): Record<string, unknown> {
+  return JSON.parse(response.content[0]?.text ?? '{}') as Record<string, unknown>;
+}
+
+async function callTool(
+  handler: (request: unknown) => Promise<ToolCallResponse | ResourceReadResponse>,
+  id: number,
+  name: string,
+  args: Record<string, unknown>
+): Promise<ToolCallResponse> {
+  return (await handler({
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: { name, arguments: args }
+  })) as ToolCallResponse;
+}
+
 describe('multi-project routing', () => {
   let primaryRoot: string;
   let secondaryRoot: string;
+  let nestedProjectRoot: string;
   let originalArgv: string[] | null = null;
   let originalEnvRoot: string | undefined;
 
@@ -156,11 +179,15 @@ describe('multi-project routing', () => {
 
     primaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cc-primary-root-'));
     secondaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cc-secondary-root-'));
+    nestedProjectRoot = path.join(primaryRoot, 'apps', 'dashboard');
+
     process.env.CODEBASE_ROOT = primaryRoot;
     process.argv[2] = primaryRoot;
 
     await seedValidIndex(primaryRoot);
     await seedValidIndex(secondaryRoot);
+    await fs.mkdir(nestedProjectRoot, { recursive: true });
+    await seedValidIndex(nestedProjectRoot);
 
     watcherMocks.start.mockImplementation(
       ({ rootPath }: { rootPath: string }) =>
@@ -199,139 +226,226 @@ describe('multi-project routing', () => {
     await fs.rm(secondaryRoot, { recursive: true, force: true });
   });
 
-  it('routes a tool call to the requested project_directory', async () => {
-    const { server } = await import('../src/index.js');
-    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+  it('starts without a bootstrap root and routes once client roots arrive', async () => {
+    delete process.env.CODEBASE_ROOT;
+    delete process.argv[2];
 
-    if (!handler) {
-      throw new Error('tools/call handler not registered');
-    }
-
-    const response = (await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: { query: 'feature', project_directory: secondaryRoot }
-      }
-    })) as ToolCallResponse;
-
-    expect(searchMocks.search).toHaveBeenCalledTimes(1);
-    expect(searchMocks.search.mock.calls[0]?.[0]).toBe(secondaryRoot);
-    expect(watcherMocks.start).not.toHaveBeenCalled();
-
-    const payload = JSON.parse(response.content[0].text) as {
-      status: string;
-      results: Array<{ file: string }>;
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string; name?: string }> }>;
     };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+    const handler = typedServer._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
 
-    expect(payload.status).toBe('success');
-    expect(payload.results[0]?.file).toContain('feature.ts');
-  });
-
-  it('keeps ad-hoc project_directory requests scoped to the current call', async () => {
-    const { server } = await import('../src/index.js');
-    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
-
-    if (!handler) {
-      throw new Error('tools/call handler not registered');
-    }
-
-    await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: { query: 'feature', project_directory: secondaryRoot }
-      }
+    typedServer.listRoots = vi.fn().mockResolvedValue({
+      roots: [{ uri: pathToFileURL(secondaryRoot).href, name: 'Secondary' }]
     });
 
-    const response = (await handler({
-      jsonrpc: '2.0',
-      id: 2,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: { query: 'feature' }
-      }
-    })) as ToolCallResponse;
+    try {
+      await refreshKnownRootsFromClient();
+      const response = await callTool(handler, 1, 'search_codebase', { query: 'feature' });
+      const payload = parsePayload(response) as {
+        status: string;
+        project: { rootPath: string; label: string };
+      };
 
-    expect(response.isError).not.toBe(true);
-    const payload = JSON.parse(response.content[0].text) as {
+      expect(payload.status).toBe('success');
+      expect(payload.project.rootPath).toBe(secondaryRoot);
+      expect(payload.project.label).toBe('Secondary');
+    } finally {
+      typedServer.listRoots = originalListRoots;
+    }
+  });
+
+  it('supports explicit project routing without bootstrap roots when the client does not expose roots', async () => {
+    delete process.env.CODEBASE_ROOT;
+    delete process.argv[2];
+
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string; name?: string }> }>;
+    };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+    const handler = typedServer._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    typedServer.listRoots = vi.fn().mockRejectedValue(new Error('roots unsupported'));
+
+    try {
+      await refreshKnownRootsFromClient();
+      const response = await callTool(handler, 2, 'search_codebase', {
+        query: 'feature',
+        project: secondaryRoot
+      });
+      const payload = parsePayload(response) as {
+        status: string;
+        project: { rootPath: string };
+      };
+
+      expect(payload.status).toBe('success');
+      expect(payload.project.rootPath).toBe(secondaryRoot);
+    } finally {
+      typedServer.listRoots = originalListRoots;
+    }
+  });
+
+  it('returns selection_required instead of silently falling back to cwd when startup is rootless and unresolved', async () => {
+    delete process.env.CODEBASE_ROOT;
+    delete process.argv[2];
+
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string; name?: string }> }>;
+    };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+    const handler = typedServer._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    typedServer.listRoots = vi.fn().mockRejectedValue(new Error('roots unsupported'));
+
+    try {
+      await refreshKnownRootsFromClient();
+      const response = await callTool(handler, 3, 'search_codebase', { query: 'feature' });
+      const payload = parsePayload(response) as {
+        status: string;
+        errorCode: string;
+      };
+
+      expect(response.isError).toBe(true);
+      expect(payload.status).toBe('selection_required');
+      expect(payload.errorCode).toBe('selection_required');
+      expect(searchMocks.search).not.toHaveBeenCalled();
+    } finally {
+      typedServer.listRoots = originalListRoots;
+    }
+  });
+
+  it('auto-selects the only known project when routing without an explicit selector', async () => {
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    await fs.rm(nestedProjectRoot, { recursive: true, force: true });
+    await refreshKnownRootsFromClient();
+    const response = await callTool(handler, 4, 'search_codebase', { query: 'feature' });
+    const payload = parsePayload(response) as {
       status: string;
-      results: Array<{ file: string }>;
+      project: { project: string; rootPath: string };
     };
 
     expect(payload.status).toBe('success');
-    expect(searchMocks.search).toHaveBeenCalledTimes(2);
-    expect(searchMocks.search.mock.calls[1]?.[0]).toBe(primaryRoot);
-    expect(payload.results[0]?.file).toContain('feature.ts');
+    expect(payload.project.rootPath).toBe(primaryRoot);
+    expect(payload.project.project).toBe(primaryRoot);
+    expect(watcherMocks.start).toHaveBeenCalledWith(expect.objectContaining({ rootPath: primaryRoot }));
   });
 
-  it('rejects unknown project_directory values before initialization starts', async () => {
+  it('explicit project starts a watcher and makes that project active', async () => {
     const { server } = await import('../src/index.js');
     const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
 
-    if (!handler) {
-      throw new Error('tools/call handler not registered');
-    }
-
-    const missingRoot = path.join(primaryRoot, 'does-not-exist');
-    const response = (await handler({
-      jsonrpc: '2.0',
-      id: 3,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: { query: 'feature', project_directory: missingRoot }
-      }
-    })) as ToolCallResponse;
-
-    expect(response.isError).toBe(true);
-    expect(searchMocks.search).not.toHaveBeenCalled();
-    expect(watcherMocks.start).not.toHaveBeenCalled();
-
-    const payload = JSON.parse(response.content[0].text) as {
+    const response = await callTool(handler, 5, 'search_codebase', {
+      query: 'feature',
+      project: secondaryRoot
+    });
+    const payload = parsePayload(response) as {
       status: string;
-      errorCode: string;
-      message: string;
+      project: { project: string; rootPath: string };
     };
 
-    expect(payload.status).toBe('error');
-    expect(payload.errorCode).toBe('unknown_project');
-    expect(payload.message).toContain('does not exist');
-  });
-
-  it('serializes concurrent initialization for the same known root', async () => {
-    const { server } = await import('../src/index.js');
-    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
-
-    if (!handler) {
-      throw new Error('tools/call handler not registered');
-    }
-
-    const makeRequest = (id: number) =>
-      handler({
-        jsonrpc: '2.0',
-        id,
-        method: 'tools/call',
-        params: {
-          name: 'get_indexing_status',
-          arguments: {}
-        }
-      });
-
-    await Promise.all([makeRequest(4), makeRequest(5)]);
-
-    expect(watcherMocks.start).toHaveBeenCalledTimes(1);
+    expect(payload.status).toBe('success');
+    expect(payload.project.rootPath).toBe(secondaryRoot);
+    expect(payload.project.project).toBe(secondaryRoot);
     expect(watcherMocks.start).toHaveBeenCalledWith(
-      expect.objectContaining({ rootPath: primaryRoot })
+      expect.objectContaining({ rootPath: secondaryRoot })
     );
   });
 
-  it('keeps resource reads pinned to known roots after ad-hoc project selection', async () => {
+  it('uses the active project for later tool calls and returns project metadata', async () => {
+    const { server } = await import('../src/index.js');
+    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    const selection = await callTool(handler, 6, 'search_codebase', {
+      query: 'feature',
+      project: secondaryRoot
+    });
+    const selectedProject = (parsePayload(selection) as { project: { project: string } }).project.project;
+
+    const response = await callTool(handler, 7, 'search_codebase', { query: 'feature' });
+    const payload = parsePayload(response) as {
+      status: string;
+      project: { project: string; rootPath: string };
+      results: Array<{ file: string }>;
+    };
+
+    expect(payload.status).toBe('success');
+    expect(payload.project.project).toBe(selectedProject);
+    expect(payload.project.rootPath).toBe(secondaryRoot);
+    expect(searchMocks.search).toHaveBeenCalledWith(
+      secondaryRoot,
+      'feature',
+      5,
+      undefined,
+      { profile: 'explore' }
+    );
+    expect(payload.results[0]?.file).toContain('feature.ts');
+  });
+
+  it('explicit project overrides the active project and updates subsequent routing', async () => {
+    const { server } = await import('../src/index.js');
+    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    await callTool(handler, 8, 'search_codebase', { query: 'feature', project: secondaryRoot });
+    await callTool(handler, 9, 'search_codebase', { query: 'feature', project: primaryRoot });
+    await callTool(handler, 10, 'search_codebase', { query: 'feature' });
+    await callTool(handler, 11, 'search_codebase', { query: 'feature' });
+
+    expect(searchMocks.search.mock.calls[0]?.[0]).toBe(secondaryRoot);
+    expect(searchMocks.search.mock.calls[1]?.[0]).toBe(primaryRoot);
+    expect(searchMocks.search.mock.calls[2]?.[0]).toBe(primaryRoot);
+    expect(searchMocks.search.mock.calls[3]?.[0]).toBe(primaryRoot);
+  });
+
+  it('requires explicit project selection in ambiguous multi-root sessions without an active project', async () => {
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string }> }>;
+    };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+    const handler = typedServer._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    typedServer.listRoots = vi.fn().mockResolvedValue({
+      roots: [{ uri: pathToFileURL(primaryRoot).href }, { uri: pathToFileURL(secondaryRoot).href }]
+    });
+
+    try {
+      await refreshKnownRootsFromClient();
+      const response = await callTool(handler, 12, 'search_codebase', { query: 'feature' });
+      const payload = parsePayload(response) as {
+        status: string;
+        errorCode: string;
+        reason: string;
+        nextAction: string;
+        availableProjects: Array<{ project: string; rootPath: string }>;
+      };
+
+      expect(response.isError).toBe(true);
+      expect(payload.status).toBe('selection_required');
+      expect(payload.errorCode).toBe('selection_required');
+      expect(payload.reason).toBe('multiple_projects_configured_no_active_context');
+      expect(payload.nextAction).toBe('retry_with_project');
+      expect(payload.availableProjects.length).toBeGreaterThanOrEqual(2);
+      expect(payload.availableProjects[0]?.project).toBeTruthy();
+    } finally {
+      typedServer.listRoots = originalListRoots;
+    }
+  });
+
+  it('generic context resource follows the active project after selection', async () => {
     const { server } = await import('../src/index.js');
     const requestHandler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
     const resourceHandler = (server as unknown as TestServer)._requestHandlers.get(
@@ -342,25 +456,136 @@ describe('multi-project routing', () => {
       throw new Error('required handlers not registered');
     }
 
-    await requestHandler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: { query: 'feature', project_directory: secondaryRoot }
-      }
+    await callTool(requestHandler, 13, 'search_codebase', {
+      query: 'feature',
+      project: secondaryRoot
     });
 
     const response = (await resourceHandler({
       jsonrpc: '2.0',
-      id: 3,
+      id: 14,
       method: 'resources/read',
       params: { uri: CONTEXT_RESOURCE_URI }
     })) as ResourceReadResponse;
 
     expect(response.contents[0]?.uri).toBe(CONTEXT_RESOURCE_URI);
     expect(response.contents[0]?.text).toContain('# Codebase Intelligence');
-    expect(response.contents[0]?.text).not.toContain('Multiple project roots are available');
+    expect(response.contents[0]?.text).not.toContain('Project selection required');
+  });
+
+  it('builds a workspace overview for multiple configured roots before selection', async () => {
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string }> }>;
+    };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+    const resourceHandler = typedServer._requestHandlers.get('resources/read');
+
+    if (!resourceHandler) {
+      throw new Error('resources/read handler not registered');
+    }
+
+    typedServer.listRoots = vi.fn().mockResolvedValue({
+      roots: [{ uri: pathToFileURL(primaryRoot).href }, { uri: pathToFileURL(secondaryRoot).href }]
+    });
+
+    try {
+      await refreshKnownRootsFromClient();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const response = (await resourceHandler({
+        jsonrpc: '2.0',
+        id: 15,
+        method: 'resources/read',
+        params: { uri: CONTEXT_RESOURCE_URI }
+      })) as ResourceReadResponse;
+
+      expect(response.contents[0]?.text).toContain('# Codebase Workspace');
+      expect(response.contents[0]?.text).toContain('client-announced roots as the workspace boundary');
+      expect(response.contents[0]?.text).toContain('codebase://context/project/');
+      expect(response.contents[0]?.text).toContain('retry tool calls with `project`');
+      expect(response.contents[0]?.text).toContain('apps/dashboard');
+      expect(response.contents[0]?.text).toMatch(/\[(idle|indexing|ready)\]/);
+      expect(watcherMocks.start).not.toHaveBeenCalledWith(
+        expect.objectContaining({ rootPath: secondaryRoot })
+      );
+    } finally {
+      typedServer.listRoots = originalListRoots;
+    }
+  });
+
+  it('supports project-scoped resource reads and monorepo subdirectory selection by relative path', async () => {
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const requestHandler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    const resourceHandler = (server as unknown as TestServer)._requestHandlers.get(
+      'resources/read'
+    );
+
+    if (!requestHandler || !resourceHandler) {
+      throw new Error('required handlers not registered');
+    }
+
+    await refreshKnownRootsFromClient();
+    const selection = await callTool(requestHandler, 16, 'search_codebase', {
+      query: 'feature',
+      project: 'apps/dashboard'
+    });
+    const payload = parsePayload(selection) as {
+      status: string;
+      project: { project: string; label: string; rootPath: string; relativePath?: string };
+    };
+
+    expect(payload.status).toBe('success');
+    expect(payload.project.rootPath).toBe(nestedProjectRoot);
+    expect(payload.project.label).toBe('apps/dashboard');
+    expect(payload.project.relativePath).toBe('apps/dashboard');
+
+    const response = (await resourceHandler({
+      jsonrpc: '2.0',
+      id: 17,
+      method: 'resources/read',
+      params: { uri: buildProjectContextResourceUri(payload.project.project) }
+    })) as ResourceReadResponse;
+
+    expect(response.contents[0]?.uri).toBe(
+      buildProjectContextResourceUri(payload.project.project)
+    );
+    expect(response.contents[0]?.text).toContain('# Codebase Intelligence');
+  });
+
+  it('resolves a file path selector to the nearest discovered project boundary', async () => {
+    const filePath = path.join(nestedProjectRoot, 'src', 'auth', 'guard.ts');
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, 'export const guard = true;\n', 'utf-8');
+
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string; name?: string }> }>;
+    };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+    const handler = typedServer._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    typedServer.listRoots = vi.fn().mockResolvedValue({
+      roots: [{ uri: pathToFileURL(primaryRoot).href, name: 'Primary' }]
+    });
+
+    try {
+      await refreshKnownRootsFromClient();
+      const response = await callTool(handler, 18, 'search_codebase', {
+        query: 'feature',
+        project: filePath
+      });
+      const payload = parsePayload(response) as {
+        status: string;
+        project: { rootPath: string; relativePath?: string };
+      };
+
+      expect(payload.status).toBe('success');
+      expect(payload.project.rootPath).toBe(nestedProjectRoot);
+      expect(payload.project.relativePath).toBe('apps/dashboard');
+    } finally {
+      typedServer.listRoots = originalListRoots;
+    }
   });
 });

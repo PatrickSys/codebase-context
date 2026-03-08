@@ -195,5 +195,6 @@ describe('CLI', () => {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
   });
+
 });
 

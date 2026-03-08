@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- **mcp:** rework multi-project routing so one MCP server can serve multiple projects instead of one hardcoded server entry per repo
+- **mcp:** keep explicit `project` as the fallback when the client does not provide enough project context
+- **mcp:** accept repo paths, subproject paths, and file paths as `project` selectors when routing is ambiguous
+
+### Documentation
+
+- simplify the setup story around three cases: default rootless setup, single-project fallback, and explicit `project` retries
+- clarify that issue #63 fixed the architecture and workspace-aware workflow, but issue #2 is not fully solved when the client does not provide enough project context
+- remove the repo-local `init` / marker-file story from the public setup guidance
+
 ## [1.8.2](https://github.com/PatrickSys/codebase-context/compare/v1.8.1...v1.8.2) (2026-03-05)
 
 
@@ -85,10 +99,13 @@
 ### Bug Fixes
 
 - restore `npx` / `npm exec` installs by removing the published pnpm-only `preinstall` guard
+- harden multi-project MCP routing so configured roots are pre-warmed in the background, `codebase://context` falls back to a workspace overview before selection, and ambiguous sessions now recover through an explicit path-based `project` selector instead of an opaque session ref
 
 ### Added
 
 - **Definition-first ranking**: Exact-name searches now show the file that _defines_ a symbol before files that use it. For example, searching `parseConfig` shows the function definition first, then callers.
+- **Path-based multi-project routing**: multi-project and monorepo sessions can route explicitly with `project` using an absolute repo path, `file://` URI, or a relative subproject path such as `apps/dashboard`.
+- **Project-scoped context resources**: `codebase://context/project/<encoded-project-path>` serves proactive context for a specific configured project and also makes later tool calls deterministic.
 
 ### Refactored
 
@@ -118,6 +135,7 @@
 - **2-hop transitive impact** (PR #50): `search --intent edit` impact now shows direct importers (hop 1) and their importers (hop 2), each labeled with distance. Capped at 20.
 - **Chokidar file watcher** (PR #52): index auto-refreshes in MCP server mode on file save (2 s debounce). No manual `reindex` needed during active editing sessions.
 - **CLI human formatters** (PR #48): all 9 commands now render as structured human-readable output. `--json` flag on every command for agent/pipe consumption.
+- **Multi-project MCP routing**: automatic routing still handles the single-project and already-active-project cases, while ambiguous multi-project sessions now require an explicit path-based `project` selector instead of forcing a selector-first flow.
 - **`status` + `reindex` formatters** (PR #56): status box with index health, progress, and last-built time. ASCII fallback via `CODEBASE_CONTEXT_ASCII=1`.
 - **`docs/cli.md` gallery** (PR #56): command reference with output previews for all 9 CLI commands.
 

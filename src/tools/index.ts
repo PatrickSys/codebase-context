@@ -23,8 +23,7 @@ const PROJECT_PROPERTY: Record<string, string> = {
 
 const PROJECT_DIRECTORY_PROPERTY: Record<string, string> = {
   type: 'string',
-  description:
-    'Deprecated compatibility alias for older clients. Prefer project.'
+  description: 'Deprecated compatibility alias for older clients. Prefer project.'
 };
 
 function withProjectSelector(definition: Tool): Tool {
@@ -52,9 +51,7 @@ function withProjectSelector(definition: Tool): Tool {
   };
 }
 
-export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10].map(
-  withProjectSelector
-);
+export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10].map(withProjectSelector);
 
 export async function dispatchTool(
   name: string,

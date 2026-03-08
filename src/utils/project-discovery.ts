@@ -171,9 +171,7 @@ export async function discoverProjectsWithinRoot(
       return;
     }
 
-    const fileNames = new Set(
-      entries.filter((entry) => entry.isFile()).map((entry) => entry.name)
-    );
+    const fileNames = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
     const directoryNames = new Set(
       entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
     );
@@ -230,9 +228,7 @@ export async function findNearestProjectBoundary(
       entries = [];
     }
 
-    const fileNames = new Set(
-      entries.filter((entry) => entry.isFile()).map((entry) => entry.name)
-    );
+    const fileNames = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
     const directoryNames = new Set(
       entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
     );
@@ -241,7 +237,10 @@ export async function findNearestProjectBoundary(
       return classification.candidate;
     }
 
-    if (resolvedTrustedRootPath && normalizePathKey(directoryPath) === normalizePathKey(resolvedTrustedRootPath)) {
+    if (
+      resolvedTrustedRootPath &&
+      normalizePathKey(directoryPath) === normalizePathKey(resolvedTrustedRootPath)
+    ) {
       return undefined;
     }
 

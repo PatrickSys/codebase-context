@@ -142,7 +142,11 @@ function rememberProjectPath(
   const rootKey = normalizeRootKey(resolvedRootPath);
   const existingSource = projectSourcesByKey.get(rootKey);
 
-  if (!existingSource || source === 'root' || (source === 'subdirectory' && existingSource === 'ad_hoc')) {
+  if (
+    !existingSource ||
+    source === 'root' ||
+    (source === 'subdirectory' && existingSource === 'ad_hoc')
+  ) {
     projectSourcesByKey.set(rootKey, source);
   }
 
@@ -305,11 +309,7 @@ function setActiveProject(rootPath: string): void {
 function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>): void {
   const nextRoots = new Map<string, { rootPath: string; label?: string }>();
   const normalizedRoots =
-    rootEntries.length > 0
-      ? rootEntries
-      : primaryRootPath
-        ? [{ rootPath: primaryRootPath }]
-        : [];
+    rootEntries.length > 0 ? rootEntries : primaryRootPath ? [{ rootPath: primaryRootPath }] : [];
 
   for (const entry of normalizedRoots) {
     const resolvedRootPath = path.resolve(entry.rootPath);
@@ -363,7 +363,9 @@ function parseProjectDirectory(value: unknown): string | undefined {
   const selector = parseProjectSelector(value);
   if (!selector) return undefined;
 
-  return selector.startsWith('file://') ? path.resolve(fileURLToPath(selector)) : path.resolve(selector);
+  return selector.startsWith('file://')
+    ? path.resolve(fileURLToPath(selector))
+    : path.resolve(selector);
 }
 
 function getProjectSourceForResolvedPath(rootPath: string): ProjectDescriptor['source'] {
@@ -390,7 +392,10 @@ async function resolveProjectFromAbsolutePath(resolvedPath: string): Promise<Pro
   } catch {
     return {
       ok: false,
-      response: buildProjectSelectionError('unknown_project', `project does not exist: ${absolutePath}`)
+      response: buildProjectSelectionError(
+        'unknown_project',
+        `project does not exist: ${absolutePath}`
+      )
     };
   }
 
@@ -410,9 +415,7 @@ async function resolveProjectFromAbsolutePath(resolvedPath: string): Promise<Pro
 
   const nearestBoundary = await findNearestProjectBoundary(absolutePath, containingRoot);
   const resolvedProjectPath =
-    nearestBoundary?.rootPath ??
-    containingRoot ??
-    (stats.isDirectory() ? absolutePath : undefined);
+    nearestBoundary?.rootPath ?? containingRoot ?? (stats.isDirectory() ? absolutePath : undefined);
 
   if (!resolvedProjectPath) {
     return {
@@ -449,7 +452,9 @@ function buildProjectSelectionPayload(
   return {
     status,
     message,
-    activeProject: project ? buildProjectDescriptor(project.rootPath) : getActiveProjectDescriptor() ?? null,
+    activeProject: project
+      ? buildProjectDescriptor(project.rootPath)
+      : (getActiveProjectDescriptor() ?? null),
     availableProjects: listProjectDescriptors(),
     ...extras
   };
@@ -592,10 +597,7 @@ async function validateResolvedProjectPath(rootPath: string): Promise<ToolRespon
 
     return undefined;
   } catch {
-    return buildProjectSelectionError(
-      'unknown_project',
-      `project does not exist: ${rootPath}`
-    );
+    return buildProjectSelectionError('unknown_project', `project does not exist: ${rootPath}`);
   }
 }
 
@@ -638,7 +640,9 @@ async function resolveProjectSelector(selector: string): Promise<ProjectResoluti
     if (descriptorMatches[0].source === 'subdirectory') {
       registerDiscoveredProjectPath(matchedRootPath, 'subdirectory');
     } else {
-      rememberProjectPath(matchedRootPath, classifyProjectSource(matchedRootPath), { touch: false });
+      rememberProjectPath(matchedRootPath, classifyProjectSource(matchedRootPath), {
+        touch: false
+      });
     }
     const project = getOrCreateProject(matchedRootPath);
     return { ok: true, project };
@@ -671,9 +675,9 @@ async function resolveProjectSelector(selector: string): Promise<ProjectResoluti
       continue;
     }
 
-    const payload = JSON.parse(
-      resolution.response.content?.[0]?.text ?? '{}'
-    ) as { errorCode?: string };
+    const payload = JSON.parse(resolution.response.content?.[0]?.text ?? '{}') as {
+      errorCode?: string;
+    };
     if (payload.errorCode !== 'unknown_project') {
       return resolution;
     }
@@ -1008,7 +1012,9 @@ function buildProjectSelectionMessage(): string {
     ''
   ];
   for (const project of projects) {
-    const projectPathHint = project.relativePath ? `${project.relativePath} | ${project.rootPath}` : project.rootPath;
+    const projectPathHint = project.relativePath
+      ? `${project.relativePath} | ${project.rootPath}`
+      : project.rootPath;
     lines.push(`- ${project.label} [${project.indexStatus}]`);
     lines.push(`  project: ${projectPathHint}`);
     lines.push(`  resource: ${buildProjectContextResourceUri(project.rootPath)}`);

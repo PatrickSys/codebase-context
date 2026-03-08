@@ -11,10 +11,7 @@ import {
   KEYWORD_INDEX_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../src/constants/codebase-context.js';
-import {
-  CONTEXT_RESOURCE_URI,
-  buildProjectContextResourceUri
-} from '../src/resources/uri.js';
+import { CONTEXT_RESOURCE_URI, buildProjectContextResourceUri } from '../src/resources/uri.js';
 
 interface SearchResultRow {
   summary: string;
@@ -47,6 +44,10 @@ const searchMocks = vi.hoisted(() => ({
   search: vi.fn()
 }));
 
+const indexerMocks = vi.hoisted(() => ({
+  index: vi.fn()
+}));
+
 const watcherMocks = vi.hoisted(() => ({
   start: vi.fn()
 }));
@@ -72,6 +73,7 @@ vi.mock('../src/core/indexer.js', () => {
     }
 
     async index() {
+      indexerMocks.index();
       return {
         totalFiles: 0,
         indexedFiles: 0,
@@ -172,6 +174,7 @@ describe('multi-project routing', () => {
   beforeEach(async () => {
     vi.resetModules();
     searchMocks.search.mockReset();
+    indexerMocks.index.mockReset();
     watcherMocks.start.mockReset();
 
     originalArgv = [...process.argv];
@@ -258,6 +261,75 @@ describe('multi-project routing', () => {
     }
   });
 
+  it('ignores invalid client roots instead of registering or creating them', async () => {
+    delete process.env.CODEBASE_ROOT;
+    delete process.argv[2];
+
+    const missingRoot = path.join(os.tmpdir(), `cc-missing-root-${Date.now()}`);
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string; name?: string }> }>;
+    };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+    const toolHandler = typedServer._requestHandlers.get('tools/call');
+    const resourceHandler = typedServer._requestHandlers.get('resources/read');
+    if (!toolHandler || !resourceHandler) throw new Error('required handlers not registered');
+
+    typedServer.listRoots = vi.fn().mockResolvedValue({
+      roots: [{ uri: pathToFileURL(missingRoot).href, name: 'Missing' }]
+    });
+
+    try {
+      await refreshKnownRootsFromClient();
+
+      const response = await callTool(toolHandler, 90, 'search_codebase', { query: 'feature' });
+      const payload = parsePayload(response) as {
+        status: string;
+        errorCode: string;
+      };
+
+      expect(response.isError).toBe(true);
+      expect(payload.status).toBe('selection_required');
+      expect(payload.errorCode).toBe('selection_required');
+      await expect(fs.stat(missingRoot)).rejects.toThrow();
+
+      const resourceResponse = (await resourceHandler({
+        jsonrpc: '2.0',
+        id: 91,
+        method: 'resources/read',
+        params: { uri: CONTEXT_RESOURCE_URI }
+      })) as ResourceReadResponse;
+
+      expect(resourceResponse.contents[0]?.text).not.toContain(missingRoot);
+    } finally {
+      typedServer.listRoots = originalListRoots;
+    }
+  });
+
+  it('does not eagerly index every announced root during background refresh', async () => {
+    delete process.env.CODEBASE_ROOT;
+    delete process.argv[2];
+
+    const unindexedRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cc-unindexed-root-'));
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string; name?: string }> }>;
+    };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+
+    typedServer.listRoots = vi.fn().mockResolvedValue({
+      roots: [{ uri: pathToFileURL(unindexedRoot).href, name: 'Unindexed' }]
+    });
+
+    try {
+      await refreshKnownRootsFromClient();
+      expect(indexerMocks.index).not.toHaveBeenCalled();
+    } finally {
+      typedServer.listRoots = originalListRoots;
+      await fs.rm(unindexedRoot, { recursive: true, force: true });
+    }
+  });
+
   it('supports explicit project routing without bootstrap roots when the client does not expose roots', async () => {
     delete process.env.CODEBASE_ROOT;
     delete process.argv[2];
@@ -337,7 +409,9 @@ describe('multi-project routing', () => {
     expect(payload.status).toBe('success');
     expect(payload.project.rootPath).toBe(primaryRoot);
     expect(payload.project.project).toBe(primaryRoot);
-    expect(watcherMocks.start).toHaveBeenCalledWith(expect.objectContaining({ rootPath: primaryRoot }));
+    expect(watcherMocks.start).toHaveBeenCalledWith(
+      expect.objectContaining({ rootPath: primaryRoot })
+    );
   });
 
   it('explicit project starts a watcher and makes that project active', async () => {
@@ -371,7 +445,8 @@ describe('multi-project routing', () => {
       query: 'feature',
       project: secondaryRoot
     });
-    const selectedProject = (parsePayload(selection) as { project: { project: string } }).project.project;
+    const selectedProject = (parsePayload(selection) as { project: { project: string } }).project
+      .project;
 
     const response = await callTool(handler, 7, 'search_codebase', { query: 'feature' });
     const payload = parsePayload(response) as {
@@ -383,13 +458,9 @@ describe('multi-project routing', () => {
     expect(payload.status).toBe('success');
     expect(payload.project.project).toBe(selectedProject);
     expect(payload.project.rootPath).toBe(secondaryRoot);
-    expect(searchMocks.search).toHaveBeenCalledWith(
-      secondaryRoot,
-      'feature',
-      5,
-      undefined,
-      { profile: 'explore' }
-    );
+    expect(searchMocks.search).toHaveBeenCalledWith(secondaryRoot, 'feature', 5, undefined, {
+      profile: 'explore'
+    });
     expect(payload.results[0]?.file).toContain('feature.ts');
   });
 
@@ -501,7 +572,9 @@ describe('multi-project routing', () => {
       })) as ResourceReadResponse;
 
       expect(response.contents[0]?.text).toContain('# Codebase Workspace');
-      expect(response.contents[0]?.text).toContain('client-announced roots as the workspace boundary');
+      expect(response.contents[0]?.text).toContain(
+        'client-announced roots as the workspace boundary'
+      );
       expect(response.contents[0]?.text).toContain('codebase://context/project/');
       expect(response.contents[0]?.text).toContain('retry tool calls with `project`');
       expect(response.contents[0]?.text).toContain('apps/dashboard');
@@ -547,9 +620,7 @@ describe('multi-project routing', () => {
       params: { uri: buildProjectContextResourceUri(payload.project.project) }
     })) as ResourceReadResponse;
 
-    expect(response.contents[0]?.uri).toBe(
-      buildProjectContextResourceUri(payload.project.project)
-    );
+    expect(response.contents[0]?.uri).toBe(buildProjectContextResourceUri(payload.project.project));
     expect(response.contents[0]?.text).toContain('# Codebase Intelligence');
   });
 

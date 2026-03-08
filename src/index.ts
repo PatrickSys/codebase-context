@@ -1200,19 +1200,42 @@ async function refreshDiscoveredProjectsForKnownRoots(): Promise<void> {
   );
 }
 
+async function validateClientRootEntries(
+  rootEntries: Array<{ rootPath: string; label?: string }>
+): Promise<Array<{ rootPath: string; label?: string }>> {
+  const validatedRoots = await Promise.all(
+    rootEntries.map(async (entry) => {
+      try {
+        const stats = await fs.stat(entry.rootPath);
+        if (!stats.isDirectory()) {
+          return undefined;
+        }
+
+        return entry;
+      } catch {
+        return undefined;
+      }
+    })
+  );
+
+  return validatedRoots.filter((entry): entry is { rootPath: string; label?: string } => !!entry);
+}
+
 async function refreshKnownRootsFromClient(): Promise<void> {
   try {
     const { roots } = await server.listRoots();
-    const fileRoots = roots
-      .map((root) => ({
-        uri: root.uri,
-        label: typeof root.name === 'string' && root.name.trim() ? root.name.trim() : undefined
-      }))
-      .filter((root) => root.uri.startsWith('file://'))
-      .map((root) => ({
-        rootPath: fileURLToPath(root.uri),
-        label: root.label
-      }));
+    const fileRoots = await validateClientRootEntries(
+      roots
+        .map((root) => ({
+          uri: root.uri,
+          label: typeof root.name === 'string' && root.name.trim() ? root.name.trim() : undefined
+        }))
+        .filter((root) => root.uri.startsWith('file://'))
+        .map((root) => ({
+          rootPath: fileURLToPath(root.uri),
+          label: root.label
+        }))
+    );
 
     clientRootsEnabled = fileRoots.length > 0;
     syncKnownRoots(fileRoots);
@@ -1222,14 +1245,6 @@ async function refreshKnownRootsFromClient(): Promise<void> {
   }
 
   await refreshDiscoveredProjectsForKnownRoots();
-
-  await Promise.all(
-    getKnownRootPaths().map((rootPath) =>
-      initProject(rootPath, watcherDebounceMs, { enableWatcher: false }).catch(() => {
-        /* best-effort prewarm */
-      })
-    )
-  );
 }
 
 async function resolveExplicitProjectSelection(selection: {
@@ -1605,7 +1620,7 @@ async function main() {
 
   await refreshKnownRootsFromClient();
 
-  // Keep the current single-project auto-select behavior while roots are pre-warmed in background.
+  // Keep the current single-project auto-select behavior when exactly one startup project is known.
   const startupRoots = getKnownRootPaths();
   if (startupRoots.length === 1) {
     await initProject(startupRoots[0], watcherDebounceMs, { enableWatcher: true });

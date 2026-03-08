@@ -72,10 +72,10 @@ Start with the default setup:
 
 ### Pick the right setup
 
-| Situation | Recommended config |
-| --- | --- |
-| Default setup | Run `npx -y codebase-context` with no project path |
-| Single repo setup | Append one project path or set `CODEBASE_ROOT` |
+| Situation                             | Recommended config                                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Default setup                         | Run `npx -y codebase-context` with no project path                                                   |
+| Single repo setup                     | Append one project path or set `CODEBASE_ROOT`                                                       |
 | Multi-project call is still ambiguous | Retry with `project`, or keep separate server entries if your client cannot preserve project context |
 
 ### Recommended setup
@@ -195,11 +195,11 @@ The MCP server can serve multiple projects in one session without requiring one 
 
 Three cases matter:
 
-| Case | What happens |
-| --- | --- |
-| One project | Routing is automatic |
+| Case                                                               | What happens                                                  |
+| ------------------------------------------------------------------ | ------------------------------------------------------------- |
+| One project                                                        | Routing is automatic                                          |
 | Multiple projects and the client provides enough workspace context | The server can route across those projects in one MCP session |
-| Multiple projects and the target is still ambiguous | The server does not guess. Use `project` explicitly |
+| Multiple projects and the target is still ambiguous                | The server does not guess. Use `project` explicitly           |
 
 Important rules:
 
@@ -265,7 +265,7 @@ Then point your MCP client at the local build:
   "mcpServers": {
     "codebase-context": {
       "command": "node",
-      "args": ["C:/Users/bitaz/Repos/codebase-context/dist/index.js"]
+      "args": ["<path-to-local-build>/dist/index.js"]
     }
   }
 }
@@ -278,7 +278,7 @@ If the default setup is not enough for your client, use this instead:
   "mcpServers": {
     "codebase-context": {
       "command": "node",
-      "args": ["C:/Users/bitaz/Repos/codebase-context/dist/index.js", "C:/path/to/your/project"]
+      "args": ["<path-to-local-build>/dist/index.js", "/path/to/your/project"]
     }
   }
 }
@@ -514,7 +514,7 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 | ------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `EMBEDDING_PROVIDER`     | `transformers`             | `openai` (fast, cloud) or `transformers` (local, private)                                                  |
 | `OPENAI_API_KEY`         | -                          | Required only if using `openai` provider                                                                   |
-| `CODEBASE_ROOT`          | -                          | Optional bootstrap root for CLI and single-project MCP clients without roots                              |
+| `CODEBASE_ROOT`          | -                          | Optional bootstrap root for CLI and single-project MCP clients without roots                               |
 | `CODEBASE_CONTEXT_DEBUG` | -                          | Set to `1` for verbose logging                                                                             |
 | `EMBEDDING_MODEL`        | `Xenova/bge-small-en-v1.5` | Local embedding model override (e.g. `onnx-community/granite-embedding-small-english-r2-ONNX` for Granite) |
 

@@ -25,6 +25,14 @@ const TRANSFORMERS_MODEL_CONFIGS: Record<string, { dimensions: number; maxContex
  * remote providers (OpenAI, Ollama) with their specific dimension logic.
  */
 export function getConfiguredDimensions(config: Partial<EmbeddingConfig> = {}): number {
+  // Allow explicit dimension override via env var for custom models
+  if (process.env.EMBEDDING_DIMENSIONS) {
+    const parsed = parseInt(process.env.EMBEDDING_DIMENSIONS, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
   const provider =
     config.provider ?? parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers';
   const model = config.model ?? process.env.EMBEDDING_MODEL ?? DEFAULT_MODEL;
@@ -34,6 +42,8 @@ export function getConfiguredDimensions(config: Partial<EmbeddingConfig> = {}): 
     const ollamaDimensions: Record<string, number> = {
       'nomic-embed-text': 768,
       'nomic-embed-text:latest': 768,
+      embeddinggemma: 768,
+      'embeddinggemma:latest': 768,
       'mxbai-embed-large': 1024,
       'mxbai-embed-large:latest': 1024,
       'all-minilm': 384,
@@ -73,9 +83,11 @@ export async function getEmbeddingProvider(
 
   if (mergedConfig.provider === 'ollama') {
     const { OllamaEmbeddingProvider } = await import('./ollama.js');
+    const endpoint =
+      mergedConfig.apiEndpoint || process.env.OLLAMA_HOST || 'http://localhost:11434';
     const provider = new OllamaEmbeddingProvider(
       mergedConfig.model || 'nomic-embed-text',
-      mergedConfig.apiEndpoint || 'http://localhost:11434'
+      endpoint
     );
     await provider.initialize();
     cachedProvider = provider;
@@ -93,6 +105,6 @@ export async function getEmbeddingProvider(
   return provider;
 }
 
-// Re-export TransformersEmbeddingProvider and MODEL_CONFIGS for consumers who need them
-// These will trigger transformers loading, but only when explicitly imported
-export { TransformersEmbeddingProvider, MODEL_CONFIGS } from './transformers.js';
+// Note: transformers provider is lazy-loaded in getEmbeddingProvider to avoid
+// eager heavy dependency loading. Consumers should import from './transformers'
+// directly if they need access to provider implementation or MODEL_CONFIGS.

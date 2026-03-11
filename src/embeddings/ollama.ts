@@ -8,6 +8,8 @@ interface OllamaEmbeddingResponse {
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'nomic-embed-text': 2048,
   'nomic-embed-text:latest': 2048,
+  embeddinggemma: 2048,
+  'embeddinggemma:latest': 2048,
   'mxbai-embed-large': 512,
   'mxbai-embed-large:latest': 512,
   'all-minilm': 512,
@@ -31,12 +33,22 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
   private maxChars: number;
 
   // Default dimensions for nomic-embed-text (768)
-  // Override via EMBEDDING_MODEL env var for other models
+  // Override via EMBEDDING_DIMENSIONS env var for custom models
   get dimensions(): number {
+    // Allow explicit dimension override via env var
+    if (process.env.EMBEDDING_DIMENSIONS) {
+      const parsed = parseInt(process.env.EMBEDDING_DIMENSIONS, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+
     // Common Ollama embedding model dimensions
     const modelDimensions: Record<string, number> = {
       'nomic-embed-text': 768,
       'nomic-embed-text:latest': 768,
+      embeddinggemma: 768,
+      'embeddinggemma:latest': 768,
       'mxbai-embed-large': 1024,
       'mxbai-embed-large:latest': 1024,
       'all-minilm': 384,

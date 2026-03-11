@@ -344,9 +344,10 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 
 | Variable                 | Default                    | Description                                                                                   |
 | ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------- |
-| `EMBEDDING_PROVIDER`     | `transformers`             | `openai` (fast, cloud) or `transformers` (local, private)                                     |
+| `EMBEDDING_PROVIDER`     | `transformers`             | `transformers` (local, private), `openai` (fast, cloud), or `ollama` (local via Ollama)        |
 | `OPENAI_API_KEY`         | -                          | Required only if using `openai` provider                                                      |
 | `OPENAI_BASE_URL`        | `https://api.openai.com/v1` | Custom OpenAI-compatible API endpoint (LiteLLM, Groq, OpenRouter, etc.)                       |
+| `OLLAMA_HOST`            | `http://localhost:11434`   | Ollama server URL (only used when `EMBEDDING_PROVIDER=ollama`)                                |
 | `CODEBASE_ROOT`          | -                          | Project root (CLI arg takes precedence)                                                       |
 | `CODEBASE_CONTEXT_DEBUG` | -                          | Set to `1` for verbose logging                                                                |
 | `EMBEDDING_MODEL`        | `Xenova/bge-small-en-v1.5` | Local embedding model override (e.g. `onnx-community/granite-embedding-small-english-r2-ONNX` for Granite) |

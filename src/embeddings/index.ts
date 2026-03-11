@@ -22,6 +22,18 @@ export function getConfiguredDimensions(config: Partial<EmbeddingConfig> = {}): 
     config.provider ?? parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers';
   const model = config.model ?? process.env.EMBEDDING_MODEL ?? DEFAULT_MODEL;
   if (provider === 'openai') return model.includes('large') ? 3072 : 1536; // text-embedding-3-large: 3072, all others: 1536
+  if (provider === 'ollama') {
+    // Common Ollama embedding model dimensions
+    const ollamaDimensions: Record<string, number> = {
+      'nomic-embed-text': 768,
+      'nomic-embed-text:latest': 768,
+      'mxbai-embed-large': 1024,
+      'mxbai-embed-large:latest': 1024,
+      'all-minilm': 384,
+      'all-minilm:latest': 384,
+    };
+    return ollamaDimensions[model] || 768;
+  }
   // Look up from the same MODEL_CONFIGS the provider uses — avoids stale hardcoded guesses
   return MODEL_CONFIGS[model]?.dimensions ?? 384;
 }
@@ -57,7 +69,15 @@ export async function getEmbeddingProvider(
   }
 
   if (mergedConfig.provider === 'ollama') {
-    console.warn('Ollama provider not yet implemented, falling back to Transformers.js');
+    const { OllamaEmbeddingProvider } = await import('./ollama.js');
+    const provider = new OllamaEmbeddingProvider(
+      mergedConfig.model || 'nomic-embed-text',
+      mergedConfig.apiEndpoint || 'http://localhost:11434'
+    );
+    await provider.initialize();
+    cachedProvider = provider;
+    cachedProviderType = providerKey;
+    return provider;
   }
 
   const provider = new TransformersEmbeddingProvider(mergedConfig.model);

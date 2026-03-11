@@ -32,11 +32,23 @@ export function parseEmbeddingProviderName(
 // better conceptual search at the cost of 5-10x slower indexing and higher RAM usage
 export const DEFAULT_MODEL = process.env.EMBEDDING_MODEL || 'Xenova/bge-small-en-v1.5';
 
+function getDefaultApiEndpoint(provider: EmbeddingConfig['provider']): string | undefined {
+  if (provider === 'ollama') {
+    return process.env.OLLAMA_HOST || 'http://localhost:11434';
+  }
+  if (provider === 'openai') {
+    return process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+  }
+  return undefined;
+}
+
 export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
   provider: parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers',
   model: DEFAULT_MODEL,
   batchSize: 32,
   maxRetries: 3,
   apiKey: process.env.OPENAI_API_KEY,
-  apiEndpoint: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
+  get apiEndpoint() {
+    return getDefaultApiEndpoint(this.provider);
+  }
 };

@@ -4,7 +4,12 @@
 
 ### Features
 
-* **embeddings:** Add `OPENAI_BASE_URL` support for custom OpenAI-compatible endpoints (e.g., Ollama, LiteLLM) ([#70](https://github.com/PatrickSys/codebase-context/issues/70))
+* **embeddings:** Add native Ollama provider for local embeddings ([#70](https://github.com/PatrickSys/codebase-context/issues/70))
+  - New `EMBEDDING_PROVIDER=ollama` option
+  - Supports `OLLAMA_HOST` environment variable (default: http://localhost:11434)
+  - Configurable via `EMBEDDING_MODEL` (default: nomic-embed-text, 768 dimensions)
+  - Also adds `OPENAI_BASE_URL` for custom OpenAI-compatible endpoints
+  - Tested with nomic-embed-text (768 dim), mxbai-embed-large (1024 dim), all-minilm (384 dim)
 
 ## [1.8.2](https://github.com/PatrickSys/codebase-context/compare/v1.8.1...v1.8.2) (2026-03-05)
 

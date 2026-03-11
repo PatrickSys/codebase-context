@@ -15,36 +15,43 @@ import { definition as d10, handle as h10 } from './get-memory.js';
 
 import type { ToolContext, ToolResponse } from './types.js';
 
-const PROJECT_DIRECTORY_PROPERTY: Record<string, string> = {
+const PROJECT_PROPERTY: Record<string, string> = {
   type: 'string',
   description:
-    'Optional absolute path or file:// URI for the project root to use for this call. Must point to an existing directory.'
+    'Optional project selector for this call. Accepts a project root path, file path, file:// URI, or a relative subproject path under a configured root.'
 };
 
-function withProjectDirectory(definition: Tool): Tool {
+const PROJECT_DIRECTORY_PROPERTY: Record<string, string> = {
+  type: 'string',
+  description: 'Deprecated compatibility alias for older clients. Prefer project.'
+};
+
+function withProjectSelector(definition: Tool): Tool {
   const schema = definition.inputSchema;
   if (!schema || schema.type !== 'object') {
     return definition;
   }
 
   const properties = { ...(schema.properties ?? {}) };
-  if ('project_directory' in properties) {
+  if ('project' in properties && 'project_directory' in properties) {
     return definition;
   }
 
   return {
     ...definition,
+    description: `Routes to the active/current project automatically when known. ${definition.description}`,
     inputSchema: {
       ...schema,
       properties: {
         ...properties,
+        ...('project' in properties ? {} : { project: PROJECT_PROPERTY }),
         project_directory: PROJECT_DIRECTORY_PROPERTY
       }
     }
   };
 }
 
-export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10].map(withProjectDirectory);
+export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10].map(withProjectSelector);
 
 export async function dispatchTool(
   name: string,

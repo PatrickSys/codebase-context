@@ -38,13 +38,25 @@ import {
   isComplementaryPatternCategory,
   shouldSkipLegacyTestingFrameworkCategory
 } from './patterns/semantics.js';
-import { CONTEXT_RESOURCE_URI, isContextResourceUri } from './resources/uri.js';
+import {
+  CONTEXT_RESOURCE_URI,
+  buildProjectContextResourceUri,
+  getProjectPathFromContextResourceUri,
+  isContextResourceUri
+} from './resources/uri.js';
+import {
+  discoverProjectsWithinRoot,
+  findNearestProjectBoundary,
+  isPathWithin
+} from './utils/project-discovery.js';
 import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
 import { TOOLS, dispatchTool, type ToolContext, type ToolResponse } from './tools/index.js';
-import type { ToolPaths } from './tools/types.js';
+import type { ProjectDescriptor, ToolPaths } from './tools/types.js';
 import {
   getOrCreateProject,
   getAllProjects,
+  getProject,
+  makePaths,
   makeLegacyPaths,
   normalizeRootKey,
   removeProject,
@@ -54,29 +66,31 @@ import {
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
-// Resolve root path with validation
-function resolveRootPath(): string {
+// Resolve optional bootstrap root with validation handled later in main().
+function resolveRootPath(): string | undefined {
   const arg = process.argv[2];
   const envPath = process.env.CODEBASE_ROOT;
 
-  // Priority: CLI arg > env var > cwd
-  let rootPath = arg || envPath || process.cwd();
-  rootPath = path.resolve(rootPath);
-
-  // Warn if using cwd as fallback (guarded to avoid stderr during MCP STDIO handshake)
-  if (!arg && !envPath && process.env.CODEBASE_CONTEXT_DEBUG) {
-    console.error(`[DEBUG] No project path specified. Using current directory: ${rootPath}`);
-    console.error(`[DEBUG] Hint: Specify path as CLI argument or set CODEBASE_ROOT env var`);
+  // Priority: CLI arg > env var. Do not fall back to cwd in MCP mode.
+  const configuredRoot = arg || envPath;
+  if (!configuredRoot) {
+    return undefined;
   }
 
-  return rootPath;
+  return path.resolve(configuredRoot);
 }
 
 const primaryRootPath = resolveRootPath();
-const primaryProject = getOrCreateProject(primaryRootPath);
 const toolNames = new Set(TOOLS.map((tool) => tool.name));
-const knownRoots = new Map<string, string>();
+const knownRoots = new Map<string, { rootPath: string; label?: string }>();
+const discoveredProjectPaths = new Map<string, string>();
 let clientRootsEnabled = false;
+const projectSourcesByKey = new Map<string, ProjectDescriptor['source']>();
+const projectAccessOrder = new Map<string, number>();
+let activeProjectKey: string | undefined;
+let nextProjectAccessOrder = 1;
+const MAX_WATCHED_PROJECTS = 5;
+const PROJECT_DISCOVERY_MAX_DEPTH = 4;
 const debounceEnv = Number.parseInt(process.env.CODEBASE_CONTEXT_DEBOUNCE_MS ?? '', 10);
 const watcherDebounceMs = Number.isFinite(debounceEnv) && debounceEnv >= 0 ? debounceEnv : 2000;
 
@@ -86,61 +100,377 @@ type ProjectResolution =
 
 function registerKnownRoot(rootPath: string): string {
   const resolvedRootPath = path.resolve(rootPath);
-  knownRoots.set(normalizeRootKey(resolvedRootPath), resolvedRootPath);
+  knownRoots.set(normalizeRootKey(resolvedRootPath), { rootPath: resolvedRootPath });
+  rememberProjectPath(resolvedRootPath, 'root');
   return resolvedRootPath;
 }
 
 function getKnownRootPaths(): string[] {
-  return Array.from(knownRoots.values()).sort((a, b) => a.localeCompare(b));
+  return Array.from(knownRoots.values())
+    .map((entry) => entry.rootPath)
+    .sort((a, b) => a.localeCompare(b));
 }
 
-function syncKnownRoots(rootPaths: string[]): void {
-  const nextRoots = new Map<string, string>();
-  const normalizedRoots = rootPaths.length > 0 ? rootPaths : [primaryRootPath];
+function getKnownRootLabel(rootPath: string): string | undefined {
+  return knownRoots.get(normalizeRootKey(rootPath))?.label;
+}
 
-  for (const rootPath of normalizedRoots) {
-    const resolvedRootPath = path.resolve(rootPath);
-    nextRoots.set(normalizeRootKey(resolvedRootPath), resolvedRootPath);
+function getContainingKnownRoot(rootPath: string): string | undefined {
+  const orderedRoots = getKnownRootPaths().sort((a, b) => b.length - a.length);
+  return orderedRoots.find((knownRootPath) => isPathWithin(knownRootPath, rootPath));
+}
+
+function classifyProjectSource(rootPath: string): ProjectDescriptor['source'] {
+  const rootKey = normalizeRootKey(rootPath);
+  if (knownRoots.has(rootKey)) {
+    return 'root';
+  }
+  return getContainingKnownRoot(rootPath) ? 'subdirectory' : 'ad_hoc';
+}
+
+function touchProject(rootPath: string): void {
+  projectAccessOrder.set(normalizeRootKey(rootPath), nextProjectAccessOrder++);
+}
+
+function rememberProjectPath(
+  rootPath: string,
+  source: ProjectDescriptor['source'] = classifyProjectSource(rootPath),
+  options: { touch?: boolean } = {}
+): void {
+  const resolvedRootPath = path.resolve(rootPath);
+  const rootKey = normalizeRootKey(resolvedRootPath);
+  const existingSource = projectSourcesByKey.get(rootKey);
+
+  if (
+    !existingSource ||
+    source === 'root' ||
+    (source === 'subdirectory' && existingSource === 'ad_hoc')
+  ) {
+    projectSourcesByKey.set(rootKey, source);
   }
 
-  for (const [rootKey, existingRootPath] of knownRoots.entries()) {
+  if (options.touch !== false) {
+    touchProject(resolvedRootPath);
+  }
+}
+
+function registerDiscoveredProjectPath(
+  rootPath: string,
+  source: ProjectDescriptor['source'] = 'subdirectory'
+): void {
+  const resolvedRootPath = path.resolve(rootPath);
+  discoveredProjectPaths.set(normalizeRootKey(resolvedRootPath), resolvedRootPath);
+  rememberProjectPath(resolvedRootPath, source, { touch: false });
+}
+
+function clearDiscoveredProjectPaths(): void {
+  discoveredProjectPaths.clear();
+}
+
+function getTrackedRootPathByKey(rootKey: string): string | undefined {
+  if (knownRoots.has(rootKey)) {
+    return knownRoots.get(rootKey)?.rootPath;
+  }
+
+  const project = Array.from(getAllProjects()).find(
+    (entry) => normalizeRootKey(entry.rootPath) === rootKey
+  );
+  return project?.rootPath;
+}
+
+function forgetProjectPath(rootPath: string): void {
+  const rootKey = normalizeRootKey(rootPath);
+  projectSourcesByKey.delete(rootKey);
+  projectAccessOrder.delete(rootKey);
+  if (activeProjectKey === rootKey) {
+    activeProjectKey = undefined;
+  }
+}
+
+function formatProjectLabel(rootPath: string): string {
+  const knownRootLabel = getKnownRootLabel(rootPath);
+  if (knownRootLabel) {
+    return knownRootLabel;
+  }
+
+  const containingRoot = getContainingKnownRoot(rootPath);
+  if (containingRoot) {
+    const relativePath = path.relative(containingRoot, rootPath);
+    if (!relativePath) {
+      return getKnownRootLabel(containingRoot) ?? (path.basename(rootPath) || rootPath);
+    }
+    return relativePath.replace(/\\/g, '/');
+  }
+  return path.basename(rootPath) || rootPath;
+}
+
+function getRelativeProjectPath(rootPath: string): string | undefined {
+  const containingRoot = getContainingKnownRoot(rootPath);
+  if (!containingRoot) return undefined;
+
+  const relativePath = path.relative(containingRoot, rootPath).replace(/\\/g, '/');
+  return relativePath || undefined;
+}
+
+function getProjectIndexStatus(rootPath: string): ProjectDescriptor['indexStatus'] {
+  return getProject(rootPath)?.indexState.status ?? 'idle';
+}
+
+function buildProjectDescriptor(rootPath: string): ProjectDescriptor {
+  const resolvedRootPath = path.resolve(rootPath);
+  const rootKey = normalizeRootKey(resolvedRootPath);
+  rememberProjectPath(resolvedRootPath, classifyProjectSource(resolvedRootPath), { touch: false });
+  return {
+    project: resolvedRootPath,
+    label: formatProjectLabel(resolvedRootPath),
+    rootPath: resolvedRootPath,
+    relativePath: getRelativeProjectPath(resolvedRootPath),
+    active: activeProjectKey === rootKey,
+    source: projectSourcesByKey.get(rootKey) ?? classifyProjectSource(resolvedRootPath),
+    indexStatus: getProjectIndexStatus(resolvedRootPath)
+  };
+}
+
+function listProjectDescriptors(): ProjectDescriptor[] {
+  const rootPaths = new Map<string, string>();
+  for (const rootPath of getKnownRootPaths()) {
+    rootPaths.set(normalizeRootKey(rootPath), rootPath);
+  }
+  for (const [projectKey, rootPath] of discoveredProjectPaths.entries()) {
+    rootPaths.set(projectKey, rootPath);
+  }
+  for (const project of getAllProjects()) {
+    rootPaths.set(normalizeRootKey(project.rootPath), project.rootPath);
+  }
+
+  const descriptors = Array.from(rootPaths.values())
+    .map((rootPath) => buildProjectDescriptor(rootPath))
+    .sort((a, b) => {
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      if (a.source !== b.source) {
+        const weight: Record<ProjectDescriptor['source'], number> = {
+          root: 0,
+          subdirectory: 1,
+          ad_hoc: 2
+        };
+        return weight[a.source] - weight[b.source];
+      }
+      return a.label.localeCompare(b.label);
+    });
+
+  const duplicates = new Set<string>();
+  const counts = new Map<string, number>();
+  for (const descriptor of descriptors) {
+    counts.set(descriptor.label, (counts.get(descriptor.label) ?? 0) + 1);
+  }
+  for (const [label, count] of counts.entries()) {
+    if (count > 1) {
+      duplicates.add(label);
+    }
+  }
+
+  return descriptors.map((descriptor) => {
+    if (!duplicates.has(descriptor.label)) {
+      return descriptor;
+    }
+
+    const containingRoot = getContainingKnownRoot(descriptor.rootPath);
+    const rootHint =
+      (containingRoot && getKnownRootLabel(containingRoot)) ||
+      (containingRoot && path.basename(containingRoot)) ||
+      path.basename(descriptor.rootPath);
+
+    return {
+      ...descriptor,
+      label: `${descriptor.label} (${rootHint})`
+    };
+  });
+}
+
+function getActiveProjectDescriptor(): ProjectDescriptor | undefined {
+  if (!activeProjectKey) return undefined;
+  const trackedRootPath = getTrackedRootPathByKey(activeProjectKey);
+
+  if (!trackedRootPath) {
+    activeProjectKey = undefined;
+    return undefined;
+  }
+
+  return buildProjectDescriptor(trackedRootPath);
+}
+
+function setActiveProject(rootPath: string): void {
+  const resolvedRootPath = path.resolve(rootPath);
+  activeProjectKey = normalizeRootKey(resolvedRootPath);
+  rememberProjectPath(resolvedRootPath);
+}
+
+function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>): void {
+  const nextRoots = new Map<string, { rootPath: string; label?: string }>();
+  const normalizedRoots =
+    rootEntries.length > 0 ? rootEntries : primaryRootPath ? [{ rootPath: primaryRootPath }] : [];
+
+  for (const entry of normalizedRoots) {
+    const resolvedRootPath = path.resolve(entry.rootPath);
+    nextRoots.set(normalizeRootKey(resolvedRootPath), {
+      rootPath: resolvedRootPath,
+      label: entry.label?.trim() || undefined
+    });
+  }
+
+  for (const [rootKey, existingRoot] of knownRoots.entries()) {
     if (!nextRoots.has(rootKey)) {
-      removeProject(existingRootPath);
+      removeProject(existingRoot.rootPath);
+      forgetProjectPath(existingRoot.rootPath);
+    }
+  }
+
+  for (const project of getAllProjects()) {
+    const stillAllowed = Array.from(nextRoots.values()).some((knownRoot) =>
+      isPathWithin(knownRoot.rootPath, project.rootPath)
+    );
+    if (!stillAllowed) {
+      removeProject(project.rootPath);
+      forgetProjectPath(project.rootPath);
     }
   }
 
   knownRoots.clear();
-  for (const [rootKey, rootPath] of nextRoots.entries()) {
-    knownRoots.set(rootKey, rootPath);
+  clearDiscoveredProjectPaths();
+  for (const [rootKey, rootEntry] of nextRoots.entries()) {
+    knownRoots.set(rootKey, rootEntry);
+    rememberProjectPath(rootEntry.rootPath, 'root', { touch: false });
+  }
+
+  if (activeProjectKey) {
+    if (!getTrackedRootPathByKey(activeProjectKey)) {
+      activeProjectKey = undefined;
+    }
   }
 }
 
-function parseProjectDirectory(value: unknown): string | undefined {
+function parseProjectSelector(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
 
   const trimmedValue = value.trim();
   if (!trimmedValue) return undefined;
 
-  return trimmedValue.startsWith('file://')
-    ? path.resolve(fileURLToPath(trimmedValue))
-    : path.resolve(trimmedValue);
+  return trimmedValue;
+}
+
+function parseProjectDirectory(value: unknown): string | undefined {
+  const selector = parseProjectSelector(value);
+  if (!selector) return undefined;
+
+  return selector.startsWith('file://')
+    ? path.resolve(fileURLToPath(selector))
+    : path.resolve(selector);
+}
+
+function getProjectSourceForResolvedPath(rootPath: string): ProjectDescriptor['source'] {
+  return getContainingKnownRoot(rootPath) ? 'subdirectory' : 'ad_hoc';
+}
+
+async function resolveProjectFromAbsolutePath(resolvedPath: string): Promise<ProjectResolution> {
+  const absolutePath = path.resolve(resolvedPath);
+  const containingRoot = getContainingKnownRoot(absolutePath);
+
+  if (clientRootsEnabled && getKnownRootPaths().length > 0 && !containingRoot) {
+    return {
+      ok: false,
+      response: buildProjectSelectionError(
+        'unknown_project',
+        'Requested project is not under an active MCP root.'
+      )
+    };
+  }
+
+  let stats;
+  try {
+    stats = await fs.stat(absolutePath);
+  } catch {
+    return {
+      ok: false,
+      response: buildProjectSelectionError(
+        'unknown_project',
+        `project does not exist: ${absolutePath}`
+      )
+    };
+  }
+
+  const lookupPath = stats.isDirectory() ? absolutePath : path.dirname(absolutePath);
+  const exactDescriptor = listProjectDescriptors().find(
+    (descriptor) => normalizeRootKey(descriptor.rootPath) === normalizeRootKey(lookupPath)
+  );
+  if (exactDescriptor) {
+    const project = getOrCreateProject(exactDescriptor.rootPath);
+    if (exactDescriptor.source === 'subdirectory') {
+      registerDiscoveredProjectPath(exactDescriptor.rootPath, 'subdirectory');
+    } else {
+      rememberProjectPath(exactDescriptor.rootPath, exactDescriptor.source, { touch: false });
+    }
+    return { ok: true, project };
+  }
+
+  const nearestBoundary = await findNearestProjectBoundary(absolutePath, containingRoot);
+  const resolvedProjectPath =
+    nearestBoundary?.rootPath ?? containingRoot ?? (stats.isDirectory() ? absolutePath : undefined);
+
+  if (!resolvedProjectPath) {
+    return {
+      ok: false,
+      response: buildProjectSelectionError(
+        'unknown_project',
+        `project was not found from path: ${absolutePath}`
+      )
+    };
+  }
+
+  const invalidProjectResponse = await validateResolvedProjectPath(resolvedProjectPath);
+  if (invalidProjectResponse) {
+    return { ok: false, response: invalidProjectResponse };
+  }
+
+  const projectSource = getProjectSourceForResolvedPath(resolvedProjectPath);
+  if (projectSource === 'subdirectory') {
+    registerDiscoveredProjectPath(resolvedProjectPath, 'subdirectory');
+  } else {
+    rememberProjectPath(resolvedProjectPath, projectSource, { touch: false });
+  }
+
+  const project = getOrCreateProject(resolvedProjectPath);
+  return { ok: true, project };
+}
+
+function buildProjectSelectionPayload(
+  status: 'success' | 'selection_required' | 'error',
+  message: string,
+  project?: ProjectState,
+  extras: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    status,
+    message,
+    activeProject: project
+      ? buildProjectDescriptor(project.rootPath)
+      : (getActiveProjectDescriptor() ?? null),
+    availableProjects: listProjectDescriptors(),
+    ...extras
+  };
 }
 
 function buildProjectSelectionError(
-  errorCode: 'ambiguous_project' | 'unknown_project',
-  message: string
+  errorCode: 'selection_required' | 'unknown_project',
+  message: string,
+  extras: Record<string, unknown> = {}
 ): ToolResponse {
+  const status = errorCode === 'selection_required' ? 'selection_required' : 'error';
   return {
     content: [
       {
         type: 'text',
         text: JSON.stringify(
-          {
-            status: 'error',
-            errorCode,
-            message,
-            availableRoots: getKnownRootPaths()
-          },
+          { ...buildProjectSelectionPayload(status, message, undefined, extras), errorCode },
           null,
           2
         )
@@ -155,11 +485,28 @@ function createToolContext(project: ProjectState): ToolContext {
     indexState: project.indexState,
     paths: project.paths,
     rootPath: project.rootPath,
-    performIndexing: (incrementalOnly?: boolean) => performIndexing(project, incrementalOnly)
+    project: buildProjectDescriptor(project.rootPath),
+    performIndexing: (incrementalOnly?: boolean) => performIndexing(project, incrementalOnly),
+    listProjects: () => listProjectDescriptors(),
+    getActiveProject: () => getActiveProjectDescriptor()
   };
 }
 
-registerKnownRoot(primaryRootPath);
+function createWorkspaceToolContext(): ToolContext {
+  const fallbackRootPath = primaryRootPath ?? path.resolve(process.cwd());
+  return {
+    indexState: { status: 'idle' },
+    paths: makePaths(fallbackRootPath),
+    rootPath: fallbackRootPath,
+    performIndexing: () => undefined,
+    listProjects: () => listProjectDescriptors(),
+    getActiveProject: () => getActiveProjectDescriptor()
+  };
+}
+
+if (primaryRootPath) {
+  registerKnownRoot(primaryRootPath);
+}
 
 export const INDEX_CONSUMING_TOOL_NAMES = [
   'search_codebase',
@@ -230,23 +577,137 @@ async function ensureValidIndexOrAutoHeal(project: ProjectState): Promise<IndexS
   }
 }
 
-async function validateProjectDirectory(rootPath: string): Promise<ToolResponse | undefined> {
+async function validateResolvedProjectPath(rootPath: string): Promise<ToolResponse | undefined> {
   try {
     const stats = await fs.stat(rootPath);
-    if (stats.isDirectory()) {
-      return undefined;
+    if (!stats.isDirectory()) {
+      return buildProjectSelectionError(
+        'unknown_project',
+        `project is not a directory: ${rootPath}`
+      );
     }
 
-    return buildProjectSelectionError(
-      'unknown_project',
-      `project_directory is not a directory: ${rootPath}`
-    );
+    if (clientRootsEnabled && getKnownRootPaths().length > 0 && !getContainingKnownRoot(rootPath)) {
+      return buildProjectSelectionError(
+        'unknown_project',
+        'Requested project is not under an active MCP root.'
+      );
+    }
+
+    return undefined;
   } catch {
-    return buildProjectSelectionError(
-      'unknown_project',
-      `project_directory does not exist: ${rootPath}`
-    );
+    return buildProjectSelectionError('unknown_project', `project does not exist: ${rootPath}`);
   }
+}
+
+async function resolveProjectSelector(selector: string): Promise<ProjectResolution> {
+  const trimmedSelector = selector.trim();
+  if (!trimmedSelector) {
+    return {
+      ok: false,
+      response: buildProjectSelectionError(
+        'unknown_project',
+        'project must be a non-empty absolute path, file:// URI, or relative subproject path.'
+      )
+    };
+  }
+
+  if (trimmedSelector.startsWith('file://') || path.isAbsolute(trimmedSelector)) {
+    const resolvedPath = parseProjectDirectory(trimmedSelector);
+    if (!resolvedPath) {
+      return {
+        ok: false,
+        response: buildProjectSelectionError(
+          'unknown_project',
+          'project must be a non-empty absolute path, file:// URI, or relative subproject path.'
+        )
+      };
+    }
+    return resolveProjectFromAbsolutePath(resolvedPath);
+  }
+
+  const normalizedSelector = trimmedSelector.replace(/\\/g, '/').replace(/^\.\/+/, '');
+  const descriptorMatches = listProjectDescriptors().filter(
+    (descriptor) =>
+      descriptor.label === normalizedSelector ||
+      descriptor.relativePath === normalizedSelector ||
+      path.basename(descriptor.rootPath) === normalizedSelector
+  );
+
+  if (descriptorMatches.length === 1) {
+    const matchedRootPath = descriptorMatches[0].rootPath;
+    if (descriptorMatches[0].source === 'subdirectory') {
+      registerDiscoveredProjectPath(matchedRootPath, 'subdirectory');
+    } else {
+      rememberProjectPath(matchedRootPath, classifyProjectSource(matchedRootPath), {
+        touch: false
+      });
+    }
+    const project = getOrCreateProject(matchedRootPath);
+    return { ok: true, project };
+  }
+
+  if (descriptorMatches.length > 1) {
+    return {
+      ok: false,
+      response: buildProjectSelectionError(
+        'selection_required',
+        `Project selector "${normalizedSelector}" matches multiple known projects. Retry with an absolute path.`,
+        {
+          reason: 'project_selector_ambiguous',
+          nextAction: 'retry_with_project'
+        }
+      )
+    };
+  }
+
+  const matchingProjects = getKnownRootPaths()
+    .map((rootPath) => ({ rootPath, candidatePath: path.resolve(rootPath, normalizedSelector) }))
+    .filter(({ rootPath, candidatePath }) => isPathWithin(rootPath, candidatePath))
+    .map(({ candidatePath }) => candidatePath);
+
+  const resolvedMatches = new Map<string, ProjectState>();
+  for (const candidatePath of matchingProjects) {
+    const resolution = await resolveProjectFromAbsolutePath(candidatePath);
+    if (resolution.ok) {
+      resolvedMatches.set(normalizeRootKey(resolution.project.rootPath), resolution.project);
+      continue;
+    }
+
+    const payload = JSON.parse(resolution.response.content?.[0]?.text ?? '{}') as {
+      errorCode?: string;
+    };
+    if (payload.errorCode !== 'unknown_project') {
+      return resolution;
+    }
+  }
+
+  if (resolvedMatches.size === 1) {
+    const project = Array.from(resolvedMatches.values())[0];
+    return { ok: true, project };
+  }
+
+  if (resolvedMatches.size > 1) {
+    return {
+      ok: false,
+      response: buildProjectSelectionError(
+        'selection_required',
+        `Relative project path "${normalizedSelector}" matches multiple configured roots. Retry with an absolute path.`,
+        {
+          reason: 'relative_project_ambiguous',
+          nextAction: 'retry_with_project'
+        }
+      )
+    };
+  }
+
+  return {
+    ok: false,
+    response: buildProjectSelectionError(
+      'unknown_project',
+      `Relative project path "${normalizedSelector}" was not found under any configured root.`
+    )
+  };
 }
 
 /**
@@ -340,20 +801,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: TOOLS };
 });
 
-// MCP Resources - Proactive context injection
-const RESOURCES: Resource[] = [
-  {
-    uri: CONTEXT_RESOURCE_URI,
-    name: 'Codebase Intelligence',
-    description:
-      'Automatic codebase context: libraries used, team patterns, and conventions. ' +
-      'Read this BEFORE generating code to follow team standards.',
-    mimeType: 'text/plain'
+function buildResources(): Resource[] {
+  const resources: Resource[] = [
+    {
+      uri: CONTEXT_RESOURCE_URI,
+      name: 'Codebase Intelligence',
+      description:
+        'Context for the active project in this MCP session. In multi-project sessions, this falls back to a workspace overview until a project is selected.',
+      mimeType: 'text/plain'
+    }
+  ];
+
+  for (const project of listProjectDescriptors()) {
+    resources.push({
+      uri: buildProjectContextResourceUri(project.rootPath),
+      name: `Codebase Intelligence (${project.label})`,
+      description: `Project-scoped context for ${project.label}.`,
+      mimeType: 'text/plain'
+    });
   }
-];
+
+  return resources;
+}
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
-  return { resources: RESOURCES };
+  return { resources: buildResources() };
 });
 
 async function generateCodebaseContext(project: ProjectState): Promise<string> {
@@ -516,22 +988,73 @@ async function generateCodebaseContext(project: ProjectState): Promise<string> {
   }
 }
 
+function buildProjectSelectionMessage(): string {
+  const projects = listProjectDescriptors();
+  if (projects.length === 0) {
+    return [
+      '# Codebase Workspace',
+      '',
+      'This MCP session is waiting for project context.',
+      'If your host supports MCP roots, project discovery will begin after the client announces its workspace roots.',
+      'Otherwise retry the tool call with `project` using an absolute project path, file path, or file:// URI.'
+    ].join('\n');
+  }
+
+  const lines = [
+    '# Codebase Workspace',
+    '',
+    'This MCP session is using client-announced roots as the workspace boundary.',
+    'Automatic routing is only possible when one project is unambiguous or this session already has an active project.',
+    'If the MCP client does not provide enough context, retry tool calls with `project` using a root path, subproject path, or file path.',
+    '',
+    'Available projects:',
+    ''
+  ];
+  for (const project of projects) {
+    const projectPathHint = project.relativePath
+      ? `${project.relativePath} | ${project.rootPath}`
+      : project.rootPath;
+    lines.push(`- ${project.label} [${project.indexStatus}]`);
+    lines.push(`  project: ${projectPathHint}`);
+    lines.push(`  resource: ${buildProjectContextResourceUri(project.rootPath)}`);
+  }
+  lines.push('');
+  lines.push('Recommended flow: retry the tool call with `project`.');
+  return lines.join('\n');
+}
+
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri;
+  const explicitProjectPath = getProjectPathFromContextResourceUri(uri);
+
+  if (explicitProjectPath) {
+    const selection = await resolveProjectSelector(explicitProjectPath);
+    if (!selection.ok) {
+      throw new Error(`Unknown project resource: ${uri}`);
+    }
+
+    const project = selection.project;
+    await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+    setActiveProject(project.rootPath);
+    return {
+      contents: [
+        {
+          uri: buildProjectContextResourceUri(project.rootPath),
+          mimeType: 'text/plain',
+          text: await generateCodebaseContext(project)
+        }
+      ]
+    };
+  }
 
   if (isContextResourceUri(uri)) {
     const project = await resolveProjectForResource();
-    const content = project
-      ? await generateCodebaseContext(project)
-      : '# Codebase Intelligence\n\n' +
-        'Multiple project roots are available. Use a tool call with `project_directory` to choose a project.';
-
     return {
       contents: [
         {
           uri: CONTEXT_RESOURCE_URI,
           mimeType: 'text/plain',
-          text: content
+          text: project ? await generateCodebaseContext(project) : buildProjectSelectionMessage()
         }
       ]
     };
@@ -662,78 +1185,162 @@ async function shouldReindex(paths: ToolPaths): Promise<boolean> {
   }
 }
 
+async function refreshDiscoveredProjectsForKnownRoots(): Promise<void> {
+  clearDiscoveredProjectPaths();
+  await Promise.all(
+    getKnownRootPaths().map(async (rootPath) => {
+      const candidates = await discoverProjectsWithinRoot(rootPath, {
+        maxDepth: PROJECT_DISCOVERY_MAX_DEPTH
+      });
+      for (const candidate of candidates) {
+        registerDiscoveredProjectPath(candidate.rootPath, 'subdirectory');
+      }
+    })
+  );
+}
+
+async function validateClientRootEntries(
+  rootEntries: Array<{ rootPath: string; label?: string }>
+): Promise<Array<{ rootPath: string; label?: string }>> {
+  const validatedRoots = await Promise.all(
+    rootEntries.map(async (entry) => {
+      try {
+        const stats = await fs.stat(entry.rootPath);
+        if (!stats.isDirectory()) {
+          return undefined;
+        }
+
+        return entry;
+      } catch {
+        return undefined;
+      }
+    })
+  );
+
+  return validatedRoots.filter((entry): entry is { rootPath: string; label?: string } => !!entry);
+}
+
 async function refreshKnownRootsFromClient(): Promise<void> {
   try {
     const { roots } = await server.listRoots();
-    const fileRoots = roots
-      .map((root) => root.uri)
-      .filter((uri) => uri.startsWith('file://'))
-      .map((uri) => fileURLToPath(uri));
+    const fileRoots = await validateClientRootEntries(
+      roots
+        .map((root) => ({
+          uri: root.uri,
+          label: typeof root.name === 'string' && root.name.trim() ? root.name.trim() : undefined
+        }))
+        .filter((root) => root.uri.startsWith('file://'))
+        .map((root) => ({
+          rootPath: fileURLToPath(root.uri),
+          label: root.label
+        }))
+    );
 
     clientRootsEnabled = fileRoots.length > 0;
     syncKnownRoots(fileRoots);
   } catch {
     clientRootsEnabled = false;
-    syncKnownRoots([primaryRootPath]);
+    syncKnownRoots(primaryRootPath ? [{ rootPath: primaryRootPath }] : []);
   }
+
+  await refreshDiscoveredProjectsForKnownRoots();
+}
+
+async function resolveExplicitProjectSelection(selection: {
+  project?: string;
+  projectDirectory?: string;
+}): Promise<ProjectResolution> {
+  const explicitProject = selection.project ?? selection.projectDirectory;
+  if (explicitProject) {
+    const resolution = await resolveProjectSelector(explicitProject);
+    if (!resolution.ok) {
+      return resolution;
+    }
+
+    await initProject(resolution.project.rootPath, watcherDebounceMs, { enableWatcher: true });
+    setActiveProject(resolution.project.rootPath);
+    return resolution;
+  }
+
+  return {
+    ok: false,
+    response: buildProjectSelectionError('selection_required', 'No project selector was provided.')
+  };
 }
 
 async function resolveProjectForTool(args: Record<string, unknown>): Promise<ProjectResolution> {
-  const requestedProjectDirectory = parseProjectDirectory(args.project_directory);
-  const availableRoots = getKnownRootPaths();
+  const requestedProject = parseProjectSelector(args.project);
+  const requestedProjectDirectory = parseProjectSelector(args.project_directory);
 
-  if (requestedProjectDirectory) {
-    const requestedRootKey = normalizeRootKey(requestedProjectDirectory);
-    const knownRootPath = knownRoots.get(requestedRootKey);
-
-    if (clientRootsEnabled && availableRoots.length > 0 && !knownRootPath) {
-      return {
-        ok: false,
-        response: buildProjectSelectionError(
-          'unknown_project',
-          'Requested project is not part of the active MCP roots.'
-        )
-      };
-    }
-
-    const rootPath = knownRootPath ?? requestedProjectDirectory;
-    const invalidProjectResponse = await validateProjectDirectory(rootPath);
-    if (invalidProjectResponse) {
-      return { ok: false, response: invalidProjectResponse };
-    }
-
-    const project = getOrCreateProject(rootPath);
-    await initProject(project.rootPath, watcherDebounceMs, {
-      enableWatcher: knownRootPath !== undefined
+  if (requestedProject || requestedProjectDirectory) {
+    return resolveExplicitProjectSelection({
+      project: requestedProject,
+      projectDirectory: requestedProjectDirectory
     });
+  }
+
+  const activeProject = activeProjectKey ? getTrackedRootPathByKey(activeProjectKey) : undefined;
+  if (activeProject) {
+    const project = getOrCreateProject(activeProject);
+    await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+    touchProject(project.rootPath);
     return { ok: true, project };
   }
 
-  if (availableRoots.length !== 1) {
+  const availableProjects = listProjectDescriptors();
+  if (availableProjects.length === 0) {
     return {
       ok: false,
       response: buildProjectSelectionError(
-        'ambiguous_project',
-        'Multiple project roots are available. Pass project_directory to choose one.'
+        'selection_required',
+        'No active project is available yet. Retry with project or wait for MCP roots to arrive.',
+        {
+          reason: clientRootsEnabled
+            ? 'workspace_waiting_for_project_selection'
+            : 'workspace_waiting_for_roots_or_project',
+          nextAction: 'retry_with_project'
+        }
       )
     };
   }
 
-  const [rootPath] = availableRoots;
-  const project = getOrCreateProject(rootPath);
-  await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
-  return { ok: true, project };
+  if (availableProjects.length === 1) {
+    const project = getOrCreateProject(availableProjects[0].rootPath);
+    await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+    setActiveProject(project.rootPath);
+    return { ok: true, project };
+  }
+
+  return {
+    ok: false,
+    response: buildProjectSelectionError(
+      'selection_required',
+      'Multiple projects are available and no active project could be inferred. Retry with project.',
+      {
+        reason: 'multiple_projects_configured_no_active_context',
+        nextAction: 'retry_with_project'
+      }
+    )
+  };
 }
 
 async function resolveProjectForResource(): Promise<ProjectState | undefined> {
-  const availableRoots = getKnownRootPaths();
-  if (availableRoots.length !== 1) {
+  const activeProject = activeProjectKey ? getTrackedRootPathByKey(activeProjectKey) : undefined;
+  if (activeProject) {
+    const project = getOrCreateProject(activeProject);
+    await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+    touchProject(project.rootPath);
+    return project;
+  }
+
+  const availableProjects = listProjectDescriptors();
+  if (availableProjects.length !== 1) {
     return undefined;
   }
 
-  const [rootPath] = availableRoots;
-  const project = getOrCreateProject(rootPath);
+  const project = getOrCreateProject(availableProjects[0].rootPath);
   await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+  setActiveProject(project.rootPath);
   return project;
 }
 
@@ -746,7 +1353,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     if (!toolNames.has(name)) {
-      return await dispatchTool(name, normalizedArgs, createToolContext(primaryProject));
+      return await dispatchTool(name, normalizedArgs, createWorkspaceToolContext());
     }
 
     const projectResolution = await resolveProjectForTool(normalizedArgs);
@@ -804,13 +1411,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     const result = await dispatchTool(name, normalizedArgs, createToolContext(project));
 
-    // Inject IndexSignal into response so callers can inspect index health
+    // Inject routing/index metadata into JSON responses so agents can reuse the resolved project safely.
     if (indexSignal !== undefined && result.content?.[0]) {
       try {
         const parsed = JSON.parse(result.content[0].text);
         result.content[0] = {
           type: 'text',
-          text: JSON.stringify({ ...parsed, index: indexSignal })
+          text: JSON.stringify({
+            ...parsed,
+            index: indexSignal,
+            project: buildProjectDescriptor(project.rootPath)
+          })
+        };
+      } catch {
+        /* response wasn't JSON, skip injection */
+      }
+    } else if (result.content?.[0]) {
+      try {
+        const parsed = JSON.parse(result.content[0].text);
+        result.content[0] = {
+          type: 'text',
+          text: JSON.stringify({ ...parsed, project: buildProjectDescriptor(project.rootPath) })
         };
       } catch {
         /* response wasn't JSON, skip injection */
@@ -884,6 +1505,7 @@ async function ensureProjectInitialized(project: ProjectState): Promise<void> {
 
 function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
   if (project.stopWatcher) {
+    touchProject(project.rootPath);
     return;
   }
 
@@ -910,6 +1532,26 @@ function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
       void performIndexing(project, true);
     }
   });
+
+  touchProject(project.rootPath);
+  const watchedProjects = getAllProjects().filter((entry) => entry.stopWatcher);
+  if (watchedProjects.length <= MAX_WATCHED_PROJECTS) {
+    return;
+  }
+
+  const evictionCandidates = watchedProjects
+    .filter((entry) => normalizeRootKey(entry.rootPath) !== activeProjectKey)
+    .sort((a, b) => {
+      const accessA = projectAccessOrder.get(normalizeRootKey(a.rootPath)) ?? 0;
+      const accessB = projectAccessOrder.get(normalizeRootKey(b.rootPath)) ?? 0;
+      return accessA - accessB;
+    });
+
+  const projectToEvict = evictionCandidates[0];
+  if (projectToEvict?.stopWatcher) {
+    projectToEvict.stopWatcher();
+    delete projectToEvict.stopWatcher;
+  }
 }
 
 async function initProject(
@@ -917,8 +1559,10 @@ async function initProject(
   debounceMs: number,
   options: InitProjectOptions
 ): Promise<void> {
+  rememberProjectPath(rootPath);
   const project = getOrCreateProject(rootPath);
   await ensureProjectInitialized(project);
+  touchProject(project.rootPath);
 
   if (options.enableWatcher) {
     ensureProjectWatcher(project, debounceMs);
@@ -926,24 +1570,30 @@ async function initProject(
 }
 
 async function main() {
-  // Validate root path exists and is a directory
-  try {
-    const stats = await fs.stat(primaryRootPath);
-    if (!stats.isDirectory()) {
-      console.error(`ERROR: Root path is not a directory: ${primaryRootPath}`);
+  if (primaryRootPath) {
+    // Validate bootstrap root path exists and is a directory when explicitly configured.
+    try {
+      const stats = await fs.stat(primaryRootPath);
+      if (!stats.isDirectory()) {
+        console.error(`ERROR: Root path is not a directory: ${primaryRootPath}`);
+        console.error(`Please specify a valid project directory.`);
+        process.exit(1);
+      }
+    } catch (_error) {
+      console.error(`ERROR: Root path does not exist: ${primaryRootPath}`);
       console.error(`Please specify a valid project directory.`);
       process.exit(1);
     }
-  } catch (_error) {
-    console.error(`ERROR: Root path does not exist: ${primaryRootPath}`);
-    console.error(`Please specify a valid project directory.`);
-    process.exit(1);
   }
 
   // Server startup banner (guarded to avoid stderr during MCP STDIO handshake)
   if (process.env.CODEBASE_CONTEXT_DEBUG) {
     console.error('[DEBUG] Codebase Context MCP Server');
-    console.error(`[DEBUG] Root: ${primaryRootPath}`);
+    console.error(
+      primaryRootPath
+        ? `[DEBUG] Bootstrap root: ${primaryRootPath}`
+        : '[DEBUG] Bootstrap root: <workspace-awaiting>'
+    );
     console.error(
       `[DEBUG] Analyzers: ${analyzerRegistry
         .getAll()
@@ -953,7 +1603,7 @@ async function main() {
   }
 
   // Check for package.json to confirm it's a project root (guarded to avoid stderr during handshake)
-  if (process.env.CODEBASE_CONTEXT_DEBUG) {
+  if (process.env.CODEBASE_CONTEXT_DEBUG && primaryRootPath) {
     try {
       await fs.access(path.join(primaryRootPath, 'package.json'));
       console.error(`[DEBUG] Project detected: ${path.basename(primaryRootPath)}`);
@@ -969,10 +1619,11 @@ async function main() {
 
   await refreshKnownRootsFromClient();
 
-  // Preserve current single-project startup behavior without eagerly indexing every root.
+  // Keep the current single-project auto-select behavior when exactly one startup project is known.
   const startupRoots = getKnownRootPaths();
   if (startupRoots.length === 1) {
     await initProject(startupRoots[0], watcherDebounceMs, { enableWatcher: true });
+    setActiveProject(startupRoots[0]);
   }
 
   // Subscribe to root changes
@@ -1003,7 +1654,7 @@ async function main() {
 }
 
 // Export server components for programmatic use
-export { server, resolveRootPath, shouldReindex, TOOLS };
+export { server, refreshKnownRootsFromClient, resolveRootPath, shouldReindex, TOOLS };
 export { performIndexing };
 
 // Only auto-start when run directly as CLI (not when imported as module)

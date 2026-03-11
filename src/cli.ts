@@ -1,7 +1,7 @@
 /**
  * CLI subcommands for codebase-context.
  * Memory list/add/remove — vendor-neutral access without any AI agent.
- * search/metadata/status/reindex/style-guide/patterns/refs/cycles — all MCP tools.
+ * search/metadata/status/reindex/style-guide/patterns/refs/cycles — human-facing wrappers over core read/query tools.
  */
 
 import path from 'path';
@@ -81,13 +81,17 @@ function printUsage(): void {
   console.log('  --help    Show this help');
   console.log('');
   console.log('Environment:');
-  console.log('  CODEBASE_ROOT    Project root path (default: cwd)');
+  console.log('  CODEBASE_ROOT    Project root path (default: cwd for CLI only)');
   console.log('  CODEBASE_CONTEXT_ASCII=1  Force ASCII-only box output');
   console.log('  CODEBASE_CONTEXT_DEBUG=1  Enable verbose logs');
 }
 
+function resolveCliRootPath(): string {
+  return path.resolve(process.env.CODEBASE_ROOT || process.cwd());
+}
+
 async function initToolContext(): Promise<ToolContext> {
-  const rootPath = path.resolve(process.env.CODEBASE_ROOT || process.cwd());
+  const rootPath = resolveCliRootPath();
 
   const paths = {
     baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
@@ -149,7 +153,12 @@ async function initToolContext(): Promise<ToolContext> {
     }
   };
 
-  return { indexState, paths, rootPath, performIndexing };
+  return {
+    indexState,
+    paths,
+    rootPath,
+    performIndexing
+  };
 }
 
 function extractText(result: { content?: Array<{ type: string; text: string }> }): string {

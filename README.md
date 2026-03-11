@@ -44,14 +44,48 @@ More CLI examples:
 - `metadata` for a quick codebase overview
 - Full gallery in `docs/cli.md`
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Multi-Project and Monorepos](#multi-project-and-monorepos)
+- [Test It Yourself](#test-it-yourself)
+- [Common First Commands](#common-first-commands)
+- [What It Actually Does](#what-it-actually-does)
+- [Evaluation Harness (`npm run eval`)](#evaluation-harness-npm-run-eval)
+- [How the Search Works](#how-the-search-works)
+- [Language Support](#language-support)
+- [Configuration](#configuration)
+- [Performance](#performance)
+- [File Structure](#file-structure)
+- [CLI Reference](#cli-reference)
+- [What to add to your CLAUDE.md / AGENTS.md](#what-to-add-to-your-claudemd--agentsmd)
+- [Links](#links)
+- [License](#license)
+
 ## Quick Start
+
+Start with the default setup:
+
+- Configure one `codebase-context` server with no project path.
+- If a tool call later returns `selection_required`, retry with `project`.
+- If you only use one repo, you can also append that repo path up front.
+
+### Pick the right setup
+
+| Situation                             | Recommended config                                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Default setup                         | Run `npx -y codebase-context` with no project path                                                   |
+| Single repo setup                     | Append one project path or set `CODEBASE_ROOT`                                                       |
+| Multi-project call is still ambiguous | Retry with `project`, or keep separate server entries if your client cannot preserve project context |
+
+### Recommended setup
 
 Add it to the configuration of your AI Agent of preference:
 
 ### Claude Code
 
 ```bash
-claude mcp add codebase-context -- npx -y codebase-context /path/to/your/project
+claude mcp add codebase-context -- npx -y codebase-context
 ```
 
 ### Claude Desktop
@@ -63,7 +97,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context", "/path/to/your/project"]
+      "args": ["-y", "codebase-context"]
     }
   }
 }
@@ -78,7 +112,7 @@ Add `.vscode/mcp.json` to your project root:
   "servers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context", "/path/to/your/project"] // Or "${workspaceFolder}" if your workspace is one project only
+      "args": ["-y", "codebase-context"] // Or append "${workspaceFolder}" for single-project use
     }
   }
 }
@@ -93,7 +127,7 @@ Add to `.cursor/mcp.json` in your project:
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context", "/path/to/your/project"]
+      "args": ["-y", "codebase-context"]
     }
   }
 }
@@ -108,7 +142,7 @@ Open Settings > MCP and add:
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context", "/path/to/your/project"]
+      "args": ["-y", "codebase-context"]
     }
   }
 }
@@ -124,7 +158,7 @@ Add `opencode.json` to your project root:
   "mcp": {
     "codebase-context": {
       "type": "local",
-      "command": ["npx", "-y", "codebase-context", "/path/to/your/project"],
+      "command": ["npx", "-y", "codebase-context"],
       "enabled": true
     }
   }
@@ -136,10 +170,159 @@ OpenCode also supports interactive setup via `opencode mcp add`.
 ### Codex
 
 ```bash
+codex mcp add codebase-context npx -y codebase-context
+```
+
+That single config entry is the intended starting point.
+
+### Fallback setup for single-project use
+
+If you only use one repo, append a project path:
+
+```bash
 codex mcp add codebase-context npx -y codebase-context "/path/to/your/project"
 ```
 
-## New to this codebase?
+Or set:
+
+```bash
+CODEBASE_ROOT=/path/to/your/project
+```
+
+## Multi-Project and Monorepos
+
+The MCP server can serve multiple projects in one session without requiring one MCP config entry per repo.
+
+Three cases matter:
+
+| Case                                                               | What happens                                                  |
+| ------------------------------------------------------------------ | ------------------------------------------------------------- |
+| One project                                                        | Routing is automatic                                          |
+| Multiple projects and the client provides enough workspace context | The server can route across those projects in one MCP session |
+| Multiple projects and the target is still ambiguous                | The server does not guess. Use `project` explicitly           |
+
+Important rules:
+
+- `project` is the explicit override when routing is ambiguous.
+- `project` accepts a project root path, file path, `file://` URI, or a relative subproject path under a configured workspace such as `apps/dashboard`.
+- If a client reads `codebase://context` before any project is active, the server returns a workspace overview instead of guessing.
+- The server does not rely on `cwd` walk-up in MCP mode.
+
+Typical explicit retry in a monorepo:
+
+```json
+{
+  "name": "search_codebase",
+  "arguments": {
+    "query": "auth interceptor",
+    "project": "apps/dashboard"
+  }
+}
+```
+
+Or target a repo directly:
+
+```json
+{
+  "name": "search_codebase",
+  "arguments": {
+    "query": "auth interceptor",
+    "project": "/repos/customer-portal"
+  }
+}
+```
+
+Or pass a file path and let the server resolve the nearest trusted project boundary:
+
+```json
+{
+  "name": "search_codebase",
+  "arguments": {
+    "query": "auth interceptor",
+    "project": "/repos/monorepo/apps/dashboard/src/auth/guard.ts"
+  }
+}
+```
+
+If you see `selection_required`, the server could not tell which project you meant. The response looks like this:
+
+```json
+{
+  "status": "selection_required",
+  "errorCode": "selection_required",
+  "message": "Multiple projects are available and no active project could be inferred. Retry with project.",
+  "nextAction": "retry_with_project",
+  "availableProjects": [
+    { "label": "app-a", "project": "/repos/app-a", "indexStatus": "idle", "source": "root" },
+    { "label": "app-b", "project": "/repos/app-b", "indexStatus": "ready", "source": "root" }
+  ]
+}
+```
+
+Retry the call with `project` set to one of the listed paths.
+
+`codebase://context` follows the active project in the session. In unresolved multi-project sessions it returns a workspace overview. Project-scoped resources are also available via the URIs listed in that overview.
+
+The CLI stays intentionally simpler: it targets one repo per invocation via `CODEBASE_ROOT` or the current working directory. Multi-project discovery and routing are MCP-only features, not a second CLI session model.
+
+## Test It Yourself
+
+Build the local branch first:
+
+```bash
+pnpm build
+```
+
+Then point your MCP client at the local build:
+
+```json
+{
+  "mcpServers": {
+    "codebase-context": {
+      "command": "node",
+      "args": ["<path-to-local-build>/dist/index.js"]
+    }
+  }
+}
+```
+
+If the default setup is not enough for your client, use this instead:
+
+```json
+{
+  "mcpServers": {
+    "codebase-context": {
+      "command": "node",
+      "args": ["<path-to-local-build>/dist/index.js", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+Check these three flows:
+
+1. Single project
+   Ask for `search_codebase` or `metadata`.
+   Expected: routing is automatic.
+
+2. Multiple projects with one server entry
+   Open two repos or one monorepo workspace.
+   Ask for `codebase://context`.
+   Expected: workspace overview first, then automatic routing once one project is active or unambiguous.
+
+3. Ambiguous project selection
+   Start without a bootstrap path.
+   Ask for `search_codebase`.
+   Expected: `selection_required`.
+   Retry with `project`, for example `apps/dashboard` or `/repos/customer-portal`.
+
+For monorepos, verify all three selector forms:
+
+- relative subproject path: `apps/dashboard`
+- repo path: `/repos/customer-portal`
+- file path: `/repos/monorepo/apps/dashboard/src/auth/guard.ts`
+
+## Common First Commands
 
 Three commands to get what usually takes a new developer weeks to piece together:
 
@@ -342,12 +525,12 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 
 ## Configuration
 
-| Variable                 | Default                    | Description                                                                                   |
-| ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------- |
-| `EMBEDDING_PROVIDER`     | `transformers`             | `openai` (fast, cloud) or `transformers` (local, private)                                     |
-| `OPENAI_API_KEY`         | -                          | Required only if using `openai` provider                                                      |
-| `CODEBASE_ROOT`          | -                          | Project root (CLI arg takes precedence)                                                       |
-| `CODEBASE_CONTEXT_DEBUG` | -                          | Set to `1` for verbose logging                                                                |
+| Variable                 | Default                    | Description                                                                                                |
+| ------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `EMBEDDING_PROVIDER`     | `transformers`             | `openai` (fast, cloud) or `transformers` (local, private)                                                  |
+| `OPENAI_API_KEY`         | -                          | Required only if using `openai` provider                                                                   |
+| `CODEBASE_ROOT`          | -                          | Optional bootstrap root for CLI and single-project MCP clients without roots                               |
+| `CODEBASE_CONTEXT_DEBUG` | -                          | Set to `1` for verbose logging                                                                             |
 | `EMBEDDING_MODEL`        | `Xenova/bge-small-en-v1.5` | Local embedding model override (e.g. `onnx-community/granite-embedding-small-english-r2-ONNX` for Granite) |
 
 ## Performance
@@ -378,7 +561,7 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 
 ## CLI Reference
 
-All MCP tools are available as CLI commands — no AI agent required. Useful for onboarding, scripting, debugging, and CI workflows.
+Repo-scoped analysis commands are available via the CLI — no AI agent required. MCP multi-project routing uses the shared `project` selector when needed; the CLI stays one-root-per-invocation.
 For formatted examples and “money shots”, see `docs/cli.md`.
 
 Set `CODEBASE_ROOT` to your project root, or run from the project directory.

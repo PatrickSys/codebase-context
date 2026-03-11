@@ -8,6 +8,10 @@
 - **mcp:** keep explicit `project` as the fallback when the client does not provide enough project context
 - **mcp:** accept repo paths, subproject paths, and file paths as `project` selectors when routing is ambiguous
 
+### Bug Fixes
+
+- **search:** auto-heal on corrupted index now triggers a background rebuild instead of blocking the search response
+
 ### Documentation
 
 - simplify the setup story around three cases: default rootless setup, single-project fallback, and explicit `project` retries
@@ -16,51 +20,46 @@
 
 ## [1.8.2](https://github.com/PatrickSys/codebase-context/compare/v1.8.1...v1.8.2) (2026-03-05)
 
-
 ### Bug Fixes
 
-* restore npx installs for published package ([107bc14](https://github.com/PatrickSys/codebase-context/commit/107bc14ff3a3b918d39df28703c739b3598b0cd8))
+- restore npx installs for published package ([107bc14](https://github.com/PatrickSys/codebase-context/commit/107bc14ff3a3b918d39df28703c739b3598b0cd8))
 
 ## [1.8.1](https://github.com/PatrickSys/codebase-context/compare/v1.8.0...v1.8.1) (2026-03-05)
 
-
 ### Bug Fixes
 
-* **get-team-patterns:** filter out legacy testing framework categories from patterns ([ed5c858](https://github.com/PatrickSys/codebase-context/commit/ed5c858063493efe328fb2ce03f95404efd34ad4))
-* **git:** run tests only on pre-push ([785d28b](https://github.com/PatrickSys/codebase-context/commit/785d28b3adfb4e5bebe946c2af17f958ac0c7022))
-* **git:** tighten pre-push formatting enforcement ([a6d95fc](https://github.com/PatrickSys/codebase-context/commit/a6d95fc297cd5dcdaba2244b9413cd5353f6f273))
+- **get-team-patterns:** filter out legacy testing framework categories from patterns ([ed5c858](https://github.com/PatrickSys/codebase-context/commit/ed5c858063493efe328fb2ce03f95404efd34ad4))
+- **git:** run tests only on pre-push ([785d28b](https://github.com/PatrickSys/codebase-context/commit/785d28b3adfb4e5bebe946c2af17f958ac0c7022))
+- **git:** tighten pre-push formatting enforcement ([a6d95fc](https://github.com/PatrickSys/codebase-context/commit/a6d95fc297cd5dcdaba2244b9413cd5353f6f273))
 
 ## [1.8.0](https://github.com/PatrickSys/codebase-context/compare/v1.7.0...v1.8.0) (2026-03-05)
 
-
 ### Features
 
-* CLI formatters + response types + debug gating ([#48](https://github.com/PatrickSys/codebase-context/issues/48)) ([7a6cd7b](https://github.com/PatrickSys/codebase-context/commit/7a6cd7b61e27adb62861d6a264c2ac1feba4d96d))
-* **cli:** status formatter + CLI gallery docs ([#56](https://github.com/PatrickSys/codebase-context/issues/56)) ([b7bc5cc](https://github.com/PatrickSys/codebase-context/commit/b7bc5cc078635a5f0a4f33e47d431d21cdb83ccc))
-* **impact:** persist import edge details + 2-hop impact candidates ([f296e30](https://github.com/PatrickSys/codebase-context/commit/f296e30834777770c70f9c20998576e123ea7592))
-* **impact:** persist import edge details and 2-hop candidates ([5bd84a1](https://github.com/PatrickSys/codebase-context/commit/5bd84a1c6174c2ae6a413579c471e68ccc30f377))
-* **indexing:** OpenAI embeddings + broader language coverage ([#57](https://github.com/PatrickSys/codebase-context/issues/57)) ([3c1c53b](https://github.com/PatrickSys/codebase-context/commit/3c1c53b15381640e96b2e62794436ca21a545ce4))
-* **refs:** tree-sitter identifier-aware symbol references ([2aa0831](https://github.com/PatrickSys/codebase-context/commit/2aa08315103fa1b87b20d4f212ab271caeee670c))
-* **refs:** Tree-sitter identifier-aware symbol references ([c23ffec](https://github.com/PatrickSys/codebase-context/commit/c23ffecf4174a6d683d4b985a754ca2ad840cfe1))
-* **watcher:** chokidar auto-refresh with debounced incremental reindex ([59e3686](https://github.com/PatrickSys/codebase-context/commit/59e36867cd4048c858b08d2c551ca94adb6738ac))
-* **watcher:** chokidar auto-refresh with debounced incremental reindex ([f300961](https://github.com/PatrickSys/codebase-context/commit/f300961b73b1ee867bfc43f0b2925d3f7c055447))
-
+- CLI formatters + response types + debug gating ([#48](https://github.com/PatrickSys/codebase-context/issues/48)) ([7a6cd7b](https://github.com/PatrickSys/codebase-context/commit/7a6cd7b61e27adb62861d6a264c2ac1feba4d96d))
+- **cli:** status formatter + CLI gallery docs ([#56](https://github.com/PatrickSys/codebase-context/issues/56)) ([b7bc5cc](https://github.com/PatrickSys/codebase-context/commit/b7bc5cc078635a5f0a4f33e47d431d21cdb83ccc))
+- **impact:** persist import edge details + 2-hop impact candidates ([f296e30](https://github.com/PatrickSys/codebase-context/commit/f296e30834777770c70f9c20998576e123ea7592))
+- **impact:** persist import edge details and 2-hop candidates ([5bd84a1](https://github.com/PatrickSys/codebase-context/commit/5bd84a1c6174c2ae6a413579c471e68ccc30f377))
+- **indexing:** OpenAI embeddings + broader language coverage ([#57](https://github.com/PatrickSys/codebase-context/issues/57)) ([3c1c53b](https://github.com/PatrickSys/codebase-context/commit/3c1c53b15381640e96b2e62794436ca21a545ce4))
+- **refs:** tree-sitter identifier-aware symbol references ([2aa0831](https://github.com/PatrickSys/codebase-context/commit/2aa08315103fa1b87b20d4f212ab271caeee670c))
+- **refs:** Tree-sitter identifier-aware symbol references ([c23ffec](https://github.com/PatrickSys/codebase-context/commit/c23ffecf4174a6d683d4b985a754ca2ad840cfe1))
+- **watcher:** chokidar auto-refresh with debounced incremental reindex ([59e3686](https://github.com/PatrickSys/codebase-context/commit/59e36867cd4048c858b08d2c551ca94adb6738ac))
+- **watcher:** chokidar auto-refresh with debounced incremental reindex ([f300961](https://github.com/PatrickSys/codebase-context/commit/f300961b73b1ee867bfc43f0b2925d3f7c055447))
 
 ### Bug Fixes
 
-* **cli:** formatter audit — render missing metadata fields, README callers qualifier ([d273729](https://github.com/PatrickSys/codebase-context/commit/d273729d16ffff3432b663b76db4964f5dce9822))
-* **cli:** remove unused MetadataDependency import ([3f08f0e](https://github.com/PatrickSys/codebase-context/commit/3f08f0ed2ed27c10c2fae3ecf31c81771b22cb88))
-* close v1.8 post-merge integration gaps ([#44](https://github.com/PatrickSys/codebase-context/issues/44)) ([d28460c](https://github.com/PatrickSys/codebase-context/commit/d28460c38bf91e8cb40a76501a03378c2edc11b5))
-* **refs:** prevent out-of-root file reads from index ([1735e3c](https://github.com/PatrickSys/codebase-context/commit/1735e3cb51f808c3bd1c9afed4f1139bad851e8f))
-* **watcher-tests:** await ready + harden Windows cleanup ([#55](https://github.com/PatrickSys/codebase-context/issues/55)) ([9929bb0](https://github.com/PatrickSys/codebase-context/commit/9929bb0cea7d9ad5a41f2719a8b1a48be1dc9909))
-* **watcher:** allow debounce 0 and harden test ([070433c](https://github.com/PatrickSys/codebase-context/commit/070433cf79dace7420c26284ceeca7fea41dc8a1))
-* **watcher:** queue refresh during indexing ([2d78110](https://github.com/PatrickSys/codebase-context/commit/2d781105f9d56e3b5644abe90ae88978e4d7b0d0))
-
+- **cli:** formatter audit — render missing metadata fields, README callers qualifier ([d273729](https://github.com/PatrickSys/codebase-context/commit/d273729d16ffff3432b663b76db4964f5dce9822))
+- **cli:** remove unused MetadataDependency import ([3f08f0e](https://github.com/PatrickSys/codebase-context/commit/3f08f0ed2ed27c10c2fae3ecf31c81771b22cb88))
+- close v1.8 post-merge integration gaps ([#44](https://github.com/PatrickSys/codebase-context/issues/44)) ([d28460c](https://github.com/PatrickSys/codebase-context/commit/d28460c38bf91e8cb40a76501a03378c2edc11b5))
+- **refs:** prevent out-of-root file reads from index ([1735e3c](https://github.com/PatrickSys/codebase-context/commit/1735e3cb51f808c3bd1c9afed4f1139bad851e8f))
+- **watcher-tests:** await ready + harden Windows cleanup ([#55](https://github.com/PatrickSys/codebase-context/issues/55)) ([9929bb0](https://github.com/PatrickSys/codebase-context/commit/9929bb0cea7d9ad5a41f2719a8b1a48be1dc9909))
+- **watcher:** allow debounce 0 and harden test ([070433c](https://github.com/PatrickSys/codebase-context/commit/070433cf79dace7420c26284ceeca7fea41dc8a1))
+- **watcher:** queue refresh during indexing ([2d78110](https://github.com/PatrickSys/codebase-context/commit/2d781105f9d56e3b5644abe90ae88978e4d7b0d0))
 
 ### Performance Improvements
 
-* **impact:** avoid per-candidate array alloc ([faf6e73](https://github.com/PatrickSys/codebase-context/commit/faf6e73101d1c76f17e755df35d8e34a1783a6fa))
-* **impact:** avoid per-candidate array allocation ([04e68eb](https://github.com/PatrickSys/codebase-context/commit/04e68eb3c7d5a2a5aaa45a82ef6823e6f13ce6a9))
+- **impact:** avoid per-candidate array alloc ([faf6e73](https://github.com/PatrickSys/codebase-context/commit/faf6e73101d1c76f17e755df35d8e34a1783a6fa))
+- **impact:** avoid per-candidate array allocation ([04e68eb](https://github.com/PatrickSys/codebase-context/commit/04e68eb3c7d5a2a5aaa45a82ef6823e6f13ce6a9))
 
 ## [1.7.0](https://github.com/PatrickSys/codebase-context/compare/v1.6.1...v1.7.0) (2026-02-21)
 

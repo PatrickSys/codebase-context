@@ -47,8 +47,7 @@ import {
 import {
   discoverProjectsWithinRoot,
   findNearestProjectBoundary,
-  isPathWithin,
-  type DiscoveredProjectCandidate
+  isPathWithin
 } from './utils/project-discovery.js';
 import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
 import { TOOLS, dispatchTool, type ToolContext, type ToolResponse } from './tools/index.js';

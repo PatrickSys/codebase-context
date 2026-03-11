@@ -7,9 +7,7 @@ import {
   findNearestProjectBoundary,
   isPathWithin
 } from '../src/utils/project-discovery.js';
-import {
-  CODEBASE_CONTEXT_DIRNAME
-} from '../src/constants/codebase-context.js';
+import { CODEBASE_CONTEXT_DIRNAME } from '../src/constants/codebase-context.js';
 
 describe('project-discovery', () => {
   let tempRoot: string;
@@ -66,7 +64,10 @@ describe('project-discovery', () => {
     const realProject = path.join(tempRoot, 'apps', 'web');
 
     await fs.mkdir(ignoredProject, { recursive: true });
-    await fs.writeFile(path.join(ignoredProject, 'package.json'), JSON.stringify({ name: 'ignored' }));
+    await fs.writeFile(
+      path.join(ignoredProject, 'package.json'),
+      JSON.stringify({ name: 'ignored' })
+    );
 
     await fs.mkdir(realProject, { recursive: true });
     await fs.writeFile(path.join(realProject, 'package.json'), JSON.stringify({ name: 'web' }));

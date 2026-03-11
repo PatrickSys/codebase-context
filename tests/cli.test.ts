@@ -42,7 +42,9 @@ describe('CLI', () => {
   });
 
   it('search errors when --query has no value', async () => {
-    await expect(handleCliCommand(['search', '--query', '--json'])).rejects.toThrow(/process\.exit:1/);
+    await expect(handleCliCommand(['search', '--query', '--json'])).rejects.toThrow(
+      /process\.exit:1/
+    );
     expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalled();
   });
@@ -82,7 +84,9 @@ describe('CLI', () => {
   });
 
   it('patterns errors on invalid category', async () => {
-    await expect(handleCliCommand(['patterns', '--category', 'nope'])).rejects.toThrow(/process\.exit:1/);
+    await expect(handleCliCommand(['patterns', '--category', 'nope'])).rejects.toThrow(
+      /process\.exit:1/
+    );
     expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
   });
 
@@ -195,6 +199,4 @@ describe('CLI', () => {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
   });
-
 });
-

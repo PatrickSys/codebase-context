@@ -624,6 +624,27 @@ describe('multi-project routing', () => {
     expect(response.contents[0]?.text).toContain('# Codebase Intelligence');
   });
 
+  it('returns unknown_project error when project path does not exist', async () => {
+    const { server } = await import('../src/index.js');
+    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    const bogusPath = path.join(os.tmpdir(), `cc-nonexistent-${Date.now()}`);
+    const response = await callTool(handler, 19, 'search_codebase', {
+      query: 'feature',
+      project: bogusPath
+    });
+    const payload = parsePayload(response) as {
+      status: string;
+      errorCode: string;
+      message: string;
+    };
+
+    expect(response.isError).toBe(true);
+    expect(payload.errorCode).toBe('unknown_project');
+    expect(payload.message).toContain('does not exist');
+  });
+
   it('resolves a file path selector to the nearest discovered project boundary', async () => {
     const filePath = path.join(nestedProjectRoot, 'src', 'auth', 'guard.ts');
     await fs.mkdir(path.dirname(filePath), { recursive: true });

@@ -244,7 +244,22 @@ Or pass a file path and let the server resolve the nearest trusted project bound
 }
 ```
 
-If you see `selection_required`, the server could not tell which project you meant. Retry the call with `project`.
+If you see `selection_required`, the server could not tell which project you meant. The response looks like this:
+
+```json
+{
+  "status": "selection_required",
+  "errorCode": "selection_required",
+  "message": "Multiple projects are available and no active project could be inferred. Retry with project.",
+  "nextAction": "retry_with_project",
+  "availableProjects": [
+    { "label": "app-a", "project": "/repos/app-a", "indexStatus": "idle", "source": "root" },
+    { "label": "app-b", "project": "/repos/app-b", "indexStatus": "ready", "source": "root" }
+  ]
+}
+```
+
+Retry the call with `project` set to one of the listed paths.
 
 `codebase://context` follows the active project in the session. In unresolved multi-project sessions it returns a workspace overview. Project-scoped resources are also available via the URIs listed in that overview.
 

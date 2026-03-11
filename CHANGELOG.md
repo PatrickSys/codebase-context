@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+* **embeddings:** Add `OPENAI_BASE_URL` support for custom OpenAI-compatible endpoints (e.g., Ollama, LiteLLM) ([#70](https://github.com/PatrickSys/codebase-context/issues/70))
+
 ## [1.8.2](https://github.com/PatrickSys/codebase-context/compare/v1.8.1...v1.8.2) (2026-03-05)
 
 

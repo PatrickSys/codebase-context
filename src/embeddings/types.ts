@@ -37,5 +37,6 @@ export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
   model: DEFAULT_MODEL,
   batchSize: 32,
   maxRetries: 3,
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
+  apiEndpoint: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
 };

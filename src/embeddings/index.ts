@@ -1,5 +1,4 @@
 export * from './types.js';
-export * from './transformers.js';
 
 import {
   EmbeddingProvider,
@@ -8,14 +7,22 @@ import {
   DEFAULT_MODEL,
   parseEmbeddingProviderName
 } from './types.js';
-import { TransformersEmbeddingProvider, MODEL_CONFIGS } from './transformers.js';
+
+// Model configs for dimension lookups (sync, no heavy dependencies)
+// This avoids loading the full transformers module at import time
+const TRANSFORMERS_MODEL_CONFIGS: Record<string, { dimensions: number; maxContext: number }> = {
+  'Xenova/bge-small-en-v1.5': { dimensions: 384, maxContext: 512 },
+  'Xenova/all-MiniLM-L6-v2': { dimensions: 384, maxContext: 512 },
+  'Xenova/bge-base-en-v1.5': { dimensions: 768, maxContext: 512 },
+  'onnx-community/granite-embedding-small-english-r2-ONNX': { dimensions: 384, maxContext: 8192 }
+};
 
 /**
  * Returns expected embedding dimensions for a given config without initializing any provider.
  * Used for LanceDB dimension validation before committing to an incremental update.
  *
- * Looks up dimensions from MODEL_CONFIGS (the authoritative source shared with the provider
- * implementation) so new models are automatically handled without updating this function.
+ * Looks up dimensions from TRANSFORMERS_MODEL_CONFIGS for local models and handles
+ * remote providers (OpenAI, Ollama) with their specific dimension logic.
  */
 export function getConfiguredDimensions(config: Partial<EmbeddingConfig> = {}): number {
   const provider =
@@ -30,12 +37,12 @@ export function getConfiguredDimensions(config: Partial<EmbeddingConfig> = {}): 
       'mxbai-embed-large': 1024,
       'mxbai-embed-large:latest': 1024,
       'all-minilm': 384,
-      'all-minilm:latest': 384,
+      'all-minilm:latest': 384
     };
     return ollamaDimensions[model] || 768;
   }
-  // Look up from the same MODEL_CONFIGS the provider uses — avoids stale hardcoded guesses
-  return MODEL_CONFIGS[model]?.dimensions ?? 384;
+  // Look up from the local config for transformers provider
+  return TRANSFORMERS_MODEL_CONFIGS[model]?.dimensions ?? 384;
 }
 
 let cachedProvider: EmbeddingProvider | null = null;
@@ -64,10 +71,6 @@ export async function getEmbeddingProvider(
     return provider;
   }
 
-  if (mergedConfig.provider === 'custom') {
-    throw new Error("Custom provider not implemented. Use 'openai' or 'transformers'.");
-  }
-
   if (mergedConfig.provider === 'ollama') {
     const { OllamaEmbeddingProvider } = await import('./ollama.js');
     const provider = new OllamaEmbeddingProvider(
@@ -80,6 +83,8 @@ export async function getEmbeddingProvider(
     return provider;
   }
 
+  // Default: transformers (lazy loaded)
+  const { TransformersEmbeddingProvider } = await import('./transformers.js');
   const provider = new TransformersEmbeddingProvider(mergedConfig.model);
   await provider.initialize();
   cachedProvider = provider;
@@ -87,3 +92,7 @@ export async function getEmbeddingProvider(
 
   return provider;
 }
+
+// Re-export TransformersEmbeddingProvider and MODEL_CONFIGS for consumers who need them
+// These will trigger transformers loading, but only when explicitly imported
+export { TransformersEmbeddingProvider, MODEL_CONFIGS } from './transformers.js';

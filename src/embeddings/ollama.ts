@@ -4,6 +4,23 @@ interface OllamaEmbeddingResponse {
   embedding: number[];
 }
 
+// Context window sizes for common Ollama embedding models (in tokens)
+const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+  'nomic-embed-text': 2048,
+  'nomic-embed-text:latest': 2048,
+  'mxbai-embed-large': 512,
+  'mxbai-embed-large:latest': 512,
+  'all-minilm': 512,
+  'all-minilm:latest': 512
+};
+
+// Conservative character limit (approx 2 chars per token for code)
+// Code has more tokens per character due to punctuation and symbols
+function getMaxChars(modelName: string): number {
+  const tokens = MODEL_CONTEXT_WINDOWS[modelName] || 2048;
+  return tokens * 2; // Very conservative: 2 chars per token
+}
+
 /**
  * Ollama Embedding Provider
  * Supports local embedding models via Ollama API.
@@ -11,7 +28,8 @@ interface OllamaEmbeddingResponse {
  */
 export class OllamaEmbeddingProvider implements EmbeddingProvider {
   readonly name = 'ollama';
-  
+  private maxChars: number;
+
   // Default dimensions for nomic-embed-text (768)
   // Override via EMBEDDING_MODEL env var for other models
   get dimensions(): number {
@@ -22,7 +40,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
       'mxbai-embed-large': 1024,
       'mxbai-embed-large:latest': 1024,
       'all-minilm': 384,
-      'all-minilm:latest': 384,
+      'all-minilm:latest': 384
     };
     return modelDimensions[this.modelName] || 768;
   }
@@ -30,7 +48,9 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
   constructor(
     readonly modelName: string = 'nomic-embed-text',
     private apiEndpoint: string = 'http://localhost:11434'
-  ) {}
+  ) {
+    this.maxChars = getMaxChars(modelName);
+  }
 
   async initialize(): Promise<void> {
     // Ollama doesn't require an API key
@@ -40,6 +60,13 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
   isReady(): boolean {
     // Ollama is always "ready" - no auth required
     return true;
+  }
+
+  private truncateText(text: string): string {
+    if (text.length <= this.maxChars) {
+      return text;
+    }
+    return text.slice(0, this.maxChars);
   }
 
   async embed(text: string): Promise<number[]> {
@@ -55,15 +82,18 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     // Ollama embeddings API processes one text at a time
     for (const text of texts) {
       try {
+        // Truncate text to fit within model's context window
+        const truncatedText = this.truncateText(text);
+
         const response = await fetch(`${this.apiEndpoint}/api/embeddings`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             model: this.modelName,
-            prompt: text,
-          }),
+            prompt: truncatedText
+          })
         });
 
         if (!response.ok) {

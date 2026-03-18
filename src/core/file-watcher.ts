@@ -1,5 +1,6 @@
 import chokidar from 'chokidar';
 import path from 'path';
+import { EXCLUDED_GLOB_PATTERNS } from '../constants/codebase-context.js';
 import { getSupportedExtensions } from '../utils/language-detection.js';
 
 export interface FileWatcherOptions {
@@ -43,18 +44,7 @@ export function startFileWatcher(opts: FileWatcherOptions): () => void {
   };
 
   const watcher = chokidar.watch(rootPath, {
-    ignored: [
-      '**/node_modules/**',
-      '**/.codebase-context/**',
-      '**/.git/**',
-      '**/dist/**',
-      '**/.nx/**',
-      '**/.planning/**',
-      '**/coverage/**',
-      '**/.turbo/**',
-      '**/.next/**',
-      '**/.cache/**'
-    ],
+    ignored: [...EXCLUDED_GLOB_PATTERNS],
     persistent: true,
     ignoreInitial: true,
     awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 100 }

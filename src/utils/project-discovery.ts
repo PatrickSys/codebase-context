@@ -1,6 +1,10 @@
 import { promises as fs } from 'fs';
 import type { Dirent } from 'fs';
 import path from 'path';
+import {
+  EXCLUDED_DIRECTORY_NAMES,
+  DISCOVERY_ONLY_IGNORED
+} from '../constants/codebase-context.js';
 
 export type ProjectEvidence =
   | 'existing_index'
@@ -20,22 +24,8 @@ export interface DiscoverProjectsOptions {
 const DEFAULT_MAX_DEPTH = 4;
 
 const IGNORED_DIRECTORY_NAMES = new Set([
-  '.git',
-  '.hg',
-  '.svn',
-  '.next',
-  '.nuxt',
-  '.turbo',
-  '.venv',
-  '.yarn',
-  'build',
-  'coverage',
-  'dist',
-  'node_modules',
-  'out',
-  'target',
-  'tmp',
-  'vendor'
+  ...EXCLUDED_DIRECTORY_NAMES,
+  ...DISCOVERY_ONLY_IGNORED
 ]);
 
 const STRONG_DIRECTORY_MARKERS = new Set(['.codebase-context', '.git']);

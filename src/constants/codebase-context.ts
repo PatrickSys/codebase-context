@@ -25,3 +25,36 @@ export const INDEXING_STATS_FILENAME = 'indexing-stats.json' as const;
 export const VECTOR_DB_DIRNAME = 'index' as const;
 export const MANIFEST_FILENAME = 'manifest.json' as const;
 export const RELATIONSHIPS_FILENAME = 'relationships.json' as const;
+
+/**
+ * Directories excluded from indexing, file-watching, and project discovery.
+ * Single source of truth — all three consumers import from here.
+ */
+export const EXCLUDED_DIRECTORY_NAMES = [
+  '.cache',
+  '.claude',
+  '.codebase-context',
+  '.git',
+  '.next',
+  '.nx',
+  '.planning',
+  '.turbo',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'target',
+  'vendor',
+  'worktrees'
+] as const;
+
+/** Glob patterns that match excluded directories at any nesting depth. */
+export const EXCLUDED_GLOB_PATTERNS: string[] = EXCLUDED_DIRECTORY_NAMES.map(
+  (dir) => `**/${dir}/**`
+);
+
+/**
+ * Additional directories skipped only during project discovery (not generated
+ * code, just not useful roots to recurse into).
+ */
+export const DISCOVERY_ONLY_IGNORED = ['.hg', '.nuxt', '.svn', '.venv', '.yarn', 'out', 'tmp'] as const;

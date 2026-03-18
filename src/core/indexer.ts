@@ -39,6 +39,7 @@ import { mergeSmallChunks } from '../utils/chunking.js';
 import { getFileCommitDates } from '../utils/git-dates.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
+  EXCLUDED_GLOB_PATTERNS,
   INDEX_FORMAT_VERSION,
   INDEXING_STATS_FILENAME,
   INDEX_META_FILENAME,
@@ -274,14 +275,7 @@ export class CodebaseIndexer {
         '**/*.{sql,graphql,gql}',
         '**/*.{json,jsonc,yaml,yml,toml,xml}'
       ],
-      exclude: [
-        'node_modules/**',
-        'dist/**',
-        'build/**',
-        '.git/**',
-        'coverage/**',
-        '.codebase-context/**'
-      ],
+      exclude: [...EXCLUDED_GLOB_PATTERNS],
       respectGitignore: true,
       parsing: {
         maxFileSize: 1048576,

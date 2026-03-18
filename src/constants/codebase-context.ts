@@ -57,4 +57,12 @@ export const EXCLUDED_GLOB_PATTERNS: string[] = EXCLUDED_DIRECTORY_NAMES.map(
  * Additional directories skipped only during project discovery (not generated
  * code, just not useful roots to recurse into).
  */
-export const DISCOVERY_ONLY_IGNORED = ['.hg', '.nuxt', '.svn', '.venv', '.yarn', 'out', 'tmp'] as const;
+export const DISCOVERY_ONLY_IGNORED = [
+  '.hg',
+  '.nuxt',
+  '.svn',
+  '.venv',
+  '.yarn',
+  'out',
+  'tmp'
+] as const;

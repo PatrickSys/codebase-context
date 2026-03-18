@@ -48,12 +48,17 @@ export function startFileWatcher(opts: FileWatcherOptions): () => void {
       '**/.codebase-context/**',
       '**/.git/**',
       '**/dist/**',
+      '**/build/**',
       '**/.nx/**',
       '**/.planning/**',
       '**/coverage/**',
       '**/.turbo/**',
       '**/.next/**',
-      '**/.cache/**'
+      '**/.cache/**',
+      '**/target/**',
+      '**/vendor/**',
+      '**/worktrees/**',
+      '**/.claude/**'
     ],
     persistent: true,
     ignoreInitial: true,

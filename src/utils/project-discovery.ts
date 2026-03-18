@@ -20,11 +20,15 @@ export interface DiscoverProjectsOptions {
 const DEFAULT_MAX_DEPTH = 4;
 
 const IGNORED_DIRECTORY_NAMES = new Set([
+  '.cache',
+  '.claude',
   '.git',
   '.hg',
+  '.nx',
+  '.nuxt',
+  '.planning',
   '.svn',
   '.next',
-  '.nuxt',
   '.turbo',
   '.venv',
   '.yarn',
@@ -35,7 +39,8 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   'out',
   'target',
   'tmp',
-  'vendor'
+  'vendor',
+  'worktrees'
 ]);
 
 const STRONG_DIRECTORY_MARKERS = new Set(['.codebase-context', '.git']);

@@ -275,12 +275,21 @@ export class CodebaseIndexer {
         '**/*.{json,jsonc,yaml,yml,toml,xml}'
       ],
       exclude: [
-        'node_modules/**',
-        'dist/**',
-        'build/**',
-        '.git/**',
-        'coverage/**',
-        '.codebase-context/**'
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/build/**',
+        '**/.git/**',
+        '**/coverage/**',
+        '**/.codebase-context/**',
+        '**/.nx/**',
+        '**/.turbo/**',
+        '**/.next/**',
+        '**/.cache/**',
+        '**/.planning/**',
+        '**/target/**',
+        '**/vendor/**',
+        '**/worktrees/**',
+        '**/.claude/**'
       ],
       respectGitignore: true,
       parsing: {

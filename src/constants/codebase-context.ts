@@ -49,7 +49,7 @@ export const EXCLUDED_DIRECTORY_NAMES = [
 ] as const;
 
 /** Glob patterns that match excluded directories at any nesting depth. */
-export const EXCLUDED_GLOB_PATTERNS: string[] = EXCLUDED_DIRECTORY_NAMES.map(
+export const EXCLUDED_GLOB_PATTERNS: readonly string[] = EXCLUDED_DIRECTORY_NAMES.map(
   (dir) => `**/${dir}/**`
 );
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -13,16 +13,14 @@ import {
 describe('Indexer exclude patterns — nested directories', () => {
   let tempDir: string;
 
-  beforeEach(async () => {
-    analyzerRegistry.register(new GenericAnalyzer());
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'indexer-exclude-patterns-'));
-  });
-
   afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true });
+    if (tempDir) await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   it('excludes nested coverage, worktrees, .claude, and dist directories', async () => {
+    analyzerRegistry.register(new GenericAnalyzer());
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'indexer-exclude-patterns-'));
+
     // Legitimate source file
     await fs.mkdir(path.join(tempDir, 'src'), { recursive: true });
     await fs.writeFile(
@@ -41,10 +39,7 @@ describe('Indexer exclude patterns — nested directories', () => {
     for (const segments of polluters) {
       const dir = path.join(tempDir, ...segments.slice(0, -1));
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(
-        path.join(tempDir, ...segments),
-        'export const polluter = true;\n'
-      );
+      await fs.writeFile(path.join(tempDir, ...segments), 'export const polluter = true;\n');
     }
 
     const indexer = new CodebaseIndexer({
@@ -65,13 +60,18 @@ describe('Indexer exclude patterns — nested directories', () => {
 
     const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
     const indexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as Record<string, unknown>;
-    const chunks = (
-      Array.isArray(indexRaw)
-        ? indexRaw
-        : Array.isArray(indexRaw?.chunks)
-          ? indexRaw.chunks
-          : []
-    ) as Array<{ filePath: string }>;
+
+    let chunks: Array<{ filePath: string }>;
+    if (Array.isArray(indexRaw)) {
+      chunks = indexRaw;
+    } else if (Array.isArray(indexRaw?.chunks)) {
+      chunks = indexRaw.chunks as Array<{ filePath: string }>;
+    } else {
+      throw new Error(
+        `Unexpected index format: keys=${JSON.stringify(Object.keys(indexRaw ?? {}))}`
+      );
+    }
+
     const indexedPaths = chunks.map((chunk) => chunk.filePath);
 
     // The legitimate file must be indexed

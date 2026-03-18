@@ -20,7 +20,10 @@ export interface DiscoverProjectsOptions {
 
 const DEFAULT_MAX_DEPTH = 4;
 
-const IGNORED_DIRECTORY_NAMES = new Set([...EXCLUDED_DIRECTORY_NAMES, ...DISCOVERY_ONLY_IGNORED]);
+const IGNORED_DIRECTORY_NAMES: Set<string> = new Set([
+  ...EXCLUDED_DIRECTORY_NAMES,
+  ...DISCOVERY_ONLY_IGNORED
+]);
 
 const STRONG_DIRECTORY_MARKERS = new Set(['.codebase-context', '.git']);
 const WORKSPACE_MARKERS = new Set(['lerna.json', 'nx.json', 'pnpm-workspace.yaml', 'turbo.json']);

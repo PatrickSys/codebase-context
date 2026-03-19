@@ -1,22 +1,22 @@
 # Changelog
 
-## Unreleased
+## [1.9.0](https://github.com/PatrickSys/codebase-context/compare/v1.8.2...v1.9.0) (2026-03-19)
 
 ### Features
 
-- **mcp:** rework multi-project routing so one MCP server can serve multiple projects instead of one hardcoded server entry per repo
-- **mcp:** keep explicit `project` as the fallback when the client does not provide enough project context
-- **mcp:** accept repo paths, subproject paths, and file paths as `project` selectors when routing is ambiguous
+- **mcp:** workspace-aware multi-project routing — one MCP server now serves multiple projects; the server picks the right project from workspace context instead of requiring one config entry per repo ([#67](https://github.com/PatrickSys/codebase-context/pull/67))
+- **mcp:** `project` selector accepts repo paths, subproject paths, and file paths when routing is ambiguous ([#67](https://github.com/PatrickSys/codebase-context/pull/67))
 
 ### Bug Fixes
 
-- **search:** auto-heal on corrupted index now triggers a background rebuild instead of blocking the search response
+- **mcp:** route all MCP requests to the correct per-project state instead of a shared global ([#65](https://github.com/PatrickSys/codebase-context/pull/65))
+- **indexing:** make exclude patterns recursive so nested paths like `**/generated/**` are honoured in subdirectories, preventing index pollution in monorepos ([#76](https://github.com/PatrickSys/codebase-context/pull/76))
+- **process:** prevent orphaned server processes — add stdin pipe, PPID poll, `server.onclose`, and SIGHUP guards so the MCP server exits when the client dies ([#77](https://github.com/PatrickSys/codebase-context/pull/77))
 
 ### Documentation
 
-- simplify the setup story around three cases: default rootless setup, single-project fallback, and explicit `project` retries
-- clarify that issue #63 fixed the architecture and workspace-aware workflow, but issue #2 is not fully solved when the client does not provide enough project context
-- remove the repo-local `init` / marker-file story from the public setup guidance
+- add OpenCode setup instructions
+- simplify setup story around three cases: default rootless setup, single-project fallback, and explicit `project` retries
 
 ## [1.8.2](https://github.com/PatrickSys/codebase-context/compare/v1.8.1...v1.8.2) (2026-03-05)
 

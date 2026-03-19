@@ -1612,8 +1612,31 @@ async function main() {
     }
   }
 
+  // Parent death guard — catches SIGKILL, crashes, terminal close on ALL platforms.
+  // process.kill(pid, 0) throws ESRCH when the process no longer exists.
+  const parentPid = process.ppid;
+  if (parentPid > 1) {
+    const parentGuard = setInterval(() => {
+      try {
+        process.kill(parentPid, 0);
+      } catch {
+        process.exit(0);
+      }
+    }, 5_000);
+    parentGuard.unref();
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Detect stdin pipe closure — the primary signal that the MCP client is gone.
+  // StdioServerTransport only listens for 'data'/'error', never 'end'.
+  process.stdin.on('end', () => process.exit(0));
+  process.stdin.on('close', () => process.exit(0));
+
+  // Handle graceful MCP protocol-level disconnect.
+  // Fires after SDK internal cleanup when transport.close() is called.
+  server.onclose = () => process.exit(0);
 
   if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
 
@@ -1648,6 +1671,10 @@ async function main() {
     process.exit(0);
   });
   process.once('SIGTERM', () => {
+    stopAllWatchers();
+    process.exit(0);
+  });
+  process.once('SIGHUP', () => {
     stopAllWatchers();
     process.exit(0);
   });

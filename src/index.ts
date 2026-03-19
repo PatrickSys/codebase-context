@@ -1612,8 +1612,56 @@ async function main() {
     }
   }
 
+  // Parent death guard — catches SIGKILL, crashes, terminal close on ALL platforms.
+  // process.kill(pid, 0) throws ESRCH when the process no longer exists.
+  const parentPid = process.ppid;
+  if (parentPid > 1) {
+    const parentGuard = setInterval(() => {
+      try {
+        process.kill(parentPid, 0);
+      } catch (err: unknown) {
+        // ESRCH = process gone → exit. EPERM = process alive, different UID → ignore.
+        if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
+          process.exit(0);
+        }
+      }
+    }, 5_000);
+    parentGuard.unref();
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Register cleanup before any handler that calls process.exit(), so the
+  // exit listener is always in place when stdin/onclose/signals fire.
+  const stopAllWatchers = () => {
+    for (const project of getAllProjects()) {
+      project.stopWatcher?.();
+    }
+  };
+
+  process.once('exit', stopAllWatchers);
+  process.once('SIGINT', () => {
+    stopAllWatchers();
+    process.exit(0);
+  });
+  process.once('SIGTERM', () => {
+    stopAllWatchers();
+    process.exit(0);
+  });
+  process.once('SIGHUP', () => {
+    stopAllWatchers();
+    process.exit(0);
+  });
+
+  // Detect stdin pipe closure — the primary signal that the MCP client is gone.
+  // StdioServerTransport only listens for 'data'/'error', never 'end'.
+  process.stdin.on('end', () => process.exit(0));
+  process.stdin.on('close', () => process.exit(0));
+
+  // Handle graceful MCP protocol-level disconnect.
+  // Fires after SDK internal cleanup when transport.close() is called.
+  server.onclose = () => process.exit(0);
 
   if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
 
@@ -1633,23 +1681,6 @@ async function main() {
     } catch {
       /* best-effort */
     }
-  });
-
-  // Cleanup all watchers on exit
-  const stopAllWatchers = () => {
-    for (const project of getAllProjects()) {
-      project.stopWatcher?.();
-    }
-  };
-
-  process.once('exit', stopAllWatchers);
-  process.once('SIGINT', () => {
-    stopAllWatchers();
-    process.exit(0);
-  });
-  process.once('SIGTERM', () => {
-    stopAllWatchers();
-    process.exit(0);
   });
 }
 

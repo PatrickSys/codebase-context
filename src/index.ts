@@ -1619,8 +1619,11 @@ async function main() {
     const parentGuard = setInterval(() => {
       try {
         process.kill(parentPid, 0);
-      } catch {
-        process.exit(0);
+      } catch (err: unknown) {
+        // ESRCH = process gone → exit. EPERM = process alive, different UID → ignore.
+        if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
+          process.exit(0);
+        }
       }
     }, 5_000);
     parentGuard.unref();
@@ -1628,6 +1631,28 @@ async function main() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Register cleanup before any handler that calls process.exit(), so the
+  // exit listener is always in place when stdin/onclose/signals fire.
+  const stopAllWatchers = () => {
+    for (const project of getAllProjects()) {
+      project.stopWatcher?.();
+    }
+  };
+
+  process.once('exit', stopAllWatchers);
+  process.once('SIGINT', () => {
+    stopAllWatchers();
+    process.exit(0);
+  });
+  process.once('SIGTERM', () => {
+    stopAllWatchers();
+    process.exit(0);
+  });
+  process.once('SIGHUP', () => {
+    stopAllWatchers();
+    process.exit(0);
+  });
 
   // Detect stdin pipe closure — the primary signal that the MCP client is gone.
   // StdioServerTransport only listens for 'data'/'error', never 'end'.
@@ -1656,27 +1681,6 @@ async function main() {
     } catch {
       /* best-effort */
     }
-  });
-
-  // Cleanup all watchers on exit
-  const stopAllWatchers = () => {
-    for (const project of getAllProjects()) {
-      project.stopWatcher?.();
-    }
-  };
-
-  process.once('exit', stopAllWatchers);
-  process.once('SIGINT', () => {
-    stopAllWatchers();
-    process.exit(0);
-  });
-  process.once('SIGTERM', () => {
-    stopAllWatchers();
-    process.exit(0);
-  });
-  process.once('SIGHUP', () => {
-    stopAllWatchers();
-    process.exit(0);
   });
 }
 

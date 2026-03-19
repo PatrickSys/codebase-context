@@ -18,6 +18,20 @@
 - clarify that issue #63 fixed the architecture and workspace-aware workflow, but issue #2 is not fully solved when the client does not provide enough project context
 - remove the repo-local `init` / marker-file story from the public setup guidance
 
+## [1.9.0](https://github.com/PatrickSys/codebase-context/compare/v1.8.2...v1.9.0) (2026-03-19)
+
+
+### Features
+
+* add workspace-aware multi-project routing ([#67](https://github.com/PatrickSys/codebase-context/issues/67)) ([edb1350](https://github.com/PatrickSys/codebase-context/commit/edb13507369c8d06a579a470665fe4449408d183))
+
+
+### Bug Fixes
+
+* make exclude patterns recursive to prevent index pollution ([#76](https://github.com/PatrickSys/codebase-context/issues/76)) ([a814b24](https://github.com/PatrickSys/codebase-context/commit/a814b2445d3df97ac205073e770399d5caa95214))
+* prevent orphaned processes via stdin/ppid/onclose lifecycle guards ([#77](https://github.com/PatrickSys/codebase-context/issues/77)) ([0b49d7a](https://github.com/PatrickSys/codebase-context/commit/0b49d7a9281b3a215cd920a77613ced1cbc3932d))
+* route MCP requests per project root ([#65](https://github.com/PatrickSys/codebase-context/issues/65)) ([b0c2d04](https://github.com/PatrickSys/codebase-context/commit/b0c2d04bc8a1ce05469697082e1bf5b80207a426))
+
 ## [1.8.2](https://github.com/PatrickSys/codebase-context/compare/v1.8.1...v1.8.2) (2026-03-05)
 
 ### Bug Fixes

@@ -1860,8 +1860,7 @@ if (isDirectRun) {
       const portFlagIdx = process.argv.indexOf('--port');
       const portFromFlag =
         portFlagIdx !== -1 ? Number.parseInt(process.argv[portFlagIdx + 1], 10) : undefined;
-      const explicitPort =
-        portFromFlag && Number.isFinite(portFromFlag) ? portFromFlag : undefined;
+      const explicitPort = portFromFlag && Number.isFinite(portFromFlag) ? portFromFlag : undefined;
 
       startHttp(explicitPort).catch((error) => {
         console.error('Fatal:', error);

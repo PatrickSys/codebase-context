@@ -11,6 +11,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createServer } from './server/factory.js';
+import { startHttpServer } from './server/http.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -66,10 +68,27 @@ import {
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
+// Flags that are NOT project paths — skip them when resolving the bootstrap root.
+const KNOWN_FLAGS = new Set(['--http', '--port', '--help']);
+
 // Resolve optional bootstrap root with validation handled later in main().
 function resolveRootPath(): string | undefined {
-  const arg = process.argv[2];
   const envPath = process.env.CODEBASE_ROOT;
+
+  // Walk argv starting at position 2, skip known flags and their values.
+  let arg: string | undefined;
+  for (let i = 2; i < process.argv.length; i++) {
+    const token = process.argv[i];
+    if (!token) continue;
+    if (KNOWN_FLAGS.has(token)) {
+      if (token === '--port') i++; // skip the value that follows --port
+      continue;
+    }
+    if (!token.startsWith('-')) {
+      arg = token;
+      break;
+    }
+  }
 
   // Priority: CLI arg > env var. Do not fall back to cwd in MCP mode.
   const configuredRoot = arg || envPath;
@@ -784,22 +803,173 @@ const PKG_VERSION: string = JSON.parse(
   await fs.readFile(new URL('../package.json', import.meta.url), 'utf-8')
 ).version;
 
-const server: Server = new Server(
-  {
-    name: 'codebase-context',
-    version: PKG_VERSION
-  },
-  {
-    capabilities: {
-      tools: {},
-      resources: {}
-    }
-  }
-);
+/**
+ * Register all MCP request handlers on a Server instance.
+ * Exported so HTTP mode can wire up per-session servers with the
+ * same handler logic that closes over module-level state.
+ */
+export function registerHandlers(target: Server): void {
+  target.setRequestHandler(ListToolsRequestSchema, async () => {
+    return { tools: TOOLS };
+  });
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools: TOOLS };
-});
+  target.setRequestHandler(ListResourcesRequestSchema, async () => {
+    return { resources: buildResources() };
+  });
+
+  target.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const uri = request.params.uri;
+    const explicitProjectPath = getProjectPathFromContextResourceUri(uri);
+
+    if (explicitProjectPath) {
+      const selection = await resolveProjectSelector(explicitProjectPath);
+      if (!selection.ok) {
+        throw new Error(`Unknown project resource: ${uri}`);
+      }
+
+      const project = selection.project;
+      await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+      setActiveProject(project.rootPath);
+      return {
+        contents: [
+          {
+            uri: buildProjectContextResourceUri(project.rootPath),
+            mimeType: 'text/plain',
+            text: await generateCodebaseContext(project)
+          }
+        ]
+      };
+    }
+
+    if (isContextResourceUri(uri)) {
+      const project = await resolveProjectForResource();
+      return {
+        contents: [
+          {
+            uri: CONTEXT_RESOURCE_URI,
+            mimeType: 'text/plain',
+            text: project ? await generateCodebaseContext(project) : buildProjectSelectionMessage()
+          }
+        ]
+      };
+    }
+
+    throw new Error(`Unknown resource: ${uri}`);
+  });
+
+  target.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    const normalizedArgs =
+      args && typeof args === 'object' && !Array.isArray(args)
+        ? (args as Record<string, unknown>)
+        : {};
+
+    try {
+      if (!toolNames.has(name)) {
+        return await dispatchTool(name, normalizedArgs, createWorkspaceToolContext());
+      }
+
+      const projectResolution = await resolveProjectForTool(normalizedArgs);
+      if (!projectResolution.ok) {
+        return projectResolution.response;
+      }
+
+      const project = projectResolution.project;
+
+      // Gate INDEX_CONSUMING tools on a valid, healthy index
+      let indexSignal: IndexSignal | undefined;
+      if ((INDEX_CONSUMING_TOOL_NAMES as readonly string[]).includes(name)) {
+        if (project.indexState.status === 'indexing') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  status: 'indexing',
+                  message: 'Index build in progress — please retry shortly'
+                })
+              }
+            ]
+          };
+        }
+        if (project.indexState.status === 'error') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  status: 'error',
+                  message: `Indexer error: ${project.indexState.error}`
+                })
+              }
+            ]
+          };
+        }
+        indexSignal = await ensureValidIndexOrAutoHeal(project);
+        if (indexSignal.action === 'rebuild-started') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  status: 'indexing',
+                  message: 'Index rebuild in progress — please retry shortly',
+                  index: indexSignal
+                })
+              }
+            ]
+          };
+        }
+      }
+
+      const result = await dispatchTool(name, normalizedArgs, createToolContext(project));
+
+      // Inject routing/index metadata into JSON responses so agents can reuse the resolved project safely.
+      if (indexSignal !== undefined && result.content?.[0]) {
+        try {
+          const parsed = JSON.parse(result.content[0].text);
+          result.content[0] = {
+            type: 'text',
+            text: JSON.stringify({
+              ...parsed,
+              index: indexSignal,
+              project: buildProjectDescriptor(project.rootPath)
+            })
+          };
+        } catch {
+          /* response wasn't JSON, skip injection */
+        }
+      } else if (result.content?.[0]) {
+        try {
+          const parsed = JSON.parse(result.content[0].text);
+          result.content[0] = {
+            type: 'text',
+            text: JSON.stringify({ ...parsed, project: buildProjectDescriptor(project.rootPath) })
+          };
+        } catch {
+          /* response wasn't JSON, skip injection */
+        }
+      }
+
+      return result;
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ],
+        isError: true
+      };
+    }
+  });
+}
+
+const server: Server = createServer(
+  { name: 'codebase-context', version: PKG_VERSION },
+  registerHandlers
+);
 
 function buildResources(): Resource[] {
   const resources: Resource[] = [
@@ -823,10 +993,6 @@ function buildResources(): Resource[] {
 
   return resources;
 }
-
-server.setRequestHandler(ListResourcesRequestSchema, async () => {
-  return { resources: buildResources() };
-});
 
 async function generateCodebaseContext(project: ProjectState): Promise<string> {
   const intelligencePath = project.paths.intelligence;
@@ -1022,46 +1188,6 @@ function buildProjectSelectionMessage(): string {
   lines.push('Recommended flow: retry the tool call with `project`.');
   return lines.join('\n');
 }
-
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const uri = request.params.uri;
-  const explicitProjectPath = getProjectPathFromContextResourceUri(uri);
-
-  if (explicitProjectPath) {
-    const selection = await resolveProjectSelector(explicitProjectPath);
-    if (!selection.ok) {
-      throw new Error(`Unknown project resource: ${uri}`);
-    }
-
-    const project = selection.project;
-    await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
-    setActiveProject(project.rootPath);
-    return {
-      contents: [
-        {
-          uri: buildProjectContextResourceUri(project.rootPath),
-          mimeType: 'text/plain',
-          text: await generateCodebaseContext(project)
-        }
-      ]
-    };
-  }
-
-  if (isContextResourceUri(uri)) {
-    const project = await resolveProjectForResource();
-    return {
-      contents: [
-        {
-          uri: CONTEXT_RESOURCE_URI,
-          mimeType: 'text/plain',
-          text: project ? await generateCodebaseContext(project) : buildProjectSelectionMessage()
-        }
-      ]
-    };
-  }
-
-  throw new Error(`Unknown resource: ${uri}`);
-});
 
 /**
  * Extract memories from conventional git commits (refactor:, migrate:, fix:, revert:).
@@ -1344,114 +1470,6 @@ async function resolveProjectForResource(): Promise<ProjectState | undefined> {
   return project;
 }
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  const normalizedArgs =
-    args && typeof args === 'object' && !Array.isArray(args)
-      ? (args as Record<string, unknown>)
-      : {};
-
-  try {
-    if (!toolNames.has(name)) {
-      return await dispatchTool(name, normalizedArgs, createWorkspaceToolContext());
-    }
-
-    const projectResolution = await resolveProjectForTool(normalizedArgs);
-    if (!projectResolution.ok) {
-      return projectResolution.response;
-    }
-
-    const project = projectResolution.project;
-
-    // Gate INDEX_CONSUMING tools on a valid, healthy index
-    let indexSignal: IndexSignal | undefined;
-    if ((INDEX_CONSUMING_TOOL_NAMES as readonly string[]).includes(name)) {
-      if (project.indexState.status === 'indexing') {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                status: 'indexing',
-                message: 'Index build in progress — please retry shortly'
-              })
-            }
-          ]
-        };
-      }
-      if (project.indexState.status === 'error') {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                status: 'error',
-                message: `Indexer error: ${project.indexState.error}`
-              })
-            }
-          ]
-        };
-      }
-      indexSignal = await ensureValidIndexOrAutoHeal(project);
-      if (indexSignal.action === 'rebuild-started') {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                status: 'indexing',
-                message: 'Index rebuild in progress — please retry shortly',
-                index: indexSignal
-              })
-            }
-          ]
-        };
-      }
-    }
-
-    const result = await dispatchTool(name, normalizedArgs, createToolContext(project));
-
-    // Inject routing/index metadata into JSON responses so agents can reuse the resolved project safely.
-    if (indexSignal !== undefined && result.content?.[0]) {
-      try {
-        const parsed = JSON.parse(result.content[0].text);
-        result.content[0] = {
-          type: 'text',
-          text: JSON.stringify({
-            ...parsed,
-            index: indexSignal,
-            project: buildProjectDescriptor(project.rootPath)
-          })
-        };
-      } catch {
-        /* response wasn't JSON, skip injection */
-      }
-    } else if (result.content?.[0]) {
-      try {
-        const parsed = JSON.parse(result.content[0].text);
-        result.content[0] = {
-          type: 'text',
-          text: JSON.stringify({ ...parsed, project: buildProjectDescriptor(project.rootPath) })
-        };
-      } catch {
-        /* response wasn't JSON, skip injection */
-      }
-    }
-
-    return result;
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
-        }
-      ],
-      isError: true
-    };
-  }
-});
-
 /**
  * Initialize a project: migrate legacy structure, check index, start watcher.
  * Deduplicates via normalized root key.
@@ -1685,8 +1703,75 @@ async function main() {
 }
 
 // Export server components for programmatic use
-export { server, refreshKnownRootsFromClient, resolveRootPath, shouldReindex, TOOLS };
+export { server, refreshKnownRootsFromClient, resolveRootPath, shouldReindex, TOOLS, PKG_VERSION };
 export { performIndexing };
+
+/**
+ * Start the server in HTTP mode.
+ * Each connecting MCP client gets its own Server+Transport pair,
+ * sharing the same module-level project state.
+ */
+async function startHttp(port: number): Promise<void> {
+  // Validate bootstrap root the same way main() does
+  if (primaryRootPath) {
+    try {
+      const stats = await fs.stat(primaryRootPath);
+      if (!stats.isDirectory()) {
+        console.error(`ERROR: Root path is not a directory: ${primaryRootPath}`);
+        process.exit(1);
+      }
+    } catch {
+      console.error(`ERROR: Root path does not exist: ${primaryRootPath}`);
+      process.exit(1);
+    }
+  }
+
+  const handle = await startHttpServer({
+    name: 'codebase-context',
+    version: PKG_VERSION,
+    port,
+    registerHandlers,
+    onSessionReady: (sessionServer) => {
+      // Per-session roots change handler
+      sessionServer.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+        try {
+          await refreshKnownRootsFromClient();
+        } catch {
+          /* best-effort */
+        }
+      });
+    }
+  });
+
+  // Register cleanup — no parent death guard or stdin listeners in HTTP mode
+  const stopAllWatchers = () => {
+    for (const project of getAllProjects()) {
+      project.stopWatcher?.();
+    }
+  };
+
+  const shutdown = async () => {
+    console.error('[HTTP] Shutting down...');
+    stopAllWatchers();
+    await handle.close();
+    process.exit(0);
+  };
+
+  process.once('SIGINT', () => void shutdown());
+  process.once('SIGTERM', () => void shutdown());
+  process.once('exit', stopAllWatchers);
+
+  // If a bootstrap root was provided, auto-init it
+  if (primaryRootPath) {
+    registerKnownRoot(primaryRootPath);
+    await refreshDiscoveredProjectsForKnownRoots();
+    const startupRoots = getKnownRootPaths();
+    if (startupRoots.length === 1) {
+      await initProject(startupRoots[0], watcherDebounceMs, { enableWatcher: true });
+      setActiveProject(startupRoots[0]);
+    }
+  }
+}
 
 // Only auto-start when run directly as CLI (not when imported as module)
 // Check if this module is the entry point
@@ -1714,9 +1799,28 @@ if (isDirectRun) {
       process.exit(1);
     });
   } else {
-    main().catch((error) => {
-      console.error('Fatal:', error);
-      process.exit(1);
-    });
+    // Detect HTTP mode from flags or env vars
+    const httpFlag = process.argv.includes('--http') || process.env.CODEBASE_CONTEXT_HTTP === '1';
+
+    if (httpFlag) {
+      const portFlagIdx = process.argv.indexOf('--port');
+      const portFromFlag = portFlagIdx !== -1 ? Number.parseInt(process.argv[portFlagIdx + 1], 10) : undefined;
+      const portFromEnv = process.env.CODEBASE_CONTEXT_PORT
+        ? Number.parseInt(process.env.CODEBASE_CONTEXT_PORT, 10)
+        : undefined;
+      const port = (portFromFlag && Number.isFinite(portFromFlag)) ? portFromFlag
+        : (portFromEnv && Number.isFinite(portFromEnv)) ? portFromEnv
+        : 3100;
+
+      startHttp(port).catch((error) => {
+        console.error('Fatal:', error);
+        process.exit(1);
+      });
+    } else {
+      main().catch((error) => {
+        console.error('Fatal:', error);
+        process.exit(1);
+      });
+    }
   }
 }

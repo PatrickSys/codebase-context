@@ -246,5 +246,86 @@
     "reason": "Auto-extracted from git commit history",
     "date": "2026-02-15T13:04:10.000Z",
     "source": "git"
+  },
+  {
+    "id": "0c5271f19670",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: prevent orphaned processes via stdin/ppid/onclose lifecycle guards (#77)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-19T22:09:36.000Z",
+    "source": "git"
+  },
+  {
+    "id": "76f3e2ea45ac",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: make exclude patterns recursive to prevent index pollution (#76)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-18T22:06:13.000Z",
+    "source": "git"
+  },
+  {
+    "id": "391c1d465544",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: route MCP requests per project root (#65)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-07T15:37:13.000Z",
+    "source": "git"
+  },
+  {
+    "id": "47fcd92fbcce",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: restore npx installs for published package",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-05T22:24:47.000Z",
+    "source": "git"
+  },
+  {
+    "id": "6cdf7384165a",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(get-team-patterns): filter out legacy testing framework categories from patterns",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-05T19:26:03.000Z",
+    "source": "git"
+  },
+  {
+    "id": "53c234c99d00",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(git): run tests only on pre-push",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-05T19:16:04.000Z",
+    "source": "git"
+  },
+  {
+    "id": "ac6653e45758",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(git): tighten pre-push formatting enforcement",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-05T18:47:36.000Z",
+    "source": "git"
+  },
+  {
+    "id": "cc519240e73c",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(cli): remove unused MetadataDependency import",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-05T18:23:48.000Z",
+    "source": "git"
+  },
+  {
+    "id": "9f949cc7137e",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(cli): formatter audit — render missing metadata fields, README callers qualifier",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-03-05T18:17:37.000Z",
+    "source": "git"
   }
 ]

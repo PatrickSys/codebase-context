@@ -17,6 +17,8 @@ export interface ProjectState {
   autoRefresh: AutoRefreshController;
   initPromise?: Promise<void>;
   stopWatcher?: () => void;
+  /** Extra glob exclusion patterns from config file — merged with EXCLUDED_GLOB_PATTERNS at index time. */
+  extraExcludePatterns?: string[];
 }
 
 export function makePaths(rootPath: string): ToolPaths {

@@ -13,6 +13,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server/factory.js';
 import { startHttpServer } from './server/http.js';
+import { loadServerConfig } from './server/config.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -46,6 +47,7 @@ import {
   getProjectPathFromContextResourceUri,
   isContextResourceUri
 } from './resources/uri.js';
+import { EXCLUDED_GLOB_PATTERNS } from './constants/codebase-context.js';
 import {
   discoverProjectsWithinRoot,
   findNearestProjectBoundary,
@@ -102,6 +104,8 @@ function resolveRootPath(): string | undefined {
 const primaryRootPath = resolveRootPath();
 const toolNames = new Set(TOOLS.map((tool) => tool.name));
 const knownRoots = new Map<string, { rootPath: string; label?: string }>();
+/** Roots loaded from config file — preserved across syncKnownRoots() refreshes. */
+const configRoots = new Map<string, { rootPath: string }>();
 const discoveredProjectPaths = new Map<string, string>();
 let clientRootsEnabled = false;
 const projectSourcesByKey = new Map<string, ProjectDescriptor['source']>();
@@ -335,6 +339,13 @@ function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>
       rootPath: resolvedRootPath,
       label: entry.label?.trim() || undefined
     });
+  }
+
+  // Always include config-registered roots — config is additive (REPO-03)
+  for (const [rootKey, rootEntry] of configRoots.entries()) {
+    if (!nextRoots.has(rootKey)) {
+      nextRoots.set(rootKey, rootEntry);
+    }
   }
 
   for (const [rootKey, existingRoot] of knownRoots.entries()) {
@@ -1240,6 +1251,9 @@ async function performIndexingOnce(
     let lastLoggedProgress = { phase: '', percentage: -1 };
     const indexer = new CodebaseIndexer({
       rootPath: project.rootPath,
+      ...(project.extraExcludePatterns?.length
+        ? { config: { exclude: [...EXCLUDED_GLOB_PATTERNS, ...project.extraExcludePatterns] } }
+        : {}),
       incrementalOnly,
       onProgress: (progress) => {
         // Only log when phase or percentage actually changes (prevents duplicate logs)
@@ -1587,7 +1601,33 @@ async function initProject(
   }
 }
 
+async function applyServerConfig(
+  serverConfig: Awaited<ReturnType<typeof loadServerConfig>>
+): Promise<void> {
+  for (const proj of serverConfig?.projects ?? []) {
+    try {
+      const stats = await fs.stat(proj.root);
+      if (!stats.isDirectory()) {
+        console.error(`[config] Skipping non-directory project root: ${proj.root}`);
+        continue;
+      }
+      const rootKey = normalizeRootKey(proj.root);
+      configRoots.set(rootKey, { rootPath: proj.root });
+      registerKnownRoot(proj.root);
+      if (proj.excludePatterns?.length) {
+        const project = getOrCreateProject(proj.root);
+        project.extraExcludePatterns = proj.excludePatterns;
+      }
+    } catch {
+      console.error(`[config] Skipping inaccessible project root: ${proj.root}`);
+    }
+  }
+}
+
 async function main() {
+  const serverConfig = await loadServerConfig();
+  await applyServerConfig(serverConfig);
+
   if (primaryRootPath) {
     // Validate bootstrap root path exists and is a directory when explicitly configured.
     try {
@@ -1711,7 +1751,18 @@ export { performIndexing };
  * Each connecting MCP client gets its own Server+Transport pair,
  * sharing the same module-level project state.
  */
-async function startHttp(port: number): Promise<void> {
+async function startHttp(explicitPort?: number): Promise<void> {
+  const serverConfig = await loadServerConfig();
+  await applyServerConfig(serverConfig);
+
+  // Port resolution priority: CLI flag > env var > config file > built-in default (3100)
+  const portFromEnv = process.env.CODEBASE_CONTEXT_PORT
+    ? Number.parseInt(process.env.CODEBASE_CONTEXT_PORT, 10)
+    : undefined;
+  const resolvedEnvPort = portFromEnv && Number.isFinite(portFromEnv) ? portFromEnv : undefined;
+  const port = explicitPort ?? resolvedEnvPort ?? serverConfig?.server?.port ?? 3100;
+  const host = serverConfig?.server?.host ?? '127.0.0.1';
+
   // Validate bootstrap root the same way main() does
   if (primaryRootPath) {
     try {
@@ -1730,6 +1781,7 @@ async function startHttp(port: number): Promise<void> {
     name: 'codebase-context',
     version: PKG_VERSION,
     port,
+    host,
     registerHandlers,
     onSessionReady: (sessionServer) => {
       // Per-session roots change handler
@@ -1803,20 +1855,15 @@ if (isDirectRun) {
     const httpFlag = process.argv.includes('--http') || process.env.CODEBASE_CONTEXT_HTTP === '1';
 
     if (httpFlag) {
+      // Extract only the CLI flag value. Env var, config, and default
+      // are resolved inside startHttp() in priority order: flag > env > config > 3100.
       const portFlagIdx = process.argv.indexOf('--port');
       const portFromFlag =
         portFlagIdx !== -1 ? Number.parseInt(process.argv[portFlagIdx + 1], 10) : undefined;
-      const portFromEnv = process.env.CODEBASE_CONTEXT_PORT
-        ? Number.parseInt(process.env.CODEBASE_CONTEXT_PORT, 10)
-        : undefined;
-      const port =
-        portFromFlag && Number.isFinite(portFromFlag)
-          ? portFromFlag
-          : portFromEnv && Number.isFinite(portFromEnv)
-            ? portFromEnv
-            : 3100;
+      const explicitPort =
+        portFromFlag && Number.isFinite(portFromFlag) ? portFromFlag : undefined;
 
-      startHttp(port).catch((error) => {
+      startHttp(explicitPort).catch((error) => {
         console.error('Fatal:', error);
         process.exit(1);
       });

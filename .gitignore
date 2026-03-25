@@ -23,7 +23,7 @@ nul
 .planning-archive/*
 .codex/
 grammars/*.wasm
-
+.agents/
 .tmp-research-repos/
 docs/visuals.md
 .repolore/

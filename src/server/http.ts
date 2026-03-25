@@ -7,7 +7,11 @@
  * project state from index.ts.
  */
 
-import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import {
+  createServer as createHttpServer,
+  type IncomingMessage,
+  type ServerResponse
+} from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -81,7 +85,9 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
     for (const [sessionId, session] of sessions.entries()) {
       if (now - session.lastActivity > SESSION_TIMEOUT_MS) {
         console.error(`[HTTP] Session ${sessionId} timed out`);
-        void session.transport.close().catch(() => { /* best effort */ });
+        void session.transport.close().catch(() => {
+          /* best effort */
+        });
         sessions.delete(sessionId);
       }
     }
@@ -200,7 +206,9 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
   // Handle server errors
   httpServer.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code === 'EADDRINUSE') {
-      console.error(`[HTTP] Port ${port} is already in use. Choose a different port with --port or CODEBASE_CONTEXT_PORT.`);
+      console.error(
+        `[HTTP] Port ${port} is already in use. Choose a different port with --port or CODEBASE_CONTEXT_PORT.`
+      );
     } else if (error.code === 'EACCES') {
       console.error(`[HTTP] Permission denied for port ${port}. Try a port above 1024.`);
     } else {

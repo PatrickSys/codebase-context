@@ -20,10 +20,7 @@ export type RegisterHandlers = (server: Server) => void;
  * Create a new MCP Server instance with standard capabilities.
  * Optionally registers handlers via the provided callback.
  */
-export function createServer(
-  options: ServerOptions,
-  registerHandlers?: RegisterHandlers
-): Server {
+export function createServer(options: ServerOptions, registerHandlers?: RegisterHandlers): Server {
   const server = new Server(
     {
       name: options.name,

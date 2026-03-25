@@ -1804,13 +1804,17 @@ if (isDirectRun) {
 
     if (httpFlag) {
       const portFlagIdx = process.argv.indexOf('--port');
-      const portFromFlag = portFlagIdx !== -1 ? Number.parseInt(process.argv[portFlagIdx + 1], 10) : undefined;
+      const portFromFlag =
+        portFlagIdx !== -1 ? Number.parseInt(process.argv[portFlagIdx + 1], 10) : undefined;
       const portFromEnv = process.env.CODEBASE_CONTEXT_PORT
         ? Number.parseInt(process.env.CODEBASE_CONTEXT_PORT, 10)
         : undefined;
-      const port = (portFromFlag && Number.isFinite(portFromFlag)) ? portFromFlag
-        : (portFromEnv && Number.isFinite(portFromEnv)) ? portFromEnv
-        : 3100;
+      const port =
+        portFromFlag && Number.isFinite(portFromFlag)
+          ? portFromFlag
+          : portFromEnv && Number.isFinite(portFromEnv)
+            ? portFromEnv
+            : 3100;
 
       startHttp(port).catch((error) => {
         console.error('Fatal:', error);

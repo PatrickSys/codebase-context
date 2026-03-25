@@ -95,112 +95,128 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
   timeoutCheck.unref();
 
   const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
-    const url = new URL(req.url ?? '/', `http://${host}:${port}`);
+    try {
+      const url = new URL(req.url ?? '/', `http://${host}:${port}`);
 
-    // Health check on root
-    if (url.pathname === '/' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok', sessions: sessions.size }));
-      return;
-    }
+      // Health check on root
+      if (url.pathname === '/' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', sessions: sessions.size }));
+        return;
+      }
 
-    // Only handle /mcp
-    if (url.pathname !== '/mcp') {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not found' }));
-      return;
-    }
+      // Only handle /mcp
+      if (url.pathname !== '/mcp') {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found' }));
+        return;
+      }
 
-    const method = req.method?.toUpperCase();
+      const method = req.method?.toUpperCase();
 
-    if (method === 'POST') {
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      if (method === 'POST') {
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-      if (sessionId && sessions.has(sessionId)) {
-        // Existing session — delegate to its transport
+        if (sessionId && sessions.has(sessionId)) {
+          // Existing session — delegate to its transport
+          touchSession(sessionId);
+          const session = sessions.get(sessionId)!;
+          await session.transport.handleRequest(req, res);
+          return;
+        }
+
+        if (sessionId && !sessions.has(sessionId)) {
+          // Unknown session ID — 404
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Session not found' }));
+          return;
+        }
+
+        // No session ID — new initialization request
+        const { server: mcpServer, transport } = createSessionServer();
+
+        // Connect server to transport
+        await mcpServer.connect(transport);
+
+        // Register onclose before handleRequest so cleanup always fires.
+        transport.onclose = () => {
+          const sid = transport.sessionId;
+          if (sid && sessions.has(sid)) {
+            sessions.delete(sid);
+            console.error(`[HTTP] Session ${sid} disconnected`);
+          }
+        };
+
+        // Handle the init request — this generates the session ID
+        await transport.handleRequest(req, res);
+
+        // After handleRequest, the session ID is available
+        const newSessionId = transport.sessionId;
+        if (newSessionId) {
+          sessions.set(newSessionId, {
+            server: mcpServer,
+            transport,
+            lastActivity: Date.now()
+          });
+          console.error(`[HTTP] Session ${newSessionId} connected`);
+
+          // Notify caller so they can set up per-session handlers (roots refresh, etc.)
+          options.onSessionReady?.(mcpServer);
+        } else {
+          // Malformed init request — SDK didn't assign a session ID; clean up the orphan.
+          void transport.close().catch(() => {
+            /* best effort */
+          });
+        }
+
+        return;
+      }
+
+      if (method === 'GET') {
+        // SSE streaming for server-initiated messages
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+        if (!sessionId || !sessions.has(sessionId)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing or invalid session ID' }));
+          return;
+        }
+
         touchSession(sessionId);
         const session = sessions.get(sessionId)!;
         await session.transport.handleRequest(req, res);
         return;
       }
 
-      if (sessionId && !sessions.has(sessionId)) {
-        // Unknown session ID — 404
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Session not found' }));
-        return;
-      }
-
-      // No session ID — new initialization request
-      const { server: mcpServer, transport } = createSessionServer();
-
-      // Connect server to transport
-      await mcpServer.connect(transport);
-
-      // Register onclose before handleRequest so cleanup always fires.
-      transport.onclose = () => {
-        const sid = transport.sessionId;
-        if (sid && sessions.has(sid)) {
-          sessions.delete(sid);
-          console.error(`[HTTP] Session ${sid} disconnected`);
+      if (method === 'DELETE') {
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+        if (!sessionId || !sessions.has(sessionId)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Session not found' }));
+          return;
         }
-      };
 
-      // Handle the init request — this generates the session ID
-      await transport.handleRequest(req, res);
-
-      // After handleRequest, the session ID is available
-      const newSessionId = transport.sessionId;
-      if (newSessionId) {
-        sessions.set(newSessionId, {
-          server: mcpServer,
-          transport,
-          lastActivity: Date.now()
-        });
-        console.error(`[HTTP] Session ${newSessionId} connected`);
-
-        // Notify caller so they can set up per-session handlers (roots refresh, etc.)
-        options.onSessionReady?.(mcpServer);
-      }
-
-      return;
-    }
-
-    if (method === 'GET') {
-      // SSE streaming for server-initiated messages
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
-      if (!sessionId || !sessions.has(sessionId)) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing or invalid session ID' }));
+        const session = sessions.get(sessionId)!;
+        try {
+          await session.transport.close();
+        } finally {
+          sessions.delete(sessionId);
+          console.error(`[HTTP] Session ${sessionId} closed by client`);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'session_closed' }));
         return;
       }
 
-      touchSession(sessionId);
-      const session = sessions.get(sessionId)!;
-      await session.transport.handleRequest(req, res);
-      return;
-    }
-
-    if (method === 'DELETE') {
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
-      if (!sessionId || !sessions.has(sessionId)) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Session not found' }));
-        return;
+      // Method not allowed
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
+    } catch (err) {
+      console.error('[HTTP] Unhandled request error:', err);
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal server error' }));
       }
-
-      const session = sessions.get(sessionId)!;
-      await session.transport.close();
-      sessions.delete(sessionId);
-      console.error(`[HTTP] Session ${sessionId} closed by client`);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'session_closed' }));
-      return;
     }
-
-    // Method not allowed
-    res.writeHead(405, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Method not allowed' }));
   });
 
   // Handle server errors

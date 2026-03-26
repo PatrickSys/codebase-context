@@ -40,7 +40,9 @@
     "README.md",
     "LICENSE",
     "docs/cli.md",
-    "docs/capabilities.md"
+    "docs/capabilities.md",
+    "docs/client-setup.md",
+    "templates"
   ],
   "packageManager": "pnpm@10.27.0",
   "engines": {

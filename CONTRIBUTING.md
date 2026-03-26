@@ -68,6 +68,25 @@ node dist/index.js /path/to/test/project
 
 The server logs to stderr, so you can see what it's doing.
 
+## Evaluation Harness
+
+Run `pnpm eval` to measure search/ranking quality against frozen fixtures. Use this before releases or after changing search/ranking/chunking logic.
+
+```bash
+# Two codebases (defaults to bundled fixtures)
+pnpm eval -- <codebaseA> <codebaseB>
+
+# Offline smoke test (no network)
+pnpm eval -- tests/fixtures/codebases/eval-controlled tests/fixtures/codebases/eval-controlled \
+  --fixture-a=tests/fixtures/eval-controlled.json \
+  --fixture-b=tests/fixtures/eval-controlled.json \
+  --skip-reindex --no-rerank
+```
+
+Flags: `--help`, `--fixture-a`, `--fixture-b`, `--skip-reindex`, `--no-rerank`, `--no-redact`.
+
+Save a report: `pnpm eval -- <path> --skip-reindex > eval-report.txt`
+
 ## Pull Requests
 
 - Fork, branch, make changes

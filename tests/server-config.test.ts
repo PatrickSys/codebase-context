@@ -86,6 +86,28 @@ describe('loadServerConfig', () => {
     });
   });
 
+  it('skips project entries with missing or empty roots instead of resolving cwd', async () => {
+    const errorSpy = vi.spyOn(console, 'error');
+    const config = JSON.stringify({
+      projects: [{}, { root: '   ' }, { root: 'valid-root' }]
+    });
+
+    await withTempConfig(config, async (filePath) => {
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = filePath;
+      const result = await loadServerConfig();
+
+      expect(result).not.toBeNull();
+      expect(result!.projects).toEqual([{ root: path.resolve('valid-root') }]);
+      expect(errorSpy).toHaveBeenCalledTimes(2);
+      expect(errorSpy.mock.calls[0][0]).toMatch(
+        /\[config\] Skipping project entry with missing or empty root/
+      );
+      expect(errorSpy.mock.calls[1][0]).toMatch(
+        /\[config\] Skipping project entry with missing or empty root/
+      );
+    });
+  });
+
   it('returns valid config for well-formed input with projects and server.port', async () => {
     // Use absolute paths that are valid on all platforms
     const projA = path.join(os.tmpdir(), 'ccc-test-proj-a');
@@ -144,6 +166,18 @@ describe('loadServerConfig', () => {
       expect(result!.server?.port).toBeUndefined();
       expect(errorSpy).toHaveBeenCalledOnce();
       expect(errorSpy.mock.calls[0][0]).toMatch(/\[config\] Ignoring invalid server\.port: abc/);
+    });
+  });
+
+  it('drops server.port with a warning when value exceeds 65535', async () => {
+    const errorSpy = vi.spyOn(console, 'error');
+    const config = JSON.stringify({ server: { port: 65536 } });
+    await withTempConfig(config, async (filePath) => {
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = filePath;
+      const result = await loadServerConfig();
+      expect(result!.server?.port).toBeUndefined();
+      expect(errorSpy).toHaveBeenCalledOnce();
+      expect(errorSpy.mock.calls[0][0]).toMatch(/\[config\] Ignoring invalid server\.port: 65536/);
     });
   });
 

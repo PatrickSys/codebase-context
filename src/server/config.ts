@@ -55,7 +55,11 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
     result.projects = (config.projects as unknown[])
       .filter((p): p is Record<string, unknown> => typeof p === 'object' && p !== null)
       .map((p) => {
-        const rawRoot = typeof p.root === 'string' ? p.root : '';
+        const rawRoot = typeof p.root === 'string' ? p.root.trim() : '';
+        if (!rawRoot) {
+          console.error('[config] Skipping project entry with missing or empty root');
+          return null;
+        }
         const resolvedRoot = path.resolve(expandTilde(rawRoot));
         const proj: ProjectConfig = { root: resolvedRoot };
         if (Array.isArray(p.excludePatterns)) {
@@ -64,7 +68,8 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
           );
         }
         return proj;
-      });
+      })
+      .filter((project): project is ProjectConfig => project !== null);
   }
 
   // Resolve server options
@@ -79,7 +84,7 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
     if (srv.port !== undefined) {
       const portValue = srv.port;
       const portNum = typeof portValue === 'number' ? portValue : Number(portValue);
-      if (Number.isInteger(portNum) && portNum > 0) {
+      if (Number.isInteger(portNum) && portNum > 0 && portNum <= 65535) {
         result.server.port = portNum;
       } else {
         console.error(`[config] Ignoring invalid server.port: ${portValue}`);

@@ -21,6 +21,7 @@ Per-project config overrides supported today:
 - `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
 - `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
 
+
 Copy-pasteable client config templates are shipped in the package:
 
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients

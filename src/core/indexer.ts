@@ -21,11 +21,7 @@ import {
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
-import {
-  getSupportedExtensions,
-  isBinaryFile,
-  isCodeFile
-} from '../utils/language-detection.js';
+import { getSupportedExtensions, isBinaryFile, isCodeFile } from '../utils/language-detection.js';
 import {
   getEmbeddingProvider,
   getConfiguredDimensions,

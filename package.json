@@ -114,7 +114,7 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "watch": "tsc -w",
-    "test": "vitest run",
+    "test": "node scripts/run-vitest.mjs",
     "test:watch": "vitest",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",

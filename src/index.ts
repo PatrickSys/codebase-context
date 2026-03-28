@@ -14,6 +14,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createServer } from './server/factory.js';
 import { startHttpServer } from './server/http.js';
 import { loadServerConfig } from './server/config.js';
+import type { ProjectConfig } from './server/config.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -64,6 +65,7 @@ import {
   makeLegacyPaths,
   normalizeRootKey,
   removeProject,
+  type ProjectRuntimeOverrides,
   type ProjectState
 } from './project-state.js';
 
@@ -1251,8 +1253,24 @@ async function performIndexingOnce(
     let lastLoggedProgress = { phase: '', percentage: -1 };
     const indexer = new CodebaseIndexer({
       rootPath: project.rootPath,
-      ...(project.extraExcludePatterns?.length
-        ? { config: { exclude: [...EXCLUDED_GLOB_PATTERNS, ...project.extraExcludePatterns] } }
+      ...(project.runtimeOverrides.extraExcludePatterns?.length
+        ? {
+            config: {
+              exclude: [
+                ...EXCLUDED_GLOB_PATTERNS,
+                ...project.runtimeOverrides.extraExcludePatterns
+              ]
+            }
+          }
+        : {}),
+      ...(project.runtimeOverrides.preferredAnalyzer ||
+      project.runtimeOverrides.extraSourceExtensions?.length
+        ? {
+            projectOptions: {
+              preferredAnalyzer: project.runtimeOverrides.preferredAnalyzer,
+              extraFileExtensions: project.runtimeOverrides.extraSourceExtensions
+            }
+          }
         : {}),
       incrementalOnly,
       onProgress: (progress) => {
@@ -1544,6 +1562,7 @@ function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
   project.stopWatcher = startFileWatcher({
     rootPath: project.rootPath,
     debounceMs,
+    extraExtensions: project.runtimeOverrides.extraSourceExtensions,
     onChanged: () => {
       const shouldRunNow = project.autoRefresh.onFileChange(
         project.indexState.status === 'indexing'
@@ -1601,6 +1620,42 @@ async function initProject(
   }
 }
 
+function normalizeRuntimeExtensions(extensions?: string[]): string[] | undefined {
+  if (!extensions?.length) {
+    return undefined;
+  }
+
+  const normalized = Array.from(
+    new Set(
+      extensions
+        .map((extension) => extension.trim().toLowerCase())
+        .filter((extension) => extension.length > 0)
+        .map((extension) => (extension.startsWith('.') ? extension : `.${extension}`))
+    )
+  );
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function buildProjectRuntimeOverrides(projectConfig: ProjectConfig): ProjectRuntimeOverrides {
+  const runtimeOverrides: ProjectRuntimeOverrides = {};
+
+  if (projectConfig.excludePatterns?.length) {
+    runtimeOverrides.extraExcludePatterns = [...projectConfig.excludePatterns];
+  }
+
+  if (projectConfig.analyzerHints?.analyzer) {
+    runtimeOverrides.preferredAnalyzer = projectConfig.analyzerHints.analyzer.trim();
+  }
+
+  const extraSourceExtensions = normalizeRuntimeExtensions(projectConfig.analyzerHints?.extensions);
+  if (extraSourceExtensions) {
+    runtimeOverrides.extraSourceExtensions = extraSourceExtensions;
+  }
+
+  return runtimeOverrides;
+}
+
 async function applyServerConfig(
   serverConfig: Awaited<ReturnType<typeof loadServerConfig>>
 ): Promise<void> {
@@ -1614,9 +1669,10 @@ async function applyServerConfig(
       const rootKey = normalizeRootKey(proj.root);
       configRoots.set(rootKey, { rootPath: proj.root });
       registerKnownRoot(proj.root);
-      if (proj.excludePatterns?.length) {
+      const runtimeOverrides = buildProjectRuntimeOverrides(proj);
+      if (Object.keys(runtimeOverrides).length > 0) {
         const project = getOrCreateProject(proj.root);
-        project.extraExcludePatterns = proj.excludePatterns;
+        project.runtimeOverrides = runtimeOverrides;
       }
     } catch {
       console.error(`[config] Skipping inaccessible project root: ${proj.root}`);

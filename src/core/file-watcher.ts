@@ -7,23 +7,22 @@ export interface FileWatcherOptions {
   rootPath: string;
   /** ms after last change before triggering. Default: 2000 */
   debounceMs?: number;
+  /** Additional source extensions tracked for this project only. */
+  extraExtensions?: string[];
   /** Called once chokidar finishes initial scan and starts emitting change events */
   onReady?: () => void;
   /** Called once the debounce window expires after the last detected change */
   onChanged: () => void;
 }
 
-const TRACKED_EXTENSIONS = new Set(
-  getSupportedExtensions().map((extension) => extension.toLowerCase())
-);
-
 const TRACKED_METADATA_FILES = new Set(['.gitignore']);
 
-function isTrackedSourcePath(filePath: string): boolean {
+function isTrackedSourcePath(filePath: string, trackedExtensions: Set<string>): boolean {
   const basename = path.basename(filePath).toLowerCase();
   if (TRACKED_METADATA_FILES.has(basename)) return true;
+
   const extension = path.extname(filePath).toLowerCase();
-  return extension.length > 0 && TRACKED_EXTENSIONS.has(extension);
+  return extension.length > 0 && trackedExtensions.has(extension);
 }
 
 /**
@@ -31,11 +30,14 @@ function isTrackedSourcePath(filePath: string): boolean {
  * Returns a stop() function that cancels the debounce timer and closes the watcher.
  */
 export function startFileWatcher(opts: FileWatcherOptions): () => void {
-  const { rootPath, debounceMs = 2000, onReady, onChanged } = opts;
+  const { rootPath, debounceMs = 2000, extraExtensions, onReady, onChanged } = opts;
+  const trackedExtensions = new Set(
+    getSupportedExtensions(extraExtensions).map((extension) => extension.toLowerCase())
+  );
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   const trigger = (filePath: string) => {
-    if (!isTrackedSourcePath(filePath)) return;
+    if (!isTrackedSourcePath(filePath, trackedExtensions)) return;
     if (debounceTimer !== undefined) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       debounceTimer = undefined;

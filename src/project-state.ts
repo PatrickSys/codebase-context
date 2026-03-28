@@ -10,6 +10,15 @@ import { createAutoRefreshController } from './core/auto-refresh.js';
 import type { AutoRefreshController } from './core/auto-refresh.js';
 import type { ToolPaths, IndexState } from './tools/types.js';
 
+export interface ProjectRuntimeOverrides {
+  /** Extra glob exclusion patterns merged with the default index-time exclusions. */
+  extraExcludePatterns?: string[];
+  /** Analyzer name to prefer for this project without mutating global registry order. */
+  preferredAnalyzer?: string;
+  /** Additional source extensions treated as code for this project only. */
+  extraSourceExtensions?: string[];
+}
+
 export interface ProjectState {
   rootPath: string;
   paths: ToolPaths;
@@ -17,8 +26,7 @@ export interface ProjectState {
   autoRefresh: AutoRefreshController;
   initPromise?: Promise<void>;
   stopWatcher?: () => void;
-  /** Extra glob exclusion patterns from config file — merged with EXCLUDED_GLOB_PATTERNS at index time. */
-  extraExcludePatterns?: string[];
+  runtimeOverrides: ProjectRuntimeOverrides;
 }
 
 export function makePaths(rootPath: string): ToolPaths {
@@ -59,7 +67,8 @@ export function createProjectState(rootPath: string): ProjectState {
     rootPath,
     paths: makePaths(rootPath),
     indexState: { status: 'idle' },
-    autoRefresh: createAutoRefreshController()
+    autoRefresh: createAutoRefreshController(),
+    runtimeOverrides: {}
   };
 }
 

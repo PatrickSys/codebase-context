@@ -3,12 +3,62 @@ import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import { CodebaseIndexer } from '../src/core/indexer.js';
+import { rmWithRetries } from './test-helpers.js';
+
+type ToolCallRequest = {
+  jsonrpc: '2.0';
+  id: number;
+  method: 'tools/call';
+  params: { name: string; arguments: Record<string, unknown> };
+};
+
+type SearchResultRow = {
+  snippet?: string;
+};
+
+type SearchToolPayload = {
+  results: SearchResultRow[];
+  preflight?: {
+    ready: boolean;
+    nextAction?: string;
+    patterns?: Record<string, unknown>;
+    warnings?: unknown[];
+    bestExample?: string;
+    impact?: Record<string, unknown>;
+    whatWouldHelp?: unknown[];
+  };
+};
+
+type ToolCallResponse = {
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+};
+
+function getToolCallHandler(
+  server: unknown
+): (request: ToolCallRequest) => Promise<ToolCallResponse> {
+  const handlers = (server as { _requestHandlers?: unknown })._requestHandlers;
+  if (!(handlers instanceof Map)) {
+    throw new Error('Expected server._requestHandlers to be a Map');
+  }
+  const handler = handlers.get('tools/call');
+  if (typeof handler !== 'function') {
+    throw new Error('Expected tools/call handler to be registered');
+  }
+  return handler as (request: ToolCallRequest) => Promise<ToolCallResponse>;
+}
 
 describe('Search Decision Card (Edit Intent)', () => {
   let tempRoot: string | null = null;
+  let originalArgv: string[] | null = null;
+  let originalEnvRoot: string | undefined;
 
   beforeEach(async () => {
     vi.resetModules();
+
+    originalArgv = [...process.argv];
+    originalEnvRoot = process.env.CODEBASE_ROOT;
+
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'search-decision-card-test-'));
     process.env.CODEBASE_ROOT = tempRoot;
     process.argv[2] = tempRoot;
@@ -97,21 +147,30 @@ export class ProfileService {
       config: { skipEmbedding: true }
     });
     await indexer.index();
-  });
+  }, 30000);
 
   afterEach(async () => {
+    if (originalArgv) {
+      process.argv = originalArgv;
+    }
+
+    if (originalEnvRoot === undefined) {
+      delete process.env.CODEBASE_ROOT;
+    } else {
+      process.env.CODEBASE_ROOT = originalEnvRoot;
+    }
+
     if (tempRoot) {
-      await fs.rm(tempRoot, { recursive: true, force: true });
+      await rmWithRetries(tempRoot);
       tempRoot = null;
     }
-    delete process.env.CODEBASE_ROOT;
-  });
+  }, 30000);
 
   it('intent="edit" with multiple results returns full decision card with ready field', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -131,12 +190,15 @@ export class ProfileService {
     const content = response.content[0];
     expect(content.type).toBe('text');
 
-    const parsed = JSON.parse(content.text);
+    const parsed = JSON.parse(content.text) as SearchToolPayload;
     expect(parsed.results).toBeDefined();
     expect(parsed.results.length).toBeGreaterThan(0);
 
     const preflight = parsed.preflight;
     expect(preflight).toBeDefined();
+    if (!preflight) {
+      throw new Error('Expected preflight payload for edit intent');
+    }
     expect(preflight.ready).toBeDefined();
     expect(typeof preflight.ready).toBe('boolean');
   });
@@ -145,7 +207,7 @@ export class ProfileService {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -161,8 +223,12 @@ export class ProfileService {
     });
 
     const content = response.content[0];
-    const parsed = JSON.parse(content.text);
+    const parsed = JSON.parse(content.text) as SearchToolPayload;
     const preflight = parsed.preflight;
+    expect(preflight).toBeDefined();
+    if (!preflight) {
+      throw new Error('Expected preflight payload for edit intent');
+    }
 
     // preflight should have ready as minimum
     expect(preflight.ready).toBeDefined();
@@ -193,7 +259,7 @@ export class ProfileService {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -209,7 +275,7 @@ export class ProfileService {
     });
 
     const content = response.content[0];
-    const parsed = JSON.parse(content.text);
+    const parsed = JSON.parse(content.text) as SearchToolPayload;
     const preflight = parsed.preflight;
 
     // For explore intent, preflight should be lite: { ready, reason? }
@@ -224,7 +290,7 @@ export class ProfileService {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -240,13 +306,13 @@ export class ProfileService {
     });
 
     const content = response.content[0];
-    const parsed = JSON.parse(content.text);
+    const parsed = JSON.parse(content.text) as SearchToolPayload;
 
     expect(parsed.results).toBeDefined();
     expect(parsed.results.length).toBeGreaterThan(0);
 
     // At least some results should have a snippet
-    const withSnippets = parsed.results.filter((r: any) => r.snippet);
+    const withSnippets = parsed.results.filter((result) => result.snippet);
     expect(withSnippets.length).toBeGreaterThan(0);
   });
 
@@ -254,7 +320,7 @@ export class ProfileService {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -270,12 +336,12 @@ export class ProfileService {
     });
 
     const content = response.content[0];
-    const parsed = JSON.parse(content.text);
+    const parsed = JSON.parse(content.text) as SearchToolPayload;
 
     expect(parsed.results).toBeDefined();
     // All results should not have snippet field
-    parsed.results.forEach((r: any) => {
-      expect(r.snippet).toBeUndefined();
+    parsed.results.forEach((result) => {
+      expect(result.snippet).toBeUndefined();
     });
   });
 
@@ -283,7 +349,7 @@ export class ProfileService {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -299,9 +365,9 @@ export class ProfileService {
     });
 
     const content = response.content[0];
-    const parsed = JSON.parse(content.text);
+    const parsed = JSON.parse(content.text) as SearchToolPayload;
 
-    const withSnippet = parsed.results.find((r: any) => r.snippet);
+    const withSnippet = parsed.results.find((result) => result.snippet);
     if (withSnippet && withSnippet.snippet) {
       // Scope header should be a comment line
       const firstLine = withSnippet.snippet.split('\n')[0].trim();

@@ -106,8 +106,7 @@ const binaryExtensions = new Set([
   '.map'
 ]);
 
-// Code file extensions
-const codeExtensions = new Set([
+const baseCodeExtensions = new Set([
   '.js',
   '.mjs',
   '.cjs',
@@ -157,6 +156,26 @@ const codeExtensions = new Set([
   '.sql'
 ]);
 
+function normalizeExtension(extension: string): string | null {
+  const trimmed = extension.trim().toLowerCase();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.startsWith('.') ? trimmed : `.${trimmed}`;
+}
+
+function buildCodeExtensions(extraExtensions?: Iterable<string>): Set<string> {
+  const merged = new Set(baseCodeExtensions);
+  for (const extension of extraExtensions ?? []) {
+    const normalized = normalizeExtension(extension);
+    if (normalized) {
+      merged.add(normalized);
+    }
+  }
+  return merged;
+}
+
 /**
  * Detect language from file path
  */
@@ -168,9 +187,9 @@ export function detectLanguage(filePath: string): string {
 /**
  * Check if a file is a code file
  */
-export function isCodeFile(filePath: string): boolean {
+export function isCodeFile(filePath: string, extraExtensions?: Iterable<string>): boolean {
   const ext = path.extname(filePath).toLowerCase();
-  return codeExtensions.has(ext);
+  return buildCodeExtensions(extraExtensions).has(ext);
 }
 
 /**
@@ -217,6 +236,6 @@ export function isDocumentationFile(filePath: string): boolean {
 /**
  * Get all supported extensions
  */
-export function getSupportedExtensions(): string[] {
-  return Array.from(codeExtensions);
+export function getSupportedExtensions(extraExtensions?: Iterable<string>): string[] {
+  return Array.from(buildCodeExtensions(extraExtensions));
 }

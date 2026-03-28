@@ -15,6 +15,12 @@ HTTP defaults to `127.0.0.1:3100`. Override with `--port`, `CODEBASE_CONTEXT_POR
 
 Config-registered project roots (from `~/.codebase-context/config.json`) are loaded at startup in both modes.
 
+Per-project config overrides supported today:
+
+- `projects[].excludePatterns`: merged with the built-in exclusion set for that project at index time
+- `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
+- `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
+
 Copy-pasteable client config templates are shipped in the package:
 
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients

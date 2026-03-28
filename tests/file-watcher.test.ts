@@ -159,4 +159,33 @@ describe('FileWatcher', () => {
       stop();
     }
   }, 5000);
+
+  it('tracks project-local extra extensions without changing defaults', async () => {
+    const debounceMs = 250;
+    let callCount = 0;
+
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+
+    const stop = startFileWatcher({
+      rootPath: tempDir,
+      debounceMs,
+      extraExtensions: ['.sfc'],
+      onReady: () => resolveReady(),
+      onChanged: () => {
+        callCount++;
+      }
+    });
+
+    try {
+      await ready;
+      await fs.writeFile(path.join(tempDir, 'widget.sfc'), '<script>export default {};</script>');
+      await new Promise((resolve) => setTimeout(resolve, debounceMs + 700));
+      expect(callCount).toBe(1);
+    } finally {
+      stop();
+    }
+  }, 5000);
 });

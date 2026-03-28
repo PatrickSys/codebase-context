@@ -69,7 +69,10 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
 
   if (Array.isArray(config.projects)) {
     result.projects = (config.projects as unknown[])
-      .filter((project): project is Record<string, unknown> => typeof project === 'object' && project !== null)
+      .filter(
+        (project): project is Record<string, unknown> =>
+          typeof project === 'object' && project !== null
+      )
       .map((project) => {
         const rawRoot = typeof project.root === 'string' ? project.root.trim() : '';
         if (!rawRoot) {

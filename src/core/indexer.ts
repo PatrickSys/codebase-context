@@ -21,7 +21,11 @@ import {
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
-import { isCodeFile, isBinaryFile } from '../utils/language-detection.js';
+import {
+  getSupportedExtensions,
+  isBinaryFile,
+  isCodeFile
+} from '../utils/language-detection.js';
 import {
   getEmbeddingProvider,
   getConfiguredDimensions,
@@ -227,6 +231,7 @@ export class CodebaseIndexer {
   private rootPath: string;
   private config: CodebaseConfig;
   private projectOptions: AnalyzerSelectionOptions;
+  private supportedCodeExtensions: Set<string>;
   private progress: IndexingProgress;
   private onProgressCallback?: (progress: IndexingProgress) => void;
   private incrementalOnly: boolean;
@@ -238,6 +243,11 @@ export class CodebaseIndexer {
       preferredAnalyzer: options.projectOptions?.preferredAnalyzer,
       extraFileExtensions: options.projectOptions?.extraFileExtensions
     };
+    this.supportedCodeExtensions = new Set(
+      getSupportedExtensions(this.projectOptions.extraFileExtensions).map((extension) =>
+        extension.toLowerCase()
+      )
+    );
     this.onProgressCallback = options.onProgress;
     this.incrementalOnly = options.incrementalOnly ?? false;
 
@@ -1101,7 +1111,7 @@ export class CodebaseIndexer {
         }
 
         // Check if it's a code file
-        if (!isCodeFile(file, this.projectOptions.extraFileExtensions) || isBinaryFile(file)) {
+        if (!isCodeFile(file, this.supportedCodeExtensions) || isBinaryFile(file)) {
           continue;
         }
 

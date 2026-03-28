@@ -187,9 +187,14 @@ export function detectLanguage(filePath: string): string {
 /**
  * Check if a file is a code file
  */
-export function isCodeFile(filePath: string, extraExtensions?: Iterable<string>): boolean {
+export function isCodeFile(
+  filePath: string,
+  extensions?: Iterable<string> | ReadonlySet<string>
+): boolean {
   const ext = path.extname(filePath).toLowerCase();
-  return buildCodeExtensions(extraExtensions).has(ext);
+  const supportedExtensions =
+    extensions instanceof Set ? extensions : buildCodeExtensions(extensions);
+  return supportedExtensions.has(ext);
 }
 
 /**

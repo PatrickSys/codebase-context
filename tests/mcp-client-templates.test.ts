@@ -60,6 +60,8 @@ describe('templates/mcp/http/.mcp.json', () => {
       mcpServers: Record<string, unknown>;
     };
     expect(config.mcpServers).toHaveProperty('codebase-context');
+  });
+
   it('server entry points to the local HTTP endpoint', () => {
     const config = readJson('templates/mcp/http/.mcp.json') as {
       mcpServers: Record<string, { url?: string; type?: string }>;
@@ -67,9 +69,6 @@ describe('templates/mcp/http/.mcp.json', () => {
     const entry = config.mcpServers['codebase-context'];
     expect(entry.url).toBe('http://127.0.0.1:3100/mcp');
     expect(entry.type).toBe('http');
-  });
-    const entry = config.mcpServers['codebase-context'];
-    expect(entry.url).toBe('http://127.0.0.1:3100/mcp');
   });
 });
 

@@ -105,6 +105,7 @@ Behavior matrix:
 Rules:
 
 - If the client provides workspace context, that becomes the trusted workspace boundary for the session. In practice this usually comes from MCP roots.
+- Treat seamless multi-project routing as evidence-backed only for roots-capable hosts. Without roots, explicit fallback is still required.
 - If the server still cannot tell which project to use, a bootstrap path or explicit absolute `project` path remains the fallback.
 - `project` is the canonical explicit selector when routing is ambiguous.
 - `project` may point at a project path, file path, `file://` URI, or relative subproject path.

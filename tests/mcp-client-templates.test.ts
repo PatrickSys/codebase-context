@@ -133,4 +133,27 @@ describe('docs/capabilities.md transport documentation', () => {
     expect(caps).toContain('Codex');
     expect(caps).toContain('Windsurf');
   });
+
+  it('states the roots-first routing fallback explicitly', () => {
+    expect(caps).toContain('roots-capable hosts');
+    expect(caps).toContain('explicit fallback is still required');
+  });
+});
+
+describe('docs/client-setup.md multi-project guidance', () => {
+  const clientSetup = readText('docs/client-setup.md');
+
+  it('documents the project routing contract', () => {
+    expect(clientSetup).toContain(
+      'Automatic multi-project routing is evidence-backed only when the MCP host announces workspace roots.'
+    );
+    expect(clientSetup).toContain(
+      'the server returns `selection_required` instead of guessing'
+    );
+  });
+
+  it('keeps the three verification flows aligned with the roots-first contract', () => {
+    expect(clientSetup).toContain('Multiple projects on a roots-capable host');
+    expect(clientSetup).toContain('Ambiguous or no-roots selection');
+  });
 });

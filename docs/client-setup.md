@@ -18,6 +18,18 @@ npx -y codebase-context --http --port 4000
 
 Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](../templates/mcp/stdio/.mcp.json) and [`templates/mcp/http/.mcp.json`](../templates/mcp/http/.mcp.json).
 
+## Project routing contract
+
+Automatic multi-project routing is evidence-backed only when the MCP host announces workspace roots. Treat that as the primary path.
+
+If the host does not send roots, or still cannot tell which project is active, use one of the explicit fallbacks instead:
+
+- start the server with a single bootstrap path
+- set `CODEBASE_ROOT`
+- retry tool calls with `project`
+
+If multiple projects are available and no active project can be inferred safely, the server returns `selection_required` instead of guessing.
+
 ## Claude Code
 
 ```bash
@@ -197,9 +209,9 @@ Check these three flows:
 
 1. **Single project** — call `search_codebase` or `metadata`. Routing is automatic.
 
-2. **Multiple projects, one server entry** — open two repos or a monorepo. Call `codebase://context`. Expected: workspace overview, then automatic routing once a project is active.
+2. **Multiple projects on a roots-capable host** — open two repos or a monorepo. Call `codebase://context`. Expected: workspace overview, then automatic routing once a project is active.
 
-3. **Ambiguous selection** — start without a bootstrap path, call `search_codebase`. Expected: `selection_required`. Retry with `project` set to `apps/dashboard` or `/repos/customer-portal`.
+3. **Ambiguous or no-roots selection** — start without a bootstrap path, call `search_codebase`. Expected: `selection_required`. Retry with `project` set to `apps/dashboard` or `/repos/customer-portal`.
 
 For monorepos, test all three selector forms:
 

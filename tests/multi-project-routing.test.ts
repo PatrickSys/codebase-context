@@ -362,6 +362,45 @@ describe('multi-project routing', () => {
     }
   });
 
+  it('triggers a background rebuild for a corrupted explicit project without falling back to cwd', async () => {
+    delete process.env.CODEBASE_ROOT;
+    delete process.argv[2];
+
+    await fs.rm(path.join(secondaryRoot, CODEBASE_CONTEXT_DIRNAME, INDEX_META_FILENAME), {
+      force: true
+    });
+
+    const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
+    const typedServer = server as unknown as TestServer & {
+      listRoots: () => Promise<{ roots: Array<{ uri: string; name?: string }> }>;
+    };
+    const originalListRoots = typedServer.listRoots.bind(typedServer);
+    const handler = typedServer._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    typedServer.listRoots = vi.fn().mockRejectedValue(new Error('roots unsupported'));
+
+    try {
+      await refreshKnownRootsFromClient();
+      const response = await callTool(handler, 21, 'search_codebase', {
+        query: 'feature',
+        project: secondaryRoot
+      });
+      const payload = parsePayload(response) as {
+        status: string;
+        message: string;
+        index?: { action?: string; reason?: string };
+      };
+
+      expect(payload.status).toBe('indexing');
+      expect(payload.message).toContain('retry shortly');
+      expect(payload.index?.action).toBe('rebuild-started');
+      expect(String(payload.index?.reason || '')).toContain('Index meta');
+    } finally {
+      typedServer.listRoots = originalListRoots;
+    }
+  });
+
   it('returns selection_required instead of silently falling back to cwd when startup is rootless and unresolved', async () => {
     delete process.env.CODEBASE_ROOT;
     delete process.argv[2];

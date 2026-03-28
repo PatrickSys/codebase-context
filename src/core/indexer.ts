@@ -20,7 +20,8 @@ import {
   IntelligenceData
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
-import { isCodeFile, isBinaryFile } from '../utils/language-detection.js';
+import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
+import { getSupportedExtensions, isBinaryFile, isCodeFile } from '../utils/language-detection.js';
 import {
   getEmbeddingProvider,
   getConfiguredDimensions,
@@ -210,6 +211,7 @@ async function cleanupDirectory(dirPath: string): Promise<void> {
 export interface IndexerOptions {
   rootPath: string;
   config?: Partial<CodebaseConfig>;
+  projectOptions?: AnalyzerSelectionOptions;
   onProgress?: (progress: IndexingProgress) => void;
   incrementalOnly?: boolean;
 }
@@ -224,6 +226,8 @@ interface PersistedIndexingStats {
 export class CodebaseIndexer {
   private rootPath: string;
   private config: CodebaseConfig;
+  private projectOptions: AnalyzerSelectionOptions;
+  private supportedCodeExtensions: Set<string>;
   private progress: IndexingProgress;
   private onProgressCallback?: (progress: IndexingProgress) => void;
   private incrementalOnly: boolean;
@@ -231,6 +235,15 @@ export class CodebaseIndexer {
   constructor(options: IndexerOptions) {
     this.rootPath = path.resolve(options.rootPath);
     this.config = this.mergeConfig(options.config);
+    this.projectOptions = {
+      preferredAnalyzer: options.projectOptions?.preferredAnalyzer,
+      extraFileExtensions: options.projectOptions?.extraFileExtensions
+    };
+    this.supportedCodeExtensions = new Set(
+      getSupportedExtensions(this.projectOptions.extraFileExtensions).map((extension) =>
+        extension.toLowerCase()
+      )
+    );
     this.onProgressCallback = options.onProgress;
     this.incrementalOnly = options.incrementalOnly ?? false;
 
@@ -321,6 +334,45 @@ export class CodebaseIndexer {
     };
   }
 
+  private getProjectOptions(): AnalyzerSelectionOptions {
+    const preferredAnalyzer = this.projectOptions.preferredAnalyzer?.trim();
+    if (!preferredAnalyzer) {
+      return this.projectOptions;
+    }
+
+    if (!analyzerRegistry.get(preferredAnalyzer)) {
+      console.warn(
+        `[indexer] Preferred analyzer "${preferredAnalyzer}" is not registered. Falling back to default analyzer selection.`
+      );
+      return {
+        ...this.projectOptions,
+        preferredAnalyzer: undefined
+      };
+    }
+
+    return {
+      ...this.projectOptions,
+      preferredAnalyzer
+    };
+  }
+
+  private getIncludePatterns(): string[] {
+    const includePatterns = this.config.include || ['**/*'];
+    const extraFileExtensions = this.projectOptions.extraFileExtensions ?? [];
+
+    if (extraFileExtensions.length === 0) {
+      return includePatterns;
+    }
+
+    const extraPatterns = extraFileExtensions
+      .map((extension) => extension.trim().toLowerCase())
+      .filter((extension) => extension.length > 0)
+      .map((extension) => (extension.startsWith('.') ? extension : `.${extension}`))
+      .map((extension) => `**/*${extension}`);
+
+    return Array.from(new Set([...includePatterns, ...extraPatterns]));
+  }
+
   async index(): Promise<IndexingStats> {
     const startTime = Date.now();
     const stats: IndexingStats = {
@@ -356,6 +408,8 @@ export class CodebaseIndexer {
         const { GenericAnalyzer } = await import('../analyzers/generic/index.js');
         analyzerRegistry.register(new GenericAnalyzer());
       }
+
+      const resolvedProjectOptions = this.getProjectOptions();
 
       const buildId = randomUUID();
       const generatedAt = new Date().toISOString();
@@ -529,7 +583,7 @@ export class CodebaseIndexer {
           // Normalize line endings to \n for consistent cross-platform output
           const rawContent = await fs.readFile(file, 'utf-8');
           const content = rawContent.replace(/\r\n/g, '\n');
-          const result = await analyzerRegistry.analyzeFile(file, content);
+          const result = await analyzerRegistry.analyzeFile(file, content, resolvedProjectOptions);
 
           if (result) {
             const isFileChanged = !filesToProcessSet || filesToProcessSet.has(file);
@@ -1027,7 +1081,7 @@ export class CodebaseIndexer {
     }
 
     // Scan with glob
-    const includePatterns = this.config.include || ['**/*'];
+    const includePatterns = this.getIncludePatterns();
     const excludePatterns = this.config.exclude || [];
 
     for (const pattern of includePatterns) {
@@ -1053,7 +1107,7 @@ export class CodebaseIndexer {
         }
 
         // Check if it's a code file
-        if (!isCodeFile(file) || isBinaryFile(file)) {
+        if (!isCodeFile(file, this.supportedCodeExtensions) || isBinaryFile(file)) {
           continue;
         }
 

@@ -2,6 +2,32 @@
 
 Technical reference for what `codebase-context` ships today. For the user-facing overview, see [README.md](../README.md).
 
+## Transport Modes
+
+The server supports two transport modes:
+
+| Mode | Command | MCP endpoint |
+| ---- | ------- | ------------ |
+| **stdio** (default) | `npx -y codebase-context` | Spawned process stdin/stdout |
+| **HTTP** | `npx -y codebase-context --http [--port N]` | `http://127.0.0.1:3100/mcp` |
+
+HTTP defaults to `127.0.0.1:3100`. Override with `--port`, `CODEBASE_CONTEXT_PORT`, or `server.port` in `~/.codebase-context/config.json`.
+
+Config-registered project roots (from `~/.codebase-context/config.json`) are loaded at startup in both modes.
+
+Per-project config overrides supported today:
+
+- `projects[].excludePatterns`: merged with the built-in exclusion set for that project at index time
+- `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
+- `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
+
+Copy-pasteable client config templates are shipped in the package:
+
+- `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients
+- `templates/mcp/http/.mcp.json` — HTTP setup for `.mcp.json`-style clients
+
+Client transport support varies — see [README.md](../README.md) for a per-client matrix covering Claude Code, Cursor, Codex, Windsurf, VS Code, Claude Desktop, and OpenCode.
+
 ## CLI Reference
 
 Repo-scoped capabilities are available locally via the CLI (human-readable by default, `--json` for automation).
@@ -85,6 +111,61 @@ Rules:
 - The server does not rely on `cwd` walk-up in MCP mode.
 - `codebase://context` serves the active project. Before selection in an unresolved multi-project session, it returns a workspace overview with candidate projects, readiness state, and project-scoped resource URIs.
 - `codebase://context/project/<encoded-project-path>` serves a specific project directly and also makes that project active for later tool calls.
+
+### Examples
+
+Retry with a subproject path in a monorepo:
+
+```json
+{
+  "name": "search_codebase",
+  "arguments": {
+    "query": "auth interceptor",
+    "project": "apps/dashboard"
+  }
+}
+```
+
+Target a repo directly:
+
+```json
+{
+  "name": "search_codebase",
+  "arguments": {
+    "query": "auth interceptor",
+    "project": "/repos/customer-portal"
+  }
+}
+```
+
+Pass a file path and let the server resolve the nearest project boundary:
+
+```json
+{
+  "name": "search_codebase",
+  "arguments": {
+    "query": "auth interceptor",
+    "project": "/repos/monorepo/apps/dashboard/src/auth/guard.ts"
+  }
+}
+```
+
+`selection_required` response shape:
+
+```json
+{
+  "status": "selection_required",
+  "errorCode": "selection_required",
+  "message": "Multiple projects are available and no active project could be inferred. Retry with project.",
+  "nextAction": "retry_with_project",
+  "availableProjects": [
+    { "label": "app-a", "project": "/repos/app-a", "indexStatus": "idle", "source": "root" },
+    { "label": "app-b", "project": "/repos/app-b", "indexStatus": "ready", "source": "root" }
+  ]
+}
+```
+
+Retry the call with `project` set to one of the listed paths.
 
 ## Retrieval Pipeline
 

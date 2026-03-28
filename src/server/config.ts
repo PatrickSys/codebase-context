@@ -5,6 +5,10 @@ import path from 'node:path';
 export interface ProjectConfig {
   root: string;
   excludePatterns?: string[];
+  analyzerHints?: {
+    extensions?: string[];
+    analyzer?: string;
+  };
 }
 
 export interface ServerConfig {
@@ -17,6 +21,19 @@ function expandTilde(filePath: string): string {
     return path.join(os.homedir(), filePath.slice(1));
   }
   return filePath;
+}
+
+function parseStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const parsed = value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  return parsed.length > 0 ? parsed : undefined;
 }
 
 export async function loadServerConfig(): Promise<ServerConfig | null> {
@@ -50,29 +67,55 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
   const config = parsed as Record<string, unknown>;
   const result: ServerConfig = {};
 
-  // Resolve projects
   if (Array.isArray(config.projects)) {
     result.projects = (config.projects as unknown[])
-      .filter((p): p is Record<string, unknown> => typeof p === 'object' && p !== null)
-      .map((p) => {
-        const rawRoot = typeof p.root === 'string' ? p.root.trim() : '';
+      .filter(
+        (project): project is Record<string, unknown> =>
+          typeof project === 'object' && project !== null
+      )
+      .map((project) => {
+        const rawRoot = typeof project.root === 'string' ? project.root.trim() : '';
         if (!rawRoot) {
           console.error('[config] Skipping project entry with missing or empty root');
           return null;
         }
+
         const resolvedRoot = path.resolve(expandTilde(rawRoot));
-        const proj: ProjectConfig = { root: resolvedRoot };
-        if (Array.isArray(p.excludePatterns)) {
-          proj.excludePatterns = p.excludePatterns.filter(
-            (pattern): pattern is string => typeof pattern === 'string'
-          );
+        const parsedProject: ProjectConfig = { root: resolvedRoot };
+        const excludePatterns = parseStringArray(project.excludePatterns);
+        if (excludePatterns) {
+          parsedProject.excludePatterns = excludePatterns;
         }
-        return proj;
+
+        if (
+          typeof project.analyzerHints === 'object' &&
+          project.analyzerHints !== null &&
+          !Array.isArray(project.analyzerHints)
+        ) {
+          const analyzerHints = project.analyzerHints as Record<string, unknown>;
+          const parsedHints: NonNullable<ProjectConfig['analyzerHints']> = {};
+          const extensions = parseStringArray(analyzerHints.extensions);
+          if (extensions) {
+            parsedHints.extensions = extensions;
+          }
+
+          if (typeof analyzerHints.analyzer === 'string') {
+            const analyzer = analyzerHints.analyzer.trim();
+            if (analyzer) {
+              parsedHints.analyzer = analyzer;
+            }
+          }
+
+          if (parsedHints.analyzer || parsedHints.extensions) {
+            parsedProject.analyzerHints = parsedHints;
+          }
+        }
+
+        return parsedProject;
       })
       .filter((project): project is ProjectConfig => project !== null);
   }
 
-  // Resolve server options
   if (typeof config.server === 'object' && config.server !== null) {
     const srv = config.server as Record<string, unknown>;
     result.server = {};

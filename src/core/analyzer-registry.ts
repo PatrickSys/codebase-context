@@ -3,7 +3,13 @@
  * Automatically selects the best analyzer based on file type and priority
  */
 
+import path from 'path';
 import { FrameworkAnalyzer, AnalysisResult } from '../types/index.js';
+
+export interface AnalyzerSelectionOptions {
+  preferredAnalyzer?: string;
+  extraFileExtensions?: string[];
+}
 
 export class AnalyzerRegistry {
   private analyzers: Map<string, FrameworkAnalyzer> = new Map();
@@ -43,11 +49,42 @@ export class AnalyzerRegistry {
     return [...this.sortedAnalyzers];
   }
 
+  private isExtraExtension(filePath: string, extraFileExtensions?: string[]): boolean {
+    if (!extraFileExtensions?.length) {
+      return false;
+    }
+
+    const extension = path.extname(filePath).toLowerCase();
+    return extraFileExtensions.some((candidate) => {
+      const normalized = candidate.trim().toLowerCase();
+      if (!normalized) {
+        return false;
+      }
+      return extension === (normalized.startsWith('.') ? normalized : `.${normalized}`);
+    });
+  }
+
   /**
-   * Find the best analyzer for a given file
-   * Returns the analyzer with highest priority that can handle the file
+   * Find the best analyzer for a given file.
+   * Returns the preferred analyzer when configured and applicable, otherwise the
+   * highest-priority analyzer that can handle the file.
    */
-  findAnalyzer(filePath: string, content?: string): FrameworkAnalyzer | null {
+  findAnalyzer(
+    filePath: string,
+    content?: string,
+    options?: AnalyzerSelectionOptions
+  ): FrameworkAnalyzer | null {
+    if (options?.preferredAnalyzer) {
+      const preferred = this.analyzers.get(options.preferredAnalyzer);
+      if (
+        preferred &&
+        (preferred.canAnalyze(filePath, content) ||
+          this.isExtraExtension(filePath, options.extraFileExtensions))
+      ) {
+        return preferred;
+      }
+    }
+
     for (const analyzer of this.sortedAnalyzers) {
       if (analyzer.canAnalyze(filePath, content)) {
         return analyzer;
@@ -66,8 +103,12 @@ export class AnalyzerRegistry {
   /**
    * Analyze a file using the best available analyzer
    */
-  async analyzeFile(filePath: string, content: string): Promise<AnalysisResult | null> {
-    const analyzer = this.findAnalyzer(filePath, content);
+  async analyzeFile(
+    filePath: string,
+    content: string,
+    options?: AnalyzerSelectionOptions
+  ): Promise<AnalysisResult | null> {
+    const analyzer = this.findAnalyzer(filePath, content, options);
 
     if (!analyzer) {
       if (process.env.CODEBASE_CONTEXT_DEBUG) {
@@ -75,8 +116,6 @@ export class AnalyzerRegistry {
       }
       return null;
     }
-
-    // console.error(`Analyzing ${filePath} with ${analyzer.name} analyzer`);
 
     try {
       return await analyzer.analyze(filePath, content);

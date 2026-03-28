@@ -132,6 +132,55 @@ describe('loadServerConfig', () => {
     });
   });
 
+  it('parses analyzer hints with trimmed analyzer name and non-empty extensions', async () => {
+    const config = JSON.stringify({
+      projects: [
+        {
+          root: '~/hinted-repo',
+          analyzerHints: {
+            analyzer: '  generic  ',
+            extensions: ['sfc', ' .astro ', '', 42, null]
+          }
+        }
+      ]
+    });
+
+    await withTempConfig(config, async (filePath) => {
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = filePath;
+      const result = await loadServerConfig();
+
+      expect(result).not.toBeNull();
+      expect(result!.projects).toHaveLength(1);
+      expect(result!.projects![0].analyzerHints).toEqual({
+        analyzer: 'generic',
+        extensions: ['sfc', '.astro']
+      });
+    });
+  });
+
+  it('drops empty analyzerHints objects after parsing', async () => {
+    const config = JSON.stringify({
+      projects: [
+        {
+          root: '~/hinted-repo',
+          analyzerHints: {
+            analyzer: '   ',
+            extensions: ['', '   ']
+          }
+        }
+      ]
+    });
+
+    await withTempConfig(config, async (filePath) => {
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = filePath;
+      const result = await loadServerConfig();
+
+      expect(result).not.toBeNull();
+      expect(result!.projects).toHaveLength(1);
+      expect(result!.projects![0].analyzerHints).toBeUndefined();
+    });
+  });
+
   it('drops server.port with a warning when value is 0', async () => {
     const errorSpy = vi.spyOn(console, 'error');
     const config = JSON.stringify({ server: { port: 0 } });

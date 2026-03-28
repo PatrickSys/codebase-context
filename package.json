@@ -169,6 +169,8 @@
       "@modelcontextprotocol/sdk>@hono/node-server": "1.19.11",
       "@modelcontextprotocol/sdk>express-rate-limit": "8.2.2",
       "@huggingface/transformers>onnxruntime-node": "1.24.2",
+      "path-to-regexp": "8.4.0",
+      "brace-expansion": "5.0.5",
       "micromatch>picomatch": "2.3.2",
       "anymatch>picomatch": "2.3.2",
       "readdirp>picomatch": "2.3.2",

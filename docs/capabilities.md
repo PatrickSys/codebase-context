@@ -21,6 +21,7 @@ Per-project config overrides supported today:
 - `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
 - `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
 
+
 Copy-pasteable client config templates are shipped in the package:
 
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients
@@ -104,6 +105,7 @@ Behavior matrix:
 Rules:
 
 - If the client provides workspace context, that becomes the trusted workspace boundary for the session. In practice this usually comes from MCP roots.
+- Treat seamless multi-project routing as evidence-backed only for roots-capable hosts. Without roots, explicit fallback is still required.
 - If the server still cannot tell which project to use, a bootstrap path or explicit absolute `project` path remains the fallback.
 - `project` is the canonical explicit selector when routing is ambiguous.
 - `project` may point at a project path, file path, `file://` URI, or relative subproject path.

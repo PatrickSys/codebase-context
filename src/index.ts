@@ -1667,10 +1667,8 @@ async function applyServerConfig(
       configRoots.set(rootKey, { rootPath: proj.root });
       registerKnownRoot(proj.root);
       const runtimeOverrides = buildProjectRuntimeOverrides(proj);
-      if (Object.keys(runtimeOverrides).length > 0) {
-        const project = getOrCreateProject(proj.root);
-        project.runtimeOverrides = runtimeOverrides;
-      }
+      const project = getOrCreateProject(proj.root);
+      project.runtimeOverrides = runtimeOverrides;
     } catch {
       console.error(`[config] Skipping inaccessible project root: ${proj.root}`);
     }

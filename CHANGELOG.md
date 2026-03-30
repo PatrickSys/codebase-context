@@ -14,8 +14,8 @@
 
 ### Documentation
 
-- simplify the setup story around three cases: default rootless setup, single-project fallback, and explicit `project` retries
-- clarify that issue #63 fixed the architecture and workspace-aware workflow, but issue #2 is not fully solved when the client does not provide enough project context
+- simplify the setup story around a roots-first contract: roots-capable multi-project sessions, single-project fallback, and explicit `project` retries
+- clarify that issue #63 fixed the architecture and workspace-aware workflow, but issue #2 is still only partially solved when the client does not provide roots or active-project context
 - remove the repo-local `init` / marker-file story from the public setup guidance
 
 ## [1.9.0](https://github.com/PatrickSys/codebase-context/compare/v1.8.2...v1.9.0) (2026-03-19)

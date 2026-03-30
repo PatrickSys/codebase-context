@@ -1,3 +1,5 @@
+// Spawns vitest via process.execPath to avoid bin-resolution failures when
+// Node is invoked directly (e.g. `node scripts/run-vitest.mjs`) without pnpm.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 

@@ -67,6 +67,10 @@ Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](./templates/mcp/stdi
 
 Full per-client setup, HTTP server instructions, and local build testing: [`docs/client-setup.md`](./docs/client-setup.md).
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/patricksys-codebase-context).
+
 ## Common First Commands
 
 Three commands to get what usually takes a new developer weeks to piece together:

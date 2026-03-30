@@ -176,6 +176,9 @@ function buildCodeExtensions(extraExtensions?: Iterable<string>): Set<string> {
   return merged;
 }
 
+// Cached default set — built once at module load, reused by callers that pass no extra extensions.
+const defaultCodeExtensions: ReadonlySet<string> = buildCodeExtensions();
+
 /**
  * Detect language from file path
  */
@@ -193,7 +196,11 @@ export function isCodeFile(
 ): boolean {
   const ext = path.extname(filePath).toLowerCase();
   const supportedExtensions =
-    extensions instanceof Set ? extensions : buildCodeExtensions(extensions);
+    extensions instanceof Set
+      ? extensions
+      : extensions
+        ? buildCodeExtensions(extensions)
+        : defaultCodeExtensions;
   return supportedExtensions.has(ext);
 }
 

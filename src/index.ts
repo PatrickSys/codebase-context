@@ -32,6 +32,8 @@ import type {
 } from './types/index.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
+import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
+import { ReactAnalyzer } from './analyzers/react/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { IndexCorruptedError } from './errors/index.js';
 import { appendMemoryFile } from './memory/store.js';
@@ -70,6 +72,8 @@ import {
 } from './project-state.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
+analyzerRegistry.register(new NextJsAnalyzer());
+analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
 // Flags that are NOT project paths — skip them when resolving the bootstrap root.

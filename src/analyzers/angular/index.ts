@@ -25,6 +25,7 @@ import {
   KEYWORD_INDEX_FILENAME
 } from '../../constants/codebase-context.js';
 import { registerComplementaryPatterns } from '../../patterns/semantics.js';
+import { isFileNotFoundError } from '../shared/metadata.js';
 
 interface AngularInput {
   name: string;
@@ -911,7 +912,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         ...packageJson.devDependencies
       };
 
-      const angularVersion = allDeps['@angular/core']?.replace(/[\^~]/, '') || 'unknown';
+      const angularCoreVersion = allDeps['@angular/core'];
 
       // Detect state management
       const stateManagement: string[] = [];
@@ -931,15 +932,17 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       if (allDeps['karma']) testingFrameworks.push('Karma');
       if (allDeps['jest']) testingFrameworks.push('Jest');
 
-      metadata.framework = {
-        name: 'Angular',
-        version: angularVersion,
-        type: 'angular',
-        variant: 'unknown', // Will be determined during analysis
-        stateManagement,
-        uiLibraries,
-        testingFrameworks
-      };
+      if (angularCoreVersion) {
+        metadata.framework = {
+          name: 'Angular',
+          version: angularCoreVersion.replace(/[\^~]/, ''),
+          type: 'angular',
+          variant: 'unknown', // Will be determined during analysis
+          stateManagement,
+          uiLibraries,
+          testingFrameworks
+        };
+      }
 
       // Convert dependencies
       metadata.dependencies = Object.entries(allDeps).map(([name, version]) => ({
@@ -948,7 +951,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         category: this.categorizeDependency(name)
       }));
     } catch (error) {
-      console.warn('Failed to read Angular project metadata:', error);
+      if (!isFileNotFoundError(error)) {
+        console.warn('Failed to read Angular project metadata:', error);
+      }
     }
 
     // Calculate statistics from existing index if available
@@ -966,8 +971,6 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       const chunks =
         parsedObj && Array.isArray(parsedObj.chunks) ? (parsedObj.chunks as IndexChunk[]) : null;
       if (Array.isArray(chunks) && chunks.length > 0) {
-        console.error(`Loading statistics from ${indexPath}: ${chunks.length} chunks`);
-
         metadata.statistics.totalFiles = new Set(chunks.map((c) => c.filePath)).size;
         metadata.statistics.totalLines = chunks.reduce(
           (sum, c) => sum + ((c.endLine ?? 0) - (c.startLine ?? 0) + 1),
@@ -1005,8 +1008,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         metadata.architecture.layers = layerCounts;
       }
     } catch (error) {
-      // Index doesn't exist yet, keep statistics at 0
-      console.warn('Failed to calculate statistics from index:', error);
+      if (!isFileNotFoundError(error)) {
+        console.warn('Failed to calculate statistics from index:', error);
+      }
     }
 
     return metadata;

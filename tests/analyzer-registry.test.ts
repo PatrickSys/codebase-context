@@ -1,10 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { analyzerRegistry, AnalyzerRegistry } from '../src/core/analyzer-registry';
 import { AngularAnalyzer } from '../src/analyzers/angular/index';
+import { NextJsAnalyzer } from '../src/analyzers/nextjs/index';
+import { ReactAnalyzer } from '../src/analyzers/react/index';
 import { GenericAnalyzer } from '../src/analyzers/generic/index';
 
 // Register default analyzers
 analyzerRegistry.register(new AngularAnalyzer());
+analyzerRegistry.register(new NextJsAnalyzer());
+analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
 describe('AnalyzerRegistry', () => {
@@ -43,11 +47,13 @@ describe('AnalyzerRegistry', () => {
       }
     });
 
-    it('should include default analyzers (Angular, Generic)', () => {
+    it('should include default analyzers (Angular, Next.js, React, Generic)', () => {
       const analyzers = analyzerRegistry.getAll();
       const names = analyzers.map((a) => a.name);
 
       expect(names).toContain('angular');
+      expect(names).toContain('nextjs');
+      expect(names).toContain('react');
       expect(names).toContain('generic');
     });
   });
@@ -59,6 +65,11 @@ describe('AnalyzerRegistry', () => {
       expect(angular?.name).toBe('angular');
     });
 
+    it('should return nextjs and react analyzers by name', () => {
+      expect(analyzerRegistry.get('nextjs')?.name).toBe('nextjs');
+      expect(analyzerRegistry.get('react')?.name).toBe('react');
+    });
+
     it('should return undefined for unknown analyzer', () => {
       const unknown = analyzerRegistry.get('unknown-analyzer');
       expect(unknown).toBeUndefined();
@@ -68,11 +79,17 @@ describe('AnalyzerRegistry', () => {
   describe('priority ordering', () => {
     it('should have Angular higher priority than Generic', () => {
       const angular = analyzerRegistry.get('angular');
+      const nextjs = analyzerRegistry.get('nextjs');
+      const react = analyzerRegistry.get('react');
       const generic = analyzerRegistry.get('generic');
 
       expect(angular).toBeDefined();
+      expect(nextjs).toBeDefined();
+      expect(react).toBeDefined();
       expect(generic).toBeDefined();
       expect(angular!.priority).toBeGreaterThan(generic!.priority);
+      expect(nextjs!.priority).toBeGreaterThan(react!.priority);
+      expect(react!.priority).toBeGreaterThan(generic!.priority);
     });
   });
 });

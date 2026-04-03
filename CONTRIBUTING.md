@@ -22,6 +22,8 @@ See [README.md](./README.md) for configuration with Claude Desktop, VS Code, Cur
 src/
   analyzers/
     angular/     # Angular-specific analysis
+    nextjs/      # Next.js routes, metadata, and client/server detection
+    react/       # React components, hooks, and context patterns
     generic/     # Fallback for non-Angular files
   core/
     indexer.ts   # Scans files, creates chunks
@@ -34,8 +36,6 @@ src/
 
 ## What Would Help
 
-**React analyzer** - Biggest gap right now. Look at `src/analyzers/angular/index.ts` for the pattern. Needs to detect components, hooks, context usage, etc.
-
 **Vue analyzer** - Same deal. Detect components, composables, Pinia stores.
 
 **Better search ranking** - The hybrid search in `src/core/search.ts` could use tuning. Currently uses RRF to combine semantic and keyword scores.
@@ -44,9 +44,9 @@ src/
 
 ## Adding a Framework Analyzer
 
-1. Create `src/analyzers/react/index.ts`
+1. Create `src/analyzers/<framework>/index.ts`
 2. Implement `FrameworkAnalyzer` interface
-3. Register in `src/index.ts`
+3. Register in `src/index.ts`, `src/cli.ts`, and `src/lib.ts`
 
 The interface is straightforward:
 

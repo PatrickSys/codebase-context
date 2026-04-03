@@ -11,11 +11,15 @@
  *   VectorStorage,
  *   analyzerRegistry,
  *   AngularAnalyzer,
+ *   NextJsAnalyzer,
+ *   ReactAnalyzer,
  *   GenericAnalyzer
  * } from 'codebase-context';
  *
  * // Register analyzers
  * analyzerRegistry.register(new AngularAnalyzer());
+ * analyzerRegistry.register(new NextJsAnalyzer());
+ * analyzerRegistry.register(new ReactAnalyzer());
  * analyzerRegistry.register(new GenericAnalyzer());
  *
  * // Create and run indexer
@@ -61,6 +65,10 @@ export {
 // Framework analyzers
 export { AngularAnalyzer } from './analyzers/angular/index.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
+export { NextJsAnalyzer } from './analyzers/nextjs/index.js';
+import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
+export { ReactAnalyzer } from './analyzers/react/index.js';
+import { ReactAnalyzer } from './analyzers/react/index.js';
 export { GenericAnalyzer } from './analyzers/generic/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 
@@ -152,6 +160,12 @@ export function createIndexer(
   // Register default analyzers if not already registered
   if (!analyzerRegistry.get('angular')) {
     analyzerRegistry.register(new AngularAnalyzer());
+  }
+  if (!analyzerRegistry.get('nextjs')) {
+    analyzerRegistry.register(new NextJsAnalyzer());
+  }
+  if (!analyzerRegistry.get('react')) {
+    analyzerRegistry.register(new ReactAnalyzer());
   }
   if (!analyzerRegistry.get('generic')) {
     analyzerRegistry.register(new GenericAnalyzer());

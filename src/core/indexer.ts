@@ -273,6 +273,7 @@ export class CodebaseIndexer {
     const defaultConfig: CodebaseConfig = {
       analyzers: {
         angular: { enabled: true, priority: 100 },
+        nextjs: { enabled: false, priority: 90 },
         react: { enabled: false, priority: 90 },
         vue: { enabled: false, priority: 90 },
         generic: { enabled: true, priority: 10 }
@@ -1238,7 +1239,7 @@ export class CodebaseIndexer {
       rootPath: incoming.rootPath || base.rootPath,
       languages: [...new Set([...base.languages, ...incoming.languages])], // Merge and deduplicate
       dependencies: this.mergeDependencies(base.dependencies, incoming.dependencies),
-      framework: incoming.framework || base.framework, // Framework from higher priority analyzer wins
+      framework: base.framework || incoming.framework, // Framework from higher priority analyzer wins
       architecture: {
         type: incoming.architecture?.type || base.architecture.type,
         layers: this.mergeLayers(base.architecture.layers, incoming.architecture?.layers),

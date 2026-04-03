@@ -3,6 +3,24 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { CodebaseIndexer } from '../src/core/indexer';
+import { analyzerRegistry } from '../src/core/analyzer-registry';
+import { AngularAnalyzer } from '../src/analyzers/angular/index';
+import { NextJsAnalyzer } from '../src/analyzers/nextjs/index';
+import { ReactAnalyzer } from '../src/analyzers/react/index';
+import { GenericAnalyzer } from '../src/analyzers/generic/index';
+
+if (!analyzerRegistry.get('angular')) {
+    analyzerRegistry.register(new AngularAnalyzer());
+}
+if (!analyzerRegistry.get('nextjs')) {
+    analyzerRegistry.register(new NextJsAnalyzer());
+}
+if (!analyzerRegistry.get('react')) {
+    analyzerRegistry.register(new ReactAnalyzer());
+}
+if (!analyzerRegistry.get('generic')) {
+    analyzerRegistry.register(new GenericAnalyzer());
+}
 
 describe('CodebaseIndexer.detectMetadata', () => {
     let tempDir: string;
@@ -26,7 +44,7 @@ describe('CodebaseIndexer.detectMetadata', () => {
             const metadata = await indexer.detectMetadata();
 
             expect(metadata.rootPath).toBe(tempDir);
-            expect(metadata.name).toBe(path.basename(tempDir));
+            expect(metadata.name).toBe('test-project');
         });
 
         it('should merge metadata from multiple analyzers', async () => {
@@ -47,6 +65,28 @@ describe('CodebaseIndexer.detectMetadata', () => {
             expect(metadata).toBeDefined();
             expect(metadata.architecture).toBeDefined();
             expect(metadata.architecture.layers).toBeDefined();
+        });
+
+        it('should prefer nextjs framework metadata over react when both apply', async () => {
+            await fs.writeFile(
+                path.join(tempDir, 'package.json'),
+                JSON.stringify({
+                    name: 'next-project',
+                    dependencies: {
+                        next: '^14.1.0',
+                        react: '^18.2.0',
+                        'react-dom': '^18.2.0',
+                    },
+                })
+            );
+
+            await fs.mkdir(path.join(tempDir, 'app'), { recursive: true });
+
+            const indexer = new CodebaseIndexer({ rootPath: tempDir });
+            const metadata = await indexer.detectMetadata();
+
+            expect(metadata.framework?.type).toBe('nextjs');
+            expect(metadata.framework?.name).toBe('Next.js');
         });
 
         it('should handle projects without package.json', async () => {

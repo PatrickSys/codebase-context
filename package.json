@@ -18,6 +18,14 @@
       "import": "./dist/analyzers/angular/index.js",
       "types": "./dist/analyzers/angular/index.d.ts"
     },
+    "./analyzers/react": {
+      "import": "./dist/analyzers/react/index.js",
+      "types": "./dist/analyzers/react/index.d.ts"
+    },
+    "./analyzers/nextjs": {
+      "import": "./dist/analyzers/nextjs/index.js",
+      "types": "./dist/analyzers/nextjs/index.d.ts"
+    },
     "./analyzers/generic": {
       "import": "./dist/analyzers/generic/index.js",
       "types": "./dist/analyzers/generic/index.d.ts"

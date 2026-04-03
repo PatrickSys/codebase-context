@@ -145,7 +145,7 @@ If you get `selection_required`, retry with one of the paths from `availableProj
 
 ## Language Support
 
-10 languages with full symbol extraction via Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust. 30+ languages with indexing and retrieval coverage, including PHP, Ruby, Swift, Scala, Shell, and config formats. Angular has a dedicated analyzer; everything else uses the Generic analyzer with AST-aligned chunking when a grammar is available.
+10 languages with full symbol extraction via Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust. 30+ languages with indexing and retrieval coverage, including PHP, Ruby, Swift, Scala, Shell, and config formats. Angular, React, and Next.js have dedicated analyzers; everything else uses the Generic analyzer with AST-aligned chunking when a grammar is available.
 
 ## Configuration
 
@@ -156,6 +156,9 @@ If you get `selection_required`, retry with one of the paths from `availableProj
 | `CODEBASE_ROOT` | — | Bootstrap root for CLI and single-project MCP clients |
 | `CODEBASE_CONTEXT_DEBUG` | — | Set to `1` for verbose logging |
 | `EMBEDDING_MODEL` | `Xenova/bge-small-en-v1.5` | Local embedding model override |
+| `CODEBASE_CONTEXT_HTTP` | — | Set to `1` to start in HTTP mode (same as `--http` flag) |
+| `CODEBASE_CONTEXT_PORT` | `3100` | HTTP server port override (same as `--port`; ignored in stdio mode) |
+| `CODEBASE_CONTEXT_CONFIG_PATH` | `~/.codebase-context/config.json` | Override the server config file path |
 
 ## Performance
 

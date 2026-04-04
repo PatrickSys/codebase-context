@@ -2,10 +2,7 @@ import { createProjectState, type ProjectState } from '../project-state.js';
 import { handle as searchCodebaseHandle } from '../tools/search-codebase.js';
 import { handle as getCodebaseMetadataHandle } from '../tools/get-codebase-metadata.js';
 import { handle as getTeamPatternsHandle } from '../tools/get-team-patterns.js';
-import type {
-  SearchResponse,
-  PatternResponse
-} from '../tools/types.js';
+import type { SearchResponse, PatternResponse } from '../tools/types.js';
 import type {
   DiscoveryBenchmarkProtocol,
   DiscoveryComparatorEvidence,
@@ -45,7 +42,10 @@ function createToolProject(rootPath: string): ProjectState {
   return project;
 }
 
-async function runSearchCodebase(task: DiscoveryTaskType, rootPath: string): Promise<DiscoverySurfaceResultType> {
+async function runSearchCodebase(
+  task: DiscoveryTaskType,
+  rootPath: string
+): Promise<DiscoverySurfaceResultType> {
   const project = createToolProject(rootPath);
   const response = await searchCodebaseHandle(task.args ?? { query: task.prompt }, {
     indexState: project.indexState,
@@ -62,7 +62,7 @@ async function runSearchCodebase(task: DiscoveryTaskType, rootPath: string): Pro
   const preflight = parsed.preflight;
   const bestExample =
     preflight && typeof preflight === 'object' && preflight !== null && 'bestExample' in preflight
-      ? (preflight.bestExample as string | undefined) ?? null
+      ? ((preflight.bestExample as string | undefined) ?? null)
       : null;
 
   return {
@@ -77,12 +77,15 @@ async function runCodebaseMetadata(
   rootPath: string
 ): Promise<DiscoverySurfaceResultType> {
   const project = createToolProject(rootPath);
-  const response = await getCodebaseMetadataHandle({}, {
-    indexState: project.indexState,
-    paths: project.paths,
-    rootPath: project.rootPath,
-    performIndexing: () => undefined
-  });
+  const response = await getCodebaseMetadataHandle(
+    {},
+    {
+      indexState: project.indexState,
+      paths: project.paths,
+      rootPath: project.rootPath,
+      performIndexing: () => undefined
+    }
+  );
   return { payload: response.content?.[0]?.text ?? '{}' };
 }
 
@@ -146,9 +149,7 @@ function evaluateDiscoveryTask(
   const matchedSignals = task.expectedSignals.filter((signal) =>
     normalizedPayload.includes(normalizeText(signal))
   );
-  const missingSignals = task.expectedSignals.filter(
-    (signal) => !matchedSignals.includes(signal)
-  );
+  const missingSignals = task.expectedSignals.filter((signal) => !matchedSignals.includes(signal));
   const forbiddenHits = (task.forbiddenSignals ?? []).filter((signal) =>
     normalizedPayload.includes(normalizeText(signal))
   );
@@ -190,9 +191,7 @@ function summarizeDiscoveryResults(results: DiscoveryTaskResultEval[]): Discover
       ? results.reduce((sum, result) => sum + result.usefulnessScore, 0) / totalTasks
       : 0;
   const averagePayloadBytes =
-    totalTasks > 0
-      ? results.reduce((sum, result) => sum + result.payloadBytes, 0) / totalTasks
-      : 0;
+    totalTasks > 0 ? results.reduce((sum, result) => sum + result.payloadBytes, 0) / totalTasks : 0;
   const averageEstimatedTokens =
     totalTasks > 0
       ? results.reduce((sum, result) => sum + result.estimatedTokens, 0) / totalTasks
@@ -241,8 +240,7 @@ function compareMetric(
   comparatorValue: number | null,
   metric: DiscoveryMetricName
 ): DiscoveryMetricComparison {
-  const lowerIsBetter =
-    metric === 'averageEstimatedTokens' || metric === 'averageFirstRelevantHit';
+  const lowerIsBetter = metric === 'averageEstimatedTokens' || metric === 'averageFirstRelevantHit';
   const passes =
     actualValue !== null &&
     comparatorValue !== null &&
@@ -359,9 +357,7 @@ function evaluateComparatorGate(
   };
 }
 
-export function combineDiscoverySummaries(
-  summaries: DiscoverySummaryType[]
-): DiscoverySummaryType {
+export function combineDiscoverySummaries(summaries: DiscoverySummaryType[]): DiscoverySummaryType {
   return summarizeDiscoveryResults(summaries.flatMap((summary) => summary.results));
 }
 
@@ -399,7 +395,8 @@ export function evaluateDiscoveryGate({
   const status =
     missingEvidence.length > 0
       ? 'pending_evidence'
-      : baseline.status === 'passed' && comparators.every((comparator) => comparator.status === 'passed')
+      : baseline.status === 'passed' &&
+          comparators.every((comparator) => comparator.status === 'passed')
         ? 'passed'
         : 'failed';
 
@@ -447,9 +444,7 @@ export function formatDiscoveryReport({
   lines.push(`Average estimated tokens: ${Math.round(summary.averageEstimatedTokens)}`);
   lines.push(
     `Average first relevant hit: ${
-      summary.averageFirstRelevantHit === null
-        ? 'n/a'
-        : summary.averageFirstRelevantHit.toFixed(2)
+      summary.averageFirstRelevantHit === null ? 'n/a' : summary.averageFirstRelevantHit.toFixed(2)
     }`
   );
   lines.push(

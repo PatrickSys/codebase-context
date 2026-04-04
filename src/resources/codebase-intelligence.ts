@@ -1,11 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { ProjectState } from '../project-state.js';
-import type {
-  IntelligenceData,
-  PatternsData,
-  PatternCandidate
-} from '../types/index.js';
+import type { IntelligenceData, PatternsData, PatternCandidate } from '../types/index.js';
 import {
   isComplementaryPatternCategory,
   shouldSkipLegacyTestingFrameworkCategory

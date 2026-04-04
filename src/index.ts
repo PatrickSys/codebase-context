@@ -50,6 +50,7 @@ import {
   getProjectPathFromContextResourceUri,
   isContextResourceUri
 } from './resources/uri.js';
+import { generateCodebaseIntelligence } from './resources/codebase-intelligence.js';
 import { EXCLUDED_GLOB_PATTERNS } from './constants/codebase-context.js';
 import {
   discoverProjectsWithinRoot,
@@ -852,7 +853,7 @@ export function registerHandlers(target: Server): void {
           {
             uri: buildProjectContextResourceUri(project.rootPath),
             mimeType: 'text/plain',
-            text: await generateCodebaseContext(project)
+            text: await generateCodebaseIntelligence(project)
           }
         ]
       };
@@ -865,7 +866,7 @@ export function registerHandlers(target: Server): void {
           {
             uri: CONTEXT_RESOURCE_URI,
             mimeType: 'text/plain',
-            text: project ? await generateCodebaseContext(project) : buildProjectSelectionMessage()
+            text: project ? await generateCodebaseIntelligence(project) : buildProjectSelectionMessage()
           }
         ]
       };

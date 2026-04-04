@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { CodebaseSearcher } from '../src/core/search.js';
 import type { CodeChunk, SearchResult } from '../src/types/index.js';
 import type { EvalFixture, EvalQuery } from '../src/eval/types.js';
-import { evaluateFixture, summarizeEvaluation, formatEvalReport } from '../src/eval/harness.js';
+import {
+  countUtf8Bytes,
+  estimateTokenCountFromBytes,
+  evaluateFixture,
+  summarizeEvaluation,
+  formatEvalReport
+} from '../src/eval/harness.js';
 import angularFixture from './fixtures/eval-angular-spotify.json';
 import controlledFixture from './fixtures/eval-controlled.json';
 
@@ -82,6 +88,12 @@ describe('Eval Harness - fixtures loaded', () => {
 });
 
 describe('Eval Harness - scoring logic', () => {
+  it('estimates payload cost with a fixed bytes-to-token heuristic', () => {
+    const bytes = countUtf8Bytes('auth interceptor');
+    expect(bytes).toBeGreaterThan(0);
+    expect(estimateTokenCountFromBytes(bytes)).toBe(Math.ceil(bytes / 4));
+  });
+
   it('marks correct top-1 when implementation file is first', async () => {
     const query: EvalQuery = {
       id: 7,

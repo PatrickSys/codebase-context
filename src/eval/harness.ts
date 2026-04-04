@@ -101,6 +101,14 @@ function hashPath(filePath: string): string {
   return crypto.createHash('sha1').update(normalizePath(filePath)).digest('hex').slice(0, 8);
 }
 
+export function countUtf8Bytes(value: string): number {
+  return Buffer.byteLength(value, 'utf-8');
+}
+
+export function estimateTokenCountFromBytes(bytes: number): number {
+  return Math.max(1, Math.ceil(bytes / 4));
+}
+
 function formatPath(filePath: string | null, redactPaths: boolean): string {
   if (!filePath) {
     return 'none';

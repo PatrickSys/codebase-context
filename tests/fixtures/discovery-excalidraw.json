@@ -1,0 +1,123 @@
+{
+  "description": "Frozen discovery benchmark tasks for Excalidraw using current shipped surfaces only.",
+  "codebase": "Excalidraw",
+  "repository": "excalidraw/excalidraw",
+  "repositoryUrl": "https://github.com/excalidraw/excalidraw",
+  "repositoryRef": "e18c1dd213000dde0ae94ef7eb00aab537b39708",
+  "frozenDate": "2026-04-04",
+  "notes": "Tasks stay broad enough to benchmark discovery honestly against the current product surface without assuming a future compact map command.",
+  "tasks": [
+    {
+      "id": "ex-map-01",
+      "title": "Orient to the main subsystems",
+      "job": "map",
+      "surface": "get_codebase_metadata",
+      "prompt": "What are the main app areas in Excalidraw?",
+      "expectedSignals": ["framework", "architecture", "statistics"]
+    },
+    {
+      "id": "ex-map-02",
+      "title": "Use the existing context resource as a repo overview",
+      "job": "map",
+      "surface": "codebase://context",
+      "prompt": "Give me the current codebase intelligence overview.",
+      "expectedSignals": ["codebase intelligence", "libraries actually used", "patterns"]
+    },
+    {
+      "id": "ex-map-03",
+      "title": "Detect whether the repo uses internal path aliases",
+      "job": "map",
+      "surface": "codebase://context",
+      "prompt": "Does Excalidraw expose import aliases?",
+      "expectedSignals": ["import aliases", "tsconfig"]
+    },
+    {
+      "id": "ex-map-04",
+      "title": "Identify likely scene and element-heavy areas",
+      "job": "map",
+      "surface": "codebase://context",
+      "prompt": "Which areas look scene or element heavy?",
+      "expectedSignals": ["patterns", "libraries actually used", "generated:"]
+    },
+    {
+      "id": "ex-find-01",
+      "title": "Find the dominant state-management pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "prompt": "What state-management pattern dominates here?",
+      "args": { "category": "state" },
+      "expectedSignals": ["stateManagement"],
+      "expectedBestExamplePatterns": ["appstate", "state", "store"]
+    },
+    {
+      "id": "ex-find-02",
+      "title": "Find a best example before editing scene behavior",
+      "job": "find",
+      "surface": "search_codebase",
+      "prompt": "What local example should I imitate for scene updates?",
+      "args": { "query": "scene update flow", "intent": "edit", "limit": 5 },
+      "expectedSignals": ["preflight", "bestExample", "patterns"],
+      "expectedBestExamplePatterns": ["scene", "app", "element"]
+    },
+    {
+      "id": "ex-find-03",
+      "title": "Find testing conventions for UI-heavy code",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "prompt": "What testing setup dominates here?",
+      "args": { "category": "testing" },
+      "expectedSignals": ["test", "framework"],
+      "expectedBestExamplePatterns": ["test", "spec"]
+    },
+    {
+      "id": "ex-find-04",
+      "title": "Find the dominant dependency pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "prompt": "What dependency injection or dependency pattern dominates here?",
+      "args": { "category": "di" },
+      "expectedSignals": ["dependencyInjection"],
+      "expectedBestExamplePatterns": ["src", "app", "component"]
+    },
+    {
+      "id": "ex-search-01",
+      "title": "Find where element types or definitions live",
+      "job": "search",
+      "surface": "search_codebase",
+      "prompt": "element type definitions",
+      "args": { "query": "element type definitions", "limit": 5 },
+      "expectedSignals": ["results", "searchQuality"],
+      "expectedFilePatterns": ["element", "type"]
+    },
+    {
+      "id": "ex-search-02",
+      "title": "Find scene serialization or export logic",
+      "job": "search",
+      "surface": "search_codebase",
+      "prompt": "scene serialization export json",
+      "args": { "query": "scene serialization export json", "limit": 5 },
+      "expectedSignals": ["results", "searchQuality"],
+      "expectedFilePatterns": ["scene", "json", "data"]
+    },
+    {
+      "id": "ex-search-03",
+      "title": "Find app state wiring",
+      "job": "search",
+      "surface": "search_codebase",
+      "prompt": "app state selection and updates",
+      "args": { "query": "app state selection and updates", "limit": 5 },
+      "expectedSignals": ["results", "searchQuality"],
+      "expectedFilePatterns": ["appstate", "state", "app"]
+    },
+    {
+      "id": "ex-search-04",
+      "title": "Find the main canvas or app entry surface",
+      "job": "search",
+      "surface": "search_codebase",
+      "prompt": "main canvas app entry",
+      "args": { "query": "main canvas app entry", "limit": 5 },
+      "expectedSignals": ["results", "searchQuality"],
+      "expectedFilePatterns": ["app", "excalidraw", "canvas"]
+    }
+  ]
+}

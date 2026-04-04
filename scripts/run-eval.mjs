@@ -11,6 +11,12 @@ import { analyzerRegistry } from '../dist/core/analyzer-registry.js';
 import { AngularAnalyzer } from '../dist/analyzers/angular/index.js';
 import { GenericAnalyzer } from '../dist/analyzers/generic/index.js';
 import { evaluateFixture, formatEvalReport } from '../dist/eval/harness.js';
+import {
+  combineDiscoverySummaries,
+  evaluateDiscoveryGate,
+  evaluateDiscoveryFixture,
+  formatDiscoveryReport
+} from '../dist/eval/discovery-harness.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
@@ -20,13 +26,34 @@ const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 
 const defaultFixtureA = path.join(projectRoot, 'tests', 'fixtures', 'eval-angular-spotify.json');
 const defaultFixtureB = path.join(projectRoot, 'tests', 'fixtures', 'eval-controlled.json');
+const defaultDiscoveryFixtureA = path.join(
+  projectRoot,
+  'tests',
+  'fixtures',
+  'discovery-angular-spotify.json'
+);
+const defaultDiscoveryFixtureB = path.join(
+  projectRoot,
+  'tests',
+  'fixtures',
+  'discovery-excalidraw.json'
+);
+const defaultDiscoveryProtocol = path.join(
+  projectRoot,
+  'tests',
+  'fixtures',
+  'discovery-benchmark-protocol.json'
+);
 
 const usage = [
   `Usage: node scripts/run-eval.mjs <codebaseA> [codebaseB] [options]`,
   ``,
   `Options:`,
+  `  --mode=<retrieval|discovery>  Select benchmark mode (default: retrieval)`,
   `  --fixture-a=<path>  Override fixture for codebaseA`,
   `  --fixture-b=<path>  Override fixture for codebaseB`,
+  `  --protocol=<path>   Override discovery benchmark protocol`,
+  `  --competitor-results=<path>  JSON file with comparator metrics for discovery gate evaluation`,
   `  --skip-reindex      Skip re-index phase`,
   `  --no-rerank         Disable ambiguity reranker`,
   `  --no-redact         Show full file paths in report`,
@@ -87,6 +114,7 @@ async function runSingleEvaluation({
   label,
   codebasePath,
   fixturePath,
+  mode,
   skipReindex,
   noRerank,
   redactPaths
@@ -98,36 +126,81 @@ async function runSingleEvaluation({
   console.log(`\n=== Codebase: ${label} ===`);
   console.log(`Target: ${resolvedCodebase}`);
   console.log(`Fixture: ${resolvedFixture}`);
-  console.log(
-    `Reranker: ${noRerank ? 'DISABLED' : 'enabled (ambiguity-triggered, Xenova/ms-marco-MiniLM-L-6-v2)'}`
-  );
+  console.log(`Mode: ${mode}`);
+  if (mode === 'retrieval') {
+    console.log(
+      `Reranker: ${noRerank ? 'DISABLED' : 'enabled (ambiguity-triggered, Xenova/ms-marco-MiniLM-L-6-v2)'}`
+    );
+  }
   console.log(`Path output: ${redactPaths ? 'REDACTED' : 'FULL'}`);
 
   await maybeReindex(resolvedCodebase, skipReindex);
 
-  console.log(`\n--- Phase 2: Running ${fixture.queries.length}-query eval harness ---`);
-  const searcher = new CodebaseSearcher(resolvedCodebase);
-  const summary = await evaluateFixture({
-    fixture,
-    searcher,
-    limit: 5,
-    searchOptions: {
-      enableReranker: !noRerank
-    }
-  });
+  let summary;
+  let report;
 
-  const report = formatEvalReport({
-    codebaseLabel: label,
-    fixturePath: resolvedFixture,
-    summary,
-    redactPaths
-  });
+  if (mode === 'discovery') {
+    console.log(`\n--- Phase 2: Running ${fixture.tasks.length}-task discovery harness ---`);
+    summary = await evaluateDiscoveryFixture({
+      fixture,
+      rootPath: resolvedCodebase
+    });
+    report = formatDiscoveryReport({
+      codebaseLabel: label,
+      fixturePath: resolvedFixture,
+      summary
+    });
+  } else {
+    console.log(`\n--- Phase 2: Running ${fixture.queries.length}-query eval harness ---`);
+    const searcher = new CodebaseSearcher(resolvedCodebase);
+    summary = await evaluateFixture({
+      fixture,
+      searcher,
+      limit: 5,
+      searchOptions: {
+        enableReranker: !noRerank
+      }
+    });
+
+    report = formatEvalReport({
+      codebaseLabel: label,
+      fixturePath: resolvedFixture,
+      summary,
+      redactPaths
+    });
+  }
 
   console.log(report);
   return summary;
 }
 
-function printCombinedSummary(summaries) {
+function printCombinedSummary(summaries, mode) {
+  if (mode === 'discovery') {
+    const totalTasks = summaries.reduce((sum, summary) => sum + summary.totalTasks, 0);
+    const avgUsefulness =
+      totalTasks > 0
+        ? summaries.reduce((sum, summary) => sum + summary.averageUsefulness * summary.totalTasks, 0) /
+          totalTasks
+        : 0;
+    const avgPayload =
+      totalTasks > 0
+        ? summaries.reduce((sum, summary) => sum + summary.averagePayloadBytes * summary.totalTasks, 0) /
+          totalTasks
+        : 0;
+    const avgTokens =
+      totalTasks > 0
+        ? summaries.reduce((sum, summary) => sum + summary.averageEstimatedTokens * summary.totalTasks, 0) /
+          totalTasks
+        : 0;
+
+    console.log(`\n=== Combined Discovery Summary ===`);
+    console.log(`Average usefulness: ${(avgUsefulness * 100).toFixed(0)}%`);
+    console.log(`Average payload: ${Math.round(avgPayload)} bytes`);
+    console.log(`Average estimated tokens: ${Math.round(avgTokens)}`);
+    console.log(`=================================\n`);
+    return;
+  }
+
   const total = summaries.reduce((sum, summary) => sum + summary.total, 0);
   const top1Correct = summaries.reduce((sum, summary) => sum + summary.top1Correct, 0);
   const top3RecallCount = summaries.reduce((sum, summary) => sum + summary.top3RecallCount, 0);
@@ -156,8 +229,11 @@ async function main() {
       'skip-reindex': { type: 'boolean', default: false },
       'no-rerank': { type: 'boolean', default: false },
       'no-redact': { type: 'boolean', default: false },
+      mode: { type: 'string', default: 'retrieval' },
       'fixture-a': { type: 'string' },
-      'fixture-b': { type: 'string' }
+      'fixture-b': { type: 'string' },
+      protocol: { type: 'string' },
+      'competitor-results': { type: 'string' }
     },
     allowPositionals: true
   });
@@ -176,10 +252,26 @@ async function main() {
 
   const codebaseA = positionals[0];
   const codebaseB = positionals[1];
-  const fixtureA = values['fixture-a'] ? path.resolve(values['fixture-a']) : defaultFixtureA;
-  const fixtureB = values['fixture-b'] ? path.resolve(values['fixture-b']) : defaultFixtureB;
+  const mode = values.mode === 'discovery' ? 'discovery' : 'retrieval';
+  const fixtureA = values['fixture-a']
+    ? path.resolve(values['fixture-a'])
+    : mode === 'discovery'
+      ? defaultDiscoveryFixtureA
+      : defaultFixtureA;
+  const fixtureB = values['fixture-b']
+    ? path.resolve(values['fixture-b'])
+    : mode === 'discovery'
+      ? defaultDiscoveryFixtureB
+      : defaultFixtureB;
+  const protocolPath = values.protocol
+    ? path.resolve(values.protocol)
+    : defaultDiscoveryProtocol;
+  const comparatorResultsPath = values['competitor-results']
+    ? path.resolve(values['competitor-results'])
+    : null;
 
   const sharedOptions = {
+    mode,
     skipReindex: values['skip-reindex'],
     noRerank: values['no-rerank'],
     redactPaths: !values['no-redact']
@@ -204,10 +296,31 @@ async function main() {
     });
 
     summaries.push(summaryB);
-    passesAllGates = passesAllGates && summaryB.passesGate;
-    printCombinedSummary(summaries);
+    passesAllGates =
+      mode === 'discovery' ? passesAllGates : passesAllGates && summaryB.passesGate;
   }
 
+  if (mode === 'discovery') {
+    const combinedSummary = combineDiscoverySummaries(summaries);
+    const protocol = loadFixture(protocolPath);
+    const comparatorEvidence = comparatorResultsPath ? loadFixture(comparatorResultsPath) : undefined;
+    const gate = evaluateDiscoveryGate({
+      summary: combinedSummary,
+      protocol,
+      comparatorEvidence,
+      suiteComplete: summaries.length > 1
+    });
+    combinedSummary.gate = gate;
+    printCombinedSummary([combinedSummary], mode);
+    console.log(formatDiscoveryReport({
+      codebaseLabel: 'combined-suite',
+      fixturePath: protocolPath,
+      summary: combinedSummary
+    }));
+    process.exit(gate.status === 'failed' ? 1 : 0);
+  }
+
+  printCombinedSummary(summaries, mode);
   process.exit(passesAllGates ? 0 : 1);
 }
 

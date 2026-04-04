@@ -906,7 +906,7 @@ export function registerHandlers(target: Server): void {
                 type: 'text',
                 text: JSON.stringify({
                   status: 'indexing',
-                  message: 'Index build in progress — please retry shortly'
+                  message: 'Index build in progress - please retry shortly'
                 })
               }
             ]
@@ -933,7 +933,7 @@ export function registerHandlers(target: Server): void {
                 type: 'text',
                 text: JSON.stringify({
                   status: 'indexing',
-                  message: 'Index rebuild in progress — please retry shortly',
+                  message: 'Index rebuild in progress - please retry shortly',
                   index: indexSignal
                 })
               }
@@ -1014,7 +1014,7 @@ function buildResources(): Resource[] {
   return resources;
 }
 
-async function generateCodebaseContext(project: ProjectState): Promise<string> {
+async function _generateCodebaseContext(project: ProjectState): Promise<string> {
   const intelligencePath = project.paths.intelligence;
 
   const index = await ensureValidIndexOrAutoHeal(project);
@@ -1036,7 +1036,7 @@ async function generateCodebaseContext(project: ProjectState): Promise<string> {
     lines.push('');
     lines.push(
       `Index: ${index.status} (${index.confidence}, ${index.action})${
-        index.reason ? ` — ${index.reason}` : ''
+        index.reason ? ` - ${index.reason}` : ''
       }`
     );
     lines.push('');
@@ -1574,14 +1574,14 @@ function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
       if (!shouldRunNow) {
         if (process.env.CODEBASE_CONTEXT_DEBUG) {
           console.error(
-            `[file-watcher] Index in progress — queueing auto-refresh: ${project.rootPath}`
+            `[file-watcher] Index in progress - queueing auto-refresh: ${project.rootPath}`
           );
         }
         return;
       }
       if (process.env.CODEBASE_CONTEXT_DEBUG) {
         console.error(
-          `[file-watcher] Changes detected — incremental reindex starting: ${project.rootPath}`
+          `[file-watcher] Changes detected - incremental reindex starting: ${project.rootPath}`
         );
       }
       void performIndexing(project, true);

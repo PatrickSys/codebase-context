@@ -151,6 +151,7 @@ export interface DiscoverySurfaceResult {
 
 export type DiscoveryMetricName =
   | 'averageUsefulness'
+  | 'averagePayloadBytes'
   | 'averageEstimatedTokens'
   | 'averageFirstRelevantHit'
   | 'bestExampleUsefulnessRate';
@@ -198,6 +199,7 @@ export interface DiscoveryBenchmarkProtocol {
 
 export interface DiscoveryComparatorMetrics {
   averageUsefulness?: number | null;
+  averagePayloadBytes?: number | null;
   averageEstimatedTokens?: number | null;
   averageFirstRelevantHit?: number | null;
   bestExampleUsefulnessRate?: number | null;

@@ -39,8 +39,8 @@
     }
   ],
   "metrics": {
-    "payloadCost": ["payloadBytes", "estimatedTokens"],
-    "usefulness": ["usefulnessScore", "firstRelevantHit", "bestExampleUseful"]
+    "payloadCost": ["averagePayloadBytes", "averageEstimatedTokens"],
+    "usefulness": ["averageUsefulness", "averageFirstRelevantHit", "bestExampleUsefulnessRate"]
   },
   "fairnessRules": [
     "Use only current shipped codebase-context surfaces in the direct-tool lane.",

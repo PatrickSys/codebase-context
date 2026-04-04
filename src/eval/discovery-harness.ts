@@ -240,7 +240,10 @@ function compareMetric(
   comparatorValue: number | null,
   metric: DiscoveryMetricName
 ): DiscoveryMetricComparison {
-  const lowerIsBetter = metric === 'averageEstimatedTokens' || metric === 'averageFirstRelevantHit';
+  const lowerIsBetter =
+    metric === 'averagePayloadBytes' ||
+    metric === 'averageEstimatedTokens' ||
+    metric === 'averageFirstRelevantHit';
   const passes =
     actualValue !== null &&
     comparatorValue !== null &&
@@ -260,7 +263,10 @@ function compareMetricWithinTolerance(
   metric: DiscoveryMetricName,
   tolerancePercent: number
 ): DiscoveryMetricComparison {
-  const lowerIsBetter = metric === 'averageFirstRelevantHit';
+  const lowerIsBetter =
+    metric === 'averagePayloadBytes' ||
+    metric === 'averageEstimatedTokens' ||
+    metric === 'averageFirstRelevantHit';
   const multiplier = 1 + tolerancePercent / 100;
   const passes =
     actualValue !== null &&

@@ -285,7 +285,6 @@ async function main() {
   });
 
   const summaries = [summaryA];
-  let passesAllGates = summaryA.passesGate;
 
   if (codebaseB) {
     const summaryB = await runSingleEvaluation({
@@ -296,8 +295,6 @@ async function main() {
     });
 
     summaries.push(summaryB);
-    passesAllGates =
-      mode === 'discovery' ? passesAllGates : passesAllGates && summaryB.passesGate;
   }
 
   if (mode === 'discovery') {
@@ -320,6 +317,7 @@ async function main() {
     process.exit(gate.status === 'failed' ? 1 : 0);
   }
 
+  const passesAllGates = summaries.every((summary) => summary.passesGate);
   printCombinedSummary(summaries, mode);
   process.exit(passesAllGates ? 0 : 1);
 }

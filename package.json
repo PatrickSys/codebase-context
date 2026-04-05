@@ -133,6 +133,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@inquirer/prompts": "^3.0.0",
     "@huggingface/transformers": "^3.8.1",
     "@lancedb/lancedb": "^0.4.0",
     "@modelcontextprotocol/sdk": "^1.27.1",

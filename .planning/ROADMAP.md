@@ -9,7 +9,7 @@ BEWARE: AI-GENERATED MARKDOWN FILE, DO NOT BLINDLY TRUST IT
 ## Active Phases
 
 - [x] **Phase 5: Freeze Discovery Benchmark** - lock the discovery-only benchmark and fairness rules before product-shaping changes land
-- [ ] **Phase 6: Bootstrap First-Run Adoption** - ship the interactive bootstrap wizard for the first-wave clients
+- [x] **Phase 6: Bootstrap First-Run Adoption** - ship the interactive bootstrap wizard for the first-wave clients
 - [ ] **Phase 7: Promote the Map Surface** - make repo intelligence the primary first-call surface in CLI and MCP
 - [ ] **Phase 8: Tighten the Search Contract** - formalize compact-vs-full search and nuanced edit-readiness
 - [ ] **Phase 9: Publish Proof and Sync the Public Surface** - finish v2 with honest proof, locked messaging, and aligned public artifacts
@@ -31,13 +31,13 @@ BEWARE: AI-GENERATED MARKDOWN FILE, DO NOT BLINDLY TRUST IT
 ### Phase 6: Bootstrap First-Run Adoption
 
 **Goal**: make first-run setup and instruction seeding simple for a new public user without turning bootstrap into a separate product.
-**Status**: [ ]
+**Status**: [x]
 **Depends on**: Phase 5
 **Requirements**: `BOOT-01`
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md — Add @inquirer/prompts, implement init wizard in src/cli-init.ts, wire subcommand, add unit tests
+- [x] 06-01-PLAN.md — Add @inquirer/prompts, implement init wizard in src/cli-init.ts, wire subcommand, add unit tests
 
 **Success Criteria**:
 1. `codebase-context init` supports `Claude Code`, `Cursor`, `Codex`, and `OpenCode` only for the first wave.
@@ -86,4 +86,4 @@ Plans:
 
 ## Current Status
 
-Active milestone is `v2.0.0 Map-First Discovery Relaunch`. Phase 5 is verified complete; the next workflow is `/gsdd-progress` to route into Phase 6.
+Active milestone is `v2.0.0 Map-First Discovery Relaunch`. Phase 5 and Phase 6 are complete. Next step is `/gsdd-verify 6` then `/gsdd-progress` to route into Phase 7.

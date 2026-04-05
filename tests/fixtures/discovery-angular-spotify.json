@@ -1,0 +1,123 @@
+{
+  "description": "Frozen discovery benchmark tasks for angular-spotify using current shipped surfaces only.",
+  "codebase": "angular-spotify",
+  "repository": "trungk18/angular-spotify",
+  "repositoryUrl": "https://github.com/trungk18/angular-spotify",
+  "repositoryRef": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+  "frozenDate": "2026-04-04",
+  "notes": "Tasks are discovery-only and intentionally benchmark the current resource and tool surface, not future Phase 7 or 8 behavior.",
+  "tasks": [
+    {
+      "id": "as-map-01",
+      "title": "Identify the main app areas from the current map surface",
+      "job": "map",
+      "surface": "codebase://context",
+      "prompt": "What are the main app areas in this repo?",
+      "expectedSignals": ["libraries actually used", "patterns", "generated:"]
+    },
+    {
+      "id": "as-map-02",
+      "title": "Orient to the framework and architecture",
+      "job": "map",
+      "surface": "get_codebase_metadata",
+      "prompt": "What framework and architecture shape does this repo use?",
+      "expectedSignals": ["framework", "architecture", "statistics"]
+    },
+    {
+      "id": "as-map-03",
+      "title": "Find store-heavy subsystems in the repo overview",
+      "job": "map",
+      "surface": "codebase://context",
+      "prompt": "Which subsystems look state-heavy?",
+      "expectedSignals": ["state", "patterns", "libraries actually used"]
+    },
+    {
+      "id": "as-map-04",
+      "title": "See whether internal path aliases exist",
+      "job": "map",
+      "surface": "codebase://context",
+      "prompt": "Does this repo expose import aliases?",
+      "expectedSignals": ["import aliases", "tsconfig"]
+    },
+    {
+      "id": "as-find-01",
+      "title": "Find the dominant dependency injection pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "prompt": "What DI pattern dominates here?",
+      "args": { "category": "di" },
+      "expectedSignals": ["dependencyInjection"],
+      "expectedBestExamplePatterns": ["src", "service"]
+    },
+    {
+      "id": "as-find-02",
+      "title": "Find the dominant state-management pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "prompt": "What state-management pattern should an agent imitate?",
+      "args": { "category": "state" },
+      "expectedSignals": ["stateManagement"],
+      "expectedBestExamplePatterns": ["store", "state"]
+    },
+    {
+      "id": "as-find-03",
+      "title": "Find a best local example before editing auth behavior",
+      "job": "find",
+      "surface": "search_codebase",
+      "prompt": "What should I imitate for auth-related request handling?",
+      "args": { "query": "auth interceptor request handling", "intent": "edit", "limit": 5 },
+      "expectedSignals": ["preflight", "bestExample", "patterns"],
+      "expectedBestExamplePatterns": ["auth", "interceptor"]
+    },
+    {
+      "id": "as-find-04",
+      "title": "Find testing conventions and likely examples",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "prompt": "What testing setup dominates here?",
+      "args": { "category": "testing" },
+      "expectedSignals": ["unitTestFramework", "test"],
+      "expectedBestExamplePatterns": ["spec", "test"]
+    },
+    {
+      "id": "as-search-01",
+      "title": "Target the playback API entrypoint",
+      "job": "search",
+      "surface": "search_codebase",
+      "prompt": "skip to next song",
+      "args": { "query": "skip to next song", "limit": 5 },
+      "expectedSignals": ["results", "searchQuality"],
+      "expectedFilePatterns": ["player-api", "player/api"]
+    },
+    {
+      "id": "as-search-02",
+      "title": "Find persistence wiring",
+      "job": "search",
+      "surface": "search_codebase",
+      "prompt": "persist data across browser sessions",
+      "args": { "query": "persist data across browser sessions", "limit": 5 },
+      "expectedSignals": ["results", "searchQuality"],
+      "expectedFilePatterns": ["storage", "local-storage"]
+    },
+    {
+      "id": "as-search-03",
+      "title": "Find where auth headers are added",
+      "job": "search",
+      "surface": "search_codebase",
+      "prompt": "add authorization token to API requests",
+      "args": { "query": "add authorization token to API requests", "limit": 5 },
+      "expectedSignals": ["results", "searchQuality"],
+      "expectedFilePatterns": ["auth", "interceptor"]
+    },
+    {
+      "id": "as-search-04",
+      "title": "Find album selectors or equivalent state wiring",
+      "job": "search",
+      "surface": "search_codebase",
+      "prompt": "album selectors ngrx",
+      "args": { "query": "album selectors ngrx", "limit": 5 },
+      "expectedSignals": ["results", "searchQuality"],
+      "expectedFilePatterns": ["selector", "store", "album"]
+    }
+  ]
+}

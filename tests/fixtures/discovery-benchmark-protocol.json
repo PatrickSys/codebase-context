@@ -1,0 +1,74 @@
+{
+  "name": "v2-discovery-benchmark",
+  "frozenDate": "2026-04-04",
+  "scope": "discovery-only",
+  "jobs": ["map", "find", "search"],
+  "allowedSurfaces": [
+    "search_codebase",
+    "get_codebase_metadata",
+    "get_team_patterns",
+    "codebase://context"
+  ],
+  "forbiddenSurfaces": ["map", "get_codebase_map"],
+  "primaryLane": "direct-tool",
+  "secondaryLane": "manual-log-capture",
+  "comparators": [
+    {
+      "name": "raw Claude Code",
+      "kind": "baseline",
+      "execution": "manual-log-capture",
+      "notes": "Use native grep/glob/read exploration only. Record payload cost and usefulness from captured session logs."
+    },
+    {
+      "name": "GrepAI",
+      "kind": "mcp-comparator",
+      "execution": "manual-log-capture",
+      "notes": "Run from public install/setup commands only. If an equivalent direct-tool run is unavailable, keep it in the manual lane."
+    },
+    {
+      "name": "jCodeMunch",
+      "kind": "mcp-comparator",
+      "execution": "manual-log-capture",
+      "notes": "Run from public install/setup commands only. Preserve its documented init and policy flow when collecting logs."
+    },
+    {
+      "name": "codebase-memory-mcp",
+      "kind": "mcp-comparator",
+      "execution": "manual-log-capture",
+      "notes": "Treat as the heavier structural comparator, not the primary public baseline."
+    }
+  ],
+  "metrics": {
+    "payloadCost": ["averagePayloadBytes", "averageEstimatedTokens"],
+    "usefulness": ["averageUsefulness", "averageFirstRelevantHit", "bestExampleUsefulnessRate"]
+  },
+  "fairnessRules": [
+    "Use only current shipped codebase-context surfaces in the direct-tool lane.",
+    "Do not benchmark unreleased map functionality.",
+    "Do not change task wording or expected signals after product-shaping implementation starts.",
+    "Do not claim implementation-quality or code-generation quality from this benchmark."
+  ],
+  "shipGate": {
+    "baselineRule": "Beat raw Claude Code on payload cost and at least one usefulness metric across the frozen public tasks.",
+    "comparatorRule": "Stay within 15% of GrepAI, jCodeMunch, and codebase-memory-mcp on frozen usefulness metrics.",
+    "claimRule": "If the gate is missed on any slice, report the loss and do not broaden relaunch claims.",
+    "baseline": {
+      "comparatorName": "raw Claude Code",
+      "payloadMetric": "averageEstimatedTokens",
+      "usefulnessMetrics": [
+        "averageUsefulness",
+        "averageFirstRelevantHit",
+        "bestExampleUsefulnessRate"
+      ]
+    },
+    "comparators": {
+      "requiredNames": ["GrepAI", "jCodeMunch", "codebase-memory-mcp"],
+      "tolerancePercent": 15,
+      "usefulnessMetrics": [
+        "averageUsefulness",
+        "averageFirstRelevantHit",
+        "bestExampleUsefulnessRate"
+      ]
+    }
+  }
+}

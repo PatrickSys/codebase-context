@@ -282,12 +282,19 @@ Notes:
 
 Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/reporting code.
 
-- **Command:** `npm run eval -- <codebaseA> <codebaseB>` (builds first, then runs `scripts/run-eval.mjs`)
-- **Shared implementation:** `src/eval/harness.ts` + `src/eval/types.ts` (tests and CLI use the same scoring)
-- **Frozen fixtures:**
-  - `tests/fixtures/eval-angular-spotify.json` (real-world)
-  - `tests/fixtures/eval-controlled.json` + `tests/fixtures/codebases/eval-controlled/` (offline controlled)
-- **Reported metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a gate pass/fail
+- **Command:** `npm run eval -- <codebaseA> [codebaseB] --mode retrieval|discovery [--competitor-results <path>]` (builds first, then runs `scripts/run-eval.mjs`)
+- **Shared implementation:** `src/eval/harness.ts`, `src/eval/discovery-harness.ts`, and `src/eval/types.ts`
+- **Frozen retrieval fixtures:**
+  - `tests/fixtures/eval-angular-spotify.json`
+  - `tests/fixtures/eval-controlled.json` + `tests/fixtures/codebases/eval-controlled/`
+- **Frozen discovery fixtures:**
+  - `tests/fixtures/discovery-angular-spotify.json`
+  - `tests/fixtures/discovery-excalidraw.json`
+  - `tests/fixtures/discovery-benchmark-protocol.json`
+- **Retrieval metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a gate pass/fail
+- **Discovery metrics:** usefulness score, payload bytes, estimated tokens, first relevant hit, and best-example usefulness
+- **Discovery gate:** discovery mode evaluates the frozen ship gate only when the full public suite and comparator metrics are available; missing comparator evidence is reported as pending, not silently treated as pass/fail
+- **Limits:** discovery mode is discovery-only, uses current shipped surfaces only, and does not claim implementation quality; named competitor runs remain a documented hybrid/manual lane rather than a built-in automated benchmark
 
 ## Limitations
 

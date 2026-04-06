@@ -35,6 +35,8 @@ export const EXCLUDED_DIRECTORY_NAMES = [
   '.claude',
   '.codebase-context',
   '.git',
+  '.opencode',
+  '.worktrees',
   '.next',
   '.nx',
   '.planning',

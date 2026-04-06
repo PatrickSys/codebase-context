@@ -27,3 +27,5 @@ grammars/*.wasm
 .tmp-research-repos/
 docs/visuals.md
 .repolore/
+.opencode/
+.agents/

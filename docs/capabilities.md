@@ -33,7 +33,7 @@ Client transport support varies — see [README.md](../README.md) for a per-clie
 
 Repo-scoped capabilities are available locally via the CLI (human-readable by default, `--json` for automation).
 Multi-project selection is MCP-only because the CLI already targets one root per invocation.
-For a “gallery” of commands and examples, see `docs/cli.md`.
+For a command gallery with examples, see `docs/cli.md`.
 
 | Command | Flags | Maps to |
 |---|---|---|

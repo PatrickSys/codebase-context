@@ -28,7 +28,7 @@ Real CLI output against `angular-spotify`, the repo used for the launch screensh
 
 ![codebase-context patterns screenshot](https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/patterns.png)
 
-This is the part most tools miss: what the team is doing now, what it is moving away from, and which files are the best examples to follow.
+This is the part most tools miss: what the team is doing now, what it is moving away from, and which files are the strongest examples to follow.
 
 **Before editing: preflight and impact**
 

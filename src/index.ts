@@ -38,7 +38,6 @@ import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { IndexCorruptedError } from './errors/index.js';
 import { appendMemoryFile } from './memory/store.js';
 import { handleCliCommand } from './cli.js';
-import { handleInitCli } from './cli-init.js';
 import { startFileWatcher } from './core/file-watcher.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {

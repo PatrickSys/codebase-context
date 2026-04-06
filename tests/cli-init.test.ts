@@ -18,7 +18,8 @@ import {
   generateMcpConfig,
   generateInstructionBlock,
   resolveInstructionFilePath,
-  _appendInstructionBlock
+  _appendInstructionBlock,
+  _buildMergedMcpContent
 } from '../src/cli-init.js';
 
 // --- generateMcpConfig ---
@@ -149,5 +150,77 @@ describe('_appendInstructionBlock', () => {
 
     expect(result).toBe('skipped');
     expect(writeFileMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('_buildMergedMcpContent', () => {
+  const readFileMock = vi.mocked(fsMod.readFile);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('preserves existing cursor mcpServers entries and adds codebase-context', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        mcpServers: {
+          'existing-server': { type: 'http', url: 'http://127.0.0.1:4000/mcp' }
+        },
+        someOtherKey: true
+      }) as unknown as Buffer
+    );
+
+    const generated = generateMcpConfig('cursor');
+    if (generated.kind !== 'file') throw new Error('expected file config');
+
+    const merged = await _buildMergedMcpContent('/test/.cursor/mcp.json', generated.content, 'cursor');
+    const parsed = JSON.parse(merged.content) as {
+      mcpServers: Record<string, { type: string; url: string }>;
+      someOtherKey: boolean;
+    };
+
+    expect(merged.mergedFromExisting).toBe(true);
+    expect(parsed.someOtherKey).toBe(true);
+    expect(parsed.mcpServers['existing-server']).toEqual({
+      type: 'http',
+      url: 'http://127.0.0.1:4000/mcp'
+    });
+    expect(parsed.mcpServers['codebase-context']).toEqual({
+      type: 'http',
+      url: 'http://127.0.0.1:3100/mcp'
+    });
+  });
+
+  it('preserves existing opencode mcp entries and updates codebase-context deterministically', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        $schema: 'https://opencode.ai/config.json',
+        mcp: {
+          'existing-server': { type: 'remote', url: 'http://127.0.0.1:5000/mcp' },
+          'codebase-context': { type: 'remote', url: 'http://old-host/mcp' }
+        },
+        extra: 'value'
+      }) as unknown as Buffer
+    );
+
+    const generated = generateMcpConfig('opencode');
+    if (generated.kind !== 'file') throw new Error('expected file config');
+
+    const merged = await _buildMergedMcpContent('/test/opencode.json', generated.content, 'opencode');
+    const parsed = JSON.parse(merged.content) as {
+      mcp: Record<string, { type: string; url: string }>;
+      extra: string;
+    };
+
+    expect(merged.mergedFromExisting).toBe(true);
+    expect(parsed.extra).toBe('value');
+    expect(parsed.mcp['existing-server']).toEqual({
+      type: 'remote',
+      url: 'http://127.0.0.1:5000/mcp'
+    });
+    expect(parsed.mcp['codebase-context']).toEqual({
+      type: 'remote',
+      url: 'http://127.0.0.1:3100/mcp'
+    });
   });
 });

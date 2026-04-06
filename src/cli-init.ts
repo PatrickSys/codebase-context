@@ -19,6 +19,8 @@ export type McpConfigResult =
   | { kind: 'file'; path: string; content: string }
   | { kind: 'command'; args: string[] };
 
+type JsonObject = Record<string, unknown>;
+
 export function generateMcpConfig(client: Client): McpConfigResult {
   switch (client) {
     case 'claude-code':
@@ -121,6 +123,70 @@ export async function _appendInstructionBlock(filePath: string): Promise<'writte
   return 'written';
 }
 
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Merge generated MCP config into an existing JSON config file when possible.
+ * Preserves unrelated keys and only updates the codebase-context server entry.
+ */
+export async function _buildMergedMcpContent(
+  filePath: string,
+  generatedContent: string,
+  client: Extract<Client, 'cursor' | 'opencode'>
+): Promise<{ content: string; mergedFromExisting: boolean }> {
+  let existing: unknown;
+  try {
+    existing = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  } catch {
+    return { content: generatedContent, mergedFromExisting: false };
+  }
+
+  const generated = JSON.parse(generatedContent) as unknown;
+  if (!isJsonObject(existing) || !isJsonObject(generated)) {
+    return { content: generatedContent, mergedFromExisting: false };
+  }
+
+  if (client === 'cursor') {
+    const existingServers = isJsonObject(existing.mcpServers) ? existing.mcpServers : {};
+    const generatedServers = isJsonObject(generated.mcpServers) ? generated.mcpServers : {};
+    return {
+      content: JSON.stringify(
+        {
+          ...existing,
+          ...generated,
+          mcpServers: {
+            ...existingServers,
+            ...generatedServers
+          }
+        },
+        null,
+        2
+      ),
+      mergedFromExisting: true
+    };
+  }
+
+  const existingMcp = isJsonObject(existing.mcp) ? existing.mcp : {};
+  const generatedMcp = isJsonObject(generated.mcp) ? generated.mcp : {};
+  return {
+    content: JSON.stringify(
+      {
+        ...existing,
+        ...generated,
+        mcp: {
+          ...existingMcp,
+          ...generatedMcp
+        }
+      },
+      null,
+      2
+    ),
+    mergedFromExisting: true
+  };
+}
+
 export async function handleInitCli(_argv: string[]): Promise<void> {
   console.log('\nSet up codebase-context for your AI client\n');
 
@@ -138,6 +204,12 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
 
   console.log('\n--- MCP Config Preview ---');
   if (mcpResult.kind === 'file') {
+    try {
+      await fs.access(mcpResult.path);
+      console.log(`Warning: ${mcpResult.path} already exists; existing entries will be preserved.`);
+    } catch {
+      // file does not exist
+    }
     console.log(`File: ${mcpResult.path}\n${mcpResult.content}`);
   } else {
     console.log(`Command to run: ${mcpResult.args[0]} ${mcpResult.args.slice(1).join(' ')}`);
@@ -181,7 +253,14 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
       if (dir && dir !== '.') {
         await fs.mkdir(dir, { recursive: true });
       }
-      await fs.writeFile(mcpResult.path, mcpResult.content, 'utf8');
+      const mergedConfig =
+        client === 'cursor' || client === 'opencode'
+          ? await _buildMergedMcpContent(mcpResult.path, mcpResult.content, client)
+          : { content: mcpResult.content, mergedFromExisting: false };
+      await fs.writeFile(mcpResult.path, mergedConfig.content, 'utf8');
+      if (mergedConfig.mergedFromExisting) {
+        console.log(`Merged: ${mcpResult.path} (existing entries preserved)`);
+      }
       console.log(`Written: ${mcpResult.path}`);
     } else {
       const [cmd, ...rest] = mcpResult.args;

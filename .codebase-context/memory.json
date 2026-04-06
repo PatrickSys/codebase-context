@@ -329,6 +329,42 @@
     "source": "git"
   },
   {
+    "id": "3793aec00d26",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: prevent zombie MCP processes via handshake timeout + deferred init (#89)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-05T10:10:33.000Z",
+    "source": "git"
+  },
+  {
+    "id": "aeea4306f46f",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: satisfy lint in index",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-04T22:09:20.000Z",
+    "source": "git"
+  },
+  {
+    "id": "96efbfb23a7d",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: align discovery protocol metrics",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-04T19:32:17.000Z",
+    "source": "git"
+  },
+  {
+    "id": "86ed745be25a",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: format discovery benchmark sources",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-04T18:56:05.000Z",
+    "source": "git"
+  },
+  {
     "id": "e9050a3936c9",
     "type": "gotcha",
     "category": "conventions",
@@ -362,33 +398,6 @@
     "memory": "fix: guard against unhandled rejections and resource leaks in HTTP transport",
     "reason": "Auto-extracted from git commit history",
     "date": "2026-03-25T21:19:51.000Z",
-    "source": "git"
-  },
-  {
-    "id": "aeea4306f46f",
-    "type": "gotcha",
-    "category": "conventions",
-    "memory": "fix: satisfy lint in index",
-    "reason": "Auto-extracted from git commit history",
-    "date": "2026-04-04T22:09:20.000Z",
-    "source": "git"
-  },
-  {
-    "id": "96efbfb23a7d",
-    "type": "gotcha",
-    "category": "conventions",
-    "memory": "fix: align discovery protocol metrics",
-    "reason": "Auto-extracted from git commit history",
-    "date": "2026-04-04T19:32:17.000Z",
-    "source": "git"
-  },
-  {
-    "id": "86ed745be25a",
-    "type": "gotcha",
-    "category": "conventions",
-    "memory": "fix: format discovery benchmark sources",
-    "reason": "Auto-extracted from git commit history",
-    "date": "2026-04-04T18:56:05.000Z",
     "source": "git"
   }
 ]

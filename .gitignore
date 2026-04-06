@@ -25,7 +25,7 @@ nul
 grammars/*.wasm
 .agents/
 .tmp-research-repos/
-.tmp-claude-swap/
 docs/visuals.md
 .repolore/
-.opencode
+.opencode/
+.agents/

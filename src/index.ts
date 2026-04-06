@@ -1748,8 +1748,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Register cleanup before any handler that calls process.exit(), so the
-  // exit listener is always in place when stdin/onclose/signals fire.
+  // ── Cleanup guards (normal MCP lifecycle) ──────────────────────────────────
   const stopAllWatchers = () => {
     for (const project of getAllProjects()) {
       project.stopWatcher?.();
@@ -1770,27 +1769,58 @@ async function main() {
     process.exit(0);
   });
 
-  // Detect stdin pipe closure — the primary signal that the MCP client is gone.
-  // StdioServerTransport only listens for 'data'/'error', never 'end'.
   process.stdin.on('end', () => process.exit(0));
   process.stdin.on('close', () => process.exit(0));
-
-  // Handle graceful MCP protocol-level disconnect.
-  // Fires after SDK internal cleanup when transport.close() is called.
   server.onclose = () => process.exit(0);
 
-  if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
+  // ── Zombie process prevention ──────────────────────────────────────────────
+  // If no MCP client sends an `initialize` message within 30 seconds, this
+  // process was started incorrectly (e.g. `npx codebase-context <path>` from
+  // a shell or AI agent without a subcommand). Exit cleanly to avoid a zombie.
+  const HANDSHAKE_TIMEOUT_MS =
+    Number.parseInt(process.env.CODEBASE_CONTEXT_HANDSHAKE_TIMEOUT_MS ?? '', 10) || 30_000;
+  let mcpClientInitialized = false;
 
-  await refreshKnownRootsFromClient();
+  const handshakeTimer = setTimeout(() => {
+    if (!mcpClientInitialized) {
+      console.error(
+        'No MCP client connected within ' +
+          Math.round(HANDSHAKE_TIMEOUT_MS / 1000) +
+          's - exiting.\n' +
+          'If you meant to use CLI commands:\n' +
+          '  npx codebase-context memory list\n' +
+          '  npx codebase-context search --query "..."\n' +
+          '  npx codebase-context --help'
+      );
+      process.exit(1);
+    }
+  }, HANDSHAKE_TIMEOUT_MS);
+  handshakeTimer.unref();
 
-  // Keep the current single-project auto-select behavior when exactly one startup project is known.
-  const startupRoots = getKnownRootPaths();
-  if (startupRoots.length === 1) {
-    await initProject(startupRoots[0], watcherDebounceMs, { enableWatcher: true });
-    setActiveProject(startupRoots[0]);
-  }
+  // ── Deferred project initialization ────────────────────────────────────────
+  // Don't start CPU-heavy indexing or file-watchers until the MCP handshake
+  // completes. A misfire (no real client) consumes near-zero resources during
+  // the timeout window and exits cleanly.
+  server.oninitialized = async () => {
+    mcpClientInitialized = true;
+    clearTimeout(handshakeTimer);
 
-  // Subscribe to root changes
+    if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
+
+    try {
+      await refreshKnownRootsFromClient();
+
+      const startupRoots = getKnownRootPaths();
+      if (startupRoots.length === 1) {
+        await initProject(startupRoots[0], watcherDebounceMs, { enableWatcher: true });
+        setActiveProject(startupRoots[0]);
+      }
+    } catch (error) {
+      console.error('[codebase-context] Project initialization failed:', error);
+    }
+  };
+
+  // Subscribe to root changes (lightweight — no project init cost)
   server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
     try {
       await refreshKnownRootsFromClient();

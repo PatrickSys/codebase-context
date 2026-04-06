@@ -429,6 +429,9 @@ export async function evaluateDiscoveryFixture({
 
   for (const task of fixture.tasks) {
     const runner = runners[task.surface];
+    if (!runner) {
+      throw new Error(`No runner registered for surface: ${task.surface}`);
+    }
     const payload = await runner(task, rootPath);
     results.push(evaluateDiscoveryTask(task, payload));
   }

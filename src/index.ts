@@ -1928,7 +1928,8 @@ const CLI_SUBCOMMANDS = [
   'style-guide',
   'patterns',
   'refs',
-  'cycles'
+  'cycles',
+  'init'
 ];
 
 if (isDirectRun) {

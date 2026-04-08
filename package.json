@@ -133,6 +133,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@inquirer/prompts": "^3.0.0",
     "@huggingface/transformers": "^3.8.1",
     "@lancedb/lancedb": "^0.4.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -184,7 +185,8 @@
       "readdirp>picomatch": "2.3.2",
       "minimatch": "10.2.3",
       "rollup": "4.59.0",
-      "hono@<4.12.7": ">=4.12.7"
+      "hono@<4.12.7": ">=4.12.7",
+      "tmp": "0.2.4"
     }
   }
 }

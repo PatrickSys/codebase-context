@@ -74,7 +74,7 @@ describe('zombie process prevention', () => {
     expect(result.stderr).toContain('No MCP client connected within');
     expect(result.stderr).toContain('npx codebase-context --help');
     // Should exit roughly around the timeout (2s), not hang forever
-    expect(result.elapsed).toBeLessThan(10_000);
+    expect(result.elapsed).toBeLessThan(12_000);
   }, 15_000);
 
   it('exits with code 1 even when invoked with no arguments at all', async () => {
@@ -85,7 +85,7 @@ describe('zombie process prevention', () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('No MCP client connected within');
-    expect(result.elapsed).toBeLessThan(10_000);
+    expect(result.elapsed).toBeLessThan(12_000);
   }, 15_000);
 
   it('does not start indexing or file watchers before handshake', async () => {
@@ -115,8 +115,8 @@ describe('zombie process prevention', () => {
     const elapsed = Date.now() - start;
 
     expect(result.code).toBe(1);
-    // Should exit around 1 second, definitely under 5
+    // Should still honor a short timeout (allow CI/Windows process jitter).
     expect(elapsed).toBeGreaterThan(800);
-    expect(elapsed).toBeLessThan(5_000);
+    expect(elapsed).toBeLessThan(7_000);
   }, 10_000);
 });

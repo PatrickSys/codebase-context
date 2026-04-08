@@ -44,6 +44,8 @@ interface BuildEvidenceLockInput {
   searchQualityStatus?: 'ok' | 'low_confidence';
   /** Impact coverage: number of known callers covered by results */
   impactCoverage?: { covered: number; total: number };
+  /** Index age signal: fresh (<24h), aging (24h–7d), stale (>7d) */
+  indexFreshness?: 'fresh' | 'aging' | 'stale';
 }
 
 function strengthFactor(strength: EvidenceStrength): number {
@@ -201,6 +203,19 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
     nextAction = 'Search quality is low. Refine query or add concrete symbols before editing.';
     if (!gaps.includes('Search quality is low')) {
       gaps.push('Search quality is low — evidence may be unreliable');
+    }
+  }
+
+  // Freshness gate: stale index forces block; aging index warns without changing status.
+  if (input.indexFreshness === 'stale') {
+    status = 'block';
+    nextAction = 'Index is stale (>7 days). Run refresh_index before editing.';
+    if (!gaps.includes('Index is stale')) {
+      gaps.push('Index is stale (>7 days) — results may be significantly out of date');
+    }
+  } else if (input.indexFreshness === 'aging') {
+    if (!gaps.includes('Index is aging')) {
+      gaps.push('Index is aging (>24h) — results may not reflect recent changes');
     }
   }
 

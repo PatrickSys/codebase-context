@@ -116,6 +116,7 @@ export const VERSION = '1.0.0';
         name: 'search_codebase',
         arguments: {
           query: 'getToken',
+          mode: 'full',
           includeSnippets: true
         }
       }
@@ -145,6 +146,7 @@ export const VERSION = '1.0.0';
         name: 'search_codebase',
         arguments: {
           query: 'getToken',
+          mode: 'full',
           includeSnippets: true
         }
       }
@@ -203,6 +205,7 @@ export const VERSION = '1.0.0';
         name: 'search_codebase',
         arguments: {
           query: 'formatDate',
+          mode: 'full',
           includeSnippets: true
         }
       }

@@ -3,6 +3,8 @@ import type { IndexingStats } from '../types/index.js';
 
 export interface DecisionCard {
   ready: boolean;
+  /** True when the tool soft-abstains from edit guidance (e.g. stale index or low confidence + edit intent) */
+  abstain?: boolean;
   nextAction?: string;
   warnings?: string[];
   patterns?: {

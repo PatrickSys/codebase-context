@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "patterns": {
+    "dependencyInjection": {
+      "primary": { "name": "Injectable", "frequency": "100%", "trend": "Stable" }
+    },
+    "stateManagement": {
+      "primary": { "name": "RxJS", "frequency": "72%", "trend": "Rising" },
+      "alsoDetected": [{ "name": "Signals", "frequency": "28%", "trend": "Rising" }]
+    },
+    "testingFramework": {
+      "primary": { "name": "Vitest", "frequency": "45%", "trend": "Stable" },
+      "alsoDetected": [{ "name": "Jest", "frequency": "55%", "trend": "Declining" }]
+    }
+  },
+  "goldenFiles": [
+    { "file": "src/core/search.ts", "score": 0.95 },
+    { "file": "src/utils/helpers.ts", "score": 0.87 }
+  ],
+  "libraryUsage": {
+    "rxjs": { "count": 42, "examples": ["src/core/stream.ts"] },
+    "lodash": { "count": 8, "examples": ["src/utils/helpers.ts"] }
+  }
+}

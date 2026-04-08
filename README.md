@@ -67,6 +67,20 @@ Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](./templates/mcp/stdi
 
 Full per-client setup, HTTP server instructions, and local build testing: [`docs/client-setup.md`](./docs/client-setup.md).
 
+## First Use
+
+Get a conventions map of your codebase before exploring or searching:
+
+```bash
+# See your codebase conventions — architecture layers, patterns, golden files
+npx -y codebase-context map
+
+# Then search for what you need
+npx -y codebase-context search --query "auth middleware"
+```
+
+Your AI agent uses the same map via the `codebase://context` MCP resource on first call.
+
 ## Common First Commands
 
 Three commands to get what usually takes a new developer weeks to piece together:

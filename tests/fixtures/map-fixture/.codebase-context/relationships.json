@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "graph": {
+    "imports": {
+      "src/index.ts": ["src/core/search.ts", "src/utils/helpers.ts"],
+      "src/core/search.ts": ["src/utils/helpers.ts", "lib/utils.ts"],
+      "src/utils/helpers.ts": [],
+      "lib/utils.ts": [],
+      "tests/search.test.ts": ["src/core/search.ts"],
+      "tests/helpers.test.ts": ["src/utils/helpers.ts"],
+      "src/cli.ts": ["src/core/search.ts", "lib/utils.ts"],
+      "src/types.ts": []
+    },
+    "importedBy": {
+      "src/core/search.ts": ["src/index.ts", "tests/search.test.ts", "src/cli.ts"],
+      "src/utils/helpers.ts": ["src/index.ts", "src/core/search.ts", "tests/helpers.test.ts"],
+      "lib/utils.ts": ["src/core/search.ts", "src/cli.ts"]
+    },
+    "importDetails": {},
+    "exports": {}
+  },
+  "stats": {
+    "files": 8,
+    "edges": 9,
+    "avgDependencies": 1.1
+  }
+}

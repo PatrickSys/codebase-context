@@ -6,10 +6,10 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 The server supports two transport modes:
 
-| Mode | Command | MCP endpoint |
-| ---- | ------- | ------------ |
-| **stdio** (default) | `npx -y codebase-context` | Spawned process stdin/stdout |
-| **HTTP** | `npx -y codebase-context --http [--port N]` | `http://127.0.0.1:3100/mcp` |
+| Mode                | Command                                     | MCP endpoint                 |
+| ------------------- | ------------------------------------------- | ---------------------------- |
+| **stdio** (default) | `npx -y codebase-context`                   | Spawned process stdin/stdout |
+| **HTTP**            | `npx -y codebase-context --http [--port N]` | `http://127.0.0.1:3100/mcp`  |
 
 HTTP defaults to `127.0.0.1:3100`. Override with `--port`, `CODEBASE_CONTEXT_PORT`, or `server.port` in `~/.codebase-context/config.json`.
 
@@ -20,7 +20,6 @@ Per-project config overrides supported today:
 - `projects[].excludePatterns`: merged with the built-in exclusion set for that project at index time
 - `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
 - `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
-
 
 Copy-pasteable client config templates are shipped in the package:
 
@@ -35,19 +34,20 @@ Repo-scoped capabilities are available locally via the CLI (human-readable by de
 Multi-project selection is MCP-only because the CLI already targets one root per invocation.
 For a command gallery with examples, see `docs/cli.md`.
 
-| Command | Flags | Maps to |
-|---|---|---|
-| `search --query <q>` | `--intent explore\|edit\|refactor\|migrate`, `--limit <n>`, `--lang <l>`, `--framework <f>`, `--layer <l>` | `search_codebase` |
-| `metadata` | — | `get_codebase_metadata` |
-| `status` | — | `get_indexing_status` |
-| `reindex` | `--incremental`, `--reason <r>` | equivalent to `refresh_index` |
-| `style-guide` | `--query <q>`, `--category <c>` | `get_style_guide` |
-| `patterns` | `--category all\|di\|state\|testing\|libraries` | `get_team_patterns` |
-| `refs --symbol <name>` | `--limit <n>` | `get_symbol_references` |
-| `cycles` | `--scope <path>` | `detect_circular_dependencies` |
-| `memory list` | `--category`, `--type`, `--query`, `--json` | — |
-| `memory add` | `--type`, `--category`, `--memory`, `--reason` | `remember` |
-| `memory remove <id>` | — | — |
+| Command                | Flags                                                                                                      | Maps to                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `map`                  | `--json`, `--pretty`                                                                                       | `codebase://context` (conventions map) |
+| `search --query <q>`   | `--intent explore\|edit\|refactor\|migrate`, `--limit <n>`, `--lang <l>`, `--framework <f>`, `--layer <l>` | `search_codebase`                      |
+| `metadata`             | —                                                                                                          | `get_codebase_metadata`                |
+| `status`               | —                                                                                                          | `get_indexing_status`                  |
+| `reindex`              | `--incremental`, `--reason <r>`                                                                            | equivalent to `refresh_index`          |
+| `style-guide`          | `--query <q>`, `--category <c>`                                                                            | `get_style_guide`                      |
+| `patterns`             | `--category all\|di\|state\|testing\|libraries`                                                            | `get_team_patterns`                    |
+| `refs --symbol <name>` | `--limit <n>`                                                                                              | `get_symbol_references`                |
+| `cycles`               | `--scope <path>`                                                                                           | `detect_circular_dependencies`         |
+| `memory list`          | `--category`, `--type`, `--query`, `--json`                                                                | —                                      |
+| `memory add`           | `--type`, `--category`, `--memory`, `--reason`                                                             | `remember`                             |
+| `memory remove <id>`   | —                                                                                                          | —                                      |
 
 All commands accept `--json` for raw JSON output. Errors go to stderr with exit code 1.
 
@@ -73,13 +73,13 @@ Shared selector inputs:
 
 ### Core Tools
 
-| Tool                    | Input                                                             | Output                                                                                                                                                                                                                  |
-| ----------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets`, shared `project`/`project_directory` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` + decision card (`ready`, `nextAction`, `patterns`, `bestExample`, `impact`, `whatWouldHelp`) when `intent="edit"`. Hints capped at 3 per category. |
-| `get_team_patterns`     | optional `category`, shared `project`/`project_directory`     | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
-| `get_symbol_references` | `symbol`, optional `limit`, shared `project`/`project_directory` | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`. |
-| `remember`              | `type`, `category`, `memory`, `reason`, shared `project`/`project_directory` | Persists to `.codebase-context/memory.json`                                                                                                                                          |
-| `get_memory`            | optional `category`, `type`, `query`, `limit`, shared `project`/`project_directory` | Memories with confidence decay scoring                                                                                                                                               |
+| Tool                    | Input                                                                                                   | Output                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets`, shared `project`/`project_directory` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` + decision card (`ready`, `nextAction`, `patterns`, `bestExample`, `impact`, `whatWouldHelp`) when `intent="edit"`. Hints capped at 3 per category.                                                                                                                  |
+| `get_team_patterns`     | optional `category`, shared `project`/`project_directory`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                                                                                                                                                                                                                            |
+| `get_symbol_references` | `symbol`, optional `limit`, shared `project`/`project_directory`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`. |
+| `remember`              | `type`, `category`, `memory`, `reason`, shared `project`/`project_directory`                            | Persists to `.codebase-context/memory.json`                                                                                                                                                                                                                                                                                                                                                     |
+| `get_memory`            | optional `category`, `type`, `query`, `limit`, shared `project`/`project_directory`                     | Memories with confidence decay scoring                                                                                                                                                                                                                                                                                                                                                          |
 
 ### Utility Tools
 
@@ -95,12 +95,12 @@ Shared selector inputs:
 
 Behavior matrix:
 
-| Situation | Server behavior |
-| --- | --- |
-| One known project | Automatic routing |
-| Multiple known projects + active project already set | Automatic routing to the active project |
-| Multiple known projects + no active project | `selection_required` |
-| No workspace context and no bootstrap path | `selection_required` until the caller passes `project` |
+| Situation                                            | Server behavior                                        |
+| ---------------------------------------------------- | ------------------------------------------------------ |
+| One known project                                    | Automatic routing                                      |
+| Multiple known projects + active project already set | Automatic routing to the active project                |
+| Multiple known projects + no active project          | `selection_required`                                   |
+| No workspace context and no bootstrap path           | `selection_required` until the caller passes `project` |
 
 Rules:
 
@@ -271,7 +271,7 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 - **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata
 - **React**: function/class components, custom hooks, context usage, memoization, Suspense, ecosystem signal extraction
 - **Next.js**: App Router and Pages Router detection, route/API classification, route paths, `"use client"`, metadata exports
-- **Generic**: 30+ have indexing/retrieval coverage including PHP, Ruby, Swift, Scala, Shell, config/markup., 10 languages have full symbol extraction (Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust). 
+- **Generic**: 30+ have indexing/retrieval coverage including PHP, Ruby, Swift, Scala, Shell, config/markup., 10 languages have full symbol extraction (Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust).
 
 Notes:
 

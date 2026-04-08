@@ -283,5 +283,9 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
     }
   }
 
-  console.log('\nNext steps:\n  Start the HTTP server: npx codebase-context --http\n');
+  console.log(
+    '\nNext steps:\n' +
+      '  Run `npx codebase-context map` to see your codebase conventions\n' +
+      '  Start the HTTP server: npx codebase-context --http\n'
+  );
 }

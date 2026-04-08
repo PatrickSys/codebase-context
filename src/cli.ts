@@ -26,6 +26,7 @@ import { formatJson } from './cli-formatters.js';
 import { handleMemoryCli } from './cli-memory.js';
 export { handleMemoryCli } from './cli-memory.js';
 import { handleInitCli } from './cli-init.js';
+import { handleMapCli } from './cli-map.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
@@ -42,7 +43,8 @@ const _CLI_COMMANDS = [
   'patterns',
   'refs',
   'cycles',
-  'init'
+  'init',
+  'map'
 ] as const;
 
 type CliCommand = (typeof _CLI_COMMANDS)[number];
@@ -82,6 +84,7 @@ function printUsage(): void {
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
   console.log('  init                               Interactive setup wizard for AI clients');
+  console.log('  map [--json] [--pretty]              Conventions map');
   console.log('');
   console.log('Global flags:');
   console.log('  --json    Output raw JSON (default: human-readable)');
@@ -266,6 +269,10 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
 
   if (command === 'init') {
     return handleInitCli(argv.slice(1));
+  }
+
+  if (command === 'map') {
+    return handleMapCli(argv.slice(1));
   }
 
   const useJson = argv.includes('--json');

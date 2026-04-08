@@ -641,6 +641,63 @@ export interface IntelligenceGoldenFile {
   score: number;
 }
 
+// ============================================================================
+// CODEBASE MAP
+// ============================================================================
+
+/** Architecture layer derived from first path segment of graph keys */
+export interface CodebaseMapLayer {
+  name: string;
+  fileCount: number;
+}
+
+/** Active pattern from intelligence.json with adoption and trend */
+export interface CodebaseMapPattern {
+  name: string;
+  /** e.g. "97%" */
+  adoption: string;
+  trend: 'Rising' | 'Stable' | 'Declining';
+}
+
+/** Best example derived from intelligence.json goldenFiles */
+export interface CodebaseMapExample {
+  file: string;
+  score: number;
+  /** Dominant pattern this file exemplifies */
+  reason: string;
+}
+
+/** Graph statistics from relationships.json stats */
+export interface CodebaseMapGraphStats {
+  files: number;
+  edges: number;
+  avgDependencies: number;
+}
+
+/** Concrete tool invocation suggestion */
+export interface CodebaseMapNextCall {
+  tool: string;
+  args?: Record<string, string>;
+  why: string;
+}
+
+/** Compact first-call conventions map — the primary product surface */
+export interface CodebaseMapSummary {
+  project: string;
+  architecture: {
+    /** Layers derived from first path segment of graph.imports keys */
+    layers: CodebaseMapLayer[];
+    /** Files that import others but are imported by nobody, excluding tests/scripts */
+    entrypoints: string[];
+    /** Top most-imported internal files by importedBy count */
+    hubFiles: string[];
+  };
+  activePatterns: CodebaseMapPattern[];
+  bestExamples: CodebaseMapExample[];
+  graphStats: CodebaseMapGraphStats;
+  suggestedNextCalls: CodebaseMapNextCall[];
+}
+
 /** Typed shape for intelligence.json content */
 export interface IntelligenceData {
   patterns?: PatternsData;

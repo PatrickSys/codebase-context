@@ -24,12 +24,7 @@ import {
   Resource
 } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
-import type {
-  IntelligenceData,
-  PatternsData,
-  PatternEntry,
-  PatternCandidate
-} from './types/index.js';
+
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
@@ -40,10 +35,6 @@ import { appendMemoryFile } from './memory/store.js';
 import { handleCliCommand } from './cli.js';
 import { startFileWatcher } from './core/file-watcher.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
-import {
-  isComplementaryPatternCategory,
-  shouldSkipLegacyTestingFrameworkCategory
-} from './patterns/semantics.js';
 import {
   CONTEXT_RESOURCE_URI,
   buildProjectContextResourceUri,
@@ -1014,166 +1005,6 @@ function buildResources(): Resource[] {
   return resources;
 }
 
-async function _generateCodebaseContext(project: ProjectState): Promise<string> {
-  const intelligencePath = project.paths.intelligence;
-
-  const index = await ensureValidIndexOrAutoHeal(project);
-  if (index.status === 'indexing') {
-    return (
-      '# Codebase Intelligence\n\n' +
-      'Index is still being built. Retry in a moment.\n\n' +
-      `Index: ${index.status} (${index.confidence}, ${index.action})` +
-      (index.reason ? `\nReason: ${index.reason}` : '')
-    );
-  }
-
-  try {
-    const content = await fs.readFile(intelligencePath, 'utf-8');
-    const intelligence = JSON.parse(content) as IntelligenceData;
-
-    const lines: string[] = [];
-    lines.push('# Codebase Intelligence');
-    lines.push('');
-    lines.push(
-      `Index: ${index.status} (${index.confidence}, ${index.action})${
-        index.reason ? ` - ${index.reason}` : ''
-      }`
-    );
-    lines.push('');
-    lines.push('WARNING: This is what YOUR codebase actually uses, not generic recommendations.');
-    lines.push('These are FACTS from analyzing your code, not best practices from the internet.');
-    lines.push('');
-
-    // Library usage - sorted by count
-    const libraryEntries = Object.entries(intelligence.libraryUsage || {})
-      .map(([lib, data]) => ({
-        lib,
-        count: data.count
-      }))
-      .sort((a, b) => b.count - a.count);
-
-    if (libraryEntries.length > 0) {
-      lines.push('## Libraries Actually Used (Top 15)');
-      lines.push('');
-
-      for (const { lib, count } of libraryEntries.slice(0, 15)) {
-        lines.push(`- **${lib}** (${count} uses)`);
-      }
-      lines.push('');
-    }
-
-    // Show tsconfig paths if available (helps AI understand internal imports)
-    if (intelligence.tsconfigPaths && Object.keys(intelligence.tsconfigPaths).length > 0) {
-      lines.push('## Import Aliases (from tsconfig.json)');
-      lines.push('');
-      lines.push('These path aliases map to internal project code:');
-      for (const [alias, paths] of Object.entries(intelligence.tsconfigPaths)) {
-        lines.push(`- \`${alias}\` -> ${(paths as string[]).join(', ')}`);
-      }
-      lines.push('');
-    }
-
-    // Pattern consensus
-    if (intelligence.patterns && Object.keys(intelligence.patterns).length > 0) {
-      const patterns: PatternsData = intelligence.patterns;
-      lines.push("## YOUR Codebase's Actual Patterns (Not Generic Best Practices)");
-      lines.push('');
-      lines.push('These patterns were detected by analyzing your actual code.');
-      lines.push('This is what YOUR team does in practice, not what tutorials recommend.');
-      lines.push('');
-
-      for (const [category, data] of Object.entries(patterns)) {
-        if (shouldSkipLegacyTestingFrameworkCategory(category, patterns)) {
-          continue;
-        }
-
-        const patternData: PatternEntry = data;
-        const primary: PatternCandidate | undefined = patternData.primary;
-        const alternatives: PatternCandidate[] = patternData.alsoDetected ?? [];
-
-        if (!primary) continue;
-
-        if (
-          isComplementaryPatternCategory(
-            category,
-            [primary.name, ...alternatives.map((alt) => alt.name)].filter(Boolean)
-          )
-        ) {
-          const secondary = alternatives[0];
-          if (secondary) {
-            const categoryName = category
-              .replace(/([A-Z])/g, ' $1')
-              .trim()
-              .replace(/^./, (str: string) => str.toUpperCase());
-            lines.push(
-              `### ${categoryName}: **${primary.name}** (${primary.frequency}) + **${secondary.name}** (${secondary.frequency})`
-            );
-            lines.push(
-              '   -> Computed and effect are complementary Signals primitives and are commonly used together.'
-            );
-            lines.push('   -> Treat this as balanced usage, not a hard split decision.');
-            lines.push('');
-            continue;
-          }
-        }
-
-        const percentage = parseInt(primary.frequency);
-        const categoryName = category
-          .replace(/([A-Z])/g, ' $1')
-          .trim()
-          .replace(/^./, (str: string) => str.toUpperCase());
-
-        if (percentage === 100) {
-          lines.push(`### ${categoryName}: **${primary.name}** (${primary.frequency} - unanimous)`);
-          lines.push(`   -> Your codebase is 100% consistent - ALWAYS use ${primary.name}`);
-        } else if (percentage >= 80) {
-          lines.push(
-            `### ${categoryName}: **${primary.name}** (${primary.frequency} - strong consensus)`
-          );
-          lines.push(`   -> Your team strongly prefers ${primary.name}`);
-          if (alternatives.length) {
-            const alt = alternatives[0];
-            lines.push(
-              `   -> Minority pattern: ${alt.name} (${alt.frequency}) - avoid for new code`
-            );
-          }
-        } else if (percentage >= 60) {
-          lines.push(`### ${categoryName}: **${primary.name}** (${primary.frequency} - majority)`);
-          lines.push(`   -> Most code uses ${primary.name}, but not unanimous`);
-          if (alternatives.length) {
-            lines.push(
-              `   -> Also detected: ${alternatives[0].name} (${alternatives[0].frequency})`
-            );
-          }
-        } else {
-          // Split decision
-          lines.push(`### ${categoryName}: WARNING: NO TEAM CONSENSUS`);
-          lines.push(`   Your codebase is split between multiple approaches:`);
-          lines.push(`   - ${primary.name} (${primary.frequency})`);
-          if (alternatives.length) {
-            for (const alt of alternatives.slice(0, 2)) {
-              lines.push(`   - ${alt.name} (${alt.frequency})`);
-            }
-          }
-          lines.push(`   -> ASK the team which approach to use for new features`);
-        }
-        lines.push('');
-      }
-    }
-
-    lines.push('---');
-    lines.push(`Generated: ${intelligence.generatedAt || new Date().toISOString()}`);
-
-    return lines.join('\n');
-  } catch (error) {
-    return (
-      '# Codebase Intelligence\n\n' +
-      'Intelligence data not yet generated. Run indexing first.\n' +
-      `Error: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-}
-
 function buildProjectSelectionMessage(): string {
   const projects = listProjectDescriptors();
   if (projects.length === 0) {
@@ -1929,7 +1760,8 @@ const CLI_SUBCOMMANDS = [
   'patterns',
   'refs',
   'cycles',
-  'init'
+  'init',
+  'map'
 ];
 
 if (isDirectRun) {

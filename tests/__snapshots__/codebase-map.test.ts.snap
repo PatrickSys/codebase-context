@@ -1,0 +1,43 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderMapMarkdown > renders deterministic markdown from fixture — snapshot 1`] = `
+"# Codebase Map — map-fixture
+
+## Architecture Layers
+
+- **src** (5 files)
+- **tests** (2 files)
+- **lib** (1 file)
+
+## Entrypoints
+
+- \`src/cli.ts\`
+- \`src/index.ts\`
+
+## Hub Files
+
+- \`src/core/search.ts\`
+- \`src/utils/helpers.ts\`
+- \`lib/utils.ts\`
+
+## Active Patterns
+
+- **Injectable**: 100% (Stable)
+- **RxJS**: 72% (Rising)
+- **Vitest**: 45% (Stable)
+
+## Best Examples
+
+- \`src/core/search.ts\` (score: 0.95) — Injectable
+- \`src/utils/helpers.ts\` (score: 0.87) — Injectable
+
+## Graph Stats
+
+Files: 8 | Edges: 9 | Avg Dependencies: 1.1
+
+## Suggested Next Calls
+
+- \`get_team_patterns category="vitest"\` — Team is split on Vitest
+- \`search_codebase query="search"\` — Explore the top-rated example
+- \`search_codebase query="project architecture"\` — Explore the codebase"
+`;

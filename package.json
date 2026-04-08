@@ -111,7 +111,7 @@
     "email": "rossellocolompatrick@gmail.com",
     "url": "https://github.com/PatrickSys"
   },
-  "license": "MIT",
+  "license": "Elastic-2.0",
   "scripts": {
     "sync:grammars": "node scripts/sync-grammars.mjs",
     "prebuild": "pnpm run sync:grammars",

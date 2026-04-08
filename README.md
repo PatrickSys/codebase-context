@@ -46,22 +46,22 @@ claude mcp add codebase-context -- npx -y codebase-context
 
 The server runs in two modes. Use stdio unless you need multiple clients connected at once:
 
-| Mode | How it runs | When to use |
-| ---- | ----------- | ------------ |
-| **stdio** (default) | Process spawned by the client | One AI client talking to one or more repos |
-| **HTTP** | Long-lived server at `http://127.0.0.1:3100/mcp` | Multiple clients sharing one server |
+| Mode                | How it runs                                      | When to use                                |
+| ------------------- | ------------------------------------------------ | ------------------------------------------ |
+| **stdio** (default) | Process spawned by the client                    | One AI client talking to one or more repos |
+| **HTTP**            | Long-lived server at `http://127.0.0.1:3100/mcp` | Multiple clients sharing one server        |
 
 Client support at a glance:
 
-| Client | stdio | HTTP |
-| ------ | ----- | ---- |
-| Claude Code | Yes | No (stdio only) |
-| Claude Desktop | Yes | No |
-| Cursor | Yes | Yes — `.cursor/mcp.json` with `type: "http"` |
-| Windsurf | Yes | Not yet |
-| Codex | Yes | Yes — `--mcp-config` flag |
-| VS Code (Copilot) | Yes | No |
-| OpenCode | Yes | Not documented yet |
+| Client            | stdio | HTTP                                         |
+| ----------------- | ----- | -------------------------------------------- |
+| Claude Code       | Yes   | No (stdio only)                              |
+| Claude Desktop    | Yes   | No                                           |
+| Cursor            | Yes   | Yes — `.cursor/mcp.json` with `type: "http"` |
+| Windsurf          | Yes   | Not yet                                      |
+| Codex             | Yes   | Yes — `--mcp-config` flag                    |
+| VS Code (Copilot) | Yes   | No                                           |
+| OpenCode          | Yes   | Not documented yet                           |
 
 Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](./templates/mcp/stdio/.mcp.json) and [`templates/mcp/http/.mcp.json`](./templates/mcp/http/.mcp.json).
 
@@ -106,28 +106,28 @@ Memory types: `convention`, `decision`, `gotcha`, `failure`. Confidence decay: c
 
 ## Tools
 
-| Tool | What it does |
-| ---- | ------------ |
-| `search_codebase` | Hybrid search + decision card when `intent="edit"` |
-| `get_team_patterns` | Pattern frequencies, golden files, conflict detection |
-| `get_symbol_references` | Concrete references to a symbol (count + snippets) |
-| `remember` | Record a convention, decision, gotcha, or failure |
-| `get_memory` | Query team memory with confidence decay scoring |
-| `get_codebase_metadata` | Project structure, frameworks, dependencies |
-| `get_style_guide` | Style guide rules for the current project |
-| `detect_circular_dependencies` | Import cycles between files |
-| `refresh_index` | Full or incremental re-index + git memory extraction |
-| `get_indexing_status` | Progress and stats for the current index |
+| Tool                           | What it does                                          |
+| ------------------------------ | ----------------------------------------------------- |
+| `search_codebase`              | Hybrid search + decision card when `intent="edit"`    |
+| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection |
+| `get_symbol_references`        | Concrete references to a symbol (count + snippets)    |
+| `remember`                     | Record a convention, decision, gotcha, or failure     |
+| `get_memory`                   | Query team memory with confidence decay scoring       |
+| `get_codebase_metadata`        | Project structure, frameworks, dependencies           |
+| `get_style_guide`              | Style guide rules for the current project             |
+| `detect_circular_dependencies` | Import cycles between files                           |
+| `refresh_index`                | Full or incremental re-index + git memory extraction  |
+| `get_indexing_status`          | Progress and stats for the current index              |
 
 ## Multi-project
 
 One server, multiple repos. Three cases:
 
-| Case | What happens |
-| ---- | ------------ |
-| One project | Routing is automatic |
-| Multiple projects, active project already set | Routes to the active project |
-| Multiple projects, ambiguous | Returns `selection_required` — retry with `project` |
+| Case                                          | What happens                                        |
+| --------------------------------------------- | --------------------------------------------------- |
+| One project                                   | Routing is automatic                                |
+| Multiple projects, active project already set | Routes to the active project                        |
+| Multiple projects, ambiguous                  | Returns `selection_required` — retry with `project` |
 
 `project` accepts a project root path, file path, `file://` URI, or relative subproject path (e.g. `apps/dashboard`).
 
@@ -149,16 +149,16 @@ If you get `selection_required`, retry with one of the paths from `availableProj
 
 ## Configuration
 
-| Variable | Default | Description |
-| -------- | ------- | ----------- |
-| `EMBEDDING_PROVIDER` | `transformers` | `openai` (fast, cloud) or `transformers` (local, private) |
-| `OPENAI_API_KEY` | — | Required only if using `openai` provider |
-| `CODEBASE_ROOT` | — | Bootstrap root for CLI and single-project MCP clients |
-| `CODEBASE_CONTEXT_DEBUG` | — | Set to `1` for verbose logging |
-| `EMBEDDING_MODEL` | `Xenova/bge-small-en-v1.5` | Local embedding model override |
-| `CODEBASE_CONTEXT_HTTP` | — | Set to `1` to start in HTTP mode (same as `--http` flag) |
-| `CODEBASE_CONTEXT_PORT` | `3100` | HTTP server port override (same as `--port`; ignored in stdio mode) |
-| `CODEBASE_CONTEXT_CONFIG_PATH` | `~/.codebase-context/config.json` | Override the server config file path |
+| Variable                       | Default                           | Description                                                         |
+| ------------------------------ | --------------------------------- | ------------------------------------------------------------------- |
+| `EMBEDDING_PROVIDER`           | `transformers`                    | `openai` (fast, cloud) or `transformers` (local, private)           |
+| `OPENAI_API_KEY`               | —                                 | Required only if using `openai` provider                            |
+| `CODEBASE_ROOT`                | —                                 | Bootstrap root for CLI and single-project MCP clients               |
+| `CODEBASE_CONTEXT_DEBUG`       | —                                 | Set to `1` for verbose logging                                      |
+| `EMBEDDING_MODEL`              | `Xenova/bge-small-en-v1.5`        | Local embedding model override                                      |
+| `CODEBASE_CONTEXT_HTTP`        | —                                 | Set to `1` to start in HTTP mode (same as `--http` flag)            |
+| `CODEBASE_CONTEXT_PORT`        | `3100`                            | HTTP server port override (same as `--port`; ignored in stdio mode) |
+| `CODEBASE_CONTEXT_CONFIG_PATH` | `~/.codebase-context/config.json` | Override the server config file path                                |
 
 ## Performance
 
@@ -217,4 +217,4 @@ These are the behaviors that make the most difference day-to-day. Copy, trim wha
 
 ## License
 
-MIT
+Elastic-2.0

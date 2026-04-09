@@ -221,6 +221,7 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
 
   const readyToEdit =
     status === 'pass' &&
+    input.indexFreshness !== 'stale' &&
     (!epistemicStress || !epistemicStress.abstain) &&
     input.searchQualityStatus !== 'low_confidence';
 

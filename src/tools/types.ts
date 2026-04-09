@@ -82,7 +82,6 @@ export interface SearchResultItem {
   };
   hints?: {
     callers?: string[];
-    consumers?: string[];
     tests?: string[];
   };
   snippet?: string;

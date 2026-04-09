@@ -141,7 +141,7 @@
     "chokidar": "^3.6.0",
     "fuse.js": "^7.0.0",
     "glob": "^10.3.10",
-    "hono": "^4.12.5",
+    "hono": "^4.12.12",
     "ignore": "^5.3.1",
     "typescript": "^5.3.3",
     "uuid": "^9.0.1",
@@ -175,7 +175,7 @@
     ],
     "overrides": {
       "@modelcontextprotocol/sdk>ajv": "8.18.0",
-      "@modelcontextprotocol/sdk>@hono/node-server": "1.19.11",
+      "@modelcontextprotocol/sdk>@hono/node-server": "1.19.13",
       "@modelcontextprotocol/sdk>express-rate-limit": "8.2.2",
       "@huggingface/transformers>onnxruntime-node": "1.24.2",
       "path-to-regexp": "8.4.0",
@@ -185,7 +185,7 @@
       "readdirp>picomatch": "2.3.2",
       "minimatch": "10.2.3",
       "rollup": "4.59.0",
-      "hono@<4.12.7": ">=4.12.7",
+      "hono@<4.12.12": ">=4.12.12",
       "tmp": "0.2.4"
     }
   }

@@ -21,13 +21,45 @@ import {
 import { assessSearchQuality } from '../core/search-quality.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import { readMemoriesFile, withConfidence } from '../memory/store.js';
+import type { MemoryWithConfidence } from '../memory/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
+import type { FileExport } from '../utils/usage-tracker.js';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
+
+// Stop words for compact-mode memory relevance filter (mirrors QUERY_STOP_WORDS in search.ts)
+const COMPACT_STOP_WORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'to',
+  'of',
+  'for',
+  'and',
+  'or',
+  'with',
+  'in',
+  'on',
+  'by',
+  'how',
+  'are',
+  'is',
+  'after',
+  'before',
+  'from',
+  'that',
+  'this',
+  'which',
+  'what',
+  'where',
+  'when'
+]);
 
 interface RelationshipsData {
   graph?: {
     imports?: Record<string, string[]>;
     importDetails?: Record<string, Record<string, { line?: number; importedSymbols?: string[] }>>;
+    importedBy?: Record<string, string[]>;
+    exports?: Record<string, FileExport[]>;
   };
   stats?: unknown;
 }
@@ -35,7 +67,10 @@ interface RelationshipsData {
 export const definition: Tool = {
   name: 'search_codebase',
   description:
-    'Search the indexed codebase. Returns ranked results and a searchQuality confidence summary. ' +
+    'Search the indexed codebase. Default compact mode returns at most 6 ranked results with ' +
+    'light graph context (importedByCount, topExports, layer), a patternSummary, bestExample, ' +
+    'nextHops, and response-budget metadata. Use mode="full" for today\'s richer response with ' +
+    'full hints arrays and all memories — identical shape as before this parameter existed. ' +
     'IMPORTANT: Pass the intent="edit"|"refactor"|"migrate" to get preflight: edit readiness check with evidence gating.',
   inputSchema: {
     type: 'object',
@@ -43,6 +78,14 @@ export const definition: Tool = {
       query: {
         type: 'string',
         description: 'Natural language search query'
+      },
+      mode: {
+        type: 'string',
+        enum: ['compact', 'full'],
+        description:
+          'Response mode. compact (default): max 6 results with light graph context, pattern summary, ' +
+          "best example, next hops, and budget metadata. full: today's richer shape + budget metadata.",
+        default: 'compact'
       },
       intent: {
         type: 'string',
@@ -98,12 +141,13 @@ export async function handle(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolResponse> {
-  const { query, limit, filters, intent, includeSnippets } = args as {
+  const { query, limit, filters, intent, includeSnippets, mode } = args as {
     query?: unknown;
     limit?: number;
     filters?: Record<string, unknown>;
     intent?: string;
     includeSnippets?: boolean;
+    mode?: string;
   };
   const queryStr = typeof query === 'string' ? query.trim() : '';
 
@@ -377,14 +421,21 @@ export async function handle(
     return Array.from(candidates.values()).slice(0, 20);
   }
 
-  // Build reverse import map from relationships sidecar (preferred) or intelligence graph
+  // Build reverse import map: prefer pre-computed relationships.graph.importedBy,
+  // fall back to rebuilding from graph.imports for older index formats.
   const reverseImports = new Map<string, string[]>();
-  const importsGraph = getImportsGraph();
-  if (importsGraph) {
-    for (const [file, deps] of Object.entries<string[]>(importsGraph)) {
-      for (const dep of deps) {
-        if (!reverseImports.has(dep)) reverseImports.set(dep, []);
-        reverseImports.get(dep)!.push(file);
+  if (relationships?.graph?.importedBy) {
+    for (const [dep, importers] of Object.entries<string[]>(relationships.graph.importedBy)) {
+      reverseImports.set(dep, importers);
+    }
+  } else {
+    const importsGraph = getImportsGraph();
+    if (importsGraph) {
+      for (const [file, deps] of Object.entries<string[]>(importsGraph)) {
+        for (const dep of deps) {
+          if (!reverseImports.has(dep)) reverseImports.set(dep, []);
+          reverseImports.get(dep)!.push(file);
+        }
       }
     }
   }
@@ -397,7 +448,6 @@ export async function handle(
     };
     hints?: {
       callers?: string[];
-      consumers?: string[];
       tests?: string[];
     };
   }
@@ -421,8 +471,9 @@ export async function handle(
     // testedIn: heuristic — same basename with .spec/.test extension
     const testedIn: string[] = [];
     const baseName = path.basename(rPathNorm).replace(/\.[^.]+$/, '');
-    if (importsGraph) {
-      for (const file of Object.keys(importsGraph)) {
+    const localImportsGraph = getImportsGraph();
+    if (localImportsGraph) {
+      for (const file of Object.keys(localImportsGraph)) {
         const fileBase = path.basename(file);
         if (
           (fileBase.includes('.spec.') || fileBase.includes('.test.')) &&
@@ -452,7 +503,7 @@ export async function handle(
         .slice(0, 3)
         .map(([file]) => file);
       hintsObj.callers = sortedCallers;
-      hintsObj.consumers = sortedCallers; // Same data, different label
+      // NOTE: consumers removed — it was identical to callers (pure token waste)
     }
 
     // Cap tests at 3
@@ -471,12 +522,95 @@ export async function handle(
     if (Object.keys(hintsObj).length > 0) {
       output.hints = hintsObj as {
         callers?: string[];
-        consumers?: string[];
         tests?: string[];
       };
     }
 
     return output;
+  }
+
+  // Get the count of files that import a given result (compact mode graph context)
+  function getImportedByCount(result: SearchResult): number {
+    const rPathNorm = normalizeGraphPath(result.filePath);
+    const importers = new Set<string>();
+    for (const [dep, imps] of reverseImports) {
+      if (dep === rPathNorm || dep.endsWith(rPathNorm) || rPathNorm.endsWith(dep)) {
+        for (const imp of imps) importers.add(imp);
+      }
+    }
+    return importers.size;
+  }
+
+  // Get up to maxCount named exports for a file from relationships.graph.exports
+  function getTopExports(filePath: string, maxCount = 3): string[] {
+    if (!relationships?.graph?.exports) return [];
+    const normalized = normalizeGraphPath(filePath);
+    const fileExports = relationships.graph.exports[normalized];
+    if (!Array.isArray(fileExports)) return [];
+    return fileExports
+      .filter((e) => e.name !== 'default')
+      .slice(0, maxCount)
+      .map((e) => e.name);
+  }
+
+  // Filter memories to only strongly relevant ones for compact mode:
+  // ≥2 non-stop-word query term matches AND effectiveConfidence ≥ 0.5
+  function filterStrongMemories(
+    memories: MemoryWithConfidence[],
+    query: string
+  ): MemoryWithConfidence[] {
+    const terms = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 2 && !COMPACT_STOP_WORDS.has(t));
+    if (terms.length === 0) return [];
+    return memories
+      .filter((m) => {
+        const text = `${m.memory} ${m.reason}`.toLowerCase();
+        const matchCount = terms.filter((t) => text.includes(t)).length;
+        return matchCount >= 2 && m.effectiveConfidence >= 0.5;
+      })
+      .slice(0, 2);
+  }
+
+  // Build a 1-line pattern summary string from intelligence.json patterns (compact mode)
+  function buildPatternSummary(): string | undefined {
+    const patterns = intelligence?.patterns;
+    if (!patterns) return undefined;
+    const entries = Object.values(patterns)
+      .filter((data) => Boolean(data.primary))
+      .slice(0, 3)
+      .map((data) => {
+        const p = data.primary!;
+        return `${p.name} (${p.frequency}, ${p.trend ?? 'Stable'})`;
+      });
+    return entries.length > 0 ? entries.join(', ') : undefined;
+  }
+
+  // Return the top golden file path from intelligence.json (compact mode bestExample)
+  function getBestExample(): string | undefined {
+    return intelligence?.goldenFiles?.[0]?.file;
+  }
+
+  // Build up to 2 dynamic next-hop suggestions (compact mode)
+  function buildNextHops(
+    compactResults: SearchResult[],
+    sq: { status: string }
+  ): Array<{ tool: string; args?: Record<string, string>; why: string }> {
+    const hops: Array<{ tool: string; args?: Record<string, string>; why: string }> = [];
+    if (compactResults.length > 0) {
+      hops.push({
+        tool: 'read_file',
+        args: { path: compactResults[0].filePath },
+        why: 'Read the top match for implementation details'
+      });
+    }
+    if (sq.status === 'low_confidence') {
+      hops.push({ tool: 'get_team_patterns', why: 'Review pattern guidance — confidence is low' });
+    } else if (hops.length < 2) {
+      hops.push({ tool: 'get_team_patterns', why: 'Review team patterns and best examples' });
+    }
+    return hops.slice(0, 2);
   }
 
   const searchQuality = assessSearchQuality(queryStr, results);
@@ -523,6 +657,8 @@ export async function handle(
           failureWarnings: [],
           patternConflicts: [],
           searchQualityStatus: searchQuality.status
+          // Note: indexFreshness intentionally omitted — explore intent is for navigation,
+          // not mutation; freshness gating does not apply.
         })
       };
     } catch {
@@ -618,7 +754,17 @@ export async function handle(
         const graphDataSource = relationships?.graph || intelligence?.internalFileGraph;
         if (graphDataSource) {
           try {
-            const graph = InternalFileGraph.fromJSON(graphDataSource, ctx.rootPath);
+            const graph = InternalFileGraph.fromJSON(
+              graphDataSource as {
+                imports?: Record<string, string[]>;
+                exports?: Record<string, FileExport[]>;
+                importDetails?: Record<
+                  string,
+                  Record<string, { line?: number; importedSymbols?: string[] }>
+                >;
+              },
+              ctx.rootPath
+            );
             // Use directory prefixes as scope (not full file paths)
             // findCycles(scope) filters files by startsWith, so a full path would only match itself
             const scopes = new Set(
@@ -700,7 +846,8 @@ export async function handle(
           failureWarnings,
           patternConflicts,
           searchQualityStatus: searchQuality.status,
-          impactCoverage
+          impactCoverage,
+          indexFreshness: computeIndexConfidence()
         });
 
         // Build clean decision card (PREF-01 to PREF-04)
@@ -716,6 +863,14 @@ export async function handle(
         // Add warnings from failure memories (capped at 3)
         if (failureWarnings.length > 0) {
           decisionCard.warnings = failureWarnings.slice(0, 3).map((w) => w.memory);
+        }
+
+        // Surface freshness gap warnings (aging/stale) into the decision card
+        const freshnessGaps = (evidenceLock.gaps ?? []).filter(
+          (g) => g.includes('aging') || g.includes('stale')
+        );
+        if (freshnessGaps.length > 0) {
+          decisionCard.warnings = [...(decisionCard.warnings ?? []), ...freshnessGaps];
         }
 
         // Add patterns (do/avoid, capped at 3 each, with adoption %)
@@ -760,6 +915,12 @@ export async function handle(
         // Add whatWouldHelp from evidenceLock
         if (evidenceLock.whatWouldHelp && evidenceLock.whatWouldHelp.length > 0) {
           decisionCard.whatWouldHelp = evidenceLock.whatWouldHelp;
+        }
+
+        // Soft-abstain: block status OR low-confidence search quality signals insufficient
+        // evidence for edit guidance. Results are still returned (soft abstain per APPROACH Decision 2).
+        if (evidenceLock.status === 'block' || searchQuality.status === 'low_confidence') {
+          decisionCard.abstain = true;
         }
 
         preflight = decisionCard;
@@ -834,6 +995,69 @@ export async function handle(
     return `// ${scopeHeader}\n${cleanedSnippet}`;
   }
 
+  const searchQualityBlock = {
+    status: searchQuality.status,
+    confidence: searchQuality.confidence,
+    ...(searchQuality.status === 'low_confidence' &&
+      searchQuality.nextSteps?.[0] && {
+        hint: searchQuality.nextSteps[0]
+      })
+  };
+
+  // Compact mode (default): bounded response with light graph context
+  const isCompact = mode !== 'full';
+
+  if (isCompact) {
+    const compactResults = results.slice(0, 6);
+    const strongMemories = filterStrongMemories(relatedMemories, queryStr);
+    const patternSummary = buildPatternSummary();
+    const bestExample = getBestExample();
+    const nextHops = buildNextHops(compactResults, searchQuality);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              status: 'success',
+              searchQuality: searchQualityBlock,
+              budget: { mode: 'compact', resultCount: compactResults.length },
+              ...(preflightPayload && { preflight: preflightPayload }),
+              ...(patternSummary && { patternSummary }),
+              ...(bestExample && { bestExample }),
+              ...(nextHops.length > 0 && { nextHops }),
+              results: compactResults.map((r) => {
+                const importedByCount = getImportedByCount(r);
+                const topExports = getTopExports(r.filePath);
+                return {
+                  file: `${r.filePath}:${r.startLine}-${r.endLine}`,
+                  summary: r.summary,
+                  score: Math.round(r.score * 100) / 100,
+                  ...(r.relevanceReason && { relevanceReason: r.relevanceReason }),
+                  ...(r.componentType &&
+                    r.layer &&
+                    r.layer !== 'unknown' && { type: `${r.componentType}:${r.layer}` }),
+                  ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
+                  ...(r.patternWarning && { patternWarning: r.patternWarning }),
+                  importedByCount,
+                  ...(topExports.length > 0 && { topExports }),
+                  ...(r.layer && r.layer !== 'unknown' && { layer: r.layer })
+                };
+              }),
+              ...(strongMemories.length > 0 && {
+                relatedMemories: strongMemories.map((m) => `${m.memory} (${m.effectiveConfidence})`)
+              })
+            },
+            null,
+            2
+          )
+        }
+      ]
+    };
+  }
+
+  // Full mode: today's response shape + budget + relevanceReason; consumers removed
   return {
     content: [
       {
@@ -841,14 +1065,8 @@ export async function handle(
         text: JSON.stringify(
           {
             status: 'success',
-            searchQuality: {
-              status: searchQuality.status,
-              confidence: searchQuality.confidence,
-              ...(searchQuality.status === 'low_confidence' &&
-                searchQuality.nextSteps?.[0] && {
-                  hint: searchQuality.nextSteps[0]
-                })
-            },
+            searchQuality: searchQualityBlock,
+            budget: { mode: 'full', resultCount: results.length },
             ...(preflightPayload && { preflight: preflightPayload }),
             results: results.map((r) => {
               const relationshipsAndHints = buildRelationshipHints(r);
@@ -860,6 +1078,7 @@ export async function handle(
                 file: `${r.filePath}:${r.startLine}-${r.endLine}`,
                 summary: r.summary,
                 score: Math.round(r.score * 100) / 100,
+                ...(r.relevanceReason && { relevanceReason: r.relevanceReason }),
                 ...(r.componentType &&
                   r.layer &&
                   r.layer !== 'unknown' && { type: `${r.componentType}:${r.layer}` }),

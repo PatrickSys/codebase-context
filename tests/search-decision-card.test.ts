@@ -300,6 +300,7 @@ export class ProfileService {
         name: 'search_codebase',
         arguments: {
           query: 'getToken',
+          mode: 'full',
           includeSnippets: true
         }
       }
@@ -359,6 +360,7 @@ export class ProfileService {
         name: 'search_codebase',
         arguments: {
           query: 'getToken',
+          mode: 'full',
           includeSnippets: true
         }
       }

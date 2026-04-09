@@ -579,7 +579,7 @@ describe('multi-project routing', () => {
     })) as ResourceReadResponse;
 
     expect(response.contents[0]?.uri).toBe(CONTEXT_RESOURCE_URI);
-    expect(response.contents[0]?.text).toContain('# Codebase Intelligence');
+    expect(response.contents[0]?.text).toContain('# Codebase Map');
     expect(response.contents[0]?.text).not.toContain('Project selection required');
   });
 
@@ -660,7 +660,7 @@ describe('multi-project routing', () => {
     })) as ResourceReadResponse;
 
     expect(response.contents[0]?.uri).toBe(buildProjectContextResourceUri(payload.project.project));
-    expect(response.contents[0]?.text).toContain('# Codebase Intelligence');
+    expect(response.contents[0]?.text).toContain('# Codebase Map');
   });
 
   it('returns unknown_project error when project path does not exist', async () => {

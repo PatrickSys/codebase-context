@@ -63,7 +63,9 @@ async function runSearchCodebase(
   const bestExample =
     preflight && typeof preflight === 'object' && preflight !== null && 'bestExample' in preflight
       ? ((preflight.bestExample as string | undefined) ?? null)
-      : null;
+      : typeof parsed.bestExample === 'string'
+        ? parsed.bestExample
+        : null;
 
   return {
     payload,
@@ -145,7 +147,12 @@ export function matchSignals(
   payload: string,
   expectedSignals: string[],
   forbiddenSignals: string[] | undefined
-): { matchedSignals: string[]; missingSignals: string[]; forbiddenHits: string[]; usefulnessScore: number } {
+): {
+  matchedSignals: string[];
+  missingSignals: string[];
+  forbiddenHits: string[];
+  usefulnessScore: number;
+} {
   const normalizedPayload = normalizeText(payload);
   const matchedSignals = expectedSignals.filter((signal) =>
     normalizedPayload.includes(normalizeText(signal))

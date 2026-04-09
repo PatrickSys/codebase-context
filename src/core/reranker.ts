@@ -9,6 +9,7 @@
  */
 
 import type { SearchResult } from '../types/index.js';
+import os from 'os';
 
 const DEFAULT_RERANKER_MODEL = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
@@ -47,7 +48,12 @@ async function ensureModelLoaded(): Promise<void> {
 
     cachedTokenizer = await AutoTokenizer.from_pretrained(DEFAULT_RERANKER_MODEL);
     cachedModel = await AutoModelForSequenceClassification.from_pretrained(DEFAULT_RERANKER_MODEL, {
-      dtype: 'q8'
+      dtype: 'q8',
+      // Limit ONNX Runtime to half cores by default — prevents system freeze during indexing.
+      session_options: {
+        intraOpNumThreads: Math.max(1, Math.floor(os.cpus().length / 2)),
+        interOpNumThreads: 1
+      }
     });
 
     console.error('[reranker] Cross-encoder loaded successfully');

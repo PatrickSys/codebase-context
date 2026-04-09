@@ -587,9 +587,45 @@ export async function handle(
     return entries.length > 0 ? entries.join(', ') : undefined;
   }
 
-  // Return the top golden file path from intelligence.json (compact mode bestExample)
-  function getBestExample(): string | undefined {
-    return intelligence?.goldenFiles?.[0]?.file;
+  // Return the golden file path most relevant to the given search results, using directory
+  // overlap as a query-aware proximity signal. Falls back to goldenFiles[0] when no overlap.
+  // Track B: use cross-encoder reranker to score golden files against the query for stronger
+  // relevance — deferred to avoid reranker latency on compact mode in v2.
+  function getBestExample(topResults: Array<{ filePath: string }>): string | undefined {
+    const goldenFiles = intelligence?.goldenFiles;
+    if (!goldenFiles?.length) return undefined;
+    if (!topResults?.length) return goldenFiles[0].file;
+
+    // Extract directory paths from top-5 results
+    const resultDirs = topResults.slice(0, 5).map((r) => path.dirname(r.filePath));
+
+    let bestFile = goldenFiles[0];
+    let bestScore = -1;
+
+    for (const gf of goldenFiles) {
+      const gfParts = path.dirname(gf.file).split(path.sep).filter(Boolean);
+      let maxShared = 0;
+
+      for (const resDir of resultDirs) {
+        const resParts = resDir.split(path.sep).filter(Boolean);
+        let shared = 0;
+        const minLen = Math.min(gfParts.length, resParts.length);
+        for (let i = 0; i < minLen; i++) {
+          if (gfParts[i] === resParts[i]) shared++;
+          else break;
+        }
+        if (shared > maxShared) maxShared = shared;
+      }
+
+      // Use golden file score as tie-breaker
+      const score = maxShared * 1000 + (gf.score ?? 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestFile = gf;
+      }
+    }
+
+    return bestFile.file;
   }
 
   // Build up to 2 dynamic next-hop suggestions (compact mode)
@@ -887,9 +923,10 @@ export async function handle(
           };
         }
 
-        // Add bestExample (top 1 golden file)
-        if (goldenFiles.length > 0) {
-          decisionCard.bestExample = `${goldenFiles[0].file}`;
+        // Add bestExample — query-aware via directory overlap against top search results
+        const preflightBestExample = getBestExample(results.slice(0, 5));
+        if (preflightBestExample) {
+          decisionCard.bestExample = preflightBestExample;
         }
 
         // Add impact (coverage + top 3 files)
@@ -1011,7 +1048,7 @@ export async function handle(
     const compactResults = results.slice(0, 6);
     const strongMemories = filterStrongMemories(relatedMemories, queryStr);
     const patternSummary = buildPatternSummary();
-    const bestExample = getBestExample();
+    const bestExample = getBestExample(compactResults);
     const nextHops = buildNextHops(compactResults, searchQuality);
 
     return {

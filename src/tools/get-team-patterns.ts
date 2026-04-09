@@ -6,7 +6,24 @@ import {
   isComplementaryPatternConflict,
   shouldSkipLegacyTestingFrameworkCategory
 } from '../patterns/semantics.js';
-import type { IntelligenceData, PatternsData } from '../types/index.js';
+import type { IntelligenceData, IntelligenceGoldenFile, PatternsData } from '../types/index.js';
+
+/**
+ * Filter golden files by category prefix keys in their patterns map.
+ * Returns files whose patterns include at least one key matching a given prefix.
+ * Returns empty array when no golden files match — never fabricates.
+ */
+function filterGoldenFilesByCategory(
+  goldenFiles: IntelligenceGoldenFile[] | undefined,
+  categoryPrefixes: string[]
+): IntelligenceGoldenFile[] {
+  if (!goldenFiles?.length) return [];
+  return goldenFiles.filter(
+    (gf) =>
+      gf.patterns &&
+      categoryPrefixes.some((prefix) => Object.keys(gf.patterns!).some((k) => k.startsWith(prefix)))
+  );
+}
 
 export const definition: Tool = {
   name: 'get_team_patterns',
@@ -59,11 +76,13 @@ export async function handle(
       if (intel.patterns?.dependencyInjection)
         (result.patterns as Record<string, unknown>).dependencyInjection =
           intel.patterns.dependencyInjection;
+      result.goldenFiles = filterGoldenFilesByCategory(intel.goldenFiles, ['dependencyInjection:']);
     } else if (category === 'state') {
       result.patterns = {};
       if (intel.patterns?.stateManagement)
         (result.patterns as Record<string, unknown>).stateManagement =
           intel.patterns.stateManagement;
+      result.goldenFiles = filterGoldenFilesByCategory(intel.goldenFiles, ['stateManagement:']);
     } else if (category === 'testing') {
       result.patterns = {};
       for (const k of [
@@ -75,6 +94,11 @@ export async function handle(
         if (intel.patterns?.[k])
           (result.patterns as Record<string, unknown>)[k] = intel.patterns[k];
       }
+      result.goldenFiles = filterGoldenFilesByCategory(intel.goldenFiles, [
+        'unitTestFramework:',
+        'e2eFramework:',
+        'testingFramework:'
+      ]);
     } else if (category === 'libraries') {
       result.topUsed = intel.importGraph?.topUsed || [];
       if (intel.tsconfigPaths) {

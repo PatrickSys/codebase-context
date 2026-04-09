@@ -694,7 +694,7 @@ export class CodebaseIndexer {
               : [];
             const uniqueCategories = new Set(detectedPatterns.map((p) => p.category));
             const patternScore = uniqueCategories.size;
-            if (patternScore >= 3) {
+            if (patternScore >= 2) {
               const patternFlags: Record<string, boolean> = {};
               for (const p of detectedPatterns) {
                 patternFlags[`${p.category}:${p.name}`] = true;
@@ -796,6 +796,10 @@ export class CodebaseIndexer {
               embedding: embeddings[j]
             });
           }
+
+          // Yield to event loop between outer embedding batches — keeps system responsive
+          // and allows SIGINT/SIGTERM signal handlers to fire during long indexing runs.
+          await new Promise<void>((resolve) => setImmediate(resolve));
 
           // Update progress
           const embeddingProgress = 50 + Math.round((i / chunksToEmbed.length) * 25);

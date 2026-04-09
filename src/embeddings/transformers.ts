@@ -1,5 +1,20 @@
 import { EmbeddingProvider, DEFAULT_MODEL } from './types.js';
 import type { FeatureExtractionPipelineType } from '@huggingface/transformers';
+import os from 'os';
+
+/**
+ * Returns the number of ONNX intra-op threads to use.
+ * Defaults to half of available CPU cores to prevent system freeze during indexing.
+ * Override via CODEBASE_CONTEXT_ONNX_THREADS env var.
+ */
+function getOnnxThreadCount(): number {
+  const envVal = process.env.CODEBASE_CONTEXT_ONNX_THREADS;
+  if (envVal) {
+    const parsed = parseInt(envVal, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return Math.max(1, Math.floor(os.cpus().length / 2));
+}
 
 interface ModelConfig {
   dimensions: number;
@@ -62,7 +77,14 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
         opts: Record<string, unknown>
       ) => Promise<FeatureExtractionPipelineType>;
       this.pipeline = await (pipeline as PipelineFn)('feature-extraction', this.modelName, {
-        dtype: 'q8'
+        dtype: 'q8',
+        // Limit ONNX Runtime to half cores by default — prevents system freeze during indexing.
+        // interOpNumThreads: 1 — no benefit for single-model pipelines.
+        // Override via CODEBASE_CONTEXT_ONNX_THREADS env var.
+        session_options: {
+          intraOpNumThreads: getOnnxThreadCount(),
+          interOpNumThreads: 1
+        }
       });
 
       this.ready = true;
@@ -113,6 +135,10 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
         normalize: true
       });
       embeddings.push(...(output.tolist() as number[][]));
+
+      // Yield to event loop — allows signal handlers (SIGINT/SIGTERM) to fire during
+      // tight embedding loops, keeping the system responsive during indexing.
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       if (texts.length > 100 && (i + batchSize) % 100 === 0) {
         console.error(`Embedded ${Math.min(i + batchSize, texts.length)}/${texts.length} chunks`);

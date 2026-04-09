@@ -639,6 +639,8 @@ export type PatternsData = Record<string, PatternEntry>;
 export interface IntelligenceGoldenFile {
   file: string;
   score: number;
+  /** Pattern flags persisted from runtime GoldenFile — e.g. "dependencyInjection:inject() function": true */
+  patterns?: Record<string, boolean>;
 }
 
 // ============================================================================

@@ -1,0 +1,22 @@
+{
+  "codebase-memory-mcp": {
+    "status": "setup_failed",
+    "reason": "codebase-memory-mcp install failed. Run: curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | sh"
+  },
+  "jCodeMunch": {
+    "status": "setup_failed",
+    "reason": "Failed to connect to jCodeMunch MCP server: MCP error -32000: Connection closed"
+  },
+  "GrepAI": {
+    "status": "setup_failed",
+    "reason": "GrepAI requires Go binary installation (Homebrew: brew install yoanbernabeu/tap/grepai) and Ollama running locally with nomic-embed-text model. See: https://github.com/yoanbernabeu/grepai"
+  },
+  "CodeGraphContext": {
+    "status": "setup_failed",
+    "reason": "CodeGraphContext install failed: Command failed: pip install codegraphcontext\nWARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B10AF90>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nWARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B174E10>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nWARNING: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B175090>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nWARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B175310>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nWARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B175590>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nERROR: Could not find a version that satisfies the requirement codegraphcontext (from versions: none)\r\nERROR: No matching distribution found for codegraphcontext\r\n. Requires Python 3.9+ and either Neo4j or FalkorDB Lite."
+  },
+  "raw Claude Code": {
+    "status": "setup_failed",
+    "reason": "raw Claude Code baseline requires the Claude Code CLI (claude) to be installed and authenticated. This is the manual-log-capture baseline — record as pending_evidence if claude CLI is unavailable."
+  }
+}

@@ -1,0 +1,614 @@
+{
+  "totalTasks": 24,
+  "averageUsefulness": 0.75,
+  "averagePayloadBytes": 3606.1666666666665,
+  "averageEstimatedTokens": 901.8333333333334,
+  "searchTasks": 8,
+  "findTasks": 8,
+  "mapTasks": 8,
+  "averageFirstRelevantHit": null,
+  "bestExampleUsefulnessRate": 0.125,
+  "averageElapsedMs": 333.5833333333333,
+  "averageToolCallCount": 1,
+  "results": [
+    {
+      "taskId": "as-map-01",
+      "title": "Identify the main app areas from the current map surface",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0.3333333333333333,
+      "matchedSignals": [
+        "patterns"
+      ],
+      "missingSignals": [
+        "libraries actually used",
+        "generated:"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 8548,
+      "estimatedTokens": 2137,
+      "elapsedMs": 20,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-map-02",
+      "title": "Orient to the framework and architecture",
+      "job": "map",
+      "surface": "get_codebase_metadata",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "framework",
+        "architecture",
+        "statistics"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 5751,
+      "estimatedTokens": 1438,
+      "elapsedMs": 25,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-map-03",
+      "title": "Find store-heavy subsystems in the repo overview",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0.6666666666666666,
+      "matchedSignals": [
+        "state",
+        "patterns"
+      ],
+      "missingSignals": [
+        "libraries actually used"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 8548,
+      "estimatedTokens": 2137,
+      "elapsedMs": 4,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-map-04",
+      "title": "See whether internal path aliases exist",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0,
+      "matchedSignals": [],
+      "missingSignals": [
+        "import aliases",
+        "tsconfig"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 8548,
+      "estimatedTokens": 2137,
+      "elapsedMs": 3,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-find-01",
+      "title": "Find the dominant dependency injection pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "dependencyInjection"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 1802,
+      "estimatedTokens": 451,
+      "bestExampleUseful": true,
+      "elapsedMs": 2,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-find-02",
+      "title": "Find the dominant state-management pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "stateManagement"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 1727,
+      "estimatedTokens": 432,
+      "bestExampleUseful": false,
+      "elapsedMs": 2,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-find-03",
+      "title": "Find a best local example before editing auth behavior",
+      "job": "find",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "preflight",
+        "bestExample",
+        "patterns"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 3916,
+      "estimatedTokens": 979,
+      "bestExampleUseful": false,
+      "elapsedMs": 1103,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-find-04",
+      "title": "Find testing conventions and likely examples",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "unitTestFramework",
+        "test"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 525,
+      "estimatedTokens": 132,
+      "bestExampleUseful": false,
+      "elapsedMs": 2,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-search-01",
+      "title": "Target the playback API entrypoint",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 2843,
+      "estimatedTokens": 711,
+      "elapsedMs": 120,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-search-02",
+      "title": "Find persistence wiring",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 3262,
+      "estimatedTokens": 816,
+      "elapsedMs": 184,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-search-03",
+      "title": "Find where auth headers are added",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 3156,
+      "estimatedTokens": 789,
+      "elapsedMs": 340,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-search-04",
+      "title": "Find album selectors or equivalent state wiring",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 3136,
+      "estimatedTokens": 784,
+      "elapsedMs": 176,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-map-01",
+      "title": "Orient to the main subsystems",
+      "job": "map",
+      "surface": "get_codebase_metadata",
+      "usefulnessScore": 0.6666666666666666,
+      "matchedSignals": [
+        "architecture",
+        "statistics"
+      ],
+      "missingSignals": [
+        "framework"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 4268,
+      "estimatedTokens": 1067,
+      "elapsedMs": 60,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-map-02",
+      "title": "Use the existing context resource as a repo overview",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0.3333333333333333,
+      "matchedSignals": [
+        "patterns"
+      ],
+      "missingSignals": [
+        "codebase intelligence",
+        "libraries actually used"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 4711,
+      "estimatedTokens": 1178,
+      "elapsedMs": 9,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-map-03",
+      "title": "Detect whether the repo uses internal path aliases",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0,
+      "matchedSignals": [],
+      "missingSignals": [
+        "import aliases",
+        "tsconfig"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 4711,
+      "estimatedTokens": 1178,
+      "elapsedMs": 13,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-map-04",
+      "title": "Identify likely scene and element-heavy areas",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0.3333333333333333,
+      "matchedSignals": [
+        "patterns"
+      ],
+      "missingSignals": [
+        "libraries actually used",
+        "generated:"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 4711,
+      "estimatedTokens": 1178,
+      "elapsedMs": 8,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-find-01",
+      "title": "Find the dominant state-management pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "stateManagement"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 298,
+      "estimatedTokens": 75,
+      "bestExampleUseful": false,
+      "elapsedMs": 4,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-find-02",
+      "title": "Find a best example before editing scene behavior",
+      "job": "find",
+      "surface": "search_codebase",
+      "usefulnessScore": 0.6666666666666666,
+      "matchedSignals": [
+        "preflight",
+        "patterns"
+      ],
+      "missingSignals": [
+        "bestExample"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 3593,
+      "estimatedTokens": 899,
+      "bestExampleUseful": false,
+      "elapsedMs": 1126,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-find-03",
+      "title": "Find testing conventions for UI-heavy code",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "test",
+        "framework"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 1615,
+      "estimatedTokens": 404,
+      "bestExampleUseful": false,
+      "elapsedMs": 4,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-find-04",
+      "title": "Find the dominant dependency pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 0,
+      "matchedSignals": [],
+      "missingSignals": [
+        "dependencyInjection"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 64,
+      "estimatedTokens": 16,
+      "bestExampleUseful": false,
+      "elapsedMs": 3,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-search-01",
+      "title": "Find where element types or definitions live",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 2877,
+      "estimatedTokens": 720,
+      "elapsedMs": 1029,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-search-02",
+      "title": "Find scene serialization or export logic",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 2459,
+      "estimatedTokens": 615,
+      "elapsedMs": 1536,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-search-03",
+      "title": "Find app state wiring",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 2870,
+      "estimatedTokens": 718,
+      "elapsedMs": 1388,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "ex-search-04",
+      "title": "Find the main canvas or app entry surface",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 2609,
+      "estimatedTokens": 653,
+      "elapsedMs": 845,
+      "toolCallCount": 1
+    }
+  ],
+  "gate": {
+    "status": "pending_evidence",
+    "suiteStatus": "complete",
+    "baseline": {
+      "comparatorName": "raw Claude Code",
+      "status": "pending_evidence",
+      "payloadMetric": "averageEstimatedTokens",
+      "payloadMetricPassed": false,
+      "beatenUsefulnessMetrics": [],
+      "missingMetrics": [
+        "averageEstimatedTokens",
+        "averageUsefulness",
+        "averageFirstRelevantHit",
+        "bestExampleUsefulnessRate"
+      ],
+      "comparisons": [
+        {
+          "metric": "averageEstimatedTokens",
+          "comparatorValue": null,
+          "actualValue": 901.8333333333334,
+          "passes": false
+        },
+        {
+          "metric": "averageUsefulness",
+          "comparatorValue": null,
+          "actualValue": 0.75,
+          "passes": false
+        },
+        {
+          "metric": "averageFirstRelevantHit",
+          "comparatorValue": null,
+          "actualValue": null,
+          "passes": false
+        },
+        {
+          "metric": "bestExampleUsefulnessRate",
+          "comparatorValue": null,
+          "actualValue": 0.125,
+          "passes": false
+        }
+      ]
+    },
+    "comparators": [
+      {
+        "comparatorName": "GrepAI",
+        "status": "pending_evidence",
+        "tolerancePercent": 15,
+        "missingMetrics": [
+          "averageUsefulness",
+          "averageFirstRelevantHit",
+          "bestExampleUsefulnessRate"
+        ],
+        "comparisons": [
+          {
+            "metric": "averageUsefulness",
+            "comparatorValue": null,
+            "actualValue": 0.75,
+            "passes": false
+          },
+          {
+            "metric": "averageFirstRelevantHit",
+            "comparatorValue": null,
+            "actualValue": null,
+            "passes": false
+          },
+          {
+            "metric": "bestExampleUsefulnessRate",
+            "comparatorValue": null,
+            "actualValue": 0.125,
+            "passes": false
+          }
+        ]
+      },
+      {
+        "comparatorName": "jCodeMunch",
+        "status": "pending_evidence",
+        "tolerancePercent": 15,
+        "missingMetrics": [
+          "averageUsefulness",
+          "averageFirstRelevantHit",
+          "bestExampleUsefulnessRate"
+        ],
+        "comparisons": [
+          {
+            "metric": "averageUsefulness",
+            "comparatorValue": null,
+            "actualValue": 0.75,
+            "passes": false
+          },
+          {
+            "metric": "averageFirstRelevantHit",
+            "comparatorValue": null,
+            "actualValue": null,
+            "passes": false
+          },
+          {
+            "metric": "bestExampleUsefulnessRate",
+            "comparatorValue": null,
+            "actualValue": 0.125,
+            "passes": false
+          }
+        ]
+      },
+      {
+        "comparatorName": "codebase-memory-mcp",
+        "status": "pending_evidence",
+        "tolerancePercent": 15,
+        "missingMetrics": [
+          "averageUsefulness",
+          "averageFirstRelevantHit",
+          "bestExampleUsefulnessRate"
+        ],
+        "comparisons": [
+          {
+            "metric": "averageUsefulness",
+            "comparatorValue": null,
+            "actualValue": 0.75,
+            "passes": false
+          },
+          {
+            "metric": "averageFirstRelevantHit",
+            "comparatorValue": null,
+            "actualValue": null,
+            "passes": false
+          },
+          {
+            "metric": "bestExampleUsefulnessRate",
+            "comparatorValue": null,
+            "actualValue": 0.125,
+            "passes": false
+          }
+        ]
+      },
+      {
+        "comparatorName": "CodeGraphContext",
+        "status": "pending_evidence",
+        "tolerancePercent": 15,
+        "missingMetrics": [
+          "averageUsefulness",
+          "averageFirstRelevantHit",
+          "bestExampleUsefulnessRate"
+        ],
+        "comparisons": [
+          {
+            "metric": "averageUsefulness",
+            "comparatorValue": null,
+            "actualValue": 0.75,
+            "passes": false
+          },
+          {
+            "metric": "averageFirstRelevantHit",
+            "comparatorValue": null,
+            "actualValue": null,
+            "passes": false
+          },
+          {
+            "metric": "bestExampleUsefulnessRate",
+            "comparatorValue": null,
+            "actualValue": 0.125,
+            "passes": false
+          }
+        ]
+      }
+    ],
+    "missingEvidence": [
+      "raw Claude Code baseline metrics missing",
+      "GrepAI comparator metrics missing",
+      "jCodeMunch comparator metrics missing",
+      "codebase-memory-mcp comparator metrics missing",
+      "CodeGraphContext comparator metrics missing"
+    ],
+    "claimAllowed": false
+  }
+}

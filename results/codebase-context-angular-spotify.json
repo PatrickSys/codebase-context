@@ -1,0 +1,401 @@
+{
+  "totalTasks": 12,
+  "averageUsefulness": 0.8333333333333334,
+  "averagePayloadBytes": 4313.5,
+  "averageEstimatedTokens": 1078.5833333333333,
+  "searchTasks": 4,
+  "findTasks": 4,
+  "mapTasks": 4,
+  "averageFirstRelevantHit": null,
+  "bestExampleUsefulnessRate": 0.25,
+  "averageElapsedMs": 179.25,
+  "averageToolCallCount": 1,
+  "results": [
+    {
+      "taskId": "as-map-01",
+      "title": "Identify the main app areas from the current map surface",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0.3333333333333333,
+      "matchedSignals": [
+        "patterns"
+      ],
+      "missingSignals": [
+        "libraries actually used",
+        "generated:"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 8548,
+      "estimatedTokens": 2137,
+      "elapsedMs": 49,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-map-02",
+      "title": "Orient to the framework and architecture",
+      "job": "map",
+      "surface": "get_codebase_metadata",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "framework",
+        "architecture",
+        "statistics"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 5751,
+      "estimatedTokens": 1438,
+      "elapsedMs": 40,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-map-03",
+      "title": "Find store-heavy subsystems in the repo overview",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0.6666666666666666,
+      "matchedSignals": [
+        "state",
+        "patterns"
+      ],
+      "missingSignals": [
+        "libraries actually used"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 8548,
+      "estimatedTokens": 2137,
+      "elapsedMs": 4,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-map-04",
+      "title": "See whether internal path aliases exist",
+      "job": "map",
+      "surface": "codebase://context",
+      "usefulnessScore": 0,
+      "matchedSignals": [],
+      "missingSignals": [
+        "import aliases",
+        "tsconfig"
+      ],
+      "forbiddenHits": [],
+      "payloadBytes": 8548,
+      "estimatedTokens": 2137,
+      "elapsedMs": 4,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-find-01",
+      "title": "Find the dominant dependency injection pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "dependencyInjection"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 1802,
+      "estimatedTokens": 451,
+      "bestExampleUseful": true,
+      "elapsedMs": 3,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-find-02",
+      "title": "Find the dominant state-management pattern",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "stateManagement"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 1727,
+      "estimatedTokens": 432,
+      "bestExampleUseful": false,
+      "elapsedMs": 2,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-find-03",
+      "title": "Find a best local example before editing auth behavior",
+      "job": "find",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "preflight",
+        "bestExample",
+        "patterns"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 3916,
+      "estimatedTokens": 979,
+      "bestExampleUseful": false,
+      "elapsedMs": 1198,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-find-04",
+      "title": "Find testing conventions and likely examples",
+      "job": "find",
+      "surface": "get_team_patterns",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "unitTestFramework",
+        "test"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 525,
+      "estimatedTokens": 132,
+      "bestExampleUseful": false,
+      "elapsedMs": 2,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-search-01",
+      "title": "Target the playback API entrypoint",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 2843,
+      "estimatedTokens": 711,
+      "elapsedMs": 130,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-search-02",
+      "title": "Find persistence wiring",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 3262,
+      "estimatedTokens": 816,
+      "elapsedMs": 200,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-search-03",
+      "title": "Find where auth headers are added",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 3156,
+      "estimatedTokens": 789,
+      "elapsedMs": 327,
+      "toolCallCount": 1
+    },
+    {
+      "taskId": "as-search-04",
+      "title": "Find album selectors or equivalent state wiring",
+      "job": "search",
+      "surface": "search_codebase",
+      "usefulnessScore": 1,
+      "matchedSignals": [
+        "results",
+        "searchQuality"
+      ],
+      "missingSignals": [],
+      "forbiddenHits": [],
+      "payloadBytes": 3136,
+      "estimatedTokens": 784,
+      "elapsedMs": 192,
+      "toolCallCount": 1
+    }
+  ],
+  "gate": {
+    "status": "pending_evidence",
+    "suiteStatus": "incomplete",
+    "baseline": {
+      "comparatorName": "raw Claude Code",
+      "status": "pending_evidence",
+      "payloadMetric": "averageEstimatedTokens",
+      "payloadMetricPassed": false,
+      "beatenUsefulnessMetrics": [],
+      "missingMetrics": [
+        "averageEstimatedTokens",
+        "averageUsefulness",
+        "averageFirstRelevantHit",
+        "bestExampleUsefulnessRate"
+      ],
+      "comparisons": [
+        {
+          "metric": "averageEstimatedTokens",
+          "comparatorValue": null,
+          "actualValue": 1078.5833333333333,
+          "passes": false
+        },
+        {
+          "metric": "averageUsefulness",
+          "comparatorValue": null,
+          "actualValue": 0.8333333333333334,
+          "passes": false
+        },
+        {
+          "metric": "averageFirstRelevantHit",
+          "comparatorValue": null,
+          "actualValue": null,
+          "passes": false
+        },
+        {
+          "metric": "bestExampleUsefulnessRate",
+          "comparatorValue": null,
+          "actualValue": 0.25,
+          "passes": false
+        }
+      ]
+    },
+    "comparators": [
+      {
+        "comparatorName": "GrepAI",
+        "status": "pending_evidence",
+        "tolerancePercent": 15,
+        "missingMetrics": [
+          "averageUsefulness",
+          "averageFirstRelevantHit",
+          "bestExampleUsefulnessRate"
+        ],
+        "comparisons": [
+          {
+            "metric": "averageUsefulness",
+            "comparatorValue": null,
+            "actualValue": 0.8333333333333334,
+            "passes": false
+          },
+          {
+            "metric": "averageFirstRelevantHit",
+            "comparatorValue": null,
+            "actualValue": null,
+            "passes": false
+          },
+          {
+            "metric": "bestExampleUsefulnessRate",
+            "comparatorValue": null,
+            "actualValue": 0.25,
+            "passes": false
+          }
+        ]
+      },
+      {
+        "comparatorName": "jCodeMunch",
+        "status": "pending_evidence",
+        "tolerancePercent": 15,
+        "missingMetrics": [
+          "averageUsefulness",
+          "averageFirstRelevantHit",
+          "bestExampleUsefulnessRate"
+        ],
+        "comparisons": [
+          {
+            "metric": "averageUsefulness",
+            "comparatorValue": null,
+            "actualValue": 0.8333333333333334,
+            "passes": false
+          },
+          {
+            "metric": "averageFirstRelevantHit",
+            "comparatorValue": null,
+            "actualValue": null,
+            "passes": false
+          },
+          {
+            "metric": "bestExampleUsefulnessRate",
+            "comparatorValue": null,
+            "actualValue": 0.25,
+            "passes": false
+          }
+        ]
+      },
+      {
+        "comparatorName": "codebase-memory-mcp",
+        "status": "pending_evidence",
+        "tolerancePercent": 15,
+        "missingMetrics": [
+          "averageUsefulness",
+          "averageFirstRelevantHit",
+          "bestExampleUsefulnessRate"
+        ],
+        "comparisons": [
+          {
+            "metric": "averageUsefulness",
+            "comparatorValue": null,
+            "actualValue": 0.8333333333333334,
+            "passes": false
+          },
+          {
+            "metric": "averageFirstRelevantHit",
+            "comparatorValue": null,
+            "actualValue": null,
+            "passes": false
+          },
+          {
+            "metric": "bestExampleUsefulnessRate",
+            "comparatorValue": null,
+            "actualValue": 0.25,
+            "passes": false
+          }
+        ]
+      },
+      {
+        "comparatorName": "CodeGraphContext",
+        "status": "pending_evidence",
+        "tolerancePercent": 15,
+        "missingMetrics": [
+          "averageUsefulness",
+          "averageFirstRelevantHit",
+          "bestExampleUsefulnessRate"
+        ],
+        "comparisons": [
+          {
+            "metric": "averageUsefulness",
+            "comparatorValue": null,
+            "actualValue": 0.8333333333333334,
+            "passes": false
+          },
+          {
+            "metric": "averageFirstRelevantHit",
+            "comparatorValue": null,
+            "actualValue": null,
+            "passes": false
+          },
+          {
+            "metric": "bestExampleUsefulnessRate",
+            "comparatorValue": null,
+            "actualValue": 0.25,
+            "passes": false
+          }
+        ]
+      }
+    ],
+    "missingEvidence": [
+      "fixed public discovery suite is incomplete",
+      "raw Claude Code baseline metrics missing",
+      "GrepAI comparator metrics missing",
+      "jCodeMunch comparator metrics missing",
+      "codebase-memory-mcp comparator metrics missing",
+      "CodeGraphContext comparator metrics missing"
+    ],
+    "claimAllowed": false
+  }
+}

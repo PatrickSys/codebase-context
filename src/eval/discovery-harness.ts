@@ -141,25 +141,39 @@ function matchPatterns(candidates: string[], patterns: string[] | undefined): nu
   return null;
 }
 
-function evaluateDiscoveryTask(
-  task: DiscoveryTaskType,
-  result: DiscoverySurfaceResultType
-): DiscoveryTaskResultEval {
-  const normalizedPayload = normalizeText(result.payload);
-  const matchedSignals = task.expectedSignals.filter((signal) =>
+export function matchSignals(
+  payload: string,
+  expectedSignals: string[],
+  forbiddenSignals: string[] | undefined
+): { matchedSignals: string[]; missingSignals: string[]; forbiddenHits: string[]; usefulnessScore: number } {
+  const normalizedPayload = normalizeText(payload);
+  const matchedSignals = expectedSignals.filter((signal) =>
     normalizedPayload.includes(normalizeText(signal))
   );
-  const missingSignals = task.expectedSignals.filter((signal) => !matchedSignals.includes(signal));
-  const forbiddenHits = (task.forbiddenSignals ?? []).filter((signal) =>
+  const missingSignals = expectedSignals.filter((signal) => !matchedSignals.includes(signal));
+  const forbiddenHits = (forbiddenSignals ?? []).filter((signal) =>
     normalizedPayload.includes(normalizeText(signal))
   );
-  const payloadBytes = countUtf8Bytes(result.payload);
-  const estimatedTokens = estimateTokenCountFromBytes(payloadBytes);
-  const usefulnessDenominator = Math.max(task.expectedSignals.length, 1);
+  const usefulnessDenominator = Math.max(expectedSignals.length, 1);
   const usefulnessScore = Math.max(
     0,
     (matchedSignals.length - forbiddenHits.length) / usefulnessDenominator
   );
+  return { matchedSignals, missingSignals, forbiddenHits, usefulnessScore };
+}
+
+function evaluateDiscoveryTask(
+  task: DiscoveryTaskType,
+  result: DiscoverySurfaceResultType,
+  elapsedMs?: number
+): DiscoveryTaskResultEval {
+  const { matchedSignals, missingSignals, forbiddenHits, usefulnessScore } = matchSignals(
+    result.payload,
+    task.expectedSignals,
+    task.forbiddenSignals
+  );
+  const payloadBytes = countUtf8Bytes(result.payload);
+  const estimatedTokens = estimateTokenCountFromBytes(payloadBytes);
   const firstRelevantHit = matchPatterns(result.topFiles ?? [], task.expectedFilePatterns);
   const bestExampleUseful =
     task.expectedBestExamplePatterns && task.expectedBestExamplePatterns.length > 0
@@ -180,7 +194,8 @@ function evaluateDiscoveryTask(
     payloadBytes,
     estimatedTokens,
     ...(firstRelevantHit !== null ? { firstRelevantHit } : {}),
-    ...(typeof bestExampleUseful === 'boolean' ? { bestExampleUseful } : {})
+    ...(typeof bestExampleUseful === 'boolean' ? { bestExampleUseful } : {}),
+    ...(typeof elapsedMs === 'number' ? { elapsedMs, toolCallCount: 1 } : {})
   };
 }
 
@@ -206,6 +221,13 @@ function summarizeDiscoveryResults(results: DiscoveryTaskResultEval[]): Discover
     .map((result) => result.bestExampleUseful)
     .filter((value): value is boolean => typeof value === 'boolean');
 
+  const elapsedResults = results
+    .map((result) => result.elapsedMs)
+    .filter((value): value is number => typeof value === 'number');
+  const toolCallResults = results
+    .map((result) => result.toolCallCount)
+    .filter((value): value is number => typeof value === 'number');
+
   return {
     totalTasks,
     averageUsefulness,
@@ -221,6 +243,14 @@ function summarizeDiscoveryResults(results: DiscoveryTaskResultEval[]): Discover
     bestExampleUsefulnessRate:
       bestExampleResults.length > 0
         ? bestExampleResults.filter(Boolean).length / bestExampleResults.length
+        : null,
+    averageElapsedMs:
+      elapsedResults.length > 0
+        ? elapsedResults.reduce((sum, value) => sum + value, 0) / elapsedResults.length
+        : null,
+    averageToolCallCount:
+      toolCallResults.length > 0
+        ? toolCallResults.reduce((sum, value) => sum + value, 0) / toolCallResults.length
         : null,
     results
   };
@@ -432,8 +462,10 @@ export async function evaluateDiscoveryFixture({
     if (!runner) {
       throw new Error(`No runner registered for surface: ${task.surface}`);
     }
+    const startMs = Date.now();
     const payload = await runner(task, rootPath);
-    results.push(evaluateDiscoveryTask(task, payload));
+    const elapsedMs = Date.now() - startMs;
+    results.push(evaluateDiscoveryTask(task, payload, elapsedMs));
   }
 
   return summarizeDiscoveryResults(results);

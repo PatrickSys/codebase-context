@@ -110,6 +110,8 @@ export interface DiscoveryTaskResult {
   estimatedTokens: number;
   firstRelevantHit?: number | null;
   bestExampleUseful?: boolean;
+  toolCallCount?: number;
+  elapsedMs?: number;
 }
 
 export interface DiscoverySummary {
@@ -122,6 +124,8 @@ export interface DiscoverySummary {
   mapTasks: number;
   averageFirstRelevantHit: number | null;
   bestExampleUsefulnessRate: number | null;
+  averageToolCallCount?: number | null;
+  averageElapsedMs?: number | null;
   gate?: DiscoveryGateEvaluation;
   results: DiscoveryTaskResult[];
 }
@@ -203,6 +207,10 @@ export interface DiscoveryComparatorMetrics {
   averageEstimatedTokens?: number | null;
   averageFirstRelevantHit?: number | null;
   bestExampleUsefulnessRate?: number | null;
+  averageToolCallCount?: number | null;
+  averageElapsedMs?: number | null;
+  status?: 'ok' | 'setup_failed' | 'pending_evidence';
+  reason?: string;
 }
 
 export interface DiscoveryComparatorEvidence {

@@ -36,6 +36,12 @@
       "kind": "mcp-comparator",
       "execution": "manual-log-capture",
       "notes": "Treat as the heavier structural comparator, not the primary public baseline."
+    },
+    {
+      "name": "CodeGraphContext",
+      "kind": "mcp-comparator",
+      "execution": "direct-tool",
+      "notes": "Added post-freeze to ensure complete competitor picture. Not in original frozen protocol. Graph-database-backed MCP server (Python, needs FalkorDB Lite or Neo4j). May record setup_failed if DB unavailable."
     }
   ],
   "metrics": {
@@ -62,7 +68,7 @@
       ]
     },
     "comparators": {
-      "requiredNames": ["GrepAI", "jCodeMunch", "codebase-memory-mcp"],
+      "requiredNames": ["GrepAI", "jCodeMunch", "codebase-memory-mcp", "CodeGraphContext"],
       "tolerancePercent": 15,
       "usefulnessMetrics": [
         "averageUsefulness",

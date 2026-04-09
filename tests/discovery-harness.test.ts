@@ -46,7 +46,7 @@ describe('Discovery benchmark fixtures', () => {
       'codebase://context'
     ]);
     expect(discoveryProtocol.forbiddenSurfaces).toContain('get_codebase_map');
-    expect(discoveryProtocol.comparators).toHaveLength(4);
+    expect(discoveryProtocol.comparators).toHaveLength(5);
   });
 
   it('pins both public discovery fixtures to concrete repository refs', () => {
@@ -255,6 +255,11 @@ describe('Discovery gate evaluation', () => {
           averageUsefulness: 0.93,
           averageFirstRelevantHit: 1.3,
           bestExampleUsefulnessRate: 0.96
+        },
+        CodeGraphContext: {
+          averageUsefulness: 0.88,
+          averageFirstRelevantHit: 1.4,
+          bestExampleUsefulnessRate: 0.9
         }
       }
     });
@@ -295,6 +300,11 @@ describe('Discovery gate evaluation', () => {
           averageUsefulness: 0.92,
           averageFirstRelevantHit: 1.0,
           bestExampleUsefulnessRate: 0.92
+        },
+        CodeGraphContext: {
+          averageUsefulness: 0.9,
+          averageFirstRelevantHit: 1.0,
+          bestExampleUsefulnessRate: 0.9
         }
       }
     });

@@ -3,7 +3,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseArgs } from 'util';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { existsSync } from 'fs';
 import { CodebaseIndexer } from '../dist/core/indexer.js';
 import { CodebaseSearcher } from '../dist/core/search.js';
@@ -54,6 +54,7 @@ const usage = [
   `  --fixture-b=<path>  Override fixture for codebaseB`,
   `  --protocol=<path>   Override discovery benchmark protocol`,
   `  --competitor-results=<path>  JSON file with comparator metrics for discovery gate evaluation`,
+  `  --output=<path>     Write final summary JSON to this file`,
   `  --skip-reindex      Skip re-index phase`,
   `  --no-rerank         Disable ambiguity reranker`,
   `  --no-redact         Show full file paths in report`,
@@ -233,7 +234,8 @@ async function main() {
       'fixture-a': { type: 'string' },
       'fixture-b': { type: 'string' },
       protocol: { type: 'string' },
-      'competitor-results': { type: 'string' }
+      'competitor-results': { type: 'string' },
+      'output': { type: 'string' }
     },
     allowPositionals: true
   });
@@ -269,6 +271,7 @@ async function main() {
   const comparatorResultsPath = values['competitor-results']
     ? path.resolve(values['competitor-results'])
     : null;
+  const outputPath = values['output'] ? path.resolve(values['output']) : null;
 
   const sharedOptions = {
     mode,
@@ -314,7 +317,20 @@ async function main() {
       fixturePath: protocolPath,
       summary: combinedSummary
     }));
+    if (outputPath) {
+      const outputDir = path.dirname(outputPath);
+      if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+      writeFileSync(outputPath, JSON.stringify(combinedSummary, null, 2));
+      console.log(`\nResults written to: ${outputPath}`);
+    }
     process.exit(gate.status === 'failed' ? 1 : 0);
+  }
+
+  if (outputPath && mode === 'discovery' && summaries.length === 1) {
+    const outputDir = path.dirname(outputPath);
+    if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+    writeFileSync(outputPath, JSON.stringify(summaries[0], null, 2));
+    console.log(`\nResults written to: ${outputPath}`);
   }
 
   const passesAllGates = summaries.every((summary) => summary.passesGate);

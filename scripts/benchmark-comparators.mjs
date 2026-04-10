@@ -17,6 +17,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { execSync, exec } from 'child_process';
 import { parseArgs } from 'util';
 import { promisify } from 'util';
+import { withManagedStdioClientSession } from './lib/managed-mcp-session.mjs';
 
 const execAsync = promisify(exec);
 
@@ -293,125 +294,111 @@ const COMPARATOR_ADAPTERS = [
 // ---------------------------------------------------------------------------
 
 async function runComparatorViaMcp(adapter, rootPath, tasks) {
-  let Client, StdioClientTransport;
-  try {
-    ({ Client } = await import('@modelcontextprotocol/sdk/client/index.js'));
-    ({ StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js'));
-  } catch (err) {
-    throw new Error(`MCP SDK not available: ${err.message}`);
-  }
+  return withManagedStdioClientSession(
+    {
+      serverCommand: adapter.serverCommand,
+      serverArgs: adapter.serverArgs,
+      serverEnv: adapter.serverEnv,
+      connectTimeoutMs: adapter.connectTimeout ?? 15_000
+    },
+    async ({ client }) => {
+      if (adapter.initTimeout > 0) {
+        await new Promise((resolve) => setTimeout(resolve, adapter.initTimeout));
+      }
 
-  const transport = new StdioClientTransport({
-    command: adapter.serverCommand,
-    args: adapter.serverArgs,
-    env: { ...process.env, ...adapter.serverEnv }
-  });
+      let availableTools = [];
+      try {
+        const toolsResult = await client.listTools();
+        availableTools = toolsResult.tools ?? [];
+      } catch (err) {
+        throw new Error(`Failed to list tools from ${adapter.name}: ${err.message}`);
+      }
 
-  const client = new Client({ name: 'benchmark-runner', version: '1.0.0' });
+      const toolNames = availableTools.map((t) => t.name);
+      let searchToolName = adapter.searchTool;
+      if (!searchToolName) {
+        searchToolName =
+          toolNames.find((n) => n.includes('search') || n.includes('query') || n.includes('find')) ??
+          null;
+      }
 
-  try {
-    await client.connect(transport);
-  } catch (err) {
-    throw new Error(`Failed to connect to ${adapter.name} MCP server: ${err.message}`);
-  }
+      if (!searchToolName || !toolNames.includes(searchToolName)) {
+        throw new Error(
+          `No suitable search tool found for ${adapter.name}. Available: ${toolNames.join(', ')}`
+        );
+      }
 
-  // Wait for server to be ready
-  if (adapter.initTimeout > 0) {
-    await new Promise((resolve) => setTimeout(resolve, adapter.initTimeout));
-  }
+      let totalToolCalls = 0;
+      if (adapter.indexTool && toolNames.includes(adapter.indexTool)) {
+        console.log(`  [${adapter.name}] Indexing ${path.basename(rootPath)}...`);
+        const indexStartMs = Date.now();
+        try {
+          await Promise.race([
+            client.callTool({ name: adapter.indexTool, arguments: adapter.indexArgs(rootPath) }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Index timeout')), adapter.indexTimeout ?? 120000)
+            )
+          ]);
+          totalToolCalls++;
+          console.log(`  [${adapter.name}] Index complete in ${Date.now() - indexStartMs}ms`);
+        } catch (err) {
+          throw new Error(`${adapter.name} indexing failed: ${err.message}`);
+        }
+      }
 
-  // Discover tools
-  let availableTools = [];
-  try {
-    const toolsResult = await client.listTools();
-    availableTools = toolsResult.tools ?? [];
-  } catch (err) {
-    await client.close();
-    throw new Error(`Failed to list tools from ${adapter.name}: ${err.message}`);
-  }
+      const taskResults = [];
+      for (const task of tasks) {
+        const startMs = Date.now();
+        let payload = '';
+        let toolCallCount = totalToolCalls;
 
-  const toolNames = availableTools.map((t) => t.name);
+        try {
+          const result = await client.callTool({
+            name: searchToolName,
+            arguments: adapter.searchArgs(task)
+          });
+          toolCallCount++;
+          payload = adapter.extractPayload(result);
+        } catch (err) {
+          console.warn(`  [${adapter.name}] Task ${task.id} failed: ${err.message}`);
+          payload = '';
+        }
 
-  // Determine search tool (may be dynamic for CodeGraphContext)
-  let searchToolName = adapter.searchTool;
-  if (!searchToolName) {
-    // Try to find a search-like tool
-    searchToolName =
-      toolNames.find((n) => n.includes('search') || n.includes('query') || n.includes('find')) ??
-      null;
-  }
+        const elapsedMs = Date.now() - startMs;
+        const payloadBytes = countUtf8Bytes(payload);
+        const estimatedTokens = estimateTokens(payloadBytes);
+        const { usefulnessScore, matchedSignals, missingSignals } = matchSignals(
+          payload,
+          task.expectedSignals,
+          task.forbiddenSignals
+        );
 
-  if (!searchToolName || !toolNames.includes(searchToolName)) {
-    await client.close();
+        taskResults.push({
+          taskId: task.id,
+          job: task.job,
+          surface: task.surface,
+          usefulnessScore,
+          matchedSignals,
+          missingSignals,
+          payloadBytes,
+          estimatedTokens,
+          toolCallCount,
+          elapsedMs
+        });
+      }
+
+      return taskResults;
+    }
+  ).catch((err) => {
+    if (err.message.startsWith('Failed to connect to')) {
+      throw err;
+    }
     throw new Error(
-      `No suitable search tool found for ${adapter.name}. Available: ${toolNames.join(', ')}`
+      err.message.includes('timed out')
+        ? `Failed to connect to ${adapter.name} MCP server: ${err.message}`
+        : err.message
     );
-  }
-
-  // Index the repo if needed
-  let totalToolCalls = 0;
-  if (adapter.indexTool && toolNames.includes(adapter.indexTool)) {
-    console.log(`  [${adapter.name}] Indexing ${path.basename(rootPath)}...`);
-    const indexStartMs = Date.now();
-    try {
-      await Promise.race([
-        client.callTool({ name: adapter.indexTool, arguments: adapter.indexArgs(rootPath) }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Index timeout')), adapter.indexTimeout ?? 120000)
-        )
-      ]);
-      totalToolCalls++;
-      console.log(`  [${adapter.name}] Index complete in ${Date.now() - indexStartMs}ms`);
-    } catch (err) {
-      await client.close();
-      throw new Error(`${adapter.name} indexing failed: ${err.message}`);
-    }
-  }
-
-  // Run each task
-  const taskResults = [];
-  for (const task of tasks) {
-    const startMs = Date.now();
-    let payload = '';
-    let toolCallCount = totalToolCalls;
-
-    try {
-      const result = await client.callTool({
-        name: searchToolName,
-        arguments: adapter.searchArgs(task)
-      });
-      toolCallCount++;
-      payload = adapter.extractPayload(result);
-    } catch (err) {
-      console.warn(`  [${adapter.name}] Task ${task.id} failed: ${err.message}`);
-      payload = '';
-    }
-
-    const elapsedMs = Date.now() - startMs;
-    const payloadBytes = countUtf8Bytes(payload);
-    const estimatedTokens = estimateTokens(payloadBytes);
-    const { usefulnessScore, matchedSignals, missingSignals } = matchSignals(
-      payload,
-      task.expectedSignals,
-      task.forbiddenSignals
-    );
-
-    taskResults.push({
-      taskId: task.id,
-      job: task.job,
-      surface: task.surface,
-      usefulnessScore,
-      matchedSignals,
-      missingSignals,
-      payloadBytes,
-      estimatedTokens,
-      toolCallCount,
-      elapsedMs
-    });
-  }
-
-  await client.close();
-  return taskResults;
+  });
 }
 
 // ---------------------------------------------------------------------------

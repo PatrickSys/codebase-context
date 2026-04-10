@@ -32,6 +32,13 @@ function withTimeout(promise, timeoutMs) {
   });
 }
 
+function delay(timeoutMs) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    timer.unref?.();
+  });
+}
+
 async function safeClose(client, transport, connected) {
   const closeAttempts = [];
 
@@ -78,6 +85,10 @@ export async function withManagedStdioClientSession(options, callback) {
       }
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
+
+    if (transport.pid !== null) {
+      onSpawn(transport.pid);
+    }
   })();
 
   try {
@@ -88,6 +99,6 @@ export async function withManagedStdioClientSession(options, callback) {
     settling = true;
     await safeClose(client, transport, connected);
     await spawnNotification.catch(() => undefined);
-    await connectPromise.catch(() => undefined);
+    await Promise.race([connectPromise, delay(5_000)]).catch(() => undefined);
   }
 }

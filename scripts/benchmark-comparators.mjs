@@ -390,9 +390,6 @@ async function runComparatorViaMcp(adapter, rootPath, tasks) {
       return taskResults;
     }
   ).catch((err) => {
-    if (err.message.startsWith('Failed to connect to')) {
-      throw err;
-    }
     throw new Error(
       err.message.includes('timed out')
         ? `Failed to connect to ${adapter.name} MCP server: ${err.message}`

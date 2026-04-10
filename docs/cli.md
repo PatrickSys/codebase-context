@@ -2,6 +2,7 @@
 
 `codebase-context` exposes its tools as a local CLI so humans can:
 
+- Get the conventions map before exploring or editing (`map`)
 - Onboard themselves onto an unfamiliar repo
 - Debug what the MCP server is doing
 - Use outputs in CI/scripts (via `--json`)
@@ -30,6 +31,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 
 ## Commands
 
+- `map` — conventions map: architecture layers, patterns, golden files
 - `metadata` — tech stack overview
 - `patterns` — team conventions + adoption/trends
 - `search --query <q>` — ranked results; add `--intent edit` for a preflight card
@@ -39,6 +41,41 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
+
+---
+
+## `map`
+
+```bash
+npx -y codebase-context map
+```
+
+The conventions map — run this first on an unfamiliar repo. Shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call.
+
+Example output (truncated):
+
+```text
+┌─ Codebase Map ── angular-spotify ────────────────────────────────────┐
+│                                                                      │
+│ Architecture: feature-based · 3 layers                               │
+│ 47 files · 6 patterns · 3 golden files                               │
+│                                                                      │
+│ LAYERS                                                               │
+│   core/      – shared services + DI                                  │
+│   features/  – domain modules                                        │
+│   shared/    – reusable components                                   │
+│                                                                      │
+│ TOP PATTERNS                                                         │
+│      Angular standalone components   92%  ↑ Rising                  │
+│      RxJS reactive patterns          78%                             │
+│   ↓  NgModules                        8%  Declining                  │
+│                                                                      │
+│ GOLDEN FILES                                                         │
+│   src/features/player/player.component.ts                            │
+│   src/core/auth/auth.service.ts                                      │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 

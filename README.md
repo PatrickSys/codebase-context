@@ -1,6 +1,6 @@
 # codebase-context
 
-## Local-first second brain for AI agents working on your codebase
+## Stop paying for AI agents to explore your codebase. codebase-context pre-maps the architecture, conventions, and team memory so they don't have to.
 
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](./package.json)
 
@@ -20,6 +20,8 @@ Here's what codebase-context does:
 
 One tool call returns all of it. Local-first - your code never leaves your machine by default.
 
+See the [v2.0.0 benchmark](./docs/benchmark.md) for the discovery suite results and current gate truth.
+
 ### What it looks like
 
 Real CLI output against `angular-spotify`, the repo used for the launch screenshots.
@@ -36,7 +38,7 @@ This is the part most tools miss: what the team is doing now, what it is moving 
 
 When the agent searches with edit intent, it gets a compact decision card: confidence, whether it's safe to proceed, which patterns apply, the best example, and which files are likely to be affected.
 
-More CLI examples in [`docs/cli.md`](./docs/cli.md).
+More CLI examples in [`docs/cli.md`](./docs/cli.md). Full walkthrough: [`docs/demo.md`](./docs/demo.md).
 
 ## Quick Start
 
@@ -222,6 +224,8 @@ These are the behaviors that make the most difference day-to-day. Copy, trim wha
 
 ## Links
 
+- [Benchmark](./docs/benchmark.md) — v2.0.0 discovery suite results and gate truth
+- [Demo](./docs/demo.md) — real CLI walkthrough
 - [Client Setup](./docs/client-setup.md) — per-client config, HTTP setup, local build testing
 - [Capabilities Reference](./docs/capabilities.md) — tool API, retrieval pipeline, decision card schema
 - [CLI Gallery](./docs/cli.md) — formatted command output examples

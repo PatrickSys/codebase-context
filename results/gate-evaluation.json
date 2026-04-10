@@ -1,14 +1,14 @@
 {
   "totalTasks": 24,
   "averageUsefulness": 0.75,
-  "averagePayloadBytes": 3606.1666666666665,
-  "averageEstimatedTokens": 901.8333333333334,
+  "averagePayloadBytes": 3613.6666666666665,
+  "averageEstimatedTokens": 903.7083333333334,
   "searchTasks": 8,
   "findTasks": 8,
   "mapTasks": 8,
   "averageFirstRelevantHit": null,
   "bestExampleUsefulnessRate": 0.125,
-  "averageElapsedMs": 333.5833333333333,
+  "averageElapsedMs": 282.625,
   "averageToolCallCount": 1,
   "results": [
     {
@@ -45,7 +45,7 @@
       "forbiddenHits": [],
       "payloadBytes": 5751,
       "estimatedTokens": 1438,
-      "elapsedMs": 25,
+      "elapsedMs": 26,
       "toolCallCount": 1
     },
     {
@@ -64,7 +64,7 @@
       "forbiddenHits": [],
       "payloadBytes": 8548,
       "estimatedTokens": 2137,
-      "elapsedMs": 4,
+      "elapsedMs": 6,
       "toolCallCount": 1
     },
     {
@@ -81,7 +81,7 @@
       "forbiddenHits": [],
       "payloadBytes": 8548,
       "estimatedTokens": 2137,
-      "elapsedMs": 3,
+      "elapsedMs": 4,
       "toolCallCount": 1
     },
     {
@@ -98,7 +98,7 @@
       "payloadBytes": 1802,
       "estimatedTokens": 451,
       "bestExampleUseful": true,
-      "elapsedMs": 2,
+      "elapsedMs": 3,
       "toolCallCount": 1
     },
     {
@@ -131,10 +131,10 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3916,
-      "estimatedTokens": 979,
+      "payloadBytes": 4014,
+      "estimatedTokens": 1004,
       "bestExampleUseful": false,
-      "elapsedMs": 1103,
+      "elapsedMs": 1015,
       "toolCallCount": 1
     },
     {
@@ -169,7 +169,7 @@
       "forbiddenHits": [],
       "payloadBytes": 2843,
       "estimatedTokens": 711,
-      "elapsedMs": 120,
+      "elapsedMs": 99,
       "toolCallCount": 1
     },
     {
@@ -186,7 +186,7 @@
       "forbiddenHits": [],
       "payloadBytes": 3262,
       "estimatedTokens": 816,
-      "elapsedMs": 184,
+      "elapsedMs": 158,
       "toolCallCount": 1
     },
     {
@@ -203,7 +203,7 @@
       "forbiddenHits": [],
       "payloadBytes": 3156,
       "estimatedTokens": 789,
-      "elapsedMs": 340,
+      "elapsedMs": 286,
       "toolCallCount": 1
     },
     {
@@ -220,7 +220,7 @@
       "forbiddenHits": [],
       "payloadBytes": 3136,
       "estimatedTokens": 784,
-      "elapsedMs": 176,
+      "elapsedMs": 169,
       "toolCallCount": 1
     },
     {
@@ -239,7 +239,7 @@
       "forbiddenHits": [],
       "payloadBytes": 4268,
       "estimatedTokens": 1067,
-      "elapsedMs": 60,
+      "elapsedMs": 66,
       "toolCallCount": 1
     },
     {
@@ -258,7 +258,7 @@
       "forbiddenHits": [],
       "payloadBytes": 4711,
       "estimatedTokens": 1178,
-      "elapsedMs": 9,
+      "elapsedMs": 10,
       "toolCallCount": 1
     },
     {
@@ -275,7 +275,7 @@
       "forbiddenHits": [],
       "payloadBytes": 4711,
       "estimatedTokens": 1178,
-      "elapsedMs": 13,
+      "elapsedMs": 14,
       "toolCallCount": 1
     },
     {
@@ -331,7 +331,7 @@
       "payloadBytes": 3593,
       "estimatedTokens": 899,
       "bestExampleUseful": false,
-      "elapsedMs": 1126,
+      "elapsedMs": 884,
       "toolCallCount": 1
     },
     {
@@ -349,7 +349,7 @@
       "payloadBytes": 1615,
       "estimatedTokens": 404,
       "bestExampleUseful": false,
-      "elapsedMs": 4,
+      "elapsedMs": 3,
       "toolCallCount": 1
     },
     {
@@ -381,9 +381,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 2877,
-      "estimatedTokens": 720,
-      "elapsedMs": 1029,
+      "payloadBytes": 2861,
+      "estimatedTokens": 716,
+      "elapsedMs": 934,
       "toolCallCount": 1
     },
     {
@@ -400,7 +400,7 @@
       "forbiddenHits": [],
       "payloadBytes": 2459,
       "estimatedTokens": 615,
-      "elapsedMs": 1536,
+      "elapsedMs": 1254,
       "toolCallCount": 1
     },
     {
@@ -415,9 +415,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 2870,
-      "estimatedTokens": 718,
-      "elapsedMs": 1388,
+      "payloadBytes": 2968,
+      "estimatedTokens": 742,
+      "elapsedMs": 1116,
       "toolCallCount": 1
     },
     {
@@ -434,7 +434,7 @@
       "forbiddenHits": [],
       "payloadBytes": 2609,
       "estimatedTokens": 653,
-      "elapsedMs": 845,
+      "elapsedMs": 697,
       "toolCallCount": 1
     }
   ],
@@ -457,7 +457,7 @@
         {
           "metric": "averageEstimatedTokens",
           "comparatorValue": null,
-          "actualValue": 901.8333333333334,
+          "actualValue": 903.7083333333334,
           "passes": false
         },
         {

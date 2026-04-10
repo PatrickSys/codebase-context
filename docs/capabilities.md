@@ -280,6 +280,8 @@ Notes:
 
 ## Evaluation Harness
 
+Current public proof bundle: [`docs/benchmark.md`](../docs/benchmark.md) and [`docs/comparison-table.md`](../docs/comparison-table.md).
+
 Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/reporting code.
 
 - **Command:** `npm run eval -- <codebaseA> [codebaseB] --mode retrieval|discovery [--competitor-results <path>]` (builds first, then runs `scripts/run-eval.mjs`)

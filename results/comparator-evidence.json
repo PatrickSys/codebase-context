@@ -5,7 +5,7 @@
   },
   "jCodeMunch": {
     "status": "setup_failed",
-    "reason": "Failed to connect to jCodeMunch MCP server: MCP error -32000: Connection closed"
+    "reason": "MCP error -32000: Connection closed"
   },
   "GrepAI": {
     "status": "setup_failed",
@@ -13,7 +13,7 @@
   },
   "CodeGraphContext": {
     "status": "setup_failed",
-    "reason": "CodeGraphContext install failed: Command failed: pip install codegraphcontext\nWARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B10AF90>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nWARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B174E10>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nWARNING: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B175090>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nWARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B175310>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nWARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001F00B175590>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed')': /simple/codegraphcontext/\r\nERROR: Could not find a version that satisfies the requirement codegraphcontext (from versions: none)\r\nERROR: No matching distribution found for codegraphcontext\r\n. Requires Python 3.9+ and either Neo4j or FalkorDB Lite."
+    "reason": "MCP error -32000: Connection closed"
   },
   "raw Claude Code": {
     "status": "setup_failed",

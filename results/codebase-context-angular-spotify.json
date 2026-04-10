@@ -1,14 +1,14 @@
 {
   "totalTasks": 12,
   "averageUsefulness": 0.8333333333333334,
-  "averagePayloadBytes": 4313.5,
-  "averageEstimatedTokens": 1078.5833333333333,
+  "averagePayloadBytes": 4321.666666666667,
+  "averageEstimatedTokens": 1080.6666666666667,
   "searchTasks": 4,
   "findTasks": 4,
   "mapTasks": 4,
   "averageFirstRelevantHit": null,
   "bestExampleUsefulnessRate": 0.25,
-  "averageElapsedMs": 179.25,
+  "averageElapsedMs": 171.41666666666666,
   "averageToolCallCount": 1,
   "results": [
     {
@@ -27,7 +27,7 @@
       "forbiddenHits": [],
       "payloadBytes": 8548,
       "estimatedTokens": 2137,
-      "elapsedMs": 49,
+      "elapsedMs": 23,
       "toolCallCount": 1
     },
     {
@@ -45,7 +45,7 @@
       "forbiddenHits": [],
       "payloadBytes": 5751,
       "estimatedTokens": 1438,
-      "elapsedMs": 40,
+      "elapsedMs": 30,
       "toolCallCount": 1
     },
     {
@@ -64,7 +64,7 @@
       "forbiddenHits": [],
       "payloadBytes": 8548,
       "estimatedTokens": 2137,
-      "elapsedMs": 4,
+      "elapsedMs": 5,
       "toolCallCount": 1
     },
     {
@@ -81,7 +81,7 @@
       "forbiddenHits": [],
       "payloadBytes": 8548,
       "estimatedTokens": 2137,
-      "elapsedMs": 4,
+      "elapsedMs": 5,
       "toolCallCount": 1
     },
     {
@@ -98,7 +98,7 @@
       "payloadBytes": 1802,
       "estimatedTokens": 451,
       "bestExampleUseful": true,
-      "elapsedMs": 3,
+      "elapsedMs": 4,
       "toolCallCount": 1
     },
     {
@@ -115,7 +115,7 @@
       "payloadBytes": 1727,
       "estimatedTokens": 432,
       "bestExampleUseful": false,
-      "elapsedMs": 2,
+      "elapsedMs": 3,
       "toolCallCount": 1
     },
     {
@@ -131,10 +131,10 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3916,
-      "estimatedTokens": 979,
+      "payloadBytes": 4014,
+      "estimatedTokens": 1004,
       "bestExampleUseful": false,
-      "elapsedMs": 1198,
+      "elapsedMs": 1145,
       "toolCallCount": 1
     },
     {
@@ -152,7 +152,7 @@
       "payloadBytes": 525,
       "estimatedTokens": 132,
       "bestExampleUseful": false,
-      "elapsedMs": 2,
+      "elapsedMs": 1,
       "toolCallCount": 1
     },
     {
@@ -169,7 +169,7 @@
       "forbiddenHits": [],
       "payloadBytes": 2843,
       "estimatedTokens": 711,
-      "elapsedMs": 130,
+      "elapsedMs": 118,
       "toolCallCount": 1
     },
     {
@@ -186,7 +186,7 @@
       "forbiddenHits": [],
       "payloadBytes": 3262,
       "estimatedTokens": 816,
-      "elapsedMs": 200,
+      "elapsedMs": 178,
       "toolCallCount": 1
     },
     {
@@ -203,7 +203,7 @@
       "forbiddenHits": [],
       "payloadBytes": 3156,
       "estimatedTokens": 789,
-      "elapsedMs": 327,
+      "elapsedMs": 384,
       "toolCallCount": 1
     },
     {
@@ -220,7 +220,7 @@
       "forbiddenHits": [],
       "payloadBytes": 3136,
       "estimatedTokens": 784,
-      "elapsedMs": 192,
+      "elapsedMs": 161,
       "toolCallCount": 1
     }
   ],
@@ -243,7 +243,7 @@
         {
           "metric": "averageEstimatedTokens",
           "comparatorValue": null,
-          "actualValue": 1078.5833333333333,
+          "actualValue": 1080.6666666666667,
           "passes": false
         },
         {

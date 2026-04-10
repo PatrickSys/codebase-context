@@ -19,7 +19,7 @@ nul
 .claude
 .codebase-intelligence.json
 .cursor/
-.planning/*
+.planning/
 .planning-archive/*
 .codex/
 grammars/*.wasm

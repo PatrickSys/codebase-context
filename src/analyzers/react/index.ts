@@ -225,33 +225,45 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
           category: categorizeDependency(name)
         })
       );
-      metadata.framework = {
-        name: 'React',
-        version: normalizeAnalyzerVersion(packageInfo.allDependencies.react),
-        type: 'react',
-        variant: 'unknown',
-        stateManagement: detectDependencyList(packageInfo.allDependencies, [
-          ['@reduxjs/toolkit', 'redux'],
-          ['redux', 'redux'],
-          ['zustand', 'zustand'],
-          ['jotai', 'jotai'],
-          ['recoil', 'recoil'],
-          ['mobx', 'mobx']
-        ]),
-        uiLibraries: detectDependencyList(packageInfo.allDependencies, [
-          ['tailwindcss', 'Tailwind'],
-          ['@mui/material', 'MUI'],
-          ['styled-components', 'styled-components'],
-          ['@radix-ui/react-slot', 'Radix UI']
-        ]),
-        testingFrameworks: detectDependencyList(packageInfo.allDependencies, [
-          ['vitest', 'Vitest'],
-          ['jest', 'Jest'],
-          ['@testing-library/react', 'Testing Library'],
-          ['playwright', 'Playwright'],
-          ['cypress', 'Cypress']
-        ])
-      };
+
+      // Collect evidence indicators before claiming framework.
+      const indicators: string[] = [];
+      if (packageInfo.allDependencies.react) indicators.push('dep:react');
+      if (packageInfo.allDependencies['react-dom']) indicators.push('dep:react-dom');
+      if (packageInfo.allDependencies['@types/react']) indicators.push('dep:@types/react');
+      if (packageInfo.allDependencies['react-native']) indicators.push('dep:react-native');
+
+      // Only claim React when the react package is an actual dependency.
+      if (indicators.includes('dep:react')) {
+        metadata.framework = {
+          name: 'React',
+          version: normalizeAnalyzerVersion(packageInfo.allDependencies.react),
+          type: 'react',
+          variant: 'unknown',
+          stateManagement: detectDependencyList(packageInfo.allDependencies, [
+            ['@reduxjs/toolkit', 'redux'],
+            ['redux', 'redux'],
+            ['zustand', 'zustand'],
+            ['jotai', 'jotai'],
+            ['recoil', 'recoil'],
+            ['mobx', 'mobx']
+          ]),
+          uiLibraries: detectDependencyList(packageInfo.allDependencies, [
+            ['tailwindcss', 'Tailwind'],
+            ['@mui/material', 'MUI'],
+            ['styled-components', 'styled-components'],
+            ['@radix-ui/react-slot', 'Radix UI']
+          ]),
+          testingFrameworks: detectDependencyList(packageInfo.allDependencies, [
+            ['vitest', 'Vitest'],
+            ['jest', 'Jest'],
+            ['@testing-library/react', 'Testing Library'],
+            ['playwright', 'Playwright'],
+            ['cypress', 'Cypress']
+          ]),
+          indicators
+        };
+      }
     } catch (error) {
       if (!isFileNotFoundError(error)) {
         console.warn('Failed to read React project metadata:', error);

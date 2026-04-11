@@ -933,6 +933,24 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       if (allDeps['jest']) testingFrameworks.push('Jest');
 
       if (angularCoreVersion) {
+        // Collect evidence indicators for the merge threshold check.
+        const indicators: string[] = ['dep:@angular/core'];
+        if (allDeps['@angular/common']) indicators.push('dep:@angular/common');
+        if (allDeps['@angular/compiler-cli']) indicators.push('dep:@angular/compiler-cli');
+        if (allDeps['@angular/cli']) indicators.push('dep:@angular/cli');
+        try {
+          await fs.stat(path.join(rootPath, 'angular.json'));
+          indicators.push('disk:angular-json');
+        } catch {
+          /* absent */
+        }
+        try {
+          await fs.stat(path.join(rootPath, 'tsconfig.app.json'));
+          indicators.push('disk:tsconfig-app');
+        } catch {
+          /* absent */
+        }
+
         metadata.framework = {
           name: 'Angular',
           version: angularCoreVersion.replace(/[\^~]/, ''),
@@ -940,7 +958,8 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           variant: 'unknown', // Will be determined during analysis
           stateManagement,
           uiLibraries,
-          testingFrameworks
+          testingFrameworks,
+          indicators
         };
       }
 

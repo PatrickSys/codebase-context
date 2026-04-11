@@ -211,6 +211,8 @@ export interface FrameworkInfo {
   stateManagement?: string[]; // 'ngrx', 'redux', 'zustand', 'pinia', etc.
   uiLibraries?: string[];
   testingFrameworks?: string[];
+  /** Enumerated evidence signals that triggered this framework claim (e.g. 'dep:next', 'disk:app-router'). */
+  indicators?: readonly string[];
 }
 
 export interface LanguageInfo {

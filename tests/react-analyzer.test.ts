@@ -1,3 +1,5 @@
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { ReactAnalyzer } from '../src/analyzers/react/index';
@@ -76,5 +78,44 @@ export class LegacyWidget extends Component {
     expect(patterns).toContainEqual({ category: 'data', name: 'tanstack-query' });
     expect(patterns).toContainEqual({ category: 'stateManagement', name: 'redux-toolkit' });
     expect(patterns).toContainEqual({ category: 'styling', name: 'tailwind' });
+  });
+
+  it('does not claim React framework when react dependency is absent', async () => {
+    const analyzer = new ReactAnalyzer();
+    const tempRoot = path.join(process.cwd(), 'tests', '.tmp', `react-${randomUUID()}`);
+    await mkdir(tempRoot, { recursive: true });
+    try {
+      await writeFile(
+        path.join(tempRoot, 'package.json'),
+        JSON.stringify({ name: 'plain-node', dependencies: { lodash: '^4' } })
+      );
+      const metadata = await analyzer.detectCodebaseMetadata(tempRoot);
+      expect(metadata.framework).toBeUndefined();
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('populates framework.indicators when React is detected', async () => {
+    const analyzer = new ReactAnalyzer();
+    const tempRoot = path.join(process.cwd(), 'tests', '.tmp', `react-${randomUUID()}`);
+    await mkdir(tempRoot, { recursive: true });
+    try {
+      await writeFile(
+        path.join(tempRoot, 'package.json'),
+        JSON.stringify({
+          name: 'react-app',
+          dependencies: { react: '^18', 'react-dom': '^18' },
+          devDependencies: { '@types/react': '^18' }
+        })
+      );
+      const metadata = await analyzer.detectCodebaseMetadata(tempRoot);
+      expect(metadata.framework?.type).toBe('react');
+      expect(metadata.framework?.indicators).toContain('dep:react');
+      expect(metadata.framework?.indicators).toContain('dep:react-dom');
+      expect(metadata.framework?.indicators).toContain('dep:@types/react');
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 });

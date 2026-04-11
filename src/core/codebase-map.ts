@@ -17,10 +17,14 @@ import type {
   CodebaseMapPattern,
   CodebaseMapExample,
   CodebaseMapNextCall,
+  CodebaseMapKeyInterface,
+  CodebaseMapApiSurface,
+  CodebaseMapHotspot,
   IntelligenceData,
-  PatternsData
+  PatternsData,
+  CodeChunk
 } from '../types/index.js';
-import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
+import { RELATIONSHIPS_FILENAME, KEYWORD_INDEX_FILENAME } from '../constants/codebase-context.js';
 
 // ---------------------------------------------------------------------------
 // Internal types for relationships.json
@@ -29,6 +33,7 @@ import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
 interface RelationshipsGraph {
   imports?: Record<string, string[]>;
   importedBy?: Record<string, string[]>;
+  exports?: Record<string, Array<{ name: string; type: string }>>;
   stats?: {
     files?: number;
     edges?: number;
@@ -58,7 +63,7 @@ const ENTRYPOINT_EXCLUSION_RE =
 
 /**
  * Build a `CodebaseMapSummary` from the project's index artifacts.
- * Reads `intelligence.json` and `relationships.json` from project paths.
+ * Reads `intelligence.json`, `relationships.json`, and `index.json` from project paths.
  * Degrades gracefully when artifacts are missing.
  */
 export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseMapSummary> {
@@ -83,9 +88,21 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
     // Degrade gracefully
   }
 
+  // Read index.json (keyword index — contains CodeChunk[] with ChunkMetadata)
+  const idxPath = path.join(path.dirname(project.paths.intelligence), KEYWORD_INDEX_FILENAME);
+  let chunks: CodeChunk[] = [];
+  try {
+    const raw = await fs.readFile(idxPath, 'utf-8');
+    const parsed = JSON.parse(raw) as { chunks?: unknown };
+    if (parsed && Array.isArray(parsed.chunks)) chunks = parsed.chunks as CodeChunk[];
+  } catch {
+    // Degrade gracefully
+  }
+
   const graph = relationships.graph ?? {};
   const graphImports = graph.imports ?? {};
   const graphImportedBy = graph.importedBy ?? {};
+  const graphExports = graph.exports ?? {};
   // relationships.json has stats at top level OR inside graph
   const statsSource =
     relationships.stats ??
@@ -105,11 +122,12 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
       layerCounts.set(segment, (layerCounts.get(segment) ?? 0) + 1);
     }
   }
-  const layers: CodebaseMapLayer[] = sortByCountThenAlpha(
+  const rawLayers: CodebaseMapLayer[] = sortByCountThenAlpha(
     Array.from(layerCounts.entries()).map(([name, fileCount]) => ({ name, fileCount })),
     (l) => l.fileCount,
     (l) => l.name
   );
+  const layers = enrichLayers(rawLayers, graphImportedBy, graphExports);
 
   // --- Entrypoints ---
   const entrypoints: string[] = [];
@@ -134,6 +152,15 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
   )
     .slice(0, 5)
     .map((x) => x.file);
+
+  // --- Key interfaces ---
+  const keyInterfaces = deriveKeyInterfaces(chunks, graphImportedBy);
+
+  // --- API surface ---
+  const apiSurface = deriveApiSurface(entrypoints, graphExports);
+
+  // --- Dependency hotspots ---
+  const hotspots = deriveHotspots(graphImports, graphImportedBy);
 
   // --- Active patterns ---
   const patterns: PatternsData = intelligence.patterns ?? {};
@@ -183,12 +210,120 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
 
   return {
     project: projectName,
-    architecture: { layers, entrypoints, hubFiles },
+    architecture: { layers, entrypoints, hubFiles, keyInterfaces, apiSurface, hotspots },
     activePatterns,
     bestExamples,
     graphStats,
     suggestedNextCalls
   };
+}
+
+// ---------------------------------------------------------------------------
+// Structural skeleton derivations
+// ---------------------------------------------------------------------------
+
+const SYMBOL_KINDS = new Set(['interface', 'class', 'type', 'enum']);
+
+function buildSignatureHint(content: string): string {
+  const lines = content.split('\n').map((l) => l.trim()).filter(Boolean);
+  const hint = lines.slice(0, 3).join('\n');
+  const truncated = hint.length > 200 ? hint.slice(0, 197) + '...' : hint;
+  return truncated.replace(/\s*\{$/, '').trim();
+}
+
+function deriveKeyInterfaces(
+  chunks: CodeChunk[],
+  graphImportedBy: Record<string, string[]>
+): CodebaseMapKeyInterface[] {
+  const symbolChunks = chunks.filter(
+    (c) => c.metadata?.symbolAware === true && SYMBOL_KINDS.has(c.metadata.symbolKind ?? '')
+  );
+  const scored = symbolChunks.map((c) => ({
+    chunk: c,
+    importerCount: graphImportedBy[c.relativePath]?.length ?? 0
+  }));
+  scored.sort((a, b) => {
+    if (b.importerCount !== a.importerCount) return b.importerCount - a.importerCount;
+    const lenDiff = a.chunk.content.length - b.chunk.content.length;
+    if (lenDiff !== 0) return lenDiff;
+    return a.chunk.relativePath.localeCompare(b.chunk.relativePath);
+  });
+  return scored.slice(0, 10).map(({ chunk, importerCount }) => ({
+    name: chunk.metadata.symbolName ?? path.basename(chunk.relativePath),
+    kind: chunk.metadata.symbolKind ?? 'unknown',
+    file: chunk.relativePath,
+    importerCount,
+    signatureHint: buildSignatureHint(chunk.content)
+  }));
+}
+
+function deriveApiSurface(
+  entrypoints: string[],
+  graphExports: Record<string, Array<{ name: string; type: string }>>
+): CodebaseMapApiSurface[] {
+  const results: CodebaseMapApiSurface[] = [];
+  for (const ep of entrypoints) {
+    const exps = graphExports[ep];
+    if (!exps || exps.length === 0) continue;
+    const names = exps
+      .map((e) => e.name)
+      .filter((n) => n && n !== 'default')
+      .slice(0, 5);
+    if (names.length === 0) continue;
+    results.push({ file: ep, exports: names });
+  }
+  return results;
+}
+
+function deriveHotspots(
+  graphImports: Record<string, string[]>,
+  graphImportedBy: Record<string, string[]>
+): CodebaseMapHotspot[] {
+  const allFiles = new Set([...Object.keys(graphImports), ...Object.keys(graphImportedBy)]);
+  const hotspots: CodebaseMapHotspot[] = [];
+  for (const file of allFiles) {
+    const importerCount = graphImportedBy[file]?.length ?? 0;
+    const importCount = graphImports[file]?.length ?? 0;
+    const combined = importerCount + importCount;
+    if (combined === 0) continue;
+    hotspots.push({ file, importerCount, importCount, combined });
+  }
+  hotspots.sort((a, b) => {
+    if (b.combined !== a.combined) return b.combined - a.combined;
+    return a.file.localeCompare(b.file);
+  });
+  return hotspots.slice(0, 5);
+}
+
+function enrichLayers(
+  layers: CodebaseMapLayer[],
+  graphImportedBy: Record<string, string[]>,
+  graphExports: Record<string, Array<{ name: string; type: string }>>
+): CodebaseMapLayer[] {
+  return layers.map((layer) => {
+    let bestFile: string | undefined;
+    let bestCount = 0;
+    for (const [file, importers] of Object.entries(graphImportedBy)) {
+      if (file.split('/')[0] !== layer.name) continue;
+      if (importers.length > bestCount) {
+        bestCount = importers.length;
+        bestFile = file;
+      }
+    }
+    if (!bestFile) return layer;
+    const exps = graphExports[bestFile];
+    const hubExports = exps
+      ? exps
+          .map((e) => e.name)
+          .filter((n) => n && n !== 'default')
+          .slice(0, 3)
+      : [];
+    return {
+      ...layer,
+      hubFile: bestFile,
+      ...(hubExports.length > 0 ? { hubExports } : {})
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -253,16 +388,22 @@ export function renderMapMarkdown(map: CodebaseMapSummary): string {
   lines.push(`# Codebase Map — ${map.project}`);
   lines.push('');
 
-  // Architecture
+  // Architecture layers
   lines.push('## Architecture Layers');
   lines.push('');
   if (map.architecture.layers.length === 0) {
     lines.push('_No index data available._');
   } else {
     for (const layer of map.architecture.layers) {
-      lines.push(
-        `- **${layer.name}** (${layer.fileCount} file${layer.fileCount === 1 ? '' : 's'})`
-      );
+      let line = `- **${layer.name}** (${layer.fileCount} file${layer.fileCount === 1 ? '' : 's'})`;
+      if (layer.hubFile) {
+        const exStr =
+          layer.hubExports && layer.hubExports.length > 0
+            ? ` → ${layer.hubExports.join(', ')}`
+            : '';
+        line += ` — hub: \`${layer.hubFile}\`${exStr}`;
+      }
+      lines.push(line);
     }
   }
   lines.push('');
@@ -287,6 +428,51 @@ export function renderMapMarkdown(map: CodebaseMapSummary): string {
   } else {
     for (const hf of map.architecture.hubFiles) {
       lines.push(`- \`${hf}\``);
+    }
+  }
+  lines.push('');
+
+  // Key Interfaces
+  lines.push('## Key Interfaces');
+  lines.push('');
+  if (map.architecture.keyInterfaces.length === 0) {
+    lines.push('_None detected._');
+  } else {
+    for (const ki of map.architecture.keyInterfaces) {
+      lines.push(
+        `- **${ki.name}** \`${ki.kind}\` — \`${ki.file}\` (imported by ${ki.importerCount})`
+      );
+      if (ki.signatureHint) {
+        lines.push('  ```');
+        lines.push(`  ${ki.signatureHint.split('\n').join('\n  ')}`);
+        lines.push('  ```');
+      }
+    }
+  }
+  lines.push('');
+
+  // API Surface
+  lines.push('## API Surface');
+  lines.push('');
+  if (map.architecture.apiSurface.length === 0) {
+    lines.push('_None detected._');
+  } else {
+    for (const s of map.architecture.apiSurface) {
+      lines.push(`- \`${s.file}\` — exports: ${s.exports.join(', ')}`);
+    }
+  }
+  lines.push('');
+
+  // Dependency Hotspots
+  lines.push('## Dependency Hotspots');
+  lines.push('');
+  if (map.architecture.hotspots.length === 0) {
+    lines.push('_None detected._');
+  } else {
+    for (const h of map.architecture.hotspots) {
+      lines.push(
+        `- \`${h.file}\` — imported by ${h.importerCount}, imports ${h.importCount} (combined: ${h.combined})`
+      );
     }
   }
   lines.push('');
@@ -376,7 +562,9 @@ export function renderMapPretty(map: CodebaseMapSummary): string {
   const layerLines =
     map.architecture.layers.length === 0
       ? ['(none)']
-      : map.architecture.layers.map((l) => `${l.name}  ${l.fileCount} files`);
+      : map.architecture.layers.map((l) =>
+          l.hubFile ? `${l.name}  ${l.fileCount} files  [${l.hubFile}]` : `${l.name}  ${l.fileCount} files`
+        );
   sections.push(box('Architecture Layers', layerLines));
 
   const epLines =
@@ -386,6 +574,28 @@ export function renderMapPretty(map: CodebaseMapSummary): string {
   const hubLines =
     map.architecture.hubFiles.length === 0 ? ['(none detected)'] : map.architecture.hubFiles;
   sections.push(box('Hub Files', hubLines));
+
+  const kiLines =
+    map.architecture.keyInterfaces.length === 0
+      ? ['(none detected)']
+      : map.architecture.keyInterfaces.map(
+          (ki) => `${ki.name} ${ki.kind}  ${ki.file} (×${ki.importerCount})`
+        );
+  sections.push(box('Key Interfaces', kiLines));
+
+  const apiLines =
+    map.architecture.apiSurface.length === 0
+      ? ['(none detected)']
+      : map.architecture.apiSurface.map((s) => `${s.file}: ${s.exports.join(', ')}`);
+  sections.push(box('API Surface', apiLines));
+
+  const hotspotLines =
+    map.architecture.hotspots.length === 0
+      ? ['(none detected)']
+      : map.architecture.hotspots.map(
+          (h) => `${h.file}  +${h.importerCount}/-${h.importCount}`
+        );
+  sections.push(box('Dependency Hotspots', hotspotLines));
 
   const patternLines =
     map.activePatterns.length === 0

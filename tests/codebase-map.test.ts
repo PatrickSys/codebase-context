@@ -24,11 +24,11 @@ describe('buildCodebaseMap', () => {
   it('derives architecture layers from graph keys, sorted by count desc then alpha', async () => {
     const project = createProjectState(FIXTURE_ROOT);
     const map = await buildCodebaseMap(project);
-    expect(map.architecture.layers).toEqual([
-      { name: 'src', fileCount: 5 },
-      { name: 'tests', fileCount: 2 },
-      { name: 'lib', fileCount: 1 }
-    ]);
+    // Use objectContaining — layers may now have hubFile/hubExports from enrichLayers
+    expect(map.architecture.layers).toHaveLength(3);
+    expect(map.architecture.layers[0]).toMatchObject({ name: 'src', fileCount: 5 });
+    expect(map.architecture.layers[1]).toMatchObject({ name: 'tests', fileCount: 2 });
+    expect(map.architecture.layers[2]).toMatchObject({ name: 'lib', fileCount: 1 });
   });
 
   it('derives entrypoints: files with imports but zero importers, excluding tests/scripts', async () => {
@@ -103,6 +103,9 @@ describe('buildCodebaseMap', () => {
     expect(map.architecture.layers).toEqual([]);
     expect(map.architecture.entrypoints).toEqual([]);
     expect(map.architecture.hubFiles).toEqual([]);
+    expect(map.architecture.keyInterfaces).toEqual([]);
+    expect(map.architecture.apiSurface).toEqual([]);
+    expect(map.architecture.hotspots).toEqual([]);
     expect(map.activePatterns).toEqual([]);
     expect(map.bestExamples).toEqual([]);
     expect(map.graphStats).toEqual({ files: 0, edges: 0, avgDependencies: 0 });
@@ -114,6 +117,88 @@ describe('buildCodebaseMap', () => {
     const project = createProjectState(FIXTURE_ROOT);
     const map = await buildCodebaseMap(project);
     expect(map.suggestedNextCalls.length).toBeLessThanOrEqual(3);
+  });
+
+  // --- Structural skeleton (Phase 13) ---
+
+  it('derives keyInterfaces from symbolAware chunks, sorted by importer count', async () => {
+    const project = createProjectState(FIXTURE_ROOT);
+    const map = await buildCodebaseMap(project);
+    // SearchOptions and CodebaseSearcher are both in src/core/search.ts (3 importers)
+    // SearchResult is in src/types.ts (0 importers)
+    // helperUtil is not symbolAware — excluded
+    expect(map.architecture.keyInterfaces.length).toBeGreaterThanOrEqual(2);
+    // Items with same importerCount: shorter content first → SearchOptions before CodebaseSearcher
+    expect(map.architecture.keyInterfaces[0].name).toBe('SearchOptions');
+    expect(map.architecture.keyInterfaces[0].importerCount).toBe(3);
+    expect(map.architecture.keyInterfaces[0].kind).toBe('interface');
+    expect(map.architecture.keyInterfaces[0].file).toBe('src/core/search.ts');
+  });
+
+  it('signatureHint strips trailing { and caps at 200 chars', async () => {
+    const project = createProjectState(FIXTURE_ROOT);
+    const map = await buildCodebaseMap(project);
+    for (const ki of map.architecture.keyInterfaces) {
+      expect(ki.signatureHint).not.toMatch(/\{$/);
+      expect(ki.signatureHint.length).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('signatureHint contains the symbol name', async () => {
+    const project = createProjectState(FIXTURE_ROOT);
+    const map = await buildCodebaseMap(project);
+    const iface = map.architecture.keyInterfaces.find((k) => k.name === 'SearchOptions')!;
+    expect(iface.signatureHint).toContain('SearchOptions');
+  });
+
+  it('derives apiSurface from entrypoints x graph.exports', async () => {
+    const project = createProjectState(FIXTURE_ROOT);
+    const map = await buildCodebaseMap(project);
+    // src/cli.ts and src/index.ts are entrypoints; both have exports in fixture
+    const cli = map.architecture.apiSurface.find((s) => s.file === 'src/cli.ts');
+    expect(cli).toBeDefined();
+    expect(cli!.exports).toContain('runCli');
+    expect(cli!.exports).toContain('parseArgs');
+    expect(cli!.exports.length).toBeLessThanOrEqual(5);
+  });
+
+  it('apiSurface excludes default exports', async () => {
+    const project = createProjectState(FIXTURE_ROOT);
+    const map = await buildCodebaseMap(project);
+    for (const surface of map.architecture.apiSurface) {
+      expect(surface.exports).not.toContain('default');
+    }
+  });
+
+  it('derives hotspots sorted by combined import + importer count', async () => {
+    const project = createProjectState(FIXTURE_ROOT);
+    const map = await buildCodebaseMap(project);
+    expect(map.architecture.hotspots.length).toBeLessThanOrEqual(5);
+    // src/core/search.ts: importedBy=3, imports=2 → combined=5 (highest)
+    expect(map.architecture.hotspots[0].file).toBe('src/core/search.ts');
+    expect(map.architecture.hotspots[0].combined).toBe(5);
+    // combined is always importerCount + importCount
+    for (const h of map.architecture.hotspots) {
+      expect(h.combined).toBe(h.importerCount + h.importCount);
+    }
+  });
+
+  it('enriches layers with hubFile from importedBy data', async () => {
+    const project = createProjectState(FIXTURE_ROOT);
+    const map = await buildCodebaseMap(project);
+    const srcLayer = map.architecture.layers.find((l) => l.name === 'src')!;
+    // src/core/search.ts has 3 importers — highest in the src layer
+    expect(srcLayer.hubFile).toBe('src/core/search.ts');
+  });
+
+  it('enriches layers with hubExports when graph.exports has data', async () => {
+    const project = createProjectState(FIXTURE_ROOT);
+    const map = await buildCodebaseMap(project);
+    // src/cli.ts has exports in fixture but is not the hub of the src layer
+    // src/index.ts has exports and is also in src — but search.ts (hub) has no exports in fixture
+    const srcLayer = map.architecture.layers.find((l) => l.name === 'src')!;
+    // search.ts has no exports in fixture → hubExports should be absent
+    expect(srcLayer.hubExports).toBeUndefined();
   });
 });
 
@@ -137,6 +222,9 @@ describe('renderMapMarkdown', () => {
     expect(md).toContain('## Architecture Layers');
     expect(md).toContain('## Entrypoints');
     expect(md).toContain('## Hub Files');
+    expect(md).toContain('## Key Interfaces');
+    expect(md).toContain('## API Surface');
+    expect(md).toContain('## Dependency Hotspots');
     expect(md).toContain('## Active Patterns');
     expect(md).toContain('## Best Examples');
     expect(md).toContain('## Graph Stats');
@@ -146,7 +234,14 @@ describe('renderMapMarkdown', () => {
   it('renders empty map sections gracefully', () => {
     const emptyMap = {
       project: 'empty',
-      architecture: { layers: [], entrypoints: [], hubFiles: [] },
+      architecture: {
+        layers: [],
+        entrypoints: [],
+        hubFiles: [],
+        keyInterfaces: [],
+        apiSurface: [],
+        hotspots: []
+      },
       activePatterns: [],
       bestExamples: [],
       graphStats: { files: 0, edges: 0, avgDependencies: 0 },

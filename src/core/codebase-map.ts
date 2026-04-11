@@ -225,7 +225,10 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
 const SYMBOL_KINDS = new Set(['interface', 'class', 'type', 'enum']);
 
 function buildSignatureHint(content: string): string {
-  const lines = content.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = content
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   const hint = lines.slice(0, 3).join('\n');
   const truncated = hint.length > 200 ? hint.slice(0, 197) + '...' : hint;
   return truncated.replace(/\s*\{$/, '').trim();
@@ -563,7 +566,9 @@ export function renderMapPretty(map: CodebaseMapSummary): string {
     map.architecture.layers.length === 0
       ? ['(none)']
       : map.architecture.layers.map((l) =>
-          l.hubFile ? `${l.name}  ${l.fileCount} files  [${l.hubFile}]` : `${l.name}  ${l.fileCount} files`
+          l.hubFile
+            ? `${l.name}  ${l.fileCount} files  [${l.hubFile}]`
+            : `${l.name}  ${l.fileCount} files`
         );
   sections.push(box('Architecture Layers', layerLines));
 
@@ -592,9 +597,7 @@ export function renderMapPretty(map: CodebaseMapSummary): string {
   const hotspotLines =
     map.architecture.hotspots.length === 0
       ? ['(none detected)']
-      : map.architecture.hotspots.map(
-          (h) => `${h.file}  +${h.importerCount}/-${h.importCount}`
-        );
+      : map.architecture.hotspots.map((h) => `${h.file}  +${h.importerCount}/-${h.importCount}`);
   sections.push(box('Dependency Hotspots', hotspotLines));
 
   const patternLines =

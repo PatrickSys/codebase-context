@@ -61,14 +61,17 @@ async function ensureModelLoaded(): Promise<void> {
 
     try {
       cachedTokenizer = await AutoTokenizer.from_pretrained(DEFAULT_RERANKER_MODEL);
-      cachedModel = await AutoModelForSequenceClassification.from_pretrained(DEFAULT_RERANKER_MODEL, {
-        dtype: 'q8',
-        // Limit ONNX Runtime to half cores by default — prevents system freeze during indexing.
-        session_options: {
-          intraOpNumThreads: Math.max(1, Math.floor(os.cpus().length / 2)),
-          interOpNumThreads: 1
+      cachedModel = await AutoModelForSequenceClassification.from_pretrained(
+        DEFAULT_RERANKER_MODEL,
+        {
+          dtype: 'q8',
+          // Limit ONNX Runtime to half cores by default — prevents system freeze during indexing.
+          session_options: {
+            intraOpNumThreads: Math.max(1, Math.floor(os.cpus().length / 2)),
+            interOpNumThreads: 1
+          }
         }
-      });
+      );
       rerankerHealth = 'fallback'; // loaded but not yet triggered
       console.error('[reranker] Cross-encoder loaded successfully');
     } catch (err) {

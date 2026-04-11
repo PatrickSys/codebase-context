@@ -76,7 +76,10 @@ async function ensureModelLoaded(): Promise<void> {
       console.error('[reranker] Cross-encoder loaded successfully');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('Protobuf') || msg.includes('parse') || msg.includes('corrupt')) {
+      const isCorrupt =
+        msg.includes('Protobuf') || msg.includes('parse') || msg.includes('corrupt');
+
+      if (isCorrupt) {
         // Corrupted cache — clear it so next session re-downloads
         console.error(`[reranker] Cache corruption detected: ${msg}`);
         console.error('[reranker] Clearing corrupted cache. Next startup will re-download.');
@@ -93,9 +96,15 @@ async function ensureModelLoaded(): Promise<void> {
         } catch {
           // Cache clear is best-effort
         }
+        rerankerHealth = 'unavailable';
+        // Permanent fail — corrupt cache can't be retried in this session.
+        initFailed = true;
+        throw err;
       }
+
+      // Transient error (network, timeout, etc.) — allow retry on next call.
       rerankerHealth = 'unavailable';
-      initFailed = true;
+      initPromise = null;
       throw err;
     }
   })();

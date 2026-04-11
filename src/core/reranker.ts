@@ -34,29 +34,79 @@ interface CrossEncoderModel {
 let cachedTokenizer: CrossEncoderTokenizer | null = null;
 let cachedModel: CrossEncoderModel | null = null;
 let initPromise: Promise<void> | null = null;
+/** Set permanently after a non-recoverable load failure so subsequent calls fast-fail. */
+let initFailed = false;
+
+/** Tracks reranker operational health for surfacing in search quality */
+export type RerankerStatus = 'active' | 'fallback' | 'unavailable';
+let rerankerHealth: RerankerStatus = 'fallback';
+
+/** Returns the current reranker health status */
+export function getRerankerStatus(): RerankerStatus {
+  return rerankerHealth;
+}
 
 async function ensureModelLoaded(): Promise<void> {
   if (cachedModel && cachedTokenizer) return;
+  // Fast-fail if a prior attempt already determined the model is unavailable.
+  if (initFailed) throw new Error('[reranker] Model unavailable (prior load failed)');
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    const { AutoTokenizer, AutoModelForSequenceClassification } =
+    const { AutoTokenizer, AutoModelForSequenceClassification, env } =
       await import('@huggingface/transformers');
 
     console.error(`[reranker] Loading cross-encoder: ${DEFAULT_RERANKER_MODEL}`);
     console.error('[reranker] (First run will download the model - this may take a moment)');
 
-    cachedTokenizer = await AutoTokenizer.from_pretrained(DEFAULT_RERANKER_MODEL);
-    cachedModel = await AutoModelForSequenceClassification.from_pretrained(DEFAULT_RERANKER_MODEL, {
-      dtype: 'q8',
-      // Limit ONNX Runtime to half cores by default — prevents system freeze during indexing.
-      session_options: {
-        intraOpNumThreads: Math.max(1, Math.floor(os.cpus().length / 2)),
-        interOpNumThreads: 1
-      }
-    });
+    try {
+      cachedTokenizer = await AutoTokenizer.from_pretrained(DEFAULT_RERANKER_MODEL);
+      cachedModel = await AutoModelForSequenceClassification.from_pretrained(
+        DEFAULT_RERANKER_MODEL,
+        {
+          dtype: 'q8',
+          // Limit ONNX Runtime to half cores by default — prevents system freeze during indexing.
+          session_options: {
+            intraOpNumThreads: Math.max(1, Math.floor(os.cpus().length / 2)),
+            interOpNumThreads: 1
+          }
+        }
+      );
+      rerankerHealth = 'fallback'; // loaded but not yet triggered
+      console.error('[reranker] Cross-encoder loaded successfully');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isCorrupt =
+        msg.includes('Protobuf') || msg.includes('parse') || msg.includes('corrupt');
 
-    console.error('[reranker] Cross-encoder loaded successfully');
+      if (isCorrupt) {
+        // Corrupted cache — clear it so next session re-downloads
+        console.error(`[reranker] Cache corruption detected: ${msg}`);
+        console.error('[reranker] Clearing corrupted cache. Next startup will re-download.');
+        try {
+          const cacheDir = env.cacheDir ?? null;
+          if (cacheDir) {
+            const { rmSync, existsSync } = await import('fs');
+            const modelCacheDir = `${cacheDir}/Xenova/ms-marco-MiniLM-L-6-v2`;
+            if (existsSync(modelCacheDir)) {
+              rmSync(modelCacheDir, { recursive: true, force: true });
+              console.error('[reranker] Corrupted cache cleared. Will re-download on next call.');
+            }
+          }
+        } catch {
+          // Cache clear is best-effort
+        }
+        rerankerHealth = 'unavailable';
+        // Permanent fail — corrupt cache can't be retried in this session.
+        initFailed = true;
+        throw err;
+      }
+
+      // Transient error (network, timeout, etc.) — allow retry on next call.
+      rerankerHealth = 'unavailable';
+      initPromise = null;
+      throw err;
+    }
   })();
 
   return initPromise;
@@ -141,6 +191,7 @@ export async function rerank(query: string, results: SearchResult[]): Promise<Se
   if (!isAmbiguous(results)) return results;
 
   await ensureModelLoaded();
+  rerankerHealth = 'active';
 
   const toRerank = results.slice(0, Math.min(RERANK_TOP_K, results.length));
   const rest = results.slice(toRerank.length);

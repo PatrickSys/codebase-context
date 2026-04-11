@@ -17,7 +17,16 @@
       "lib/utils.ts": ["src/core/search.ts", "src/cli.ts"]
     },
     "importDetails": {},
-    "exports": {}
+    "exports": {
+      "src/cli.ts": [
+        { "name": "runCli", "type": "function" },
+        { "name": "parseArgs", "type": "function" }
+      ],
+      "src/index.ts": [
+        { "name": "main", "type": "function" },
+        { "name": "createServer", "type": "function" }
+      ]
+    }
   },
   "stats": {
     "files": 8,

@@ -651,6 +651,35 @@ export interface IntelligenceGoldenFile {
 export interface CodebaseMapLayer {
   name: string;
   fileCount: number;
+  /** Most-imported file whose first path segment matches this layer */
+  hubFile?: string;
+  /** Top 3 named exports from hubFile */
+  hubExports?: string[];
+}
+
+/** Key interface/class/type from the index, ranked by import centrality */
+export interface CodebaseMapKeyInterface {
+  name: string;
+  kind: string;
+  file: string;
+  importerCount: number;
+  /** First 1–3 non-empty content lines, trimmed, max 200 chars, trailing { stripped */
+  signatureHint: string;
+}
+
+/** Exported symbols per entrypoint file */
+export interface CodebaseMapApiSurface {
+  file: string;
+  /** Up to 5 named exports (no 'default') */
+  exports: string[];
+}
+
+/** File ranked by combined import + importer count */
+export interface CodebaseMapHotspot {
+  file: string;
+  importerCount: number;
+  importCount: number;
+  combined: number;
 }
 
 /** Active pattern from intelligence.json with adoption and trend */
@@ -693,6 +722,12 @@ export interface CodebaseMapSummary {
     entrypoints: string[];
     /** Top most-imported internal files by importedBy count */
     hubFiles: string[];
+    /** Top 10 interfaces/classes/types by import centrality */
+    keyInterfaces: CodebaseMapKeyInterface[];
+    /** Exported API surface per entrypoint */
+    apiSurface: CodebaseMapApiSurface[];
+    /** Top 5 files by combined import + importer count */
+    hotspots: CodebaseMapHotspot[];
   };
   activePatterns: CodebaseMapPattern[];
   bestExamples: CodebaseMapExample[];

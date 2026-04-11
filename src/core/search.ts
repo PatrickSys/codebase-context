@@ -12,7 +12,7 @@ import { analyzerRegistry } from './analyzer-registry.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import { isTestingRelatedQuery } from '../preflight/query-scope.js';
 import { assessSearchQuality } from './search-quality.js';
-import { rerank } from './reranker.js';
+import { rerank, getRerankerStatus } from './reranker.js';
 import { type IndexMeta, readIndexMeta, validateIndexArtifacts } from './index-meta.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,

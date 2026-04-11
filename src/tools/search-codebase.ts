@@ -19,6 +19,7 @@ import {
   shouldSkipLegacyTestingFrameworkCategory
 } from '../patterns/semantics.js';
 import { assessSearchQuality } from '../core/search-quality.js';
+import { getRerankerStatus } from '../core/reranker.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import { readMemoriesFile, withConfidence } from '../memory/store.js';
 import type { MemoryWithConfidence } from '../memory/store.js';
@@ -1032,13 +1033,16 @@ export async function handle(
     return `// ${scopeHeader}\n${cleanedSnippet}`;
   }
 
+  const rerankerStatus = getRerankerStatus();
   const searchQualityBlock = {
     status: searchQuality.status,
     confidence: searchQuality.confidence,
     ...(searchQuality.status === 'low_confidence' &&
       searchQuality.nextSteps?.[0] && {
         hint: searchQuality.nextSteps[0]
-      })
+      }),
+    // Surface reranker health so agents know if they're getting degraded results
+    ...(rerankerStatus === 'unavailable' && { rerankerStatus: 'unavailable' })
   };
 
   // Compact mode (default): bounded response with light graph context
@@ -1067,6 +1071,16 @@ export async function handle(
               results: compactResults.map((r) => {
                 const importedByCount = getImportedByCount(r);
                 const topExports = getTopExports(r.filePath);
+                const scope = buildScopeHeader(r.metadata);
+                // First 3 lines of chunk content as a lightweight signature preview
+                const signaturePreview = r.snippet
+                  ? r.snippet
+                      .replace(/^\r?\n+/, '')
+                      .split('\n')
+                      .slice(0, 3)
+                      .join('\n')
+                      .trim() || undefined
+                  : undefined;
                 return {
                   file: `${r.filePath}:${r.startLine}-${r.endLine}`,
                   summary: r.summary,
@@ -1079,7 +1093,12 @@ export async function handle(
                   ...(r.patternWarning && { patternWarning: r.patternWarning }),
                   importedByCount,
                   ...(topExports.length > 0 && { topExports }),
-                  ...(r.layer && r.layer !== 'unknown' && { layer: r.layer })
+                  ...(r.layer && r.layer !== 'unknown' && { layer: r.layer }),
+                  // Structural metadata: surface AST intelligence already computed at index time
+                  ...(r.metadata?.symbolName && { symbol: r.metadata.symbolName }),
+                  ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
+                  ...(scope && { scope }),
+                  ...(signaturePreview && { signaturePreview })
                 };
               }),
               ...(strongMemories.length > 0 && {
@@ -1110,6 +1129,10 @@ export async function handle(
               const enrichedSnippet = includeSnippets
                 ? enrichSnippetWithScope(r.snippet, r.metadata, r.filePath, r.startLine)
                 : undefined;
+              const scope = buildScopeHeader(r.metadata);
+              // Chunk-level imports/exports (top 5 each) + complexity
+              const chunkImports = (r as unknown as { imports?: string[] }).imports?.slice(0, 5);
+              const chunkExports = (r as unknown as { exports?: string[] }).exports?.slice(0, 5);
 
               return {
                 file: `${r.filePath}:${r.startLine}-${r.endLine}`,
@@ -1125,7 +1148,16 @@ export async function handle(
                   relationships: relationshipsAndHints.relationships
                 }),
                 ...(relationshipsAndHints.hints && { hints: relationshipsAndHints.hints }),
-                ...(enrichedSnippet && { snippet: enrichedSnippet })
+                ...(enrichedSnippet && { snippet: enrichedSnippet }),
+                // Structural metadata
+                ...(r.metadata?.symbolName && { symbol: r.metadata.symbolName }),
+                ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
+                ...(scope && { scope }),
+                ...(chunkImports && chunkImports.length > 0 && { imports: chunkImports }),
+                ...(chunkExports && chunkExports.length > 0 && { exports: chunkExports }),
+                ...(r.metadata?.cyclomaticComplexity && {
+                  complexity: r.metadata.cyclomaticComplexity
+                })
               };
             }),
             totalResults: results.length,

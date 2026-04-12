@@ -143,4 +143,92 @@ describe('CodebaseIndexer.detectMetadata', () => {
             expect(typeof metadata.customMetadata).toBe('object');
         });
     });
+
+    describe('framework misclassification guards', () => {
+        it('does not claim framework for plain Node project', async () => {
+            await fs.writeFile(
+                path.join(tempDir, 'package.json'),
+                JSON.stringify({ name: 'plain-node', dependencies: { zod: '^3' } })
+            );
+
+            const indexer = new CodebaseIndexer({ rootPath: tempDir });
+            const metadata = await indexer.detectMetadata();
+
+            expect(metadata.framework).toBeUndefined();
+        });
+
+        it('drops React claim when indicators are below threshold', async () => {
+            // react alone is only 1 indicator — should not meet the >=3 threshold
+            await fs.writeFile(
+                path.join(tempDir, 'package.json'),
+                JSON.stringify({ name: 'thin-react', dependencies: { react: '^18' } })
+            );
+
+            const indexer = new CodebaseIndexer({ rootPath: tempDir });
+            const metadata = await indexer.detectMetadata();
+
+            expect(metadata.framework).toBeUndefined();
+        });
+
+        it('preserves Next.js preference over React when both pass threshold', async () => {
+            // next + react + react-dom + app/ = 4 Next.js indicators; react + react-dom = 2 React indicators
+            await fs.writeFile(
+                path.join(tempDir, 'package.json'),
+                JSON.stringify({
+                    name: 'next-project',
+                    dependencies: { next: '^14.1.0', react: '^18.2.0', 'react-dom': '^18.2.0' },
+                })
+            );
+            await fs.mkdir(path.join(tempDir, 'app'), { recursive: true });
+
+            const indexer = new CodebaseIndexer({ rootPath: tempDir });
+            const metadata = await indexer.detectMetadata();
+
+            expect(metadata.framework?.type).toBe('nextjs');
+        });
+
+        it('detects React when sufficient indicators are present', async () => {
+            await fs.writeFile(
+                path.join(tempDir, 'package.json'),
+                JSON.stringify({
+                    name: 'react-app',
+                    dependencies: { react: '^18', 'react-dom': '^18' },
+                    devDependencies: { '@types/react': '^18' },
+                })
+            );
+
+            const indexer = new CodebaseIndexer({ rootPath: tempDir });
+            const metadata = await indexer.detectMetadata();
+
+            expect(metadata.framework?.type).toBe('react');
+            expect(metadata.framework?.indicators).toContain('dep:react');
+        });
+
+        it('detects Angular library project with @angular/core in peerDependencies + ng-package.json', async () => {
+            await fs.writeFile(
+                path.join(tempDir, 'package.json'),
+                JSON.stringify({
+                    name: 'my-angular-lib',
+                    peerDependencies: {
+                        '@angular/core': '^17.0.0',
+                        '@angular/common': '^17.0.0',
+                    },
+                    devDependencies: {
+                        '@angular/compiler-cli': '^17.0.0',
+                    }
+                })
+            );
+            await fs.writeFile(
+                path.join(tempDir, 'ng-package.json'),
+                JSON.stringify({ lib: { entryFile: 'src/public-api.ts' } })
+            );
+
+            const indexer = new CodebaseIndexer({ rootPath: tempDir });
+            const metadata = await indexer.detectMetadata();
+
+            expect(metadata.framework?.type).toBe('angular');
+            expect(metadata.framework?.indicators).toContain('dep:@angular/core');
+            expect(metadata.framework?.indicators).toContain('disk:ng-package-json');
+        });
+    });
 });

@@ -11,6 +11,7 @@ import ignore from 'ignore';
 import {
   CodebaseMetadata,
   CodeChunk,
+  FrameworkInfo,
   IndexingProgress,
   IndexingStats,
   IndexingPhase,
@@ -1243,7 +1244,7 @@ export class CodebaseIndexer {
       rootPath: incoming.rootPath || base.rootPath,
       languages: [...new Set([...base.languages, ...incoming.languages])], // Merge and deduplicate
       dependencies: this.mergeDependencies(base.dependencies, incoming.dependencies),
-      framework: base.framework || incoming.framework, // Framework from higher priority analyzer wins
+      framework: this.selectFramework(base.framework, incoming.framework),
       architecture: {
         type: incoming.architecture?.type || base.architecture.type,
         layers: this.mergeLayers(base.architecture.layers, incoming.architecture?.layers),
@@ -1263,6 +1264,44 @@ export class CodebaseIndexer {
       statistics: this.mergeStatistics(base.statistics, incoming.statistics),
       customMetadata: { ...base.customMetadata, ...incoming.customMetadata }
     };
+  }
+
+  /**
+   * Select the best framework claim from two candidates.
+   * Requires at least MIN_INDICATORS evidence signals — prevents analyzers from claiming
+   * a framework when only one weak signal is present (e.g. a single import).
+   * Priority-order callers (highest priority first) ensure the first passing candidate wins.
+   */
+  private selectFramework(
+    base: FrameworkInfo | undefined,
+    incoming: FrameworkInfo | undefined
+  ): FrameworkInfo | undefined {
+    const MIN_INDICATORS = 3;
+    const passes = (f: FrameworkInfo | undefined): f is FrameworkInfo =>
+      !!f && (f.indicators?.length ?? 0) >= MIN_INDICATORS;
+
+    if (passes(base) && passes(incoming)) return base; // higher-priority analyzer wins
+    if (passes(base)) return base;
+    if (passes(incoming)) return incoming;
+    // Debug: log dropped framework claims to aid production diagnosis
+    const claimed = [];
+    if (base)
+      claimed.push(
+        `${(base as FrameworkInfo).type}(${(base as FrameworkInfo).indicators?.length ?? 0})`
+      );
+    if (incoming)
+      claimed.push(
+        `${(incoming as FrameworkInfo).type}(${(incoming as FrameworkInfo).indicators?.length ?? 0})`
+      );
+    if (claimed.length > 0) {
+      console.debug(
+        '[selectFramework] dropped %d claim(s) below MIN_INDICATORS=%d: %s',
+        claimed.length,
+        MIN_INDICATORS,
+        claimed.join(', ')
+      );
+    }
+    return undefined;
   }
 
   private mergeDependencies(base: Dependency[], incoming: Dependency[]): Dependency[] {

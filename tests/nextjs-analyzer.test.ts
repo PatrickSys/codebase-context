@@ -136,4 +136,44 @@ export default function Page() { return <div />; }
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('does not claim Next.js framework when next dependency is absent', async () => {
+    const analyzer = new NextJsAnalyzer();
+    const tempRoot = path.join(process.cwd(), 'tests', '.tmp', `nextjs-${randomUUID()}`);
+    await mkdir(tempRoot, { recursive: true });
+    try {
+      await writeFile(
+        path.join(tempRoot, 'package.json'),
+        JSON.stringify({ name: 'react-only', dependencies: { react: '^18', 'react-dom': '^18' } })
+      );
+      const metadata = await analyzer.detectCodebaseMetadata(tempRoot);
+      expect(metadata.framework).toBeUndefined();
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('populates framework.indicators when Next.js is detected', async () => {
+    const analyzer = new NextJsAnalyzer();
+    const tempRoot = path.join(process.cwd(), 'tests', '.tmp', `nextjs-${randomUUID()}`);
+    await mkdir(path.join(tempRoot, 'app'), { recursive: true });
+    await mkdir(path.join(tempRoot, 'pages'), { recursive: true });
+    try {
+      await writeFile(
+        path.join(tempRoot, 'package.json'),
+        JSON.stringify({
+          name: 'next-app',
+          dependencies: { next: '^14', react: '^18', 'react-dom': '^18' }
+        })
+      );
+      const metadata = await analyzer.detectCodebaseMetadata(tempRoot);
+      expect(metadata.framework?.type).toBe('nextjs');
+      expect(metadata.framework?.indicators).toContain('dep:next');
+      expect(metadata.framework?.indicators).toContain('dep:react');
+      expect(metadata.framework?.indicators).toContain('disk:app-router');
+      expect(metadata.framework?.indicators).toContain('disk:pages-router');
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
 });

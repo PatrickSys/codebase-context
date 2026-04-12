@@ -198,33 +198,53 @@ export class NextJsAnalyzer implements FrameworkAnalyzer {
           category: categorizeDependency(name)
         })
       );
-      metadata.framework = {
-        name: 'Next.js',
-        version: normalizeAnalyzerVersion(packageInfo.allDependencies.next),
-        type: 'nextjs',
-        variant: getFrameworkVariant(routerPresence),
-        stateManagement: detectDependencyList(packageInfo.allDependencies, [
-          ['@reduxjs/toolkit', 'redux'],
-          ['redux', 'redux'],
-          ['zustand', 'zustand'],
-          ['jotai', 'jotai'],
-          ['recoil', 'recoil'],
-          ['mobx', 'mobx']
-        ]),
-        uiLibraries: detectDependencyList(packageInfo.allDependencies, [
-          ['tailwindcss', 'Tailwind'],
-          ['@mui/material', 'MUI'],
-          ['styled-components', 'styled-components'],
-          ['@radix-ui/react-slot', 'Radix UI']
-        ]),
-        testingFrameworks: detectDependencyList(packageInfo.allDependencies, [
-          ['vitest', 'Vitest'],
-          ['jest', 'Jest'],
-          ['@testing-library/react', 'Testing Library'],
-          ['playwright', 'Playwright'],
-          ['cypress', 'Cypress']
-        ])
-      };
+
+      // Collect evidence indicators before claiming framework.
+      const indicators: string[] = [];
+      if (packageInfo.allDependencies.next) indicators.push('dep:next');
+      if (packageInfo.allDependencies.react) indicators.push('dep:react');
+      if (packageInfo.allDependencies['react-dom']) indicators.push('dep:react-dom');
+      if (routerPresence.hasAppRouter) indicators.push('disk:app-router');
+      if (routerPresence.hasPagesRouter) indicators.push('disk:pages-router');
+      const nextConfigCandidates = [
+        path.join(rootPath, 'next.config.js'),
+        path.join(rootPath, 'next.config.ts'),
+        path.join(rootPath, 'next.config.mjs'),
+        path.join(rootPath, 'next.config.cjs')
+      ];
+      if (await anyExists(nextConfigCandidates)) indicators.push('disk:next-config');
+
+      // Only claim Next.js when the next package is an actual dependency.
+      if (indicators.includes('dep:next')) {
+        metadata.framework = {
+          name: 'Next.js',
+          version: normalizeAnalyzerVersion(packageInfo.allDependencies.next),
+          type: 'nextjs',
+          variant: getFrameworkVariant(routerPresence),
+          stateManagement: detectDependencyList(packageInfo.allDependencies, [
+            ['@reduxjs/toolkit', 'redux'],
+            ['redux', 'redux'],
+            ['zustand', 'zustand'],
+            ['jotai', 'jotai'],
+            ['recoil', 'recoil'],
+            ['mobx', 'mobx']
+          ]),
+          uiLibraries: detectDependencyList(packageInfo.allDependencies, [
+            ['tailwindcss', 'Tailwind'],
+            ['@mui/material', 'MUI'],
+            ['styled-components', 'styled-components'],
+            ['@radix-ui/react-slot', 'Radix UI']
+          ]),
+          testingFrameworks: detectDependencyList(packageInfo.allDependencies, [
+            ['vitest', 'Vitest'],
+            ['jest', 'Jest'],
+            ['@testing-library/react', 'Testing Library'],
+            ['playwright', 'Playwright'],
+            ['cypress', 'Cypress']
+          ]),
+          indicators
+        };
+      }
       metadata.customMetadata = {
         nextjs: routerPresence
       };

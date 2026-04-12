@@ -1283,6 +1283,24 @@ export class CodebaseIndexer {
     if (passes(base) && passes(incoming)) return base; // higher-priority analyzer wins
     if (passes(base)) return base;
     if (passes(incoming)) return incoming;
+    // Debug: log dropped framework claims to aid production diagnosis
+    const claimed = [];
+    if (base)
+      claimed.push(
+        `${(base as FrameworkInfo).type}(${(base as FrameworkInfo).indicators?.length ?? 0})`
+      );
+    if (incoming)
+      claimed.push(
+        `${(incoming as FrameworkInfo).type}(${(incoming as FrameworkInfo).indicators?.length ?? 0})`
+      );
+    if (claimed.length > 0) {
+      console.debug(
+        '[selectFramework] dropped %d claim(s) below MIN_INDICATORS=%d: %s',
+        claimed.length,
+        MIN_INDICATORS,
+        claimed.join(', ')
+      );
+    }
     return undefined;
   }
 

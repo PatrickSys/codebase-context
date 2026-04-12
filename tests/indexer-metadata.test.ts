@@ -203,5 +203,32 @@ describe('CodebaseIndexer.detectMetadata', () => {
             expect(metadata.framework?.type).toBe('react');
             expect(metadata.framework?.indicators).toContain('dep:react');
         });
+
+        it('detects Angular library project with @angular/core in peerDependencies + ng-package.json', async () => {
+            await fs.writeFile(
+                path.join(tempDir, 'package.json'),
+                JSON.stringify({
+                    name: 'my-angular-lib',
+                    peerDependencies: {
+                        '@angular/core': '^17.0.0',
+                        '@angular/common': '^17.0.0',
+                    },
+                    devDependencies: {
+                        '@angular/compiler-cli': '^17.0.0',
+                    }
+                })
+            );
+            await fs.writeFile(
+                path.join(tempDir, 'ng-package.json'),
+                JSON.stringify({ lib: { entryFile: 'src/public-api.ts' } })
+            );
+
+            const indexer = new CodebaseIndexer({ rootPath: tempDir });
+            const metadata = await indexer.detectMetadata();
+
+            expect(metadata.framework?.type).toBe('angular');
+            expect(metadata.framework?.indicators).toContain('dep:@angular/core');
+            expect(metadata.framework?.indicators).toContain('disk:ng-package-json');
+        });
     });
 });

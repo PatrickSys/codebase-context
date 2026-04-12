@@ -1,4 +1,5 @@
 import path from 'path';
+import { promises as fs } from 'fs';
 import { parse, type TSESTree } from '@typescript-eslint/typescript-estree';
 import type {
   AnalysisResult,
@@ -232,6 +233,20 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
       if (packageInfo.allDependencies['react-dom']) indicators.push('dep:react-dom');
       if (packageInfo.allDependencies['@types/react']) indicators.push('dep:@types/react');
       if (packageInfo.allDependencies['react-native']) indicators.push('dep:react-native');
+
+      // Add disk-based indicators for plain JS React projects (CRA, Vite)
+      try {
+        await fs.stat(path.join(rootPath, 'src'));
+        indicators.push('disk:src-directory');
+      } catch {
+        /* absent */
+      }
+      try {
+        await fs.stat(path.join(rootPath, 'public', 'index.html'));
+        indicators.push('disk:public-index-html');
+      } catch {
+        /* absent */
+      }
 
       // Only claim React when the react package is an actual dependency.
       if (indicators.includes('dep:react')) {

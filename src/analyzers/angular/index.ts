@@ -908,6 +908,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
       // Extract Angular version and dependencies
       const allDeps = {
+        ...packageJson.peerDependencies,
         ...packageJson.dependencies,
         ...packageJson.devDependencies
       };
@@ -947,6 +948,12 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         try {
           await fs.stat(path.join(rootPath, 'tsconfig.app.json'));
           indicators.push('disk:tsconfig-app');
+        } catch {
+          /* absent */
+        }
+        try {
+          await fs.stat(path.join(rootPath, 'ng-package.json'));
+          indicators.push('disk:ng-package-json');
         } catch {
           /* absent */
         }

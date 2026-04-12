@@ -118,4 +118,28 @@ export class LegacyWidget extends Component {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('detects plain JS React project with react + react-dom + src directory', async () => {
+    const analyzer = new ReactAnalyzer();
+    const tempRoot = path.join(process.cwd(), 'tests', '.tmp', `react-${randomUUID()}`);
+    await mkdir(tempRoot, { recursive: true });
+    await mkdir(path.join(tempRoot, 'src'), { recursive: true });
+    try {
+      await writeFile(
+        path.join(tempRoot, 'package.json'),
+        JSON.stringify({
+          name: 'plain-react-app',
+          dependencies: { react: '^18', 'react-dom': '^18' }
+        })
+      );
+      const metadata = await analyzer.detectCodebaseMetadata(tempRoot);
+      expect(metadata.framework?.type).toBe('react');
+      expect(metadata.framework?.indicators).toContain('dep:react');
+      expect(metadata.framework?.indicators).toContain('dep:react-dom');
+      expect(metadata.framework?.indicators).toContain('disk:src-directory');
+      expect(metadata.framework?.indicators?.length).toBeGreaterThanOrEqual(3);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
 });

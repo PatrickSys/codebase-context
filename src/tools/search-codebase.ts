@@ -26,6 +26,7 @@ import type { MemoryWithConfidence } from '../memory/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
 import type { FileExport } from '../utils/usage-tracker.js';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
+import { finalizeSearchPayloadText } from './search-payload-budget.js';
 
 // Stop words for compact-mode memory relevance filter (mirrors QUERY_STOP_WORDS in search.ts)
 const COMPACT_STOP_WORDS = new Set([
@@ -1061,44 +1062,6 @@ export async function handle(
     relatedMemories?: string[];
   };
 
-  function renderSearchPayloadText(payload: SearchResponsePayload): string {
-    let tokenEstimate = 0;
-    let warning: string | undefined;
-    let renderedPayload = '';
-
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      renderedPayload = JSON.stringify(
-        {
-          ...payload,
-          searchQuality: {
-            ...searchQualityBlock,
-            ...(warning && { warning }),
-            tokenEstimate
-          }
-        },
-        null,
-        2
-      );
-
-      const estimatedTransportPayload =
-        process.platform === 'win32' ? renderedPayload.replace(/\n/g, '\r\n') : renderedPayload;
-      const nextTokenEstimate = Math.ceil(estimatedTransportPayload.length / 4);
-      const nextWarning =
-        nextTokenEstimate > 4000
-          ? `Large search payload: estimated ${nextTokenEstimate} tokens. Prefer compact mode or tighter filters before pasting into an agent.`
-          : undefined;
-
-      if (nextTokenEstimate === tokenEstimate && nextWarning === warning) {
-        return renderedPayload;
-      }
-
-      tokenEstimate = nextTokenEstimate;
-      warning = nextWarning;
-    }
-
-    return renderedPayload;
-  }
-
   // Compact mode (default): bounded response with light graph context
   const isCompact = mode !== 'full';
 
@@ -1108,7 +1071,8 @@ export async function handle(
     const patternSummary = buildPatternSummary();
     const bestExample = getBestExample(compactResults);
     const nextHops = buildNextHops(compactResults, searchQuality);
-    const payloadText = renderSearchPayloadText({
+    const payloadText = finalizeSearchPayloadText(
+      {
       status: 'success',
       searchQuality: searchQualityBlock,
       budget: { mode: 'compact', resultCount: compactResults.length },
@@ -1152,7 +1116,9 @@ export async function handle(
       ...(strongMemories.length > 0 && {
         relatedMemories: strongMemories.map((m) => `${m.memory} (${m.effectiveConfidence})`)
       })
-    });
+      },
+      { mode: 'compact', pretty: true, transportAware: true }
+    );
 
     return {
       content: [
@@ -1165,7 +1131,8 @@ export async function handle(
   }
 
   // Full mode: today's response shape + budget + relevanceReason; consumers removed
-  const payloadText = renderSearchPayloadText({
+  const payloadText = finalizeSearchPayloadText(
+    {
     status: 'success',
     searchQuality: searchQualityBlock,
     budget: { mode: 'full', resultCount: results.length },
@@ -1212,7 +1179,9 @@ export async function handle(
         .slice(0, 3)
         .map((m) => `${m.memory} (${m.effectiveConfidence})`)
     })
-  });
+    },
+    { mode: 'full', pretty: true, transportAware: true }
+  );
 
   return {
     content: [

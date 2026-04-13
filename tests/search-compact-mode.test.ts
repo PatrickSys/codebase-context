@@ -363,6 +363,46 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.searchQuality.warning).toBeUndefined();
   });
 
+  it('uses filter-only guidance when a final compact payload exceeds the token threshold', async () => {
+    const oversizedSummary = 'Token-heavy compact summary '.repeat(1200);
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({
+        summary: oversizedSummary
+      })
+    ]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'auth service' } }
+    });
+
+    const payload = JSON.parse(response.content[0].text) as {
+      searchQuality: {
+        tokenEstimate: number;
+        warning?: string;
+      };
+    };
+
+    expect(payload.searchQuality.tokenEstimate).toBe(Math.ceil(response.content[0].text.length / 4));
+    expect(payload.searchQuality.tokenEstimate).toBeGreaterThan(4000);
+    expect(payload.searchQuality.warning).toBe(
+      `Large search payload: estimated ${payload.searchQuality.tokenEstimate} tokens. Try tighter filters (e.g. layer=, language=) to reduce payload size.`
+    );
+  });
+
   // Test 5: Full mode returns hints arrays and all memories + budget
   it('full mode returns hints object with callers/tests and budget metadata', async () => {
     searchMocks.search.mockResolvedValueOnce([makeResult()]);
@@ -444,8 +484,8 @@ describe('search_codebase compact/full mode', () => {
 
     expect(payload.searchQuality.tokenEstimate).toBe(Math.ceil(response.content[0].text.length / 4));
     expect(payload.searchQuality.tokenEstimate).toBeGreaterThan(4000);
-    expect(payload.searchQuality.warning).toContain(
-      `estimated ${payload.searchQuality.tokenEstimate} tokens`
+    expect(payload.searchQuality.warning).toBe(
+      `Large search payload: estimated ${payload.searchQuality.tokenEstimate} tokens. Prefer compact mode or tighter filters before pasting into an agent.`
     );
   });
 

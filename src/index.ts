@@ -50,6 +50,7 @@ import {
 } from './utils/project-discovery.js';
 import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
 import { TOOLS, dispatchTool, type ToolContext, type ToolResponse } from './tools/index.js';
+import { finalizeSearchPayloadText } from './tools/search-payload-budget.js';
 import type { ProjectDescriptor, ToolPaths } from './tools/types.js';
 import {
   getOrCreateProject,
@@ -119,48 +120,20 @@ type ProjectResolution =
   | { ok: true; project: ProjectState }
   | { ok: false; response: ToolResponse };
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function finalizeJsonTextPayload(payload: Record<string, unknown>): string {
-  if (!isPlainRecord(payload.searchQuality)) {
+  const mode =
+    typeof payload.budget === 'object' &&
+    payload.budget !== null &&
+    'mode' in payload.budget &&
+    (payload.budget.mode === 'compact' || payload.budget.mode === 'full')
+      ? payload.budget.mode
+      : undefined;
+
+  if (!mode) {
     return JSON.stringify(payload);
   }
 
-  let tokenEstimate =
-    typeof payload.searchQuality.tokenEstimate === 'number'
-      ? payload.searchQuality.tokenEstimate
-      : 0;
-  let warning =
-    typeof payload.searchQuality.warning === 'string' ? payload.searchQuality.warning : undefined;
-  let renderedPayload = '';
-
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    renderedPayload = JSON.stringify({
-      ...payload,
-      searchQuality: {
-        ...payload.searchQuality,
-        ...(warning ? { warning } : {}),
-        tokenEstimate
-      }
-    });
-
-    const nextTokenEstimate = Math.ceil(renderedPayload.length / 4);
-    const nextWarning =
-      nextTokenEstimate > 4000
-        ? `Large search payload: estimated ${nextTokenEstimate} tokens. Prefer compact mode or tighter filters before pasting into an agent.`
-        : undefined;
-
-    if (nextTokenEstimate === tokenEstimate && nextWarning === warning) {
-      return renderedPayload;
-    }
-
-    tokenEstimate = nextTokenEstimate;
-    warning = nextWarning;
-  }
-
-  return renderedPayload;
+  return finalizeSearchPayloadText(payload, { mode });
 }
 
 function registerKnownRoot(rootPath: string): string {

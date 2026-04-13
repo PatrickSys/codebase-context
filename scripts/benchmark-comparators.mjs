@@ -14,12 +14,11 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { execSync, exec, execFile } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import { parseArgs } from 'util';
 import { promisify } from 'util';
 import { withManagedStdioClientSession } from './lib/managed-mcp-session.mjs';
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -413,7 +412,7 @@ async function runRawClaudeCode(rootPath, tasks) {
       const { stdout } = await execFileAsync(
         'claude',
         ['-p', prompt, '--output-format', 'json', '--allowedTools', 'Read,Grep,Glob'],
-        { timeout: 120000, cwd: path.resolve(rootPath) }
+        { timeout: 120000, cwd: path.resolve(rootPath), shell: process.platform === 'win32' }
       );
       try {
         const parsed = JSON.parse(stdout);

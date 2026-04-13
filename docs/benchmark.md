@@ -1,6 +1,6 @@
 # Discovery Benchmark
 
-This page documents the current public proof slice for `v2.1.0`.
+This page documents the current public proof slice for `v2.0.0`.
 It is a discovery benchmark, not an implementation-quality benchmark.
 
 ## Scope
@@ -37,30 +37,28 @@ From `results/gate-evaluation.json`:
 - `claimAllowed`: `false`
 - `totalTasks`: `24`
 - `averageUsefulness`: `0.75`
-- `averagePayloadBytes`: `7287.625`
-- `averageEstimatedTokens`: `1822.25`
-- `averageFirstRelevantHit`: `null`
+- `averageEstimatedTokens`: `903.7083333333334`
 - `bestExampleUsefulnessRate`: `0.125`
 
 Repo-level outputs from the same rerun:
 
-| Repo | Tasks | Avg usefulness | Avg payload bytes | Avg estimated tokens | Best-example usefulness |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `angular-spotify` | 12 | 0.8333 | 8553 | 2138 | 0.25 |
-| `excalidraw` | 12 | 0.6667 | 6023 | 1506 | 0 |
+| Repo | Tasks | Avg usefulness | Avg estimated tokens | Best-example usefulness |
+| --- | ---: | ---: | ---: | ---: |
+| `angular-spotify` | 12 | 0.8333 | 1080.6667 | 0.25 |
+| `excalidraw` | 12 | 0.6667 | 726.75 | 0 |
 
 ## Gate Truth
 
 The gate is intentionally still blocked.
 
-- The combined suite covers both frozen public repos.
+- The combined suite now covers both public repos.
 - The release claim is still disallowed because comparator evidence remains incomplete.
 - Missing evidence currently includes:
   - raw Claude Code baseline metrics
-  - GrepAI comparator metrics
-  - jCodeMunch comparator metrics
-  - codebase-memory-mcp comparator metrics
-  - CodeGraphContext comparator metrics
+  - GrepAI metrics
+  - jCodeMunch metrics
+  - codebase-memory-mcp metrics
+  - CodeGraphContext metrics
 
 ## Comparator Reality
 
@@ -68,20 +66,20 @@ The current comparator artifact records setup failures, not benchmark wins.
 
 | Comparator | Status | Current reason |
 | --- | --- | --- |
-| `codebase-memory-mcp` | `ok` | The lane now executes on this host, but the captured outputs are near-empty (`19` bytes / `5` tokens on average, `0` usefulness), so the gate still treats it as missing evidence |
-| `jCodeMunch` | `setup_failed` | MCP handshake still closes during startup on this host (`MCP error -32000: Connection closed`) |
-| `GrepAI` | `setup_failed` | Local Go binary and Ollama model path are not present |
-| `CodeGraphContext` | `setup_failed` | MCP handshake still closes during startup on this host (`MCP error -32000: Connection closed`); database prerequisite remains unresolved |
-| `raw Claude Code` | `ok` | The baseline now runs, but the captured outputs remain non-useful (`66.08` bytes / `17.17` tokens on average, `0` usefulness), so the gate still treats it as missing evidence |
+| `codebase-memory-mcp` | `setup_failed` | Installer path still points to the external shell installer |
+| `jCodeMunch` | `setup_failed` | MCP server closes during startup |
+| `GrepAI` | `setup_failed` | Local Go binary and Ollama model path not present |
+| `CodeGraphContext` | `setup_failed` | MCP server closes during startup |
+| `raw Claude Code` | `setup_failed` | Local `claude` CLI baseline is not installed/authenticated in this environment |
 
-`CodeGraphContext` remains part of the comparison frame. It is not removed from the public story just because the lane still fails to start.
+`CodeGraphContext` is explicitly part of the frozen comparison frame. It is not omitted from the public story just because the lane still fails to start.
 
 ## Important Limitations
 
 - This benchmark measures discovery usefulness and payload cost only.
 - It does not measure implementation correctness, patch quality, or end-to-end task completion.
 - Comparator setup is still environment-sensitive, so the gate remains `pending_evidence`.
-- Current search payload costs are higher than the older v2.0.0 proof slice because the v2.1.0 surface now includes richer map structure and `searchQuality.tokenEstimate` advisories.
+- The reranker cache is currently corrupted on this machine. During the proof rerun, search fell back to original ordering after `Protobuf parsing failed` while still completing the harness.
 - `averageFirstRelevantHit` remains `null` in the current gate output because this compact response surface does not expose a comparable ranked-hit metric across the incomplete comparator set.
 
 ## What This Proof Can Support

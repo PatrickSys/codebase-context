@@ -1073,49 +1073,49 @@ export async function handle(
     const nextHops = buildNextHops(compactResults, searchQuality);
     const payloadText = finalizeSearchPayloadText(
       {
-      status: 'success',
-      searchQuality: searchQualityBlock,
-      budget: { mode: 'compact', resultCount: compactResults.length },
-      ...(preflightPayload && { preflight: preflightPayload }),
-      ...(patternSummary && { patternSummary }),
-      ...(bestExample && { bestExample }),
-      ...(nextHops.length > 0 && { nextHops }),
-      results: compactResults.map((r) => {
-        const importedByCount = getImportedByCount(r);
-        const topExports = getTopExports(r.filePath);
-        const scope = buildScopeHeader(r.metadata);
-        // First 3 lines of chunk content as a lightweight signature preview
-        const signaturePreview = r.snippet
-          ? r.snippet
-              .replace(/^\r?\n+/, '')
-              .split('\n')
-              .slice(0, 3)
-              .join('\n')
-              .trim() || undefined
-          : undefined;
-        return {
-          file: `${r.filePath}:${r.startLine}-${r.endLine}`,
-          summary: r.summary,
-          score: Math.round(r.score * 100) / 100,
-          ...(r.relevanceReason && { relevanceReason: r.relevanceReason }),
-          ...(r.componentType &&
-            r.layer &&
-            r.layer !== 'unknown' && { type: `${r.componentType}:${r.layer}` }),
-          ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
-          ...(r.patternWarning && { patternWarning: r.patternWarning }),
-          importedByCount,
-          ...(topExports.length > 0 && { topExports }),
-          ...(r.layer && r.layer !== 'unknown' && { layer: r.layer }),
-          // Structural metadata: surface AST intelligence already computed at index time
-          ...(r.metadata?.symbolName && { symbol: r.metadata.symbolName }),
-          ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
-          ...(scope && { scope }),
-          ...(signaturePreview && { signaturePreview })
-        };
-      }),
-      ...(strongMemories.length > 0 && {
-        relatedMemories: strongMemories.map((m) => `${m.memory} (${m.effectiveConfidence})`)
-      })
+        status: 'success',
+        searchQuality: searchQualityBlock,
+        budget: { mode: 'compact', resultCount: compactResults.length },
+        ...(preflightPayload && { preflight: preflightPayload }),
+        ...(patternSummary && { patternSummary }),
+        ...(bestExample && { bestExample }),
+        ...(nextHops.length > 0 && { nextHops }),
+        results: compactResults.map((r) => {
+          const importedByCount = getImportedByCount(r);
+          const topExports = getTopExports(r.filePath);
+          const scope = buildScopeHeader(r.metadata);
+          // First 3 lines of chunk content as a lightweight signature preview
+          const signaturePreview = r.snippet
+            ? r.snippet
+                .replace(/^\r?\n+/, '')
+                .split('\n')
+                .slice(0, 3)
+                .join('\n')
+                .trim() || undefined
+            : undefined;
+          return {
+            file: `${r.filePath}:${r.startLine}-${r.endLine}`,
+            summary: r.summary,
+            score: Math.round(r.score * 100) / 100,
+            ...(r.relevanceReason && { relevanceReason: r.relevanceReason }),
+            ...(r.componentType &&
+              r.layer &&
+              r.layer !== 'unknown' && { type: `${r.componentType}:${r.layer}` }),
+            ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
+            ...(r.patternWarning && { patternWarning: r.patternWarning }),
+            importedByCount,
+            ...(topExports.length > 0 && { topExports }),
+            ...(r.layer && r.layer !== 'unknown' && { layer: r.layer }),
+            // Structural metadata: surface AST intelligence already computed at index time
+            ...(r.metadata?.symbolName && { symbol: r.metadata.symbolName }),
+            ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
+            ...(scope && { scope }),
+            ...(signaturePreview && { signaturePreview })
+          };
+        }),
+        ...(strongMemories.length > 0 && {
+          relatedMemories: strongMemories.map((m) => `${m.memory} (${m.effectiveConfidence})`)
+        })
       },
       { mode: 'compact', pretty: true, transportAware: true }
     );
@@ -1133,52 +1133,52 @@ export async function handle(
   // Full mode: today's response shape + budget + relevanceReason; consumers removed
   const payloadText = finalizeSearchPayloadText(
     {
-    status: 'success',
-    searchQuality: searchQualityBlock,
-    budget: { mode: 'full', resultCount: results.length },
-    ...(preflightPayload && { preflight: preflightPayload }),
-    results: results.map((r) => {
-      const relationshipsAndHints = buildRelationshipHints(r);
-      const enrichedSnippet = includeSnippets
-        ? enrichSnippetWithScope(r.snippet, r.metadata, r.filePath, r.startLine)
-        : undefined;
-      const scope = buildScopeHeader(r.metadata);
-      // Chunk-level imports/exports (top 5 each) + complexity
-      const chunkImports = (r as unknown as { imports?: string[] }).imports?.slice(0, 5);
-      const chunkExports = (r as unknown as { exports?: string[] }).exports?.slice(0, 5);
+      status: 'success',
+      searchQuality: searchQualityBlock,
+      budget: { mode: 'full', resultCount: results.length },
+      ...(preflightPayload && { preflight: preflightPayload }),
+      results: results.map((r) => {
+        const relationshipsAndHints = buildRelationshipHints(r);
+        const enrichedSnippet = includeSnippets
+          ? enrichSnippetWithScope(r.snippet, r.metadata, r.filePath, r.startLine)
+          : undefined;
+        const scope = buildScopeHeader(r.metadata);
+        // Chunk-level imports/exports (top 5 each) + complexity
+        const chunkImports = (r as unknown as { imports?: string[] }).imports?.slice(0, 5);
+        const chunkExports = (r as unknown as { exports?: string[] }).exports?.slice(0, 5);
 
-      return {
-        file: `${r.filePath}:${r.startLine}-${r.endLine}`,
-        summary: r.summary,
-        score: Math.round(r.score * 100) / 100,
-        ...(r.relevanceReason && { relevanceReason: r.relevanceReason }),
-        ...(r.componentType &&
-          r.layer &&
-          r.layer !== 'unknown' && { type: `${r.componentType}:${r.layer}` }),
-        ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
-        ...(r.patternWarning && { patternWarning: r.patternWarning }),
-        ...(relationshipsAndHints.relationships && {
-          relationships: relationshipsAndHints.relationships
-        }),
-        ...(relationshipsAndHints.hints && { hints: relationshipsAndHints.hints }),
-        ...(enrichedSnippet && { snippet: enrichedSnippet }),
-        // Structural metadata
-        ...(r.metadata?.symbolName && { symbol: r.metadata.symbolName }),
-        ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
-        ...(scope && { scope }),
-        ...(chunkImports && chunkImports.length > 0 && { imports: chunkImports }),
-        ...(chunkExports && chunkExports.length > 0 && { exports: chunkExports }),
-        ...(r.metadata?.cyclomaticComplexity && {
-          complexity: r.metadata.cyclomaticComplexity
-        })
-      };
-    }),
-    totalResults: results.length,
-    ...(relatedMemories.length > 0 && {
-      relatedMemories: relatedMemories
-        .slice(0, 3)
-        .map((m) => `${m.memory} (${m.effectiveConfidence})`)
-    })
+        return {
+          file: `${r.filePath}:${r.startLine}-${r.endLine}`,
+          summary: r.summary,
+          score: Math.round(r.score * 100) / 100,
+          ...(r.relevanceReason && { relevanceReason: r.relevanceReason }),
+          ...(r.componentType &&
+            r.layer &&
+            r.layer !== 'unknown' && { type: `${r.componentType}:${r.layer}` }),
+          ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
+          ...(r.patternWarning && { patternWarning: r.patternWarning }),
+          ...(relationshipsAndHints.relationships && {
+            relationships: relationshipsAndHints.relationships
+          }),
+          ...(relationshipsAndHints.hints && { hints: relationshipsAndHints.hints }),
+          ...(enrichedSnippet && { snippet: enrichedSnippet }),
+          // Structural metadata
+          ...(r.metadata?.symbolName && { symbol: r.metadata.symbolName }),
+          ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
+          ...(scope && { scope }),
+          ...(chunkImports && chunkImports.length > 0 && { imports: chunkImports }),
+          ...(chunkExports && chunkExports.length > 0 && { exports: chunkExports }),
+          ...(r.metadata?.cyclomaticComplexity && {
+            complexity: r.metadata.cyclomaticComplexity
+          })
+        };
+      }),
+      totalResults: results.length,
+      ...(relatedMemories.length > 0 && {
+        relatedMemories: relatedMemories
+          .slice(0, 3)
+          .map((m) => `${m.memory} (${m.effectiveConfidence})`)
+      })
     },
     { mode: 'full', pretty: true, transportAware: true }
   );

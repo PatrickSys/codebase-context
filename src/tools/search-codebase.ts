@@ -1062,29 +1062,43 @@ export async function handle(
   };
 
   function renderSearchPayloadText(payload: SearchResponsePayload): string {
-    const baseRenderedPayload = JSON.stringify(payload, null, 2);
-    const transportPayload =
-      process.platform === 'win32'
-        ? baseRenderedPayload.replace(/\n/g, '\r\n')
-        : baseRenderedPayload;
-    const tokenEstimate = Math.ceil(transportPayload.length / 4);
-    const warning =
-      tokenEstimate > 4000
-        ? `Large search payload: estimated ${tokenEstimate} tokens. Prefer compact mode or tighter filters before pasting into an agent.`
-        : undefined;
+    let tokenEstimate = 0;
+    let warning: string | undefined;
+    let renderedPayload = '';
 
-    return JSON.stringify(
-      {
-        ...payload,
-        searchQuality: {
-          ...searchQualityBlock,
-          ...(warning && { warning }),
-          tokenEstimate
-        }
-      },
-      null,
-      2
-    );
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      renderedPayload = JSON.stringify(
+        {
+          ...payload,
+          searchQuality: {
+            ...searchQualityBlock,
+            ...(warning && { warning }),
+            tokenEstimate
+          }
+        },
+        null,
+        2
+      );
+
+      const estimatedTransportPayload =
+        process.platform === 'win32'
+          ? renderedPayload.replace(/\n/g, '\r\n')
+          : renderedPayload;
+      const nextTokenEstimate = Math.ceil(estimatedTransportPayload.length / 4);
+      const nextWarning =
+        nextTokenEstimate > 4000
+          ? `Large search payload: estimated ${nextTokenEstimate} tokens. Prefer compact mode or tighter filters before pasting into an agent.`
+          : undefined;
+
+      if (nextTokenEstimate === tokenEstimate && nextWarning === warning) {
+        return renderedPayload;
+      }
+
+      tokenEstimate = nextTokenEstimate;
+      warning = nextWarning;
+    }
+
+    return renderedPayload;
   }
 
   // Compact mode (default): bounded response with light graph context
@@ -1110,7 +1124,12 @@ export async function handle(
         const scope = buildScopeHeader(r.metadata);
         // First 3 lines of chunk content as a lightweight signature preview
         const signaturePreview = r.snippet
-          ? r.snippet.replace(/^\r?\n+/, '').split('\n').slice(0, 3).join('\n').trim() || undefined
+          ? r.snippet
+              .replace(/^\r?\n+/, '')
+              .split('\n')
+              .slice(0, 3)
+              .join('\n')
+              .trim() || undefined
           : undefined;
         return {
           file: `${r.filePath}:${r.startLine}-${r.endLine}`,

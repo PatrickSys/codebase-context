@@ -359,7 +359,7 @@ describe('search_codebase compact/full mode', () => {
       [key: string]: unknown;
     };
 
-    expect(payload.searchQuality.tokenEstimate).toBeGreaterThan(0);
+    expect(payload.searchQuality.tokenEstimate).toBe(Math.ceil(response.content[0].text.length / 4));
     expect(payload.searchQuality.warning).toBeUndefined();
   });
 
@@ -442,6 +442,7 @@ describe('search_codebase compact/full mode', () => {
       [key: string]: unknown;
     };
 
+    expect(payload.searchQuality.tokenEstimate).toBe(Math.ceil(response.content[0].text.length / 4));
     expect(payload.searchQuality.tokenEstimate).toBeGreaterThan(4000);
     expect(payload.searchQuality.warning).toContain(
       `estimated ${payload.searchQuality.tokenEstimate} tokens`

@@ -119,6 +119,48 @@ type ProjectResolution =
   | { ok: true; project: ProjectState }
   | { ok: false; response: ToolResponse };
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function finalizeJsonTextPayload(payload: Record<string, unknown>): string {
+  if (!isPlainRecord(payload.searchQuality)) {
+    return JSON.stringify(payload);
+  }
+
+  let tokenEstimate =
+    typeof payload.searchQuality.tokenEstimate === 'number' ? payload.searchQuality.tokenEstimate : 0;
+  let warning =
+    typeof payload.searchQuality.warning === 'string' ? payload.searchQuality.warning : undefined;
+  let renderedPayload = '';
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    renderedPayload = JSON.stringify({
+      ...payload,
+      searchQuality: {
+        ...payload.searchQuality,
+        ...(warning ? { warning } : {}),
+        tokenEstimate
+      }
+    });
+
+    const nextTokenEstimate = Math.ceil(renderedPayload.length / 4);
+    const nextWarning =
+      nextTokenEstimate > 4000
+        ? `Large search payload: estimated ${nextTokenEstimate} tokens. Prefer compact mode or tighter filters before pasting into an agent.`
+        : undefined;
+
+    if (nextTokenEstimate === tokenEstimate && nextWarning === warning) {
+      return renderedPayload;
+    }
+
+    tokenEstimate = nextTokenEstimate;
+    warning = nextWarning;
+  }
+
+  return renderedPayload;
+}
+
 function registerKnownRoot(rootPath: string): string {
   const resolvedRootPath = path.resolve(rootPath);
   knownRoots.set(normalizeRootKey(resolvedRootPath), { rootPath: resolvedRootPath });
@@ -941,7 +983,7 @@ export function registerHandlers(target: Server): void {
           const parsed = JSON.parse(result.content[0].text);
           result.content[0] = {
             type: 'text',
-            text: JSON.stringify({
+            text: finalizeJsonTextPayload({
               ...parsed,
               index: indexSignal,
               project: buildProjectDescriptor(project.rootPath)
@@ -955,7 +997,10 @@ export function registerHandlers(target: Server): void {
           const parsed = JSON.parse(result.content[0].text);
           result.content[0] = {
             type: 'text',
-            text: JSON.stringify({ ...parsed, project: buildProjectDescriptor(project.rootPath) })
+            text: finalizeJsonTextPayload({
+              ...parsed,
+              project: buildProjectDescriptor(project.rootPath)
+            })
           };
         } catch {
           /* response wasn't JSON, skip injection */

@@ -18,8 +18,8 @@
 ### Documentation
 
 - publish the v2.1.0 discovery benchmark rerun with the current gate output: `pending_evidence`, `claimAllowed: false`, `24` frozen tasks, `0.75` average usefulness, and `1822.25` average estimated tokens
-- document the current comparator truth instead of stale assumptions: the public proof still has no real comparator lane data on this host, so benchmark win claims remain blocked
-- note the new `searchQuality.tokenEstimate` advisory contract: estimates are based on the pre-advisory response payload and warnings only appear above the 4K-token threshold
+- document the current comparator truth instead of stale assumptions: the public proof still has setup failures plus near-empty comparator outputs on this host, so benchmark win claims remain blocked
+- note the new `searchQuality.tokenEstimate` advisory contract: estimates are based on the final serialized response payload and warnings only appear above the 4K-token threshold
 
 ### Features
 

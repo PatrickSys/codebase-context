@@ -129,7 +129,9 @@ function finalizeJsonTextPayload(payload: Record<string, unknown>): string {
   }
 
   let tokenEstimate =
-    typeof payload.searchQuality.tokenEstimate === 'number' ? payload.searchQuality.tokenEstimate : 0;
+    typeof payload.searchQuality.tokenEstimate === 'number'
+      ? payload.searchQuality.tokenEstimate
+      : 0;
   let warning =
     typeof payload.searchQuality.warning === 'string' ? payload.searchQuality.warning : undefined;
   let renderedPayload = '';

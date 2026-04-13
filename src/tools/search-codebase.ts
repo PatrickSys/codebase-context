@@ -1081,9 +1081,7 @@ export async function handle(
       );
 
       const estimatedTransportPayload =
-        process.platform === 'win32'
-          ? renderedPayload.replace(/\n/g, '\r\n')
-          : renderedPayload;
+        process.platform === 'win32' ? renderedPayload.replace(/\n/g, '\r\n') : renderedPayload;
       const nextTokenEstimate = Math.ceil(estimatedTransportPayload.length / 4);
       const nextWarning =
         nextTokenEstimate > 4000

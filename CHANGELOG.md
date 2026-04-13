@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## [2.1.0](https://github.com/PatrickSys/codebase-context/compare/v2.0.0...v2.1.0) (2026-04-13)
+
+### Features
+
+- **search:** surface chunk intelligence directly in `search_codebase` results, including symbol identity, scope, signature preview, and compact/full response budgeting
+- **map:** upgrade the conventions map with structural skeleton sections and add `map --export` so the compact map can be written to `CODEBASE_MAP.md`
+
+### Bug Fixes
+
+- **metadata:** require real dependency evidence plus multiple framework indicators before labeling a repo as Next.js or another specialized framework
+- **reranker:** auto-heal corrupted cross-encoder cache entries and surface degraded reranker state in `searchQuality.rerankerStatus`
+- **benchmarks:** harden comparator lanes for cross-platform execution and keep setup failures explicit instead of silently turning them into claims
+
+### Documentation
+
+- publish the v2.1.0 discovery benchmark rerun with the current gate output: `pending_evidence`, `claimAllowed: false`, `24` frozen tasks, `0.75` average usefulness, and `1822.25` average estimated tokens
+- document the current comparator truth instead of stale assumptions: the public proof still has no real comparator lane data on this host, so benchmark win claims remain blocked
+- note the new `searchQuality.tokenEstimate` advisory contract: estimates are based on the pre-advisory response payload and warnings only appear above the 4K-token threshold
+
 ### Features
 
 - **mcp:** rework multi-project routing so one MCP server can serve multiple projects instead of one hardcoded server entry per repo

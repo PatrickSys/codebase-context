@@ -326,6 +326,43 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.nextHops?.length ?? 0).toBeGreaterThan(0);
   });
 
+  it('adds an exact tokenEstimate advisory to compact responses', async () => {
+    searchMocks.search.mockResolvedValueOnce([makeResult()]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'auth service' } }
+    });
+
+    const payload = JSON.parse(response.content[0].text) as {
+      searchQuality: {
+        status: string;
+        confidence: string;
+        tokenEstimate: number;
+        warning?: string;
+        hint?: string;
+        rerankerStatus?: string;
+      };
+      [key: string]: unknown;
+    };
+
+    expect(payload.searchQuality.tokenEstimate).toBeGreaterThan(0);
+    expect(payload.searchQuality.warning).toBeUndefined();
+  });
+
   // Test 5: Full mode returns hints arrays and all memories + budget
   it('full mode returns hints object with callers/tests and budget metadata', async () => {
     searchMocks.search.mockResolvedValueOnce([makeResult()]);
@@ -360,6 +397,55 @@ describe('search_codebase compact/full mode', () => {
     expect(result.hints).toBeDefined();
     const hints = result.hints as Record<string, unknown>;
     expect(Array.isArray(hints.callers)).toBe(true);
+  });
+
+  it('adds a warning only when the final full payload exceeds the compact budget threshold', async () => {
+    const oversizedSummary = 'Token-heavy summary '.repeat(1200);
+    const oversizedSnippet = 'const token = authService.getToken();\n'.repeat(600);
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({
+        summary: oversizedSummary,
+        snippet: oversizedSnippet
+      })
+    ]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'auth service', mode: 'full', includeSnippets: true }
+      }
+    });
+
+    const payload = JSON.parse(response.content[0].text) as {
+      searchQuality: {
+        status: string;
+        confidence: string;
+        tokenEstimate: number;
+        warning?: string;
+        hint?: string;
+        rerankerStatus?: string;
+      };
+      [key: string]: unknown;
+    };
+
+    expect(payload.searchQuality.tokenEstimate).toBeGreaterThan(4000);
+    expect(payload.searchQuality.warning).toContain(
+      `estimated ${payload.searchQuality.tokenEstimate} tokens`
+    );
   });
 
   // Test 6: relevanceReason appears in results in both modes

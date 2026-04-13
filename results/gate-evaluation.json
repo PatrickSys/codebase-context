@@ -1,14 +1,14 @@
 {
   "totalTasks": 24,
   "averageUsefulness": 0.75,
-  "averagePayloadBytes": 3613.6666666666665,
-  "averageEstimatedTokens": 903.7083333333334,
+  "averagePayloadBytes": 7287.625,
+  "averageEstimatedTokens": 1822.25,
   "searchTasks": 8,
   "findTasks": 8,
   "mapTasks": 8,
   "averageFirstRelevantHit": null,
   "bestExampleUsefulnessRate": 0.125,
-  "averageElapsedMs": 282.625,
+  "averageElapsedMs": 304.4166666666667,
   "averageToolCallCount": 1,
   "results": [
     {
@@ -25,9 +25,9 @@
         "generated:"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 8548,
-      "estimatedTokens": 2137,
-      "elapsedMs": 20,
+      "payloadBytes": 23720,
+      "estimatedTokens": 5930,
+      "elapsedMs": 39,
       "toolCallCount": 1
     },
     {
@@ -45,7 +45,7 @@
       "forbiddenHits": [],
       "payloadBytes": 5751,
       "estimatedTokens": 1438,
-      "elapsedMs": 26,
+      "elapsedMs": 28,
       "toolCallCount": 1
     },
     {
@@ -62,9 +62,9 @@
         "libraries actually used"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 8548,
-      "estimatedTokens": 2137,
-      "elapsedMs": 6,
+      "payloadBytes": 23720,
+      "estimatedTokens": 5930,
+      "elapsedMs": 18,
       "toolCallCount": 1
     },
     {
@@ -79,9 +79,9 @@
         "tsconfig"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 8548,
-      "estimatedTokens": 2137,
-      "elapsedMs": 4,
+      "payloadBytes": 23720,
+      "estimatedTokens": 5930,
+      "elapsedMs": 13,
       "toolCallCount": 1
     },
     {
@@ -98,7 +98,7 @@
       "payloadBytes": 1802,
       "estimatedTokens": 451,
       "bestExampleUseful": true,
-      "elapsedMs": 3,
+      "elapsedMs": 2,
       "toolCallCount": 1
     },
     {
@@ -131,10 +131,10 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 4014,
-      "estimatedTokens": 1004,
+      "payloadBytes": 4960,
+      "estimatedTokens": 1240,
       "bestExampleUseful": false,
-      "elapsedMs": 1015,
+      "elapsedMs": 1106,
       "toolCallCount": 1
     },
     {
@@ -167,9 +167,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 2843,
-      "estimatedTokens": 711,
-      "elapsedMs": 99,
+      "payloadBytes": 3695,
+      "estimatedTokens": 924,
+      "elapsedMs": 115,
       "toolCallCount": 1
     },
     {
@@ -184,9 +184,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3262,
-      "estimatedTokens": 816,
-      "elapsedMs": 158,
+      "payloadBytes": 4627,
+      "estimatedTokens": 1157,
+      "elapsedMs": 292,
       "toolCallCount": 1
     },
     {
@@ -201,9 +201,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3156,
-      "estimatedTokens": 789,
-      "elapsedMs": 286,
+      "payloadBytes": 3981,
+      "estimatedTokens": 996,
+      "elapsedMs": 292,
       "toolCallCount": 1
     },
     {
@@ -218,9 +218,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3136,
-      "estimatedTokens": 784,
-      "elapsedMs": 169,
+      "payloadBytes": 4402,
+      "estimatedTokens": 1101,
+      "elapsedMs": 193,
       "toolCallCount": 1
     },
     {
@@ -239,7 +239,7 @@
       "forbiddenHits": [],
       "payloadBytes": 4268,
       "estimatedTokens": 1067,
-      "elapsedMs": 66,
+      "elapsedMs": 67,
       "toolCallCount": 1
     },
     {
@@ -256,9 +256,9 @@
         "libraries actually used"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 4711,
-      "estimatedTokens": 1178,
-      "elapsedMs": 10,
+      "payloadBytes": 15329,
+      "estimatedTokens": 3833,
+      "elapsedMs": 54,
       "toolCallCount": 1
     },
     {
@@ -273,9 +273,9 @@
         "tsconfig"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 4711,
-      "estimatedTokens": 1178,
-      "elapsedMs": 14,
+      "payloadBytes": 15329,
+      "estimatedTokens": 3833,
+      "elapsedMs": 48,
       "toolCallCount": 1
     },
     {
@@ -292,9 +292,9 @@
         "generated:"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 4711,
-      "estimatedTokens": 1178,
-      "elapsedMs": 8,
+      "payloadBytes": 15329,
+      "estimatedTokens": 3833,
+      "elapsedMs": 53,
       "toolCallCount": 1
     },
     {
@@ -311,7 +311,7 @@
       "payloadBytes": 298,
       "estimatedTokens": 75,
       "bestExampleUseful": false,
-      "elapsedMs": 4,
+      "elapsedMs": 3,
       "toolCallCount": 1
     },
     {
@@ -328,10 +328,10 @@
         "bestExample"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 3593,
-      "estimatedTokens": 899,
+      "payloadBytes": 4570,
+      "estimatedTokens": 1143,
       "bestExampleUseful": false,
-      "elapsedMs": 884,
+      "elapsedMs": 921,
       "toolCallCount": 1
     },
     {
@@ -349,7 +349,7 @@
       "payloadBytes": 1615,
       "estimatedTokens": 404,
       "bestExampleUseful": false,
-      "elapsedMs": 3,
+      "elapsedMs": 4,
       "toolCallCount": 1
     },
     {
@@ -381,9 +381,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 2861,
-      "estimatedTokens": 716,
-      "elapsedMs": 934,
+      "payloadBytes": 4033,
+      "estimatedTokens": 1009,
+      "elapsedMs": 903,
       "toolCallCount": 1
     },
     {
@@ -398,9 +398,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 2459,
-      "estimatedTokens": 615,
-      "elapsedMs": 1254,
+      "payloadBytes": 3440,
+      "estimatedTokens": 860,
+      "elapsedMs": 1224,
       "toolCallCount": 1
     },
     {
@@ -415,9 +415,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 2968,
-      "estimatedTokens": 742,
-      "elapsedMs": 1116,
+      "payloadBytes": 4391,
+      "estimatedTokens": 1098,
+      "elapsedMs": 1208,
       "toolCallCount": 1
     },
     {
@@ -432,9 +432,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 2609,
-      "estimatedTokens": 653,
-      "elapsedMs": 697,
+      "payloadBytes": 3607,
+      "estimatedTokens": 902,
+      "elapsedMs": 716,
       "toolCallCount": 1
     }
   ],
@@ -446,25 +446,25 @@
       "status": "pending_evidence",
       "payloadMetric": "averageEstimatedTokens",
       "payloadMetricPassed": false,
-      "beatenUsefulnessMetrics": [],
+      "beatenUsefulnessMetrics": [
+        "averageUsefulness"
+      ],
       "missingMetrics": [
-        "averageEstimatedTokens",
-        "averageUsefulness",
         "averageFirstRelevantHit",
         "bestExampleUsefulnessRate"
       ],
       "comparisons": [
         {
           "metric": "averageEstimatedTokens",
-          "comparatorValue": null,
-          "actualValue": 903.7083333333334,
+          "comparatorValue": 17.166666666666668,
+          "actualValue": 1822.25,
           "passes": false
         },
         {
           "metric": "averageUsefulness",
-          "comparatorValue": null,
+          "comparatorValue": 0,
           "actualValue": 0.75,
-          "passes": false
+          "passes": true
         },
         {
           "metric": "averageFirstRelevantHit",
@@ -546,16 +546,15 @@
         "status": "pending_evidence",
         "tolerancePercent": 15,
         "missingMetrics": [
-          "averageUsefulness",
           "averageFirstRelevantHit",
           "bestExampleUsefulnessRate"
         ],
         "comparisons": [
           {
             "metric": "averageUsefulness",
-            "comparatorValue": null,
+            "comparatorValue": 0,
             "actualValue": 0.75,
-            "passes": false
+            "passes": true
           },
           {
             "metric": "averageFirstRelevantHit",

@@ -14,12 +14,12 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { execSync, exec } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import { parseArgs } from 'util';
 import { promisify } from 'util';
 import { withManagedStdioClientSession } from './lib/managed-mcp-session.mjs';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
@@ -96,15 +96,14 @@ function estimateTokens(bytes) {
  * - searchArgs(task): map frozen task to tool arguments
  * - extractPayload(result): extract string payload from MCP tool response
  */
+const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
 const COMPARATOR_ADAPTERS = [
   {
     name: 'codebase-memory-mcp',
     checkInstalled() {
       try {
-        // Installed via curl installer to ~/.local/bin or similar; also available via npx
-        execSync('which codebase-memory-mcp 2>/dev/null || npx --yes codebase-memory-mcp --version 2>/dev/null', {
-          stdio: 'pipe'
-        });
+        execSync('npx --yes codebase-memory-mcp --version', { stdio: 'pipe', timeout: 30000 });
         return true;
       } catch {
         return false;
@@ -124,7 +123,7 @@ const COMPARATOR_ADAPTERS = [
     serverCommand: 'npx',
     serverArgs: ['--yes', 'codebase-memory-mcp'],
     serverEnv: {},
-    initTimeout: 5000,
+    initTimeout: 10000,
     indexTool: null, // auto-indexes on first query
     searchTool: 'search_code',
     searchArgs(task) {
@@ -141,7 +140,7 @@ const COMPARATOR_ADAPTERS = [
     name: 'jCodeMunch',
     checkInstalled() {
       try {
-        execSync('python3 -c "import jcodemunch" 2>/dev/null', { stdio: 'pipe' });
+        execSync(`${pythonCmd} -c "import jcodemunch"`, { stdio: 'pipe' });
         return true;
       } catch {
         return false;
@@ -149,15 +148,15 @@ const COMPARATOR_ADAPTERS = [
     },
     async install() {
       try {
-        execSync('pip install jcodemunch-mcp', { stdio: 'pipe', timeout: 120000 });
+        execSync(`${pythonCmd} -m pip install jcodemunch-mcp`, { stdio: 'pipe', timeout: 120000 });
       } catch (err) {
         throw new Error(`jCodeMunch install failed: ${err.message}`);
       }
     },
-    serverCommand: 'python3',
+    serverCommand: pythonCmd,
     serverArgs: ['-m', 'jcodemunch.server'],
     serverEnv: {},
-    initTimeout: 8000,
+    initTimeout: 15000,
     indexTool: 'index_folder',
     indexArgs(rootPath) {
       return { path: path.resolve(rootPath) };
@@ -182,7 +181,7 @@ const COMPARATOR_ADAPTERS = [
     name: 'GrepAI',
     checkInstalled() {
       try {
-        execSync('which grepai 2>/dev/null', { stdio: 'pipe' });
+        execSync('grepai --version', { stdio: 'pipe' });
         return true;
       } catch {
         return false;
@@ -191,7 +190,7 @@ const COMPARATOR_ADAPTERS = [
     async install() {
       // GrepAI requires a Go binary + Ollama embedding provider. Likely setup_failed without Ollama.
       try {
-        execSync('which grepai', { stdio: 'pipe' });
+        execSync('grepai --version', { stdio: 'pipe' });
       } catch {
         throw new Error(
           'GrepAI requires Go binary installation (Homebrew: brew install yoanbernabeu/tap/grepai) ' +
@@ -220,7 +219,7 @@ const COMPARATOR_ADAPTERS = [
     name: 'CodeGraphContext',
     checkInstalled() {
       try {
-        execSync('python3 -c "import codegraphcontext" 2>/dev/null', { stdio: 'pipe' });
+        execSync(`${pythonCmd} -c "import codegraphcontext"`, { stdio: 'pipe' });
         return true;
       } catch {
         return false;
@@ -228,7 +227,7 @@ const COMPARATOR_ADAPTERS = [
     },
     async install() {
       try {
-        execSync('pip install codegraphcontext', { stdio: 'pipe', timeout: 120000 });
+        execSync(`${pythonCmd} -m pip install codegraphcontext`, { stdio: 'pipe', timeout: 120000 });
       } catch (err) {
         throw new Error(
           `CodeGraphContext install failed: ${err.message}. ` +
@@ -236,7 +235,7 @@ const COMPARATOR_ADAPTERS = [
         );
       }
     },
-    serverCommand: 'python3',
+    serverCommand: pythonCmd,
     serverArgs: ['-m', 'codegraphcontext.server'],
     serverEnv: {},
     initTimeout: 15000,
@@ -261,7 +260,7 @@ const COMPARATOR_ADAPTERS = [
     name: 'raw Claude Code',
     checkInstalled() {
       try {
-        execSync('claude --version 2>/dev/null', { stdio: 'pipe' });
+        execSync('claude --version', { stdio: 'pipe' });
         return true;
       } catch {
         return false;
@@ -269,8 +268,7 @@ const COMPARATOR_ADAPTERS = [
     },
     async install() {
       throw new Error(
-        'raw Claude Code baseline requires the Claude Code CLI (claude) to be installed and authenticated. ' +
-        'This is the manual-log-capture baseline — record as pending_evidence if claude CLI is unavailable.'
+        'raw Claude Code baseline requires the claude CLI. Install: npm install -g @anthropic-ai/claude-code'
       );
     },
     // raw Claude Code is not an MCP server; handled separately via claude -p
@@ -411,11 +409,17 @@ async function runRawClaudeCode(rootPath, tasks) {
 
     try {
       const prompt = `You are exploring a codebase at ${path.resolve(rootPath)}. Answer this question using only grep, glob, and read file operations: ${task.prompt}`;
-      const { stdout } = await execAsync(
-        `claude -p "${prompt.replace(/"/g, '\\"')}" --allowedTools "Read,Grep,Glob"`,
-        { timeout: 60000, cwd: path.resolve(rootPath) }
+      const { stdout } = await execFileAsync(
+        'claude',
+        ['-p', prompt, '--output-format', 'json', '--allowedTools', 'Read,Grep,Glob'],
+        { timeout: 120000, cwd: path.resolve(rootPath), shell: process.platform === 'win32' }
       );
-      payload = stdout;
+      try {
+        const parsed = JSON.parse(stdout);
+        payload = parsed.result ?? stdout;
+      } catch {
+        payload = stdout;
+      }
     } catch (err) {
       if (err.code === 'ENOENT' || err.message?.includes('command not found')) {
         throw new Error('claude CLI not found');
@@ -510,8 +514,8 @@ async function runComparator(adapter, repoPaths, allFixtures) {
       } catch (err) {
         if (err.message.includes('claude CLI not found')) {
           return {
-            status: 'pending_evidence',
-            reason: 'claude CLI not available. Run manually with: claude -p "<task>" --allowedTools "Read,Grep,Glob"'
+            status: 'setup_failed',
+            reason: 'claude CLI not found — required for baseline. Install: npm install -g @anthropic-ai/claude-code'
           };
         }
         return { status: 'setup_failed', reason: err.message };

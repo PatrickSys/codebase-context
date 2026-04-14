@@ -1,5 +1,5 @@
 {
-  "header": { "buildId": "test-build-13", "formatVersion": 4 },
+  "header": { "buildId": "map-fixture-v1", "formatVersion": 4 },
   "chunks": [
     {
       "id": "c1",
@@ -25,7 +25,7 @@
       "filePath": "/fixture/src/core/search.ts",
       "relativePath": "src/core/search.ts",
       "startLine": 10,
-      "endLine": 20,
+      "endLine": 15,
       "language": "typescript",
       "dependencies": [],
       "imports": [],

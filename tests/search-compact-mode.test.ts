@@ -359,7 +359,9 @@ describe('search_codebase compact/full mode', () => {
       [key: string]: unknown;
     };
 
-    expect(payload.searchQuality.tokenEstimate).toBe(Math.ceil(response.content[0].text.length / 4));
+    expect(payload.searchQuality.tokenEstimate).toBe(
+      Math.ceil(response.content[0].text.length / 4)
+    );
     expect(payload.searchQuality.warning).toBeUndefined();
   });
 
@@ -396,7 +398,9 @@ describe('search_codebase compact/full mode', () => {
       };
     };
 
-    expect(payload.searchQuality.tokenEstimate).toBe(Math.ceil(response.content[0].text.length / 4));
+    expect(payload.searchQuality.tokenEstimate).toBe(
+      Math.ceil(response.content[0].text.length / 4)
+    );
     expect(payload.searchQuality.tokenEstimate).toBeGreaterThan(4000);
     expect(payload.searchQuality.warning).toBe(
       `Large search payload: estimated ${payload.searchQuality.tokenEstimate} tokens. Try tighter filters (e.g. layer=, language=) to reduce payload size.`
@@ -437,6 +441,63 @@ describe('search_codebase compact/full mode', () => {
     expect(result.hints).toBeDefined();
     const hints = result.hints as Record<string, unknown>;
     expect(Array.isArray(hints.callers)).toBe(true);
+  });
+
+  it('full mode serializes chunk-level imports and exports', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({
+        imports: [
+          'src/auth/token-store.ts',
+          'src/auth/session.ts',
+          'src/shared/logger.ts',
+          'src/config/env.ts',
+          'src/http/client.ts',
+          'src/extra/ignored.ts'
+        ],
+        exports: ['AuthService', 'createAuthService', 'AUTH_TOKEN', 'defaultIgnored']
+      })
+    ]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'auth service', mode: 'full' }
+      }
+    });
+
+    const payload = JSON.parse(response.content[0].text) as {
+      budget: { mode: string };
+      results: Array<{ imports?: string[]; exports?: string[] }>;
+    };
+
+    expect(payload.budget.mode).toBe('full');
+    expect(payload.results[0].imports).toEqual([
+      'src/auth/token-store.ts',
+      'src/auth/session.ts',
+      'src/shared/logger.ts',
+      'src/config/env.ts',
+      'src/http/client.ts'
+    ]);
+    expect(payload.results[0].exports).toEqual([
+      'AuthService',
+      'createAuthService',
+      'AUTH_TOKEN',
+      'defaultIgnored'
+    ]);
   });
 
   it('adds a warning only when the final full payload exceeds the compact budget threshold', async () => {
@@ -482,7 +543,9 @@ describe('search_codebase compact/full mode', () => {
       [key: string]: unknown;
     };
 
-    expect(payload.searchQuality.tokenEstimate).toBe(Math.ceil(response.content[0].text.length / 4));
+    expect(payload.searchQuality.tokenEstimate).toBe(
+      Math.ceil(response.content[0].text.length / 4)
+    );
     expect(payload.searchQuality.tokenEstimate).toBeGreaterThan(4000);
     expect(payload.searchQuality.warning).toBe(
       `Large search payload: estimated ${payload.searchQuality.tokenEstimate} tokens. Prefer compact mode or tighter filters before pasting into an agent.`

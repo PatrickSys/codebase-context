@@ -304,15 +304,13 @@ function enrichLayers(
   graphExports: Record<string, Array<{ name: string; type: string }>>
 ): CodebaseMapLayer[] {
   return layers.map((layer) => {
-    let bestFile: string | undefined;
-    let bestCount = 0;
-    for (const [file, importers] of Object.entries(graphImportedBy)) {
-      if (file.split('/')[0] !== layer.name) continue;
-      if (importers.length > bestCount) {
-        bestCount = importers.length;
-        bestFile = file;
-      }
-    }
+    const bestFile = sortByCountThenAlpha(
+      Object.entries(graphImportedBy)
+        .filter(([file]) => file.split('/')[0] === layer.name)
+        .map(([file, importers]) => ({ file, count: importers.length })),
+      (entry) => entry.count,
+      (entry) => entry.file
+    )[0]?.file;
     if (!bestFile) return layer;
     const exps = graphExports[bestFile];
     const hubExports = exps

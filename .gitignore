@@ -6,6 +6,7 @@ dist/
 .codebase-context/*
 **/.codebase-context/*
 !/.codebase-context/memory.json
+!tests/fixtures/map-fixture/.codebase-context/index.json
 .codebase/
 *.log
 .DS_Store

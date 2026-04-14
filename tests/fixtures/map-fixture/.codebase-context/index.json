@@ -1,0 +1,76 @@
+{
+  "header": { "buildId": "test-build-13", "formatVersion": 4 },
+  "chunks": [
+    {
+      "id": "c1",
+      "content": "export interface SearchOptions {\n  query: string;\n  limit?: number;\n}",
+      "filePath": "/fixture/src/core/search.ts",
+      "relativePath": "src/core/search.ts",
+      "startLine": 1,
+      "endLine": 4,
+      "language": "typescript",
+      "dependencies": [],
+      "imports": [],
+      "exports": ["SearchOptions"],
+      "tags": [],
+      "metadata": {
+        "symbolAware": true,
+        "symbolName": "SearchOptions",
+        "symbolKind": "interface"
+      }
+    },
+    {
+      "id": "c2",
+      "content": "export class CodebaseSearcher {\n  private rootPath: string;\n  constructor(rootPath: string) {\n    this.rootPath = rootPath;\n  }\n}",
+      "filePath": "/fixture/src/core/search.ts",
+      "relativePath": "src/core/search.ts",
+      "startLine": 10,
+      "endLine": 20,
+      "language": "typescript",
+      "dependencies": [],
+      "imports": [],
+      "exports": ["CodebaseSearcher"],
+      "tags": [],
+      "metadata": {
+        "symbolAware": true,
+        "symbolName": "CodebaseSearcher",
+        "symbolKind": "class"
+      }
+    },
+    {
+      "id": "c3",
+      "content": "export type SearchResult = { chunk: CodeChunk; score: number; };",
+      "filePath": "/fixture/src/types.ts",
+      "relativePath": "src/types.ts",
+      "startLine": 5,
+      "endLine": 5,
+      "language": "typescript",
+      "dependencies": [],
+      "imports": [],
+      "exports": ["SearchResult"],
+      "tags": [],
+      "metadata": {
+        "symbolAware": true,
+        "symbolName": "SearchResult",
+        "symbolKind": "type"
+      }
+    },
+    {
+      "id": "c4",
+      "content": "function helperUtil() {\n  return 42;\n}",
+      "filePath": "/fixture/src/utils/helpers.ts",
+      "relativePath": "src/utils/helpers.ts",
+      "startLine": 1,
+      "endLine": 3,
+      "language": "typescript",
+      "dependencies": [],
+      "imports": [],
+      "exports": [],
+      "tags": [],
+      "metadata": {
+        "symbolAware": false,
+        "symbolKind": "function"
+      }
+    }
+  ]
+}

@@ -1,9 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import { promises as fs } from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createProjectState } from '../src/project-state.js';
 import { buildCodebaseMap, renderMapMarkdown, renderMapPretty } from '../src/core/codebase-map.js';
 import { generateCodebaseIntelligence } from '../src/resources/codebase-intelligence.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  INTELLIGENCE_FILENAME,
+  KEYWORD_INDEX_FILENAME,
+  RELATIONSHIPS_FILENAME
+} from '../src/constants/codebase-context.js';
 
 // Resolve fixture path relative to this test file — portable across CWD setups.
 const __filename = fileURLToPath(import.meta.url);
@@ -199,6 +207,55 @@ describe('buildCodebaseMap', () => {
     const srcLayer = map.architecture.layers.find((l) => l.name === 'src')!;
     // search.ts has no exports in fixture → hubExports should be absent
     expect(srcLayer.hubExports).toBeUndefined();
+  });
+
+  it('breaks equal layer hub-file ties alphabetically', async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'map-layer-tie-break-'));
+
+    try {
+      const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
+      await fs.mkdir(ctxDir, { recursive: true });
+
+      await fs.writeFile(
+        path.join(ctxDir, INTELLIGENCE_FILENAME),
+        JSON.stringify({}, null, 2),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(ctxDir, KEYWORD_INDEX_FILENAME),
+        JSON.stringify({ chunks: [] }, null, 2),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(ctxDir, RELATIONSHIPS_FILENAME),
+        JSON.stringify(
+          {
+            graph: {
+              importedBy: {
+                'src/a.ts': ['src/app.ts', 'src/root.ts'],
+                'src/b.ts': ['src/app.ts', 'src/root.ts']
+              },
+              exports: {
+                'src/a.ts': [{ name: 'alpha', type: 'function' }],
+                'src/b.ts': [{ name: 'beta', type: 'function' }]
+              }
+            }
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+
+      const project = createProjectState(tempRoot);
+      const map = await buildCodebaseMap(project);
+      const srcLayer = map.architecture.layers.find((layer) => layer.name === 'src');
+
+      expect(srcLayer?.hubFile).toBe('src/a.ts');
+      expect(srcLayer?.hubExports).toEqual(['alpha']);
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
   });
 });
 

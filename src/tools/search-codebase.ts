@@ -1144,8 +1144,8 @@ export async function handle(
           : undefined;
         const scope = buildScopeHeader(r.metadata);
         // Chunk-level imports/exports (top 5 each) + complexity
-        const chunkImports = (r as unknown as { imports?: string[] }).imports?.slice(0, 5);
-        const chunkExports = (r as unknown as { exports?: string[] }).exports?.slice(0, 5);
+        const chunkImports = r.imports?.slice(0, 5);
+        const chunkExports = r.exports?.slice(0, 5);
 
         return {
           file: `${r.filePath}:${r.startLine}-${r.endLine}`,

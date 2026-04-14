@@ -360,6 +360,8 @@ export interface SearchResult {
 
   trend?: 'Rising' | 'Stable' | 'Declining';
   patternWarning?: string;
+  imports?: string[];
+  exports?: string[];
 
   relationships?: RelationshipData;
 

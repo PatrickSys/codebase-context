@@ -699,6 +699,8 @@ export class CodebaseSearcher {
           framework: chunk.framework,
           componentType: chunk.componentType,
           layer: chunk.layer,
+          imports: chunk.imports,
+          exports: chunk.exports,
           metadata: chunk.metadata,
           trend,
           patternWarning: warning
@@ -794,6 +796,8 @@ export class CodebaseSearcher {
           framework: bestTestChunk.chunk.framework,
           componentType: bestTestChunk.chunk.componentType,
           layer: bestTestChunk.chunk.layer,
+          imports: bestTestChunk.chunk.imports,
+          exports: bestTestChunk.chunk.exports,
           metadata: bestTestChunk.chunk.metadata,
           trend,
           patternWarning: warning

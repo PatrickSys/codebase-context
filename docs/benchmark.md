@@ -1,6 +1,6 @@
 # Discovery Benchmark
 
-This page documents the current public proof slice for `v2.0.0`.
+This page documents the current public discovery proof from the checked-in result artifacts on `master`.
 It is a discovery benchmark, not an implementation-quality benchmark.
 
 ## Scope
@@ -37,48 +37,44 @@ From `results/gate-evaluation.json`:
 - `claimAllowed`: `false`
 - `totalTasks`: `24`
 - `averageUsefulness`: `0.75`
-- `averageEstimatedTokens`: `903.7083333333334`
+- `averageEstimatedTokens`: `1822.25`
 - `bestExampleUsefulnessRate`: `0.125`
 
 Repo-level outputs from the same rerun:
 
 | Repo | Tasks | Avg usefulness | Avg estimated tokens | Best-example usefulness |
 | --- | ---: | ---: | ---: | ---: |
-| `angular-spotify` | 12 | 0.8333 | 1080.6667 | 0.25 |
-| `excalidraw` | 12 | 0.6667 | 726.75 | 0 |
+| `angular-spotify` | 12 | 0.8333 | 2138.4167 | 0.25 |
+| `excalidraw` | 12 | 0.6667 | 1506.0833 | 0 |
 
 ## Gate Truth
 
 The gate is intentionally still blocked.
 
-- The combined suite now covers both public repos.
-- The release claim is still disallowed because comparator evidence remains incomplete.
-- Missing evidence currently includes:
-  - raw Claude Code baseline metrics
-  - GrepAI metrics
-  - jCodeMunch metrics
-  - codebase-memory-mcp metrics
-  - CodeGraphContext metrics
+- The combined suite covers both public repos.
+- `claimAllowed` remains `false` because comparator evidence still does not support a benchmark-win claim.
+- Two comparator lanes now return `status: "ok"`, but both are effectively near-empty on the frozen tasks and contribute `0` average usefulness.
+- Three comparator lanes still fail setup entirely.
 
 ## Comparator Reality
 
-The current comparator artifact records setup failures, not benchmark wins.
+The current comparator artifact records incomplete comparator evidence, not benchmark wins.
 
 | Comparator | Status | Current reason |
 | --- | --- | --- |
-| `codebase-memory-mcp` | `setup_failed` | Installer path still points to the external shell installer |
-| `jCodeMunch` | `setup_failed` | MCP server closes during startup |
+| `codebase-memory-mcp` | `ok` | Runs, but the checked-in artifact still averages `0` usefulness and `5` estimated tokens per task, so it does not yet contribute meaningful benchmark evidence |
+| `jCodeMunch` | `setup_failed` | `MCP error -32000: Connection closed` |
 | `GrepAI` | `setup_failed` | Local Go binary and Ollama model path not present |
-| `CodeGraphContext` | `setup_failed` | MCP server closes during startup |
-| `raw Claude Code` | `setup_failed` | Local `claude` CLI baseline is not installed/authenticated in this environment |
+| `CodeGraphContext` | `setup_failed` | `MCP error -32000: Connection closed` |
+| `raw Claude Code` | `ok` | Runs, but the checked-in artifact still averages `0` usefulness and only `18.5` estimated tokens per task, so it does not yet contribute meaningful benchmark evidence |
 
-`CodeGraphContext` is explicitly part of the frozen comparison frame. It is not omitted from the public story just because the lane still fails to start.
+`CodeGraphContext` remains part of the frozen comparison frame. It is not omitted from the public story just because the lane still fails to start.
 
 ## Important Limitations
 
 - This benchmark measures discovery usefulness and payload cost only.
 - It does not measure implementation correctness, patch quality, or end-to-end task completion.
-- Comparator setup is still environment-sensitive, so the gate remains `pending_evidence`.
+- Comparator setup remains environment-sensitive, and the checked-in comparator outputs are still too weak to justify a claim.
 - The reranker cache is currently corrupted on this machine. During the proof rerun, search fell back to original ordering after `Protobuf parsing failed` while still completing the harness.
 - `averageFirstRelevantHit` remains `null` in the current gate output because this compact response surface does not expose a comparable ranked-hit metric across the incomplete comparator set.
 

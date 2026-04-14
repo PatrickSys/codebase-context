@@ -50,6 +50,7 @@ import {
 } from './utils/project-discovery.js';
 import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
 import { TOOLS, dispatchTool, type ToolContext, type ToolResponse } from './tools/index.js';
+import { finalizeSearchPayloadText } from './tools/search-payload-budget.js';
 import type { ProjectDescriptor, ToolPaths } from './tools/types.js';
 import {
   getOrCreateProject,
@@ -118,6 +119,22 @@ const watcherDebounceMs = Number.isFinite(debounceEnv) && debounceEnv >= 0 ? deb
 type ProjectResolution =
   | { ok: true; project: ProjectState }
   | { ok: false; response: ToolResponse };
+
+function finalizeJsonTextPayload(payload: Record<string, unknown>): string {
+  const mode =
+    typeof payload.budget === 'object' &&
+    payload.budget !== null &&
+    'mode' in payload.budget &&
+    (payload.budget.mode === 'compact' || payload.budget.mode === 'full')
+      ? payload.budget.mode
+      : undefined;
+
+  if (!mode) {
+    return JSON.stringify(payload);
+  }
+
+  return finalizeSearchPayloadText(payload, { mode });
+}
 
 function registerKnownRoot(rootPath: string): string {
   const resolvedRootPath = path.resolve(rootPath);
@@ -941,7 +958,7 @@ export function registerHandlers(target: Server): void {
           const parsed = JSON.parse(result.content[0].text);
           result.content[0] = {
             type: 'text',
-            text: JSON.stringify({
+            text: finalizeJsonTextPayload({
               ...parsed,
               index: indexSignal,
               project: buildProjectDescriptor(project.rootPath)
@@ -955,7 +972,10 @@ export function registerHandlers(target: Server): void {
           const parsed = JSON.parse(result.content[0].text);
           result.content[0] = {
             type: 'text',
-            text: JSON.stringify({ ...parsed, project: buildProjectDescriptor(project.rootPath) })
+            text: finalizeJsonTextPayload({
+              ...parsed,
+              project: buildProjectDescriptor(project.rootPath)
+            })
           };
         } catch {
           /* response wasn't JSON, skip injection */

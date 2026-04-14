@@ -1,7 +1,379 @@
 {
   "codebase-memory-mcp": {
-    "status": "setup_failed",
-    "reason": "codebase-memory-mcp install failed. Run: curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | sh"
+    "averageUsefulness": 0,
+    "averagePayloadBytes": 19,
+    "averageEstimatedTokens": 5,
+    "averageFirstRelevantHit": null,
+    "bestExampleUsefulnessRate": null,
+    "averageToolCallCount": 1,
+    "averageElapsedMs": 0.3333333333333333,
+    "status": "ok",
+    "taskResults": [
+      {
+        "taskId": "as-map-01",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "libraries actually used",
+          "patterns",
+          "generated:"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 2
+      },
+      {
+        "taskId": "as-map-02",
+        "job": "map",
+        "surface": "get_codebase_metadata",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "framework",
+          "architecture",
+          "statistics"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 1
+      },
+      {
+        "taskId": "as-map-03",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "state",
+          "patterns",
+          "libraries actually used"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "as-map-04",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "import aliases",
+          "tsconfig"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "as-find-01",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "dependencyInjection"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "as-find-02",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "stateManagement"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 1
+      },
+      {
+        "taskId": "as-find-03",
+        "job": "find",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "preflight",
+          "bestExample",
+          "patterns"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "as-find-04",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "unitTestFramework",
+          "test"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 1
+      },
+      {
+        "taskId": "as-search-01",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "as-search-02",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "as-search-03",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "as-search-04",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-map-01",
+        "job": "map",
+        "surface": "get_codebase_metadata",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "framework",
+          "architecture",
+          "statistics"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-map-02",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "codebase intelligence",
+          "libraries actually used",
+          "patterns"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 1
+      },
+      {
+        "taskId": "ex-map-03",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "import aliases",
+          "tsconfig"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-map-04",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "patterns",
+          "libraries actually used",
+          "generated:"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-find-01",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "stateManagement"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-find-02",
+        "job": "find",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "preflight",
+          "bestExample",
+          "patterns"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-find-03",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "test",
+          "framework"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 1
+      },
+      {
+        "taskId": "ex-find-04",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "dependencyInjection"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-search-01",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-search-02",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      },
+      {
+        "taskId": "ex-search-03",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 1
+      },
+      {
+        "taskId": "ex-search-04",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 19,
+        "estimatedTokens": 5,
+        "toolCallCount": 1,
+        "elapsedMs": 0
+      }
+    ]
   },
   "jCodeMunch": {
     "status": "setup_failed",
@@ -16,7 +388,379 @@
     "reason": "MCP error -32000: Connection closed"
   },
   "raw Claude Code": {
-    "status": "setup_failed",
-    "reason": "raw Claude Code baseline requires the Claude Code CLI (claude) to be installed and authenticated. This is the manual-log-capture baseline — record as pending_evidence if claude CLI is unavailable."
+    "averageUsefulness": 0,
+    "averagePayloadBytes": 71.54166666666667,
+    "averageEstimatedTokens": 18.5,
+    "averageFirstRelevantHit": null,
+    "bestExampleUsefulnessRate": null,
+    "averageToolCallCount": null,
+    "averageElapsedMs": 9590.208333333334,
+    "status": "ok",
+    "taskResults": [
+      {
+        "taskId": "as-map-01",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "libraries actually used",
+          "patterns",
+          "generated:"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 12461
+      },
+      {
+        "taskId": "as-map-02",
+        "job": "map",
+        "surface": "get_codebase_metadata",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "framework",
+          "architecture",
+          "statistics"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 9390
+      },
+      {
+        "taskId": "as-map-03",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "state",
+          "patterns",
+          "libraries actually used"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 9836
+      },
+      {
+        "taskId": "as-map-04",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "import aliases",
+          "tsconfig"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 10098
+      },
+      {
+        "taskId": "as-find-01",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "dependencyInjection"
+        ],
+        "payloadBytes": 70,
+        "estimatedTokens": 18,
+        "toolCallCount": null,
+        "elapsedMs": 8937
+      },
+      {
+        "taskId": "as-find-02",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "stateManagement"
+        ],
+        "payloadBytes": 75,
+        "estimatedTokens": 19,
+        "toolCallCount": null,
+        "elapsedMs": 8747
+      },
+      {
+        "taskId": "as-find-03",
+        "job": "find",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "preflight",
+          "bestExample",
+          "patterns"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 8747
+      },
+      {
+        "taskId": "as-find-04",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "unitTestFramework",
+          "test"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 9351
+      },
+      {
+        "taskId": "as-search-01",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 73,
+        "estimatedTokens": 19,
+        "toolCallCount": null,
+        "elapsedMs": 9376
+      },
+      {
+        "taskId": "as-search-02",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 70,
+        "estimatedTokens": 18,
+        "toolCallCount": null,
+        "elapsedMs": 9891
+      },
+      {
+        "taskId": "as-search-03",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 11377
+      },
+      {
+        "taskId": "as-search-04",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 8972
+      },
+      {
+        "taskId": "ex-map-01",
+        "job": "map",
+        "surface": "get_codebase_metadata",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "framework",
+          "architecture",
+          "statistics"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 10195
+      },
+      {
+        "taskId": "ex-map-02",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "codebase intelligence",
+          "libraries actually used",
+          "patterns"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 8753
+      },
+      {
+        "taskId": "ex-map-03",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "import aliases",
+          "tsconfig"
+        ],
+        "payloadBytes": 71,
+        "estimatedTokens": 18,
+        "toolCallCount": null,
+        "elapsedMs": 8860
+      },
+      {
+        "taskId": "ex-map-04",
+        "job": "map",
+        "surface": "codebase://context",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "patterns",
+          "libraries actually used",
+          "generated:"
+        ],
+        "payloadBytes": 75,
+        "estimatedTokens": 19,
+        "toolCallCount": null,
+        "elapsedMs": 8623
+      },
+      {
+        "taskId": "ex-find-01",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "stateManagement"
+        ],
+        "payloadBytes": 150,
+        "estimatedTokens": 38,
+        "toolCallCount": null,
+        "elapsedMs": 12098
+      },
+      {
+        "taskId": "ex-find-02",
+        "job": "find",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "preflight",
+          "bestExample",
+          "patterns"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 8783
+      },
+      {
+        "taskId": "ex-find-03",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "test",
+          "framework"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 8785
+      },
+      {
+        "taskId": "ex-find-04",
+        "job": "find",
+        "surface": "get_team_patterns",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "dependencyInjection"
+        ],
+        "payloadBytes": 83,
+        "estimatedTokens": 21,
+        "toolCallCount": null,
+        "elapsedMs": 8912
+      },
+      {
+        "taskId": "ex-search-01",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 8043
+      },
+      {
+        "taskId": "ex-search-02",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 75,
+        "estimatedTokens": 19,
+        "toolCallCount": null,
+        "elapsedMs": 8755
+      },
+      {
+        "taskId": "ex-search-03",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 12373
+      },
+      {
+        "taskId": "ex-search-04",
+        "job": "search",
+        "surface": "search_codebase",
+        "usefulnessScore": 0,
+        "matchedSignals": [],
+        "missingSignals": [
+          "results",
+          "searchQuality"
+        ],
+        "payloadBytes": 65,
+        "estimatedTokens": 17,
+        "toolCallCount": null,
+        "elapsedMs": 8802
+      }
+    ]
   }
 }

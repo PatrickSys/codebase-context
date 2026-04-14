@@ -84,6 +84,8 @@ export interface SearchResultItem {
     callers?: string[];
     tests?: string[];
   };
+  imports?: string[];
+  exports?: string[];
   snippet?: string;
 }
 

@@ -500,6 +500,66 @@ describe('search_codebase compact/full mode', () => {
     ]);
   });
 
+  it('real CodebaseSearcher preserves chunk imports and exports', async () => {
+    if (!tempRoot) throw new Error('tempRoot not initialized');
+
+    const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
+    const actualChunk = {
+      id: 'auth-chunk',
+      content:
+        'import { tokenStore } from "./token-store";\nexport class AuthService {\n  getToken() { return tokenStore.read(); }\n}\nexport const AUTH_TOKEN = "auth";',
+      filePath: path.join(tempRoot, 'src', 'auth', 'auth.service.ts'),
+      relativePath: 'src/auth/auth.service.ts',
+      startLine: 1,
+      endLine: 5,
+      language: 'ts',
+      dependencies: [],
+      imports: [
+        'src/auth/token-store.ts',
+        'src/auth/session.ts',
+        'src/shared/logger.ts',
+        'src/config/env.ts',
+        'src/http/client.ts'
+      ],
+      exports: ['AuthService', 'AUTH_TOKEN'],
+      tags: ['service'],
+      metadata: {
+        className: 'AuthService',
+        symbolAware: true,
+        symbolName: 'AuthService',
+        symbolKind: 'class'
+      }
+    };
+
+    await fs.writeFile(
+      path.join(ctxDir, KEYWORD_INDEX_FILENAME),
+      JSON.stringify(
+        {
+          header: { buildId: 'test-build-compact', formatVersion: INDEX_FORMAT_VERSION },
+          chunks: [actualChunk]
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    const actualSearchModule = await vi.importActual<typeof import('../src/core/search.js')>(
+      '../src/core/search.js'
+    );
+    const searcher = new actualSearchModule.CodebaseSearcher(tempRoot);
+    const results = await searcher.search('AuthService token', 5, undefined, {
+      useSemanticSearch: false,
+      useKeywordSearch: true,
+      enableReranker: false
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].filePath).toBe(actualChunk.filePath);
+    expect(results[0].imports).toEqual(actualChunk.imports);
+    expect(results[0].exports).toEqual(actualChunk.exports);
+  });
+
   it('adds a warning only when the final full payload exceeds the compact budget threshold', async () => {
     const oversizedSummary = 'Token-heavy summary '.repeat(1200);
     const oversizedSnippet = 'const token = authService.getToken();\n'.repeat(600);

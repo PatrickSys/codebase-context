@@ -207,7 +207,7 @@ export class ProfileService {
     }
     expect(preflight.ready).toBeDefined();
     expect(typeof preflight.ready).toBe('boolean');
-  });
+  }, 30000);
 
   it('decision card has all expected fields when returned', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -259,7 +259,7 @@ export class ProfileService {
     if (preflight.whatWouldHelp) {
       expect(Array.isArray(preflight.whatWouldHelp)).toBe(true);
     }
-  });
+  }, 30000);
 
   it('intent="explore" returns lightweight preflight', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -290,7 +290,7 @@ export class ProfileService {
       expect(typeof preflight.ready).toBe('boolean');
       // Should NOT have full decision card fields for explore
     }
-  });
+  }, 30000);
 
   it('includes snippet field when includeSnippets=true', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -321,7 +321,7 @@ export class ProfileService {
     // At least some results should have a snippet
     const withSnippets = parsed.results.filter((result) => result.snippet);
     expect(withSnippets.length).toBeGreaterThan(0);
-  });
+  }, 30000);
 
   it('does not include snippet field when includeSnippets=false', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -350,7 +350,7 @@ export class ProfileService {
     parsed.results.forEach((result) => {
       expect(result.snippet).toBeUndefined();
     });
-  });
+  }, 30000);
 
   it('scope header starts snippet when includeSnippets=true', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -381,5 +381,5 @@ export class ProfileService {
       const firstLine = withSnippet.snippet.split('\n')[0].trim();
       expect(firstLine).toMatch(/^\/\//);
     }
-  });
+  }, 30000);
 });

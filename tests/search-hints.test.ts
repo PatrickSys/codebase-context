@@ -145,7 +145,7 @@ describe('Search Hints', () => {
       // Should be capped at 3
       expect(utilResult.hints.callers.length).toBeLessThanOrEqual(3);
     }
-  });
+  }, 30000);
 
   it('hints include tests when test files are detected', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');

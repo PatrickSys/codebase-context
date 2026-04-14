@@ -5,6 +5,11 @@ import path from 'path';
 import { CodebaseIndexer } from '../src/core/indexer.js';
 import { rmWithRetries } from './test-helpers.js';
 
+vi.mock('../src/core/reranker.js', () => ({
+  rerank: vi.fn(async (_query: string, results: unknown) => results),
+  getRerankerStatus: vi.fn(() => 'fallback')
+}));
+
 describe('Search Snippets with Scope Headers', () => {
   let tempRoot: string | null = null;
 

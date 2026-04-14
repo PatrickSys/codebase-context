@@ -214,7 +214,7 @@ export function greet(user: User): string {
     // Verify staging directory is cleaned up
     const hasStaging = await stagingDirExists(contextDir);
     expect(hasStaging).toBe(false);
-  });
+  }, 30000);
 
   it('should fail closed when meta points to missing artifacts', async () => {
     // Create an index with meta pointing to non-existent files

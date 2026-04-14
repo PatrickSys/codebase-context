@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -14,6 +14,11 @@ import {
   MEMORY_FILENAME,
   RELATIONSHIPS_FILENAME
 } from '../src/constants/codebase-context.js';
+
+vi.mock('../src/core/reranker.js', () => ({
+  rerank: vi.fn(async (_query: string, results: unknown) => results),
+  getRerankerStatus: vi.fn(() => 'fallback')
+}));
 
 describe('Impact candidates (2-hop)', () => {
   let tempRoot: string | null = null;

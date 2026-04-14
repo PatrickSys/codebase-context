@@ -11,6 +11,12 @@ import {
   KEYWORD_INDEX_FILENAME
 } from '../src/constants/codebase-context.js';
 
+vi.mock('../src/core/reranker.js', () => ({
+  rerank: vi.fn(async (_query: string, results: unknown) => results),
+  getRerankerStatus: vi.fn(() => 'fallback'),
+  isAmbiguous: vi.fn(() => false)
+}));
+
 describe('Search Hints', () => {
   let tempRoot: string | null = null;
 

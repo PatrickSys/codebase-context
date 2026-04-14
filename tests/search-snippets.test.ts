@@ -7,7 +7,8 @@ import { rmWithRetries } from './test-helpers.js';
 
 vi.mock('../src/core/reranker.js', () => ({
   rerank: vi.fn(async (_query: string, results: unknown) => results),
-  getRerankerStatus: vi.fn(() => 'fallback')
+  getRerankerStatus: vi.fn(() => 'fallback'),
+  isAmbiguous: vi.fn(() => false)
 }));
 
 describe('Search Snippets with Scope Headers', () => {

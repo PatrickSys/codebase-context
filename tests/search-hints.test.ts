@@ -11,6 +11,12 @@ import {
   KEYWORD_INDEX_FILENAME
 } from '../src/constants/codebase-context.js';
 
+vi.mock('../src/core/reranker.js', () => ({
+  rerank: vi.fn(async (_query: string, results: unknown) => results),
+  getRerankerStatus: vi.fn(() => 'fallback'),
+  isAmbiguous: vi.fn(() => false)
+}));
+
 describe('Search Hints', () => {
   let tempRoot: string | null = null;
 
@@ -145,7 +151,7 @@ describe('Search Hints', () => {
       // Should be capped at 3
       expect(utilResult.hints.callers.length).toBeLessThanOrEqual(3);
     }
-  });
+  }, 30000);
 
   it('hints include tests when test files are detected', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');

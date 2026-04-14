@@ -20,7 +20,7 @@ Here's what codebase-context does:
 
 One tool call returns all of it. Local-first - your code never leaves your machine by default.
 
-See the [v2.0.0 benchmark](./docs/benchmark.md) for the discovery suite results and current gate truth.
+See the [current discovery benchmark](./docs/benchmark.md) for the checked-in proof results and current gate truth.
 
 ### What it looks like
 
@@ -224,7 +224,7 @@ These are the behaviors that make the most difference day-to-day. Copy, trim wha
 
 ## Links
 
-- [Benchmark](./docs/benchmark.md) — v2.0.0 discovery suite results and gate truth
+- [Benchmark](./docs/benchmark.md) — current discovery suite results and gate truth
 - [Demo](./docs/demo.md) — real CLI walkthrough
 - [Client Setup](./docs/client-setup.md) — per-client config, HTTP setup, local build testing
 - [Capabilities Reference](./docs/capabilities.md) — tool API, retrieval pipeline, decision card schema

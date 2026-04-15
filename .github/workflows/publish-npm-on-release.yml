@@ -53,8 +53,8 @@ jobs:
           pnpm lint
           pnpm format:check
           pnpm type-check
-          pnpm test
           pnpm build
+          pnpm test
 
       - name: Publish to npm with provenance
         if: steps.check.outputs.already_published != 'true'

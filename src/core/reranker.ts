@@ -34,8 +34,6 @@ interface CrossEncoderModel {
 let cachedTokenizer: CrossEncoderTokenizer | null = null;
 let cachedModel: CrossEncoderModel | null = null;
 let initPromise: Promise<void> | null = null;
-/** Set permanently after a non-recoverable load failure so subsequent calls fast-fail. */
-let initFailed = false;
 
 /** Tracks reranker operational health for surfacing in search quality */
 export type RerankerStatus = 'active' | 'fallback' | 'unavailable';
@@ -46,10 +44,14 @@ export function getRerankerStatus(): RerankerStatus {
   return rerankerHealth;
 }
 
+function resetLoadedState(): void {
+  cachedTokenizer = null;
+  cachedModel = null;
+  initPromise = null;
+}
+
 async function ensureModelLoaded(): Promise<void> {
   if (cachedModel && cachedTokenizer) return;
-  // Fast-fail if a prior attempt already determined the model is unavailable.
-  if (initFailed) throw new Error('[reranker] Model unavailable (prior load failed)');
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
@@ -76,13 +78,13 @@ async function ensureModelLoaded(): Promise<void> {
       console.error('[reranker] Cross-encoder loaded successfully');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const isCorrupt =
-        msg.includes('Protobuf') || msg.includes('parse') || msg.includes('corrupt');
+      const isCorrupt = /protobuf|parse|corrupt/i.test(msg);
+      resetLoadedState();
 
       if (isCorrupt) {
-        // Corrupted cache — clear it so next session re-downloads
+        // Corrupted cache is recoverable in-session once the bad model files are removed.
         console.error(`[reranker] Cache corruption detected: ${msg}`);
-        console.error('[reranker] Clearing corrupted cache. Next startup will re-download.');
+        console.error('[reranker] Clearing corrupted cache. Next call will re-download.');
         try {
           const cacheDir = env.cacheDir ?? null;
           if (cacheDir) {
@@ -97,14 +99,11 @@ async function ensureModelLoaded(): Promise<void> {
           // Cache clear is best-effort
         }
         rerankerHealth = 'unavailable';
-        // Permanent fail — corrupt cache can't be retried in this session.
-        initFailed = true;
         throw err;
       }
 
       // Transient error (network, timeout, etc.) — allow retry on next call.
       rerankerHealth = 'unavailable';
-      initPromise = null;
       throw err;
     }
   })();

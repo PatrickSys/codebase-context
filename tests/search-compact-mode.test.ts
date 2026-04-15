@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
+import type { SearchResponse } from '../src/tools/types.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INDEX_FORMAT_VERSION,
@@ -43,6 +44,10 @@ function makeResult(overrides: Record<string, unknown> = {}) {
     relevanceReason: 'Matches auth token query',
     ...overrides
   };
+}
+
+function parseSearchResponse(text: string): SearchResponse {
+  return JSON.parse(text) as SearchResponse;
 }
 
 describe('search_codebase compact/full mode', () => {
@@ -211,15 +216,11 @@ describe('search_codebase compact/full mode', () => {
       params: { name: 'search_codebase', arguments: { query: 'auth service', limit: 10 } }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      status: string;
-      budget: { mode: string; resultCount: number };
-      results: unknown[];
-    };
+    const payload = parseSearchResponse(response.content[0].text);
     expect(payload.status).toBe('success');
-    expect(payload.budget.mode).toBe('compact');
+    expect(payload.budget?.mode).toBe('compact');
     expect(payload.results.length).toBeLessThanOrEqual(6);
-    expect(payload.budget.resultCount).toBeLessThanOrEqual(6);
+    expect(payload.budget?.resultCount).toBeLessThanOrEqual(6);
   });
 
   // Test 2: Compact results include importedByCount and topExports when available
@@ -244,9 +245,7 @@ describe('search_codebase compact/full mode', () => {
       params: { name: 'search_codebase', arguments: { query: 'auth service' } }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      results: Array<{ importedByCount: number; topExports?: string[] }>;
-    };
+    const payload = parseSearchResponse(response.content[0].text);
     const result = payload.results[0];
     expect(typeof result.importedByCount).toBe('number');
     // Expect 2 importers (app.module.ts + login.component.ts)
@@ -278,9 +277,7 @@ describe('search_codebase compact/full mode', () => {
       params: { name: 'search_codebase', arguments: { query: 'auth service' } }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      results: Array<Record<string, unknown>>;
-    };
+    const payload = parseSearchResponse(response.content[0].text);
     const result = payload.results[0];
     expect(result.hints).toBeUndefined();
     expect((result as Record<string, unknown>).consumers).toBeUndefined();
@@ -308,14 +305,9 @@ describe('search_codebase compact/full mode', () => {
       params: { name: 'search_codebase', arguments: { query: 'auth service' } }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      budget: { mode: string; resultCount: number };
-      patternSummary?: string;
-      bestExample?: string;
-      nextHops?: Array<{ tool: string; why: string }>;
-    };
+    const payload = parseSearchResponse(response.content[0].text);
     expect(payload.budget).toBeDefined();
-    expect(payload.budget.mode).toBe('compact');
+    expect(payload.budget?.mode).toBe('compact');
     // patternSummary should include pattern info from intelligence.json
     expect(typeof payload.patternSummary).toBe('string');
     expect(payload.patternSummary).toContain('Signals');
@@ -324,6 +316,47 @@ describe('search_codebase compact/full mode', () => {
     // nextHops should have at least 1 entry
     expect(Array.isArray(payload.nextHops)).toBe(true);
     expect(payload.nextHops?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it('compact mode serializes symbol intelligence fields from chunk metadata', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({
+        snippet:
+          '\nexport class AuthService {\n  getToken() {\n    return tokenStore.read();\n  }\n}\nconst ignored = true;',
+        metadata: {
+          symbolName: 'AuthService',
+          symbolKind: 'class',
+          symbolPath: ['AuthModule', 'AuthService']
+        }
+      })
+    ]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'auth service' } }
+    });
+
+    const payload = parseSearchResponse(response.content[0].text);
+
+    expect(payload.results[0].symbol).toBe('AuthService');
+    expect(payload.results[0].symbolKind).toBe('class');
+    expect(payload.results[0].scope).toBe('AuthModule.AuthService');
+    expect(payload.results[0].signaturePreview).toBe(
+      'export class AuthService {\n  getToken() {\n    return tokenStore.read();'
+    );
   });
 
   it('adds an exact tokenEstimate advisory to compact responses', async () => {
@@ -347,17 +380,7 @@ describe('search_codebase compact/full mode', () => {
       params: { name: 'search_codebase', arguments: { query: 'auth service' } }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      searchQuality: {
-        status: string;
-        confidence: string;
-        tokenEstimate: number;
-        warning?: string;
-        hint?: string;
-        rerankerStatus?: string;
-      };
-      [key: string]: unknown;
-    };
+    const payload = parseSearchResponse(response.content[0].text);
 
     expect(payload.searchQuality.tokenEstimate).toBe(
       Math.ceil(response.content[0].text.length / 4)
@@ -391,12 +414,7 @@ describe('search_codebase compact/full mode', () => {
       params: { name: 'search_codebase', arguments: { query: 'auth service' } }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      searchQuality: {
-        tokenEstimate: number;
-        warning?: string;
-      };
-    };
+    const payload = parseSearchResponse(response.content[0].text);
 
     expect(payload.searchQuality.tokenEstimate).toBe(
       Math.ceil(response.content[0].text.length / 4)
@@ -429,12 +447,8 @@ describe('search_codebase compact/full mode', () => {
       params: { name: 'search_codebase', arguments: { query: 'auth service', mode: 'full' } }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      budget: { mode: string; resultCount: number };
-      results: Array<Record<string, unknown>>;
-      totalResults: number;
-    };
-    expect(payload.budget.mode).toBe('full');
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.budget?.mode).toBe('full');
     expect(typeof payload.totalResults).toBe('number');
     // Full mode includes hints object (callers present because of relationships)
     const result = payload.results[0];
@@ -454,7 +468,10 @@ describe('search_codebase compact/full mode', () => {
           'src/http/client.ts',
           'src/extra/ignored.ts'
         ],
-        exports: ['AuthService', 'createAuthService', 'AUTH_TOKEN', 'defaultIgnored']
+        exports: ['AuthService', 'createAuthService', 'AUTH_TOKEN', 'defaultIgnored'],
+        metadata: {
+          cyclomaticComplexity: 7
+        }
       })
     ]);
 
@@ -479,12 +496,9 @@ describe('search_codebase compact/full mode', () => {
       }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      budget: { mode: string };
-      results: Array<{ imports?: string[]; exports?: string[] }>;
-    };
+    const payload = parseSearchResponse(response.content[0].text);
 
-    expect(payload.budget.mode).toBe('full');
+    expect(payload.budget?.mode).toBe('full');
     expect(payload.results[0].imports).toEqual([
       'src/auth/token-store.ts',
       'src/auth/session.ts',
@@ -498,6 +512,7 @@ describe('search_codebase compact/full mode', () => {
       'AUTH_TOKEN',
       'defaultIgnored'
     ]);
+    expect(payload.results[0].complexity).toBe(7);
   });
 
   it('real CodebaseSearcher preserves chunk imports and exports', async () => {
@@ -591,17 +606,7 @@ describe('search_codebase compact/full mode', () => {
       }
     });
 
-    const payload = JSON.parse(response.content[0].text) as {
-      searchQuality: {
-        status: string;
-        confidence: string;
-        tokenEstimate: number;
-        warning?: string;
-        hint?: string;
-        rerankerStatus?: string;
-      };
-      [key: string]: unknown;
-    };
+    const payload = parseSearchResponse(response.content[0].text);
 
     expect(payload.searchQuality.tokenEstimate).toBe(
       Math.ceil(response.content[0].text.length / 4)
@@ -636,9 +641,7 @@ describe('search_codebase compact/full mode', () => {
       method: 'tools/call',
       params: { name: 'search_codebase', arguments: { query: 'auth token' } }
     });
-    const compactPayload = JSON.parse(compactResponse.content[0].text) as {
-      results: Array<{ relevanceReason?: string }>;
-    };
+    const compactPayload = parseSearchResponse(compactResponse.content[0].text);
     expect(compactPayload.results[0].relevanceReason).toBe('Token management for auth flows');
 
     searchMocks.search.mockResolvedValueOnce([
@@ -652,9 +655,7 @@ describe('search_codebase compact/full mode', () => {
       method: 'tools/call',
       params: { name: 'search_codebase', arguments: { query: 'auth token', mode: 'full' } }
     });
-    const fullPayload = JSON.parse(fullResponse.content[0].text) as {
-      results: Array<{ relevanceReason?: string }>;
-    };
+    const fullPayload = parseSearchResponse(fullResponse.content[0].text);
     expect(fullPayload.results[0].relevanceReason).toBe('Token management for auth flows');
   });
 
@@ -680,9 +681,7 @@ describe('search_codebase compact/full mode', () => {
       method: 'tools/call',
       params: { name: 'search_codebase', arguments: { query: 'auth service' } }
     });
-    const compactPayload = JSON.parse(compactResp.content[0].text) as {
-      results: Array<Record<string, unknown>>;
-    };
+    const compactPayload = parseSearchResponse(compactResp.content[0].text);
     const compactResult = compactPayload.results[0];
     expect(compactResult.consumers).toBeUndefined();
     if (compactResult.hints) {
@@ -698,9 +697,7 @@ describe('search_codebase compact/full mode', () => {
       method: 'tools/call',
       params: { name: 'search_codebase', arguments: { query: 'auth service', mode: 'full' } }
     });
-    const fullPayload = JSON.parse(fullResp.content[0].text) as {
-      results: Array<Record<string, unknown>>;
-    };
+    const fullPayload = parseSearchResponse(fullResp.content[0].text);
     const fullResult = fullPayload.results[0];
     expect(fullResult.consumers).toBeUndefined();
     if (fullResult.hints) {
@@ -764,9 +761,7 @@ describe('search_codebase compact/full mode', () => {
         arguments: { query: 'inject AuthService constructor testing' }
       }
     });
-    const compactPayload = JSON.parse(compactResp.content[0].text) as {
-      relatedMemories?: string[];
-    };
+    const compactPayload = parseSearchResponse(compactResp.content[0].text);
     // mem001 matches "inject", "AuthService", "constructor" — strong match
     // mem002 only matches "spacing" (if at all) — weak/no match → excluded
     if (compactPayload.relatedMemories) {
@@ -788,9 +783,7 @@ describe('search_codebase compact/full mode', () => {
         arguments: { query: 'inject AuthService constructor testing', mode: 'full' }
       }
     });
-    const fullPayload = JSON.parse(fullResp.content[0].text) as {
-      relatedMemories?: string[];
-    };
+    const fullPayload = parseSearchResponse(fullResp.content[0].text);
     // Full mode: keyword match (any term). "inject" matches mem001.
     if (fullPayload.relatedMemories) {
       expect(fullPayload.relatedMemories.some((m) => m.includes('AuthService'))).toBe(true);

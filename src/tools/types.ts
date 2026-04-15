@@ -67,34 +67,70 @@ export interface SearchQuality {
   status: 'ok' | 'low_confidence';
   confidence: number | string;
   hint?: string;
+  tokenEstimate?: number;
+  warning?: string;
+  rerankerStatus?: 'unavailable';
+}
+
+export interface SearchResultRelationships {
+  importedByCount?: number;
+  hasTests?: boolean;
+}
+
+export interface SearchResultHints {
+  callers?: string[];
+  tests?: string[];
+}
+
+export interface SearchNextHop {
+  tool: string;
+  why: string;
+  args?: Record<string, string>;
+}
+
+export interface SearchBudget {
+  mode: 'compact' | 'full';
+  resultCount: number;
+}
+
+export interface SearchLitePreflight extends Partial<Omit<DecisionCard, 'ready'>> {
+  ready: boolean;
+  reason?: string;
 }
 
 export interface SearchResultItem {
   file: string; // "path:startLine-endLine"
   summary: string;
   score: number;
+  relevanceReason?: string;
   type?: string; // "componentType:layer"
   trend?: 'Rising' | 'Declining';
   patternWarning?: string;
-  relationships?: {
-    importedByCount?: number;
-    hasTests?: boolean;
-  };
-  hints?: {
-    callers?: string[];
-    tests?: string[];
-  };
+  relationships?: SearchResultRelationships;
+  hints?: SearchResultHints;
+  importedByCount?: number;
+  topExports?: string[];
+  layer?: string;
+  symbol?: string;
+  symbolKind?: string;
+  scope?: string;
+  signaturePreview?: string;
   imports?: string[];
   exports?: string[];
+  complexity?: number;
   snippet?: string;
 }
 
 export interface SearchResponse {
   status: string;
   searchQuality: SearchQuality;
-  preflight?: DecisionCard;
+  budget?: SearchBudget;
+  preflight?: DecisionCard | SearchLitePreflight;
+  patternSummary?: string;
+  bestExample?: string;
+  nextHops?: SearchNextHop[];
   results: SearchResultItem[];
-  totalResults: number;
+  totalResults?: number;
   relatedMemories?: string[];
 }
 

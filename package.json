@@ -1,6 +1,6 @@
 {
   "name": "codebase-context",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "Pre-maps your codebase architecture, conventions, and team memory so AI agents navigate with precision instead of exploring. Local-first MCP server with AST-backed hybrid search.",
   "type": "module",
   "main": "./dist/lib.js",
@@ -94,7 +94,6 @@
     "static-analysis",
     "code-quality",
     "team-memory",
-
     "code-search",
     "codebase-intelligence"
   ],

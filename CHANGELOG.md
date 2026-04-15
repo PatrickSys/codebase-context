@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+## [1.10.0](https://github.com/PatrickSys/codebase-context/compare/v1.9.0...v1.10.0) (2026-04-14)
+
+
+### Features
+
+* add HTTP transport mode alongside stdio ([8e97d0f](https://github.com/PatrickSys/codebase-context/commit/8e97d0f115c8b5e0b4f2a7f0f1ddcf2d996fe7a0))
+* add HTTP transport mode and server config file support ([3c8c273](https://github.com/PatrickSys/codebase-context/commit/3c8c27357c658b72bcfa1d5dc6044152a5e64e2a))
+* add react and nextjs analyzers ([3da89f9](https://github.com/PatrickSys/codebase-context/commit/3da89f98a6ba3f8f784a9a46b526bdbb14f48331))
+* add server config file support for pre-registering projects ([08539c6](https://github.com/PatrickSys/codebase-context/commit/08539c680a9f6f9b5f39f991a85686ad35f2dd7c))
+* **eval:** add 5-comparator benchmark harness with timing and output flag ([999faf7](https://github.com/PatrickSys/codebase-context/commit/999faf707313ce60d1af16ceead446ad29a95a6f))
+* freeze discovery benchmark contract ([1c78171](https://github.com/PatrickSys/codebase-context/commit/1c7817161f04bfc033e682f289865eb11c5769c8))
+* implement DISC-01 compact/full search modes and SAFE-01 freshness-aware edit gating ([059aa0c](https://github.com/PatrickSys/codebase-context/commit/059aa0cda1e96363444aff1558bfc84907ef23bd))
+* **map:** promote codebase map as primary first-call surface (Phase 7) ([328d03b](https://github.com/PatrickSys/codebase-context/commit/328d03b23a27e32027dbc64ab52c243dac70b96a))
+* **phase-6:** add codebase-context init wizard ([#90](https://github.com/PatrickSys/codebase-context/issues/90)) ([e52cf0d](https://github.com/PatrickSys/codebase-context/commit/e52cf0db48aeb9e582784d585074b7ace8950731))
+* support per-project analyzer hints ([#83](https://github.com/PatrickSys/codebase-context/issues/83)) ([4441b41](https://github.com/PatrickSys/codebase-context/commit/4441b41de8953c830e59c9373555ba94dcb4f339))
+* tighten search contract (Phase 8 - DISC-01 + SAFE-01) ([164ff14](https://github.com/PatrickSys/codebase-context/commit/164ff1447bb3bde7815c0490ac6f8507ee478918))
+* surface map structural skeleton and search metadata ([#95](https://github.com/PatrickSys/codebase-context/issues/95)) ([8650c0a](https://github.com/PatrickSys/codebase-context/commit/8650c0aa63c6eaf2ea0cc0050caf0642d792823e))
+
+
+### Bug Fixes
+
+* address greptile P2 review comments ([41c252a](https://github.com/PatrickSys/codebase-context/commit/41c252a644baf230ee0d1efb34387fad9d85e8eb))
+* align discovery protocol metrics ([21c3e43](https://github.com/PatrickSys/codebase-context/commit/21c3e43323a29aad2894a56933255cb3417d969d))
+* **benchmarks:** make all comparator lanes cross-platform on Windows ([#97](https://github.com/PatrickSys/codebase-context/issues/97)) ([6c19628](https://github.com/PatrickSys/codebase-context/commit/6c19628d5d1691c999b07a4532643f0d4ce7016d))
+* clean up benchmark MCP sessions ([408c248](https://github.com/PatrickSys/codebase-context/commit/408c248933c08d5c1868522d10d1715fa6091c9d))
+* close Phase 8 review follow-ups ([b549be4](https://github.com/PatrickSys/codebase-context/commit/b549be4b6bb470a84c434cf019a64f5efb824db9))
+* **config:** reject empty roots and invalid ports ([912e6f6](https://github.com/PatrickSys/codebase-context/commit/912e6f6af672048f2ac145c7574bac140e503a05))
+* **deps:** patch picomatch audit path ([c637bf5](https://github.com/PatrickSys/codebase-context/commit/c637bf58d1614bd7c2e0089e188f5869b17ce1dd))
+* finalize token budget advisory ([2df5399](https://github.com/PatrickSys/codebase-context/commit/2df53997dfd43bfa306c99d562a6608afedb5411))
+* format discovery benchmark sources ([b4ab479](https://github.com/PatrickSys/codebase-context/commit/b4ab47985f09908ae35ae180834f7c850e05207b))
+* guard against unhandled rejections and resource leaks in HTTP transport ([e031a56](https://github.com/PatrickSys/codebase-context/commit/e031a56a1fa7a1c18424c5c6d01d2c9cbd03955d))
+* harden managed MCP session cleanup ([fcce4b6](https://github.com/PatrickSys/codebase-context/commit/fcce4b6e820e55c085ff933e436c3bc76881ab6b))
+* **metadata:** prevent framework misclassification in codebase detection ([#96](https://github.com/PatrickSys/codebase-context/issues/96)) ([ae649dd](https://github.com/PatrickSys/codebase-context/commit/ae649dd803ee1b4146205c1ee4f50c0e7d04ce2a))
+* patch vulnerable hono dependencies ([fa79e90](https://github.com/PatrickSys/codebase-context/commit/fa79e90d409a861c1df8fcb759c1f1ee0a91e0b2))
+* prevent zombie MCP processes via handshake timeout + deferred init ([#89](https://github.com/PatrickSys/codebase-context/issues/89)) ([37fd4b9](https://github.com/PatrickSys/codebase-context/commit/37fd4b98c8bacf8418c97604d932f0149e1e3efc))
+* resolve PR [#98](https://github.com/PatrickSys/codebase-context/issues/98) review blockers ([396dd66](https://github.com/PatrickSys/codebase-context/commit/396dd6687ae3ad33d1d6ca18ef6205ec836b5da4))
+* satisfy lint in index ([e218859](https://github.com/PatrickSys/codebase-context/commit/e218859875a1a6e27a7f588db4d2c3e022b956d7))
+* **search:** finalize token budget advisory payload ([2d08c89](https://github.com/PatrickSys/codebase-context/commit/2d08c898c89286da4fd6a4c777f588fbb17fbe32))
+* **search:** query-aware bestExample, golden file threshold, ONNX thread limits ([9cec82a](https://github.com/PatrickSys/codebase-context/commit/9cec82ab38d63d759648baacba608ca4b578f075))
+* **search:** wire SearchResult imports/exports and stabilize map hub selection ([#100](https://github.com/PatrickSys/codebase-context/issues/100)) ([922f9fc](https://github.com/PatrickSys/codebase-context/commit/922f9fc1482f5f35f1e69673fe6cdf8d15f2aee3))
+* **test:** update multi-project routing assertions for new map header ([adfe8d5](https://github.com/PatrickSys/codebase-context/commit/adfe8d521d3dc99468f0f83c4498a73251ca5ecd))
+
 ## [1.9.0](https://github.com/PatrickSys/codebase-context/compare/v1.8.2...v1.9.0) (2026-03-19)
 
 

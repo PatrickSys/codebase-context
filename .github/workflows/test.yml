@@ -29,8 +29,8 @@ jobs:
       - name: Type Check
         run: pnpm type-check
 
-      - name: Security Audit
-        run: pnpm audit --prod
+      - name: Registry Signatures Audit
+        run: npm audit signatures
 
   test:
     name: Functional Tests

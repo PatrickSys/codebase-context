@@ -13,7 +13,6 @@
 * add server config file support for pre-registering projects ([08539c6](https://github.com/PatrickSys/codebase-context/commit/08539c680a9f6f9b5f39f991a85686ad35f2dd7c))
 * **eval:** add 5-comparator benchmark harness with timing and output flag ([999faf7](https://github.com/PatrickSys/codebase-context/commit/999faf707313ce60d1af16ceead446ad29a95a6f))
 * freeze discovery benchmark contract ([1c78171](https://github.com/PatrickSys/codebase-context/commit/1c7817161f04bfc033e682f289865eb11c5769c8))
-* HTTP transport mode (--http flag) ([c9bf17f](https://github.com/PatrickSys/codebase-context/commit/c9bf17f59cdd07b86d0a047cccb1aec2f735195e))
 * implement DISC-01 compact/full search modes and SAFE-01 freshness-aware edit gating ([059aa0c](https://github.com/PatrickSys/codebase-context/commit/059aa0cda1e96363444aff1558bfc84907ef23bd))
 * **map:** promote codebase map as primary first-call surface (Phase 7) ([328d03b](https://github.com/PatrickSys/codebase-context/commit/328d03b23a27e32027dbc64ab52c243dac70b96a))
 * **phase-6:** add codebase-context init wizard ([#90](https://github.com/PatrickSys/codebase-context/issues/90)) ([e52cf0d](https://github.com/PatrickSys/codebase-context/commit/e52cf0db48aeb9e582784d585074b7ace8950731))

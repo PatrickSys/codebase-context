@@ -9,20 +9,9 @@ import { promises as fs } from 'fs';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createServer } from './server/factory.js';
-import { startHttpServer } from './server/http.js';
-import { loadServerConfig } from './server/config.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ProjectConfig } from './server/config.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-  RootsListChangedNotificationSchema,
-  Resource
-} from '@modelcontextprotocol/sdk/types.js';
+import type { Resource } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
 
 import { analyzerRegistry } from './core/analyzer-registry.js';
@@ -69,8 +58,75 @@ analyzerRegistry.register(new NextJsAnalyzer());
 analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
+let createServer!: typeof import('./server/factory.js').createServer;
+let startHttpServer!: typeof import('./server/http.js').startHttpServer;
+let loadServerConfig!: typeof import('./server/config.js').loadServerConfig;
+let StdioServerTransport!: typeof import('@modelcontextprotocol/sdk/server/stdio.js').StdioServerTransport;
+let CallToolRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').CallToolRequestSchema;
+let ListToolsRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ListToolsRequestSchema;
+let ListResourcesRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ListResourcesRequestSchema;
+let ReadResourceRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ReadResourceRequestSchema;
+let RootsListChangedNotificationSchema!: typeof import('@modelcontextprotocol/sdk/types.js').RootsListChangedNotificationSchema;
+let server!: Server;
+let mcpRuntimeReady = false;
+let mcpRuntimePromise: Promise<void> | undefined;
+
 // Flags that are NOT project paths — skip them when resolving the bootstrap root.
 const KNOWN_FLAGS = new Set(['--http', '--port', '--help']);
+const CLI_SUBCOMMANDS = [
+  'memory',
+  'search',
+  'metadata',
+  'status',
+  'reindex',
+  'style-guide',
+  'patterns',
+  'refs',
+  'cycles',
+  'init',
+  'map'
+];
+
+// Check if this module is the entry point.
+const isDirectRun =
+  process.argv[1]?.replace(/\\/g, '/').endsWith('index.js') ||
+  process.argv[1]?.replace(/\\/g, '/').endsWith('index.ts');
+const directSubcommand = process.argv[2];
+const isDirectCliSubcommand =
+  isDirectRun &&
+  typeof directSubcommand === 'string' &&
+  (CLI_SUBCOMMANDS.includes(directSubcommand) || directSubcommand === '--help');
+
+async function ensureMcpRuntimeLoaded(): Promise<void> {
+  if (mcpRuntimeReady) {
+    return;
+  }
+
+  mcpRuntimePromise ??= (async () => {
+    const [factoryModule, httpModule, configModule, stdioModule, sdkTypesModule] =
+      await Promise.all([
+        import('./server/factory.js'),
+        import('./server/http.js'),
+        import('./server/config.js'),
+        import('@modelcontextprotocol/sdk/server/stdio.js'),
+        import('@modelcontextprotocol/sdk/types.js')
+      ]);
+
+    createServer = factoryModule.createServer;
+    startHttpServer = httpModule.startHttpServer;
+    loadServerConfig = configModule.loadServerConfig;
+    StdioServerTransport = stdioModule.StdioServerTransport;
+    CallToolRequestSchema = sdkTypesModule.CallToolRequestSchema;
+    ListToolsRequestSchema = sdkTypesModule.ListToolsRequestSchema;
+    ListResourcesRequestSchema = sdkTypesModule.ListResourcesRequestSchema;
+    ReadResourceRequestSchema = sdkTypesModule.ReadResourceRequestSchema;
+    RootsListChangedNotificationSchema = sdkTypesModule.RootsListChangedNotificationSchema;
+    server = createServer({ name: 'codebase-context', version: PKG_VERSION }, registerHandlers);
+    mcpRuntimeReady = true;
+  })();
+
+  await mcpRuntimePromise;
+}
 
 // Resolve optional bootstrap root with validation handled later in main().
 function resolveRootPath(): string | undefined {
@@ -997,11 +1053,6 @@ export function registerHandlers(target: Server): void {
   });
 }
 
-const server: Server = createServer(
-  { name: 'codebase-context', version: PKG_VERSION },
-  registerHandlers
-);
-
 function buildResources(): Resource[] {
   const resources: Resource[] = [
     {
@@ -1234,6 +1285,8 @@ async function validateClientRootEntries(
 }
 
 async function refreshKnownRootsFromClient(): Promise<void> {
+  await ensureMcpRuntimeLoaded();
+
   try {
     const { roots } = await server.listRoots();
     const fileRoots = await validateClientRootEntries(
@@ -1534,6 +1587,8 @@ async function applyServerConfig(
 }
 
 async function main() {
+  await ensureMcpRuntimeLoaded();
+
   const serverConfig = await loadServerConfig();
   await applyServerConfig(serverConfig);
 
@@ -1691,6 +1746,8 @@ export { performIndexing };
  * sharing the same module-level project state.
  */
 async function startHttp(explicitPort?: number): Promise<void> {
+  await ensureMcpRuntimeLoaded();
+
   const serverConfig = await loadServerConfig();
   await applyServerConfig(serverConfig);
 
@@ -1764,25 +1821,9 @@ async function startHttp(explicitPort?: number): Promise<void> {
   }
 }
 
-// Only auto-start when run directly as CLI (not when imported as module)
-// Check if this module is the entry point
-const isDirectRun =
-  process.argv[1]?.replace(/\\/g, '/').endsWith('index.js') ||
-  process.argv[1]?.replace(/\\/g, '/').endsWith('index.ts');
-
-const CLI_SUBCOMMANDS = [
-  'memory',
-  'search',
-  'metadata',
-  'status',
-  'reindex',
-  'style-guide',
-  'patterns',
-  'refs',
-  'cycles',
-  'init',
-  'map'
-];
+if (!isDirectCliSubcommand) {
+  await ensureMcpRuntimeLoaded();
+}
 
 if (isDirectRun) {
   const subcommand = process.argv[2];

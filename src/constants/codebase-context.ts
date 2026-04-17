@@ -20,6 +20,7 @@ export const INDEX_META_FILENAME = 'index-meta.json' as const;
 
 export const MEMORY_FILENAME = 'memory.json' as const;
 export const INTELLIGENCE_FILENAME = 'intelligence.json' as const;
+export const HEALTH_FILENAME = 'health.json' as const;
 export const KEYWORD_INDEX_FILENAME = 'index.json' as const;
 export const INDEXING_STATS_FILENAME = 'indexing-stats.json' as const;
 export const VECTOR_DB_DIRNAME = 'index' as const;

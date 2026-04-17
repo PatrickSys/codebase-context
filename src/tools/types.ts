@@ -17,6 +17,10 @@ export interface DecisionCard {
     files?: string[];
     details?: Array<{ file: string; line?: number; hop: 1 | 2 }>;
   };
+  health?: {
+    level: 'low' | 'medium' | 'high';
+    reasons?: string[];
+  };
   whatWouldHelp?: string[];
 }
 
@@ -24,6 +28,7 @@ export interface ToolPaths {
   baseDir: string;
   memory: string;
   intelligence: string;
+  health: string;
   keywordIndex: string;
   vectorDb: string;
 }
@@ -118,6 +123,10 @@ export interface SearchResultItem {
   imports?: string[];
   exports?: string[];
   complexity?: number;
+  health?: {
+    level: 'low' | 'medium' | 'high';
+    reasons?: string[];
+  };
   snippet?: string;
 }
 

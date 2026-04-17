@@ -12,6 +12,7 @@ import { definition as d7, handle as h7 } from './get-symbol-references.js';
 import { definition as d8, handle as h8 } from './detect-circular-dependencies.js';
 import { definition as d9, handle as h9 } from './remember.js';
 import { definition as d10, handle as h10 } from './get-memory.js';
+import { definition as d11, handle as h11 } from './get-codebase-health.js';
 
 import type { ToolContext, ToolResponse } from './types.js';
 
@@ -51,7 +52,9 @@ function withProjectSelector(definition: Tool): Tool {
   };
 }
 
-export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10].map(withProjectSelector);
+export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11].map(
+  withProjectSelector
+);
 
 export async function dispatchTool(
   name: string,
@@ -79,6 +82,8 @@ export async function dispatchTool(
       return h9(args, ctx);
     case 'get_memory':
       return h10(args, ctx);
+    case 'get_codebase_health':
+      return h11(args, ctx);
     default:
       return {
         content: [{ type: 'text', text: JSON.stringify({ error: `Unknown tool: ${name}` }) }],

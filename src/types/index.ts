@@ -597,6 +597,39 @@ export interface Memory {
   source?: 'user' | 'git';
 }
 
+export type CodebaseHealthLevel = 'low' | 'medium' | 'high';
+
+export interface CodebaseHealthFile {
+  file: string;
+  level: CodebaseHealthLevel;
+  score: number;
+  reasons: string[];
+  signals?: {
+    hotspotRank?: number;
+    importerCount?: number;
+    importCount?: number;
+    cycleCount?: number;
+    maxCyclomaticComplexity?: number;
+  };
+}
+
+export interface CodebaseHealthSummary {
+  files: number;
+  highRiskFiles: number;
+  mediumRiskFiles: number;
+  lowRiskFiles: number;
+}
+
+export interface CodebaseHealthArtifact {
+  header: {
+    buildId: string;
+    formatVersion: number;
+  };
+  generatedAt: string;
+  summary: CodebaseHealthSummary;
+  files: CodebaseHealthFile[];
+}
+
 // ============================================================================
 // SHARED PRIMITIVES
 // ============================================================================

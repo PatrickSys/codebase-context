@@ -42,6 +42,7 @@ import { getFileCommitDates } from '../utils/git-dates.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   EXCLUDED_GLOB_PATTERNS,
+  HEALTH_FILENAME,
   INDEX_FORMAT_VERSION,
   INDEXING_STATS_FILENAME,
   INDEX_META_FILENAME,
@@ -52,6 +53,7 @@ import {
   RELATIONSHIPS_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
+import { deriveCodebaseHealth } from '../health/derive.js';
 
 const STAGING_DIRNAME = '.staging';
 const PREVIOUS_DIRNAME = '.previous';
@@ -104,6 +106,7 @@ async function atomicSwapStagingToActive(
   const activeManifestPath = path.join(contextDir, MANIFEST_FILENAME);
   const activeStatsPath = path.join(contextDir, INDEXING_STATS_FILENAME);
   const activeRelationshipsPath = path.join(contextDir, RELATIONSHIPS_FILENAME);
+  const activeHealthPath = path.join(contextDir, HEALTH_FILENAME);
 
   const stagingMetaPath = path.join(stagingDir, INDEX_META_FILENAME);
   const stagingIndexPath = path.join(stagingDir, KEYWORD_INDEX_FILENAME);
@@ -112,6 +115,7 @@ async function atomicSwapStagingToActive(
   const stagingManifestPath = path.join(stagingDir, MANIFEST_FILENAME);
   const stagingStatsPath = path.join(stagingDir, INDEXING_STATS_FILENAME);
   const stagingRelationshipsPath = path.join(stagingDir, RELATIONSHIPS_FILENAME);
+  const stagingHealthPath = path.join(stagingDir, HEALTH_FILENAME);
 
   // Step 1: Create .previous directory and move current active there
   await fs.mkdir(previousDir, { recursive: true });
@@ -149,6 +153,7 @@ async function atomicSwapStagingToActive(
   await moveIfExists(activeManifestPath, path.join(previousDir, MANIFEST_FILENAME));
   await moveIfExists(activeStatsPath, path.join(previousDir, INDEXING_STATS_FILENAME));
   await moveIfExists(activeRelationshipsPath, path.join(previousDir, RELATIONSHIPS_FILENAME));
+  await moveIfExists(activeHealthPath, path.join(previousDir, HEALTH_FILENAME));
   await moveDirIfExists(activeVectorDir, path.join(previousDir, VECTOR_DB_DIRNAME));
 
   // Step 2: Move staging artifacts to active location
@@ -159,6 +164,7 @@ async function atomicSwapStagingToActive(
     await moveIfExists(stagingManifestPath, activeManifestPath);
     await moveIfExists(stagingStatsPath, activeStatsPath);
     await moveIfExists(stagingRelationshipsPath, activeRelationshipsPath);
+    await moveIfExists(stagingHealthPath, activeHealthPath);
     await moveDirIfExists(stagingVectorDir, activeVectorDir);
 
     // Step 3: Clean up .previous and staging directories
@@ -188,6 +194,7 @@ async function atomicSwapStagingToActive(
       await moveIfExists(path.join(previousDir, MANIFEST_FILENAME), activeManifestPath);
       await moveIfExists(path.join(previousDir, INDEXING_STATS_FILENAME), activeStatsPath);
       await moveIfExists(path.join(previousDir, RELATIONSHIPS_FILENAME), activeRelationshipsPath);
+      await moveIfExists(path.join(previousDir, HEALTH_FILENAME), activeHealthPath);
       await moveDirIfExists(path.join(previousDir, VECTOR_DB_DIRNAME), activeVectorDir);
       console.error('Rollback successful');
     } catch (rollbackError) {
@@ -980,6 +987,16 @@ export class CodebaseIndexer {
       };
       await fs.writeFile(relationshipsPath, JSON.stringify(relationships, null, 2));
 
+      const healthPath = path.join(activeContextDir, HEALTH_FILENAME);
+      const health = deriveCodebaseHealth({
+        buildId,
+        formatVersion: INDEX_FORMAT_VERSION,
+        generatedAt,
+        chunks: allChunks,
+        graph: internalFileGraph
+      });
+      await fs.writeFile(healthPath, JSON.stringify(health, null, 2));
+
       // Write manifest (both full and incremental)
       // For full rebuild, write to staging; for incremental, write to active
       const activeManifestPath = path.join(activeContextDir, MANIFEST_FILENAME);
@@ -1021,7 +1038,8 @@ export class CodebaseIndexer {
               intelligence: { path: INTELLIGENCE_FILENAME },
               manifest: { path: MANIFEST_FILENAME },
               indexingStats: { path: INDEXING_STATS_FILENAME },
-              relationships: { path: RELATIONSHIPS_FILENAME }
+              relationships: { path: RELATIONSHIPS_FILENAME },
+              health: { path: HEALTH_FILENAME }
             }
           },
           null,

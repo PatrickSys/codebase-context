@@ -23,6 +23,7 @@ import { getRerankerStatus } from '../core/reranker.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import { readMemoriesFile, withConfidence } from '../memory/store.js';
 import type { MemoryWithConfidence } from '../memory/store.js';
+import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../health/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
 import type { FileExport } from '../utils/usage-tracker.js';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
@@ -283,6 +284,9 @@ export async function handle(
   } catch {
     /* graceful degradation — relationships sidecar may not exist yet */
   }
+
+  const healthArtifact = await readHealthFile(ctx.paths.health);
+  const healthByFile = indexHealthByFile(healthArtifact, ctx.rootPath);
 
   // Helper to get imports graph from relationships sidecar (preferred) or intelligence
   function getImportsGraph(): Record<string, string[]> | null {
@@ -573,6 +577,49 @@ export async function handle(
         return matchCount >= 2 && m.effectiveConfidence >= 0.5;
       })
       .slice(0, 2);
+  }
+
+  function getResultHealth(filePath: string):
+    | { level: 'low' | 'medium' | 'high'; reasons?: string[] }
+    | undefined {
+    const fileHealth = healthByFile.get(normalizeHealthLookupKey(filePath, ctx.rootPath));
+    if (!fileHealth || fileHealth.level === 'low') {
+      return undefined;
+    }
+    return {
+      level: fileHealth.level,
+      ...(fileHealth.reasons.length > 0 && { reasons: fileHealth.reasons.slice(0, 2) })
+    };
+  }
+
+  function summarizeResultHealth(resultPaths: string[]):
+    | { level: 'low' | 'medium' | 'high'; reasons?: string[] }
+    | undefined {
+    const matched = resultPaths
+      .map((filePath) => healthByFile.get(normalizeHealthLookupKey(filePath, ctx.rootPath)))
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+    if (matched.length === 0) {
+      return undefined;
+    }
+
+    const priority = { high: 3, medium: 2, low: 1 };
+    matched.sort((a, b) => {
+      if (priority[b.level] !== priority[a.level]) return priority[b.level] - priority[a.level];
+      if (b.score !== a.score) return b.score - a.score;
+      return a.file.localeCompare(b.file);
+    });
+
+    const top = matched[0];
+    const reasons = [...top.reasons];
+    const sameLevelCount = matched.filter((entry) => entry.level === top.level).length;
+    if (sameLevelCount > 1) {
+      reasons.push(`${sameLevelCount} result files are marked ${top.level}-risk`);
+    }
+
+    return {
+      level: top.level,
+      ...(reasons.length > 0 && { reasons: reasons.slice(0, 3) })
+    };
   }
 
   // Build a 1-line pattern summary string from intelligence.json patterns (compact mode)
@@ -951,6 +998,11 @@ export async function handle(
           }
         }
 
+        const healthSummary = summarizeResultHealth(resultPaths);
+        if (healthSummary) {
+          decisionCard.health = healthSummary;
+        }
+
         // Add whatWouldHelp from evidenceLock
         if (evidenceLock.whatWouldHelp && evidenceLock.whatWouldHelp.length > 0) {
           decisionCard.whatWouldHelp = evidenceLock.whatWouldHelp;
@@ -1084,6 +1136,7 @@ export async function handle(
           const importedByCount = getImportedByCount(r);
           const topExports = getTopExports(r.filePath);
           const scope = buildScopeHeader(r.metadata);
+          const health = getResultHealth(r.filePath);
           // First 3 lines of chunk content as a lightweight signature preview
           const signaturePreview = r.snippet
             ? r.snippet
@@ -1110,6 +1163,7 @@ export async function handle(
             ...(r.metadata?.symbolName && { symbol: r.metadata.symbolName }),
             ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
             ...(scope && { scope }),
+            ...(health && { health }),
             ...(signaturePreview && { signaturePreview })
           };
         }),
@@ -1143,6 +1197,7 @@ export async function handle(
           ? enrichSnippetWithScope(r.snippet, r.metadata, r.filePath, r.startLine)
           : undefined;
         const scope = buildScopeHeader(r.metadata);
+        const health = getResultHealth(r.filePath);
         // Chunk-level imports/exports (top 5 each) + complexity
         const chunkImports = r.imports?.slice(0, 5);
         const chunkExports = r.exports?.slice(0, 5);
@@ -1168,6 +1223,7 @@ export async function handle(
           ...(scope && { scope }),
           ...(chunkImports && chunkImports.length > 0 && { imports: chunkImports }),
           ...(chunkExports && chunkExports.length > 0 && { exports: chunkExports }),
+          ...(health && { health }),
           ...(r.metadata?.cyclomaticComplexity && {
             complexity: r.metadata.cyclomaticComplexity
           })

@@ -558,7 +558,8 @@ export const INDEX_CONSUMING_TOOL_NAMES = [
   'get_symbol_references',
   'detect_circular_dependencies',
   'get_team_patterns',
-  'get_codebase_metadata'
+  'get_codebase_metadata',
+  'get_codebase_health'
 ] as const;
 
 export const INDEX_CONSUMING_RESOURCE_NAMES = ['Codebase Intelligence'] as const;

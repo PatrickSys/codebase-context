@@ -14,6 +14,18 @@ const sidecar = spawn(process.execPath, [path.join(__dirname, 'hanging-server.mj
   stdio: 'ignore'
 });
 
+function cleanupChildren() {
+  for (const child of [echoChild, sidecar]) {
+    if (child.pid) {
+      try {
+        process.kill(child.pid, 'SIGTERM');
+      } catch {
+        // Best-effort cleanup for test fixture shutdown.
+      }
+    }
+  }
+}
+
 if (pidFile) {
   writeFileSync(
     pidFile,
@@ -25,11 +37,26 @@ if (pidFile) {
 process.stdin.pipe(echoChild.stdin);
 echoChild.stdout.pipe(process.stdout);
 
+process.once('SIGTERM', () => {
+  cleanupChildren();
+  process.exit(0);
+});
+process.once('SIGINT', () => {
+  cleanupChildren();
+  process.exit(0);
+});
+process.once('SIGHUP', () => {
+  cleanupChildren();
+  process.exit(0);
+});
+
 echoChild.on('exit', (code) => {
+  cleanupChildren();
   process.exit(code ?? 0);
 });
 
 echoChild.on('error', (error) => {
+  cleanupChildren();
   console.error(error);
   process.exit(1);
 });

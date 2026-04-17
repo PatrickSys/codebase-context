@@ -146,8 +146,7 @@ function getHealthLevel(fileMetrics: FileMetrics): CodebaseHealthFile {
     reasons.push(`Moderate code complexity (cyclomatic ${fileMetrics.maxCyclomaticComplexity})`);
   }
 
-  const level =
-    score >= 4 ? 'high' : score >= 2 ? 'medium' : ('low' as const);
+  const level = score >= 4 ? 'high' : score >= 2 ? 'medium' : ('low' as const);
 
   return {
     file: '',

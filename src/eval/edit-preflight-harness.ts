@@ -86,7 +86,10 @@ function summarizeEditPreflightResults(results: EditPreflightTaskResult[]): Edit
   };
 }
 
-function evaluateTask(task: EditPreflightTask, response: EditPreflightResponse): EditPreflightTaskResult {
+function evaluateTask(
+  task: EditPreflightTask,
+  response: EditPreflightResponse
+): EditPreflightTaskResult {
   const topFiles = (response.results ?? [])
     .map((result) => (typeof result.file === 'string' ? stripLocationSuffix(result.file) : ''))
     .filter((filePath): filePath is string => Boolean(filePath));
@@ -202,7 +205,9 @@ export function formatEditPreflightReport({
 
   lines.push(`\n=== Edit Preflight Eval Report: ${codebaseLabel} ===`);
   lines.push(`Fixture: ${fixturePath}`);
-  lines.push(`Tasks: ${summary.totalTasks} (${summary.safeTasks} safe, ${summary.unsafeTasks} unsafe)`);
+  lines.push(
+    `Tasks: ${summary.totalTasks} (${summary.safeTasks} safe, ${summary.unsafeTasks} unsafe)`
+  );
   lines.push(
     `Top-target in top-3: ${summary.topTargetInTop3Count}/${summary.targetableTasks} (${formatRate(summary.topTargetInTop3Rate)})`
   );

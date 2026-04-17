@@ -24,11 +24,15 @@ function normalizeHealthFile(raw: unknown): CodebaseHealthFile | null {
   const rawSignals = isRecord(raw.signals) ? raw.signals : undefined;
   const signals = rawSignals
     ? {
-        ...(typeof rawSignals.hotspotRank === 'number' ? { hotspotRank: rawSignals.hotspotRank } : {}),
+        ...(typeof rawSignals.hotspotRank === 'number'
+          ? { hotspotRank: rawSignals.hotspotRank }
+          : {}),
         ...(typeof rawSignals.importerCount === 'number'
           ? { importerCount: rawSignals.importerCount }
           : {}),
-        ...(typeof rawSignals.importCount === 'number' ? { importCount: rawSignals.importCount } : {}),
+        ...(typeof rawSignals.importCount === 'number'
+          ? { importCount: rawSignals.importCount }
+          : {}),
         ...(typeof rawSignals.cycleCount === 'number' ? { cycleCount: rawSignals.cycleCount } : {}),
         ...(typeof rawSignals.maxCyclomaticComplexity === 'number'
           ? { maxCyclomaticComplexity: rawSignals.maxCyclomaticComplexity }
@@ -45,7 +49,12 @@ function normalizeHealthFile(raw: unknown): CodebaseHealthFile | null {
 }
 
 export function normalizeHealthArtifact(raw: unknown): CodebaseHealthArtifact | null {
-  if (!isRecord(raw) || !isRecord(raw.header) || !isRecord(raw.summary) || !Array.isArray(raw.files)) {
+  if (
+    !isRecord(raw) ||
+    !isRecord(raw.header) ||
+    !isRecord(raw.summary) ||
+    !Array.isArray(raw.files)
+  ) {
     return null;
   }
 

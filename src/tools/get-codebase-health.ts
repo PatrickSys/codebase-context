@@ -34,7 +34,9 @@ export async function handle(
   const file = typeof args.file === 'string' ? args.file.trim() : undefined;
   const limit = typeof args.limit === 'number' && Number.isFinite(args.limit) ? args.limit : 10;
   const level =
-    args.level === 'low' || args.level === 'medium' || args.level === 'high' ? args.level : undefined;
+    args.level === 'low' || args.level === 'medium' || args.level === 'high'
+      ? args.level
+      : undefined;
 
   const health = await readHealthFile(ctx.paths.health);
   if (!health) {
@@ -45,7 +47,8 @@ export async function handle(
           text: JSON.stringify(
             {
               status: 'no_data',
-              message: 'No codebase health artifact found. Run refresh_index to generate health.json.'
+              message:
+                'No codebase health artifact found. Run refresh_index to generate health.json.'
             },
             null,
             2

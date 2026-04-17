@@ -997,7 +997,9 @@ export function registerHandlers(target: Server): void {
             {
               uri: CONTEXT_RESOURCE_URI,
               mimeType: 'text/plain',
-              text: project ? await generateCodebaseIntelligence(project) : buildProjectSelectionMessage()
+              text: project
+                ? await generateCodebaseIntelligence(project)
+                : buildProjectSelectionMessage()
             }
           ]
         };

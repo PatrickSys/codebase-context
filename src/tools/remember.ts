@@ -1,7 +1,11 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext, ToolResponse } from './types.js';
 import type { Memory, MemoryCategory, MemoryScope, MemoryType } from '../types/index.js';
-import { appendMemoryFile, buildMemoryIdentityParts, normalizeMemoryScope } from '../memory/store.js';
+import {
+  appendMemoryFile,
+  buildMemoryIdentityParts,
+  normalizeMemoryScope
+} from '../memory/store.js';
 
 export const definition: Tool = {
   name: 'remember',

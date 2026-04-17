@@ -220,7 +220,9 @@ export async function buildCodebaseMap(
   // --- Best examples ---
   const dominantPatternName =
     activePatterns.length > 0 ? activePatterns[0].name : 'high-quality example';
-  const goldenFiles = (intelligence.goldenFiles ?? []).filter((gf) => isMapEligiblePath(gf.file, mode));
+  const goldenFiles = (intelligence.goldenFiles ?? []).filter((gf) =>
+    isMapEligiblePath(gf.file, mode)
+  );
   const bestExamples: CodebaseMapExample[] = maybeLimit(
     goldenFiles,
     BOUNDED_SECTION_LIMITS.bestExamples,

@@ -73,7 +73,16 @@ export function normalizeMemory(raw: unknown): Memory | null {
 
   const source = m.source === 'git' ? ('git' as const) : undefined;
   const scope = normalizeMemoryScope(m.scope);
-  return { id, type, category, memory, reason, date, ...(source && { source }), ...(scope && { scope }) };
+  return {
+    id,
+    type,
+    category,
+    memory,
+    reason,
+    date,
+    ...(source && { source }),
+    ...(scope && { scope })
+  };
 }
 
 export function normalizeMemories(raw: unknown): Memory[] {

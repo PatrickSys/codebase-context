@@ -21,11 +21,7 @@ import {
 import { assessSearchQuality } from '../core/search-quality.js';
 import { getRerankerStatus } from '../core/reranker.js';
 import { IndexCorruptedError } from '../errors/index.js';
-import {
-  formatMemoryScopeText,
-  readMemoriesFile,
-  withConfidence
-} from '../memory/store.js';
+import { formatMemoryScopeText, readMemoriesFile, withConfidence } from '../memory/store.js';
 import type { MemoryWithConfidence } from '../memory/store.js';
 import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../health/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
@@ -359,7 +355,8 @@ export async function handle(
   }
 
   function getMemoryTextMatchCount(memory: MemoryWithConfidence): number {
-    const haystack = `${memory.memory} ${memory.reason} ${formatMemoryScopeText(memory.scope)}`.toLowerCase();
+    const haystack =
+      `${memory.memory} ${memory.reason} ${formatMemoryScopeText(memory.scope)}`.toLowerCase();
     return queryTerms.filter((term) => haystack.includes(term)).length;
   }
 
@@ -638,9 +635,9 @@ export async function handle(
       .slice(0, 2);
   }
 
-  function getResultHealth(filePath: string):
-    | { level: 'low' | 'medium' | 'high'; reasons?: string[] }
-    | undefined {
+  function getResultHealth(
+    filePath: string
+  ): { level: 'low' | 'medium' | 'high'; reasons?: string[] } | undefined {
     const fileHealth = healthByFile.get(normalizeHealthLookupKey(filePath, ctx.rootPath));
     if (!fileHealth || fileHealth.level === 'low') {
       return undefined;
@@ -651,9 +648,9 @@ export async function handle(
     };
   }
 
-  function summarizeResultHealth(resultPaths: string[]):
-    | { level: 'low' | 'medium' | 'high'; reasons?: string[] }
-    | undefined {
+  function summarizeResultHealth(
+    resultPaths: string[]
+  ): { level: 'low' | 'medium' | 'high'; reasons?: string[] } | undefined {
     const matched = resultPaths
       .map((filePath) => healthByFile.get(normalizeHealthLookupKey(filePath, ctx.rootPath)))
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));

@@ -3,13 +3,15 @@
  */
 
 import path from 'path';
-import type { Memory } from './types/index.js';
+import type { Memory, MemoryScope } from './types/index.js';
 import { CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME } from './constants/codebase-context.js';
 import {
   appendMemoryFile,
+  buildMemoryIdentityParts,
   readMemoriesFile,
   removeMemory,
   filterMemories,
+  normalizeMemoryScope,
   withConfidence
 } from './memory/store.js';
 
@@ -45,7 +47,7 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
   const listUsage =
     'Usage: codebase-context memory list [--category <cat>] [--type <type>] [--query <text>] [--json]';
   const addUsage =
-    'Usage: codebase-context memory add --type <type> --category <category> --memory <text> --reason <text> [--json]';
+    'Usage: codebase-context memory add --type <type> --category <category> --memory <text> --reason <text> [--scope-kind global|file|symbol] [--scope-file <path>] [--scope-symbol <name>] [--json]';
   const removeUsage = 'Usage: codebase-context memory remove <id> [--json]';
 
   const exitWithUsageError = (message: string, usage?: string): never => {
@@ -134,6 +136,13 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
           const staleTag = m.stale ? ' [STALE]' : '';
           console.log(`[${m.id}] ${m.type}/${m.category}: ${m.memory}${staleTag}`);
           console.log(`  Reason: ${m.reason}`);
+          if (m.scope && m.scope.kind !== 'global') {
+            if (m.scope.kind === 'file') {
+              console.log(`  Scope: file ${m.scope.file}`);
+            } else {
+              console.log(`  Scope: symbol ${m.scope.file}#${m.scope.symbol}`);
+            }
+          }
           console.log(`  Date: ${m.date} | Confidence: ${m.effectiveConfidence}`);
           console.log('');
         }
@@ -145,6 +154,9 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
     let category: CliMemoryCategory | undefined;
     let memory: string | undefined;
     let reason: string | undefined;
+    let scopeKind: MemoryScope['kind'] | undefined;
+    let scopeFile: string | undefined;
+    let scopeSymbol: string | undefined;
 
     for (let i = 1; i < args.length; i++) {
       if (args[i] === '--type') {
@@ -197,6 +209,34 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
         }
         reason = value;
         i++;
+      } else if (args[i] === '--scope-kind') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('--')) {
+          exitWithUsageError('Error: --scope-kind requires a value.', addUsage);
+        }
+        if (value === 'global' || value === 'file' || value === 'symbol') {
+          scopeKind = value;
+        } else {
+          exitWithUsageError(
+            'Error: invalid --scope-kind. Allowed: global, file, symbol.',
+            addUsage
+          );
+        }
+        i++;
+      } else if (args[i] === '--scope-file') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('--')) {
+          exitWithUsageError('Error: --scope-file requires a value.', addUsage);
+        }
+        scopeFile = value;
+        i++;
+      } else if (args[i] === '--scope-symbol') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('--')) {
+          exitWithUsageError('Error: --scope-symbol requires a value.', addUsage);
+        }
+        scopeSymbol = value;
+        i++;
       } else if (args[i] === '--json') {
         // handled above
       }
@@ -210,9 +250,30 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
     const requiredCategory = category;
     const requiredMemory = memory;
     const requiredReason = reason;
+    const scope = normalizeMemoryScope({
+      kind: scopeKind,
+      file: scopeFile,
+      symbol: scopeSymbol
+    });
+
+    if (scopeKind === 'file' && !scope) {
+      exitWithUsageError('Error: --scope-kind file requires --scope-file.', addUsage);
+    }
+    if (scopeKind === 'symbol' && !scope) {
+      exitWithUsageError(
+        'Error: --scope-kind symbol requires --scope-file and --scope-symbol.',
+        addUsage
+      );
+    }
 
     const crypto = await import('crypto');
-    const hashContent = `${type}:${requiredCategory}:${requiredMemory}:${requiredReason}`;
+    const hashContent = buildMemoryIdentityParts({
+      type,
+      category: requiredCategory,
+      memory: requiredMemory,
+      reason: requiredReason,
+      scope
+    });
     const hash = crypto.createHash('sha256').update(hashContent).digest('hex');
     const id = hash.substring(0, 12);
 
@@ -222,7 +283,8 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
       category: requiredCategory,
       memory: requiredMemory,
       reason: requiredReason,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      ...(scope && { scope })
     };
     const result = await appendMemoryFile(memoryPath, newMemory);
 

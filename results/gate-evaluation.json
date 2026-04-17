@@ -1,14 +1,14 @@
 {
   "totalTasks": 24,
   "averageUsefulness": 0.75,
-  "averagePayloadBytes": 7287.625,
-  "averageEstimatedTokens": 1822.25,
+  "averagePayloadBytes": 7306.458333333333,
+  "averageEstimatedTokens": 1827.0833333333333,
   "searchTasks": 8,
   "findTasks": 8,
   "mapTasks": 8,
   "averageFirstRelevantHit": null,
   "bestExampleUsefulnessRate": 0.125,
-  "averageElapsedMs": 546.75,
+  "averageElapsedMs": 473.5833333333333,
   "averageToolCallCount": 1,
   "results": [
     {
@@ -25,9 +25,9 @@
         "generated:"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 23720,
-      "estimatedTokens": 5930,
-      "elapsedMs": 74,
+      "payloadBytes": 23694,
+      "estimatedTokens": 5924,
+      "elapsedMs": 30,
       "toolCallCount": 1
     },
     {
@@ -43,9 +43,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 5751,
-      "estimatedTokens": 1438,
-      "elapsedMs": 29,
+      "payloadBytes": 5906,
+      "estimatedTokens": 1477,
+      "elapsedMs": 25,
       "toolCallCount": 1
     },
     {
@@ -62,9 +62,9 @@
         "libraries actually used"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 23720,
-      "estimatedTokens": 5930,
-      "elapsedMs": 18,
+      "payloadBytes": 23694,
+      "estimatedTokens": 5924,
+      "elapsedMs": 15,
       "toolCallCount": 1
     },
     {
@@ -79,9 +79,9 @@
         "tsconfig"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 23720,
-      "estimatedTokens": 5930,
-      "elapsedMs": 13,
+      "payloadBytes": 23694,
+      "estimatedTokens": 5924,
+      "elapsedMs": 11,
       "toolCallCount": 1
     },
     {
@@ -98,7 +98,7 @@
       "payloadBytes": 1802,
       "estimatedTokens": 451,
       "bestExampleUseful": true,
-      "elapsedMs": 4,
+      "elapsedMs": 2,
       "toolCallCount": 1
     },
     {
@@ -115,7 +115,7 @@
       "payloadBytes": 1727,
       "estimatedTokens": 432,
       "bestExampleUseful": false,
-      "elapsedMs": 2,
+      "elapsedMs": 1,
       "toolCallCount": 1
     },
     {
@@ -131,10 +131,10 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 4960,
-      "estimatedTokens": 1240,
+      "payloadBytes": 5095,
+      "estimatedTokens": 1274,
       "bestExampleUseful": false,
-      "elapsedMs": 6310,
+      "elapsedMs": 1981,
       "toolCallCount": 1
     },
     {
@@ -167,9 +167,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3695,
-      "estimatedTokens": 924,
-      "elapsedMs": 130,
+      "payloadBytes": 3721,
+      "estimatedTokens": 931,
+      "elapsedMs": 123,
       "toolCallCount": 1
     },
     {
@@ -184,9 +184,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 4627,
-      "estimatedTokens": 1157,
-      "elapsedMs": 378,
+      "payloadBytes": 4654,
+      "estimatedTokens": 1164,
+      "elapsedMs": 1817,
       "toolCallCount": 1
     },
     {
@@ -201,9 +201,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3981,
-      "estimatedTokens": 996,
-      "elapsedMs": 303,
+      "payloadBytes": 4008,
+      "estimatedTokens": 1002,
+      "elapsedMs": 371,
       "toolCallCount": 1
     },
     {
@@ -218,9 +218,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 4402,
-      "estimatedTokens": 1101,
-      "elapsedMs": 187,
+      "payloadBytes": 4429,
+      "estimatedTokens": 1108,
+      "elapsedMs": 215,
       "toolCallCount": 1
     },
     {
@@ -239,7 +239,7 @@
       "forbiddenHits": [],
       "payloadBytes": 4268,
       "estimatedTokens": 1067,
-      "elapsedMs": 148,
+      "elapsedMs": 100,
       "toolCallCount": 1
     },
     {
@@ -258,7 +258,7 @@
       "forbiddenHits": [],
       "payloadBytes": 15329,
       "estimatedTokens": 3833,
-      "elapsedMs": 63,
+      "elapsedMs": 79,
       "toolCallCount": 1
     },
     {
@@ -275,7 +275,7 @@
       "forbiddenHits": [],
       "payloadBytes": 15329,
       "estimatedTokens": 3833,
-      "elapsedMs": 52,
+      "elapsedMs": 64,
       "toolCallCount": 1
     },
     {
@@ -294,7 +294,7 @@
       "forbiddenHits": [],
       "payloadBytes": 15329,
       "estimatedTokens": 3833,
-      "elapsedMs": 48,
+      "elapsedMs": 64,
       "toolCallCount": 1
     },
     {
@@ -311,7 +311,7 @@
       "payloadBytes": 298,
       "estimatedTokens": 75,
       "bestExampleUseful": false,
-      "elapsedMs": 3,
+      "elapsedMs": 4,
       "toolCallCount": 1
     },
     {
@@ -328,10 +328,10 @@
         "bestExample"
       ],
       "forbiddenHits": [],
-      "payloadBytes": 4570,
-      "estimatedTokens": 1143,
+      "payloadBytes": 4597,
+      "estimatedTokens": 1150,
       "bestExampleUseful": false,
-      "elapsedMs": 1018,
+      "elapsedMs": 1323,
       "toolCallCount": 1
     },
     {
@@ -381,9 +381,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 4033,
-      "estimatedTokens": 1009,
-      "elapsedMs": 920,
+      "payloadBytes": 4060,
+      "estimatedTokens": 1015,
+      "elapsedMs": 1086,
       "toolCallCount": 1
     },
     {
@@ -398,9 +398,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3440,
-      "estimatedTokens": 860,
-      "elapsedMs": 1369,
+      "payloadBytes": 3466,
+      "estimatedTokens": 867,
+      "elapsedMs": 1640,
       "toolCallCount": 1
     },
     {
@@ -415,9 +415,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 4391,
-      "estimatedTokens": 1098,
-      "elapsedMs": 1269,
+      "payloadBytes": 4418,
+      "estimatedTokens": 1105,
+      "elapsedMs": 1510,
       "toolCallCount": 1
     },
     {
@@ -432,9 +432,9 @@
       ],
       "missingSignals": [],
       "forbiddenHits": [],
-      "payloadBytes": 3607,
-      "estimatedTokens": 902,
-      "elapsedMs": 775,
+      "payloadBytes": 3633,
+      "estimatedTokens": 909,
+      "elapsedMs": 896,
       "toolCallCount": 1
     }
   ],
@@ -447,22 +447,22 @@
       "payloadMetric": "averageEstimatedTokens",
       "payloadMetricPassed": false,
       "beatenUsefulnessMetrics": [
-        "averageUsefulness"
+        "averageUsefulness",
+        "bestExampleUsefulnessRate"
       ],
       "missingMetrics": [
-        "averageFirstRelevantHit",
-        "bestExampleUsefulnessRate"
+        "averageFirstRelevantHit"
       ],
       "comparisons": [
         {
           "metric": "averageEstimatedTokens",
-          "comparatorValue": 18.5,
-          "actualValue": 1822.25,
+          "comparatorValue": 32.166666666666664,
+          "actualValue": 1827.0833333333333,
           "passes": false
         },
         {
           "metric": "averageUsefulness",
-          "comparatorValue": 0,
+          "comparatorValue": 0.027777777777777776,
           "actualValue": 0.75,
           "passes": true
         },
@@ -474,9 +474,9 @@
         },
         {
           "metric": "bestExampleUsefulnessRate",
-          "comparatorValue": null,
+          "comparatorValue": 0,
           "actualValue": 0.125,
-          "passes": false
+          "passes": true
         }
       ]
     },
@@ -543,28 +543,25 @@
       },
       {
         "comparatorName": "codebase-memory-mcp",
-        "status": "pending_evidence",
+        "status": "failed",
         "tolerancePercent": 15,
-        "missingMetrics": [
-          "averageFirstRelevantHit",
-          "bestExampleUsefulnessRate"
-        ],
+        "missingMetrics": [],
         "comparisons": [
           {
             "metric": "averageUsefulness",
-            "comparatorValue": 0,
+            "comparatorValue": 0.1875,
             "actualValue": 0.75,
             "passes": true
           },
           {
             "metric": "averageFirstRelevantHit",
-            "comparatorValue": null,
+            "comparatorValue": 1.2857142857142858,
             "actualValue": null,
             "passes": false
           },
           {
             "metric": "bestExampleUsefulnessRate",
-            "comparatorValue": null,
+            "comparatorValue": 0.5,
             "actualValue": 0.125,
             "passes": false
           }
@@ -605,7 +602,6 @@
       "raw Claude Code baseline metrics missing",
       "GrepAI comparator metrics missing",
       "jCodeMunch comparator metrics missing",
-      "codebase-memory-mcp comparator metrics missing",
       "CodeGraphContext comparator metrics missing"
     ],
     "claimAllowed": false

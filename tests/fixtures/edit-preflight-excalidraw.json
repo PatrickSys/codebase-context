@@ -1,0 +1,93 @@
+{
+  "description": "Frozen edit-preflight tasks for Excalidraw. This suite measures whether the current preflight finds the right edit surface and abstains on unsafe asks.",
+  "codebase": "Excalidraw",
+  "repository": "excalidraw/excalidraw",
+  "repositoryUrl": "https://github.com/excalidraw/excalidraw",
+  "repositoryRef": "e18c1dd213000dde0ae94ef7eb00aab537b39708",
+  "frozenDate": "2026-04-17",
+  "notes": "Safe tasks stay local to a scene, element, serialization, or app-state surface. Unsafe tasks intentionally span multiple subsystems or migration-scale edits.",
+  "tasks": [
+    {
+      "id": "ex-ep-01",
+      "title": "Scene update flow",
+      "query": "change how scene updates are applied",
+      "risk": "safe",
+      "expectedTargetPatterns": ["scene"],
+      "expectedBestExamplePatterns": ["scene"],
+      "notes": "Focused scene-edit behavior used in current discovery coverage."
+    },
+    {
+      "id": "ex-ep-02",
+      "title": "Element type definitions",
+      "query": "edit element type definitions",
+      "risk": "safe",
+      "expectedTargetPatterns": ["element", "type"],
+      "expectedBestExamplePatterns": ["element", "type"],
+      "notes": "Concrete type-oriented edit surface."
+    },
+    {
+      "id": "ex-ep-03",
+      "title": "Scene JSON serialization",
+      "query": "modify scene serialization to json export",
+      "risk": "safe",
+      "expectedTargetPatterns": ["scene", "json", "data"],
+      "expectedBestExamplePatterns": ["scene", "json", "data"],
+      "notes": "Narrow export/serialization edit."
+    },
+    {
+      "id": "ex-ep-04",
+      "title": "App state selection flow",
+      "query": "change app state selection and update logic",
+      "risk": "safe",
+      "expectedTargetPatterns": ["appstate", "state", "app"],
+      "expectedBestExamplePatterns": ["appstate", "state", "app"],
+      "notes": "Local app-state behavior."
+    },
+    {
+      "id": "ex-ep-05",
+      "title": "Canvas entry interaction",
+      "query": "edit the main canvas app entry behavior",
+      "risk": "safe",
+      "expectedTargetPatterns": ["app", "excalidraw", "canvas"],
+      "expectedBestExamplePatterns": ["app", "excalidraw", "canvas"],
+      "notes": "Concrete entry-surface edit."
+    },
+    {
+      "id": "ex-ep-06",
+      "title": "Element mutation helper",
+      "query": "change how elements are updated after scene edits",
+      "risk": "safe",
+      "expectedTargetPatterns": ["element", "scene"],
+      "expectedBestExamplePatterns": ["element", "scene"],
+      "notes": "Targets the local element mutation path without asking for repo-wide migration."
+    },
+    {
+      "id": "ex-ep-07",
+      "title": "Rewrite scene mutation architecture",
+      "query": "rewrite all scene mutation flows across the whole app in one pass",
+      "risk": "unsafe",
+      "notes": "Broad architectural request intended to trigger abstention."
+    },
+    {
+      "id": "ex-ep-08",
+      "title": "Replace state model globally",
+      "query": "migrate every app state update path to a new state architecture",
+      "risk": "unsafe",
+      "notes": "Migration-scale change across the repository."
+    },
+    {
+      "id": "ex-ep-09",
+      "title": "Refactor export and collaboration together",
+      "query": "change the entire export pipeline and collaboration serialization at once",
+      "risk": "unsafe",
+      "notes": "Coupled multi-subsystem change that should not look edit-ready from one search."
+    },
+    {
+      "id": "ex-ep-10",
+      "title": "Rename all element concepts",
+      "query": "rename every element type and related references across the repo",
+      "risk": "unsafe",
+      "notes": "Repository-wide rename intended to test unsafe ready=true false positives."
+    }
+  ]
+}

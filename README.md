@@ -1,26 +1,26 @@
 # codebase-context
 
-## Stop paying for AI agents to explore your codebase. codebase-context pre-maps the architecture, conventions, and team memory so they don't have to.
+## Map your team's conventions before your AI agent starts searching.
 
-[![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](./package.json)
+[![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](https://github.com/PatrickSys/codebase-context/blob/master/package.json)
 
-You're tired of AI agents writing code that 'just works' but fits like a square peg in a round hole - not your conventions, not your architecture, not your repo. Even with well-curated instructions. You correct the agent, it doesn't remember. Next session, same mistakes.
+You're tired of AI agents writing code that "just works" but still misses how your team actually builds things. They search too broadly, pick generic examples, and spend tokens exploring before they understand the shape of the repo.
 
-This MCP gives agents _just enough_ context so they match _how_ your team codes, know _why_, and _remember_ every correction.
+`codebase-context` changes the first step. Start with a bounded conventions map that shows the architecture, dominant patterns, and strongest local examples. Then search for the exact file, symbol, or workflow you need.
 
 Here's what codebase-context does:
 
-**Finds the right context** - Search that doesn't just return code. Each result comes back with analyzed and quantified coding patterns and conventions, related team memories, file relationships, and quality indicators. It knows whether you're looking for a specific file, a concept, or how things wire together - and filters out the noise (test files, configs, old utilities) before the agent sees them. The agent gets curated context, not raw hits.
+**Starts with a bounded conventions map** - The first call shows architecture layers, active patterns, golden files, and next calls without dumping vendored repos, fixtures, generated output, or oversized entrypoint lists into the default surface.
 
-**Knows your conventions** - Detected from your code and git history, not only from rules you wrote. Seeks team consensus and direction by adoption percentages and trends (rising/declining), golden files. Tells the difference between code that's _common_ and code that's _current_ - what patterns the team is moving toward and what's being left behind.
+**Finds the right local example** - Search does not just return code. Each result comes back with pattern signals, file relationships, and quality indicators so the agent can move from the map to the most relevant local example instead of wandering through raw hits.
 
-**Remembers across sessions** - Decisions, failures, workarounds that look wrong but exist for a reason - the battle scars that aren't in the comments. Recorded once, surfaced automatically so the agent doesn't "clean up" something you spent a week getting right. Conventional git commits (`refactor:`, `migrate:`, `fix:`) auto-extract into memory with zero effort. Stale memories decay and get flagged instead of blindly trusted.
+**Knows what is current** - Conventions are detected from your code and git history, not only from rules you wrote. The map distinguishes what is common from what is rising or declining, and points at the files that best represent the current direction.
 
-**Checks before editing** - Before editing something, you get a decision card showing whether there's enough evidence to proceed. If a symbol has four callers and only two appear in your search results, the card shows that coverage gap. If coverage is low, `whatWouldHelp` lists the specific searches to run before you touch anything.
+**Adds support signals when you need them** - Team memory and edit-readiness checks stay available, but as supporting context after the map and search have already narrowed the work.
 
-One tool call returns all of it. Local-first - your code never leaves your machine by default.
+Map first, search second, local-first throughout. Your code never leaves your machine by default.
 
-See the [current discovery benchmark](./docs/benchmark.md) for the checked-in proof results and current gate truth.
+See the [current discovery benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) for the checked-in discovery-only proof. The gate is still `pending_evidence`, and `claimAllowed` remains `false`.
 
 ### What it looks like
 
@@ -38,7 +38,7 @@ This is the part most tools miss: what the team is doing now, what it is moving 
 
 When the agent searches with edit intent, it gets a compact decision card: confidence, whether it's safe to proceed, which patterns apply, the best example, and which files are likely to be affected.
 
-More CLI examples in [`docs/cli.md`](./docs/cli.md). Full walkthrough: [`docs/demo.md`](./docs/demo.md).
+More CLI examples in [`docs/cli.md`](./docs/cli.md). Full walkthrough: [demo.md on GitHub](https://github.com/PatrickSys/codebase-context/blob/master/docs/demo.md).
 
 ## Quick Start
 
@@ -71,7 +71,7 @@ Full per-client setup, HTTP server instructions, and local build testing: [`docs
 
 ## First Use
 
-Get a conventions map of your codebase before exploring or searching:
+Get a conventions map of your codebase before exploring or editing:
 
 ```bash
 # See your codebase conventions — architecture layers, patterns, golden files
@@ -85,20 +85,20 @@ Your AI agent uses the same map via the `codebase://context` MCP resource on fir
 
 ## Common First Commands
 
-Three commands to get what usually takes a new developer weeks to piece together:
+Three commands to understand a repo before you edit it:
 
 ```bash
-# What tech stack, architecture, and file count?
-npx -y codebase-context metadata
+# What are the main conventions and best examples?
+npx -y codebase-context map
 
-# What does the team actually code like right now?
+# Then search for the local example you need
+npx -y codebase-context search --query "auth middleware"
+
+# What patterns is the team actually using right now?
 npx -y codebase-context patterns
-
-# What team decisions were made (and why)?
-npx -y codebase-context memory list
 ```
 
-This is also what your AI agent consumes automatically via MCP tools; the CLI is the human-readable version.
+This is also what your AI agent consumes automatically via MCP tools; the CLI is the human-readable version of the same map-plus-search flow.
 
 ## What it does
 
@@ -224,14 +224,14 @@ These are the behaviors that make the most difference day-to-day. Copy, trim wha
 
 ## Links
 
-- [Benchmark](./docs/benchmark.md) — current discovery suite results and gate truth
-- [Demo](./docs/demo.md) — real CLI walkthrough
+- [Benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) — current discovery suite results and gate truth
+- [Demo](https://github.com/PatrickSys/codebase-context/blob/master/docs/demo.md) — real CLI walkthrough
 - [Client Setup](./docs/client-setup.md) — per-client config, HTTP setup, local build testing
 - [Capabilities Reference](./docs/capabilities.md) — tool API, retrieval pipeline, decision card schema
 - [CLI Gallery](./docs/cli.md) — formatted command output examples
-- [Motivation](./MOTIVATION.md) — research and design rationale
-- [Contributing](./CONTRIBUTING.md) — dev setup and eval harness
-- [Changelog](./CHANGELOG.md)
+- [Motivation](https://github.com/PatrickSys/codebase-context/blob/master/MOTIVATION.md) — research and design rationale
+- [Contributing](https://github.com/PatrickSys/codebase-context/blob/master/CONTRIBUTING.md) — dev setup and eval harness
+- [Changelog](https://github.com/PatrickSys/codebase-context/blob/master/CHANGELOG.md)
 
 ## License
 

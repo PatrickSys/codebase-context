@@ -21,8 +21,9 @@ import {
 import { assessSearchQuality } from '../core/search-quality.js';
 import { getRerankerStatus } from '../core/reranker.js';
 import { IndexCorruptedError } from '../errors/index.js';
-import { readMemoriesFile, withConfidence } from '../memory/store.js';
+import { formatMemoryScopeText, readMemoriesFile, withConfidence } from '../memory/store.js';
 import type { MemoryWithConfidence } from '../memory/store.js';
+import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../health/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
 import type { FileExport } from '../utils/usage-tracker.js';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
@@ -247,14 +248,8 @@ export async function handle(
   // Load memories for keyword matching, enriched with confidence
   const allMemories = await readMemoriesFile(ctx.paths.memory);
   const allMemoriesWithConf = withConfidence(allMemories);
-
   const queryTerms = queryStr.toLowerCase().split(/\s+/).filter(Boolean);
-  const relatedMemories = allMemoriesWithConf
-    .filter((m) => {
-      const searchText = `${m.memory} ${m.reason}`.toLowerCase();
-      return queryTerms.some((term: string) => searchText.includes(term));
-    })
-    .sort((a, b) => b.effectiveConfidence - a.effectiveConfidence);
+  const queryTermSet = new Set(queryTerms);
 
   // Load intelligence data for enrichment (all intents, not just preflight)
   let intelligence: IntelligenceData | null = null;
@@ -283,6 +278,9 @@ export async function handle(
   } catch {
     /* graceful degradation — relationships sidecar may not exist yet */
   }
+
+  const healthArtifact = await readHealthFile(ctx.paths.health);
+  const healthByFile = indexHealthByFile(healthArtifact, ctx.rootPath);
 
   // Helper to get imports graph from relationships sidecar (preferred) or intelligence
   function getImportsGraph(): Record<string, string[]> | null {
@@ -320,9 +318,71 @@ export async function handle(
     return normalized.replace(/^\.\//, '');
   }
 
+  function normalizeSymbolName(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
   function pathsMatch(a: string, b: string): boolean {
     return a === b || a.endsWith(b) || b.endsWith(a);
   }
+
+  const resultPathSet = new Set(results.map((result) => normalizeGraphPath(result.filePath)));
+  const resultSymbolSet = new Set(
+    results
+      .map((result) => {
+        const symbolName = result.metadata?.symbolName;
+        return typeof symbolName === 'string' ? normalizeSymbolName(symbolName) : null;
+      })
+      .filter((value): value is string => value !== null)
+  );
+
+  function getMemoryScopeBoost(memory: MemoryWithConfidence): number {
+    if (!memory.scope || memory.scope.kind === 'global') return 0;
+
+    const normalizedFile = normalizeGraphPath(memory.scope.file);
+    if (memory.scope.kind === 'file') {
+      return resultPathSet.has(normalizedFile) ? 3 : 0;
+    }
+
+    const symbolMatch =
+      resultSymbolSet.has(normalizeSymbolName(memory.scope.symbol)) ||
+      queryTermSet.has(normalizeSymbolName(memory.scope.symbol));
+
+    if (resultPathSet.has(normalizedFile) && symbolMatch) return 4;
+    if (resultPathSet.has(normalizedFile)) return 2;
+    if (symbolMatch) return 1;
+    return 0;
+  }
+
+  function getMemoryTextMatchCount(memory: MemoryWithConfidence): number {
+    const haystack =
+      `${memory.memory} ${memory.reason} ${formatMemoryScopeText(memory.scope)}`.toLowerCase();
+    return queryTerms.filter((term) => haystack.includes(term)).length;
+  }
+
+  function formatMemoryForOutput(memory: MemoryWithConfidence): string {
+    const scopeText =
+      !memory.scope || memory.scope.kind === 'global'
+        ? ''
+        : memory.scope.kind === 'file'
+          ? ` [${memory.scope.file}]`
+          : ` [${memory.scope.file}#${memory.scope.symbol}]`;
+    return `${memory.memory}${scopeText} (${memory.effectiveConfidence})`;
+  }
+
+  const relatedMemories = allMemoriesWithConf
+    .map((memory) => ({
+      memory,
+      textMatches: getMemoryTextMatchCount(memory),
+      scopeBoost: getMemoryScopeBoost(memory)
+    }))
+    .filter((entry) => entry.textMatches > 0 || entry.scopeBoost > 0)
+    .sort((a, b) => {
+      if (b.scopeBoost !== a.scopeBoost) return b.scopeBoost - a.scopeBoost;
+      if (b.textMatches !== a.textMatches) return b.textMatches - a.textMatches;
+      return b.memory.effectiveConfidence - a.memory.effectiveConfidence;
+    })
+    .map((entry) => entry.memory);
 
   function computeIndexConfidence(): 'fresh' | 'aging' | 'stale' {
     let confidence: 'fresh' | 'aging' | 'stale' = 'stale';
@@ -568,11 +628,54 @@ export async function handle(
     if (terms.length === 0) return [];
     return memories
       .filter((m) => {
-        const text = `${m.memory} ${m.reason}`.toLowerCase();
+        const text = `${m.memory} ${m.reason} ${formatMemoryScopeText(m.scope)}`.toLowerCase();
         const matchCount = terms.filter((t) => text.includes(t)).length;
-        return matchCount >= 2 && m.effectiveConfidence >= 0.5;
+        return (matchCount >= 2 || getMemoryScopeBoost(m) >= 2) && m.effectiveConfidence >= 0.5;
       })
       .slice(0, 2);
+  }
+
+  function getResultHealth(
+    filePath: string
+  ): { level: 'low' | 'medium' | 'high'; reasons?: string[] } | undefined {
+    const fileHealth = healthByFile.get(normalizeHealthLookupKey(filePath, ctx.rootPath));
+    if (!fileHealth || fileHealth.level === 'low') {
+      return undefined;
+    }
+    return {
+      level: fileHealth.level,
+      ...(fileHealth.reasons.length > 0 && { reasons: fileHealth.reasons.slice(0, 2) })
+    };
+  }
+
+  function summarizeResultHealth(
+    resultPaths: string[]
+  ): { level: 'low' | 'medium' | 'high'; reasons?: string[] } | undefined {
+    const matched = resultPaths
+      .map((filePath) => healthByFile.get(normalizeHealthLookupKey(filePath, ctx.rootPath)))
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+    if (matched.length === 0) {
+      return undefined;
+    }
+
+    const priority = { high: 3, medium: 2, low: 1 };
+    matched.sort((a, b) => {
+      if (priority[b.level] !== priority[a.level]) return priority[b.level] - priority[a.level];
+      if (b.score !== a.score) return b.score - a.score;
+      return a.file.localeCompare(b.file);
+    });
+
+    const top = matched[0];
+    const reasons = [...top.reasons];
+    const sameLevelCount = matched.filter((entry) => entry.level === top.level).length;
+    if (sameLevelCount > 1) {
+      reasons.push(`${sameLevelCount} result files are marked ${top.level}-risk`);
+    }
+
+    return {
+      level: top.level,
+      ...(reasons.length > 0 && { reasons: reasons.slice(0, 3) })
+    };
   }
 
   // Build a 1-line pattern summary string from intelligence.json patterns (compact mode)
@@ -787,7 +890,7 @@ export async function handle(
 
         // --- Risk level (based on circular deps + impact breadth) ---
         //TODO: Review this risk level calculation
-        let _riskLevel: 'low' | 'medium' | 'high' = 'low';
+        let riskLevel: 'low' | 'medium' | 'high' = 'low';
         let cycleCount = 0;
         const graphDataSource = relationships?.graph || intelligence?.internalFileGraph;
         if (graphDataSource) {
@@ -820,9 +923,9 @@ export async function handle(
           }
         }
         if (cycleCount > 0 || impactCandidates.length > 10) {
-          _riskLevel = 'high';
+          riskLevel = 'high';
         } else if (impactCandidates.length > 3) {
-          _riskLevel = 'medium';
+          riskLevel = 'medium';
         }
 
         // --- Golden files (exemplar code) ---
@@ -949,6 +1052,25 @@ export async function handle(
           if (Object.keys(impactObj).length > 0) {
             decisionCard.impact = impactObj;
           }
+        }
+
+        const healthSummary = summarizeResultHealth(resultPaths);
+        if (healthSummary) {
+          decisionCard.health = healthSummary;
+        } else if (riskLevel !== 'low') {
+          const reasons: string[] = [];
+          if (cycleCount > 0) {
+            reasons.push(
+              `${cycleCount} circular dependenc${cycleCount === 1 ? 'y' : 'ies'} in the result area`
+            );
+          }
+          if (impactCandidates.length > 3) {
+            reasons.push(`${impactCandidates.length} upstream callers may be affected`);
+          }
+          decisionCard.health = {
+            level: riskLevel,
+            ...(reasons.length > 0 && { reasons })
+          };
         }
 
         // Add whatWouldHelp from evidenceLock
@@ -1084,6 +1206,7 @@ export async function handle(
           const importedByCount = getImportedByCount(r);
           const topExports = getTopExports(r.filePath);
           const scope = buildScopeHeader(r.metadata);
+          const health = getResultHealth(r.filePath);
           // First 3 lines of chunk content as a lightweight signature preview
           const signaturePreview = r.snippet
             ? r.snippet
@@ -1110,11 +1233,12 @@ export async function handle(
             ...(r.metadata?.symbolName && { symbol: r.metadata.symbolName }),
             ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
             ...(scope && { scope }),
+            ...(health && { health }),
             ...(signaturePreview && { signaturePreview })
           };
         }),
         ...(strongMemories.length > 0 && {
-          relatedMemories: strongMemories.map((m) => `${m.memory} (${m.effectiveConfidence})`)
+          relatedMemories: strongMemories.map((m) => formatMemoryForOutput(m))
         })
       },
       { mode: 'compact', pretty: true, transportAware: true }
@@ -1143,6 +1267,7 @@ export async function handle(
           ? enrichSnippetWithScope(r.snippet, r.metadata, r.filePath, r.startLine)
           : undefined;
         const scope = buildScopeHeader(r.metadata);
+        const health = getResultHealth(r.filePath);
         // Chunk-level imports/exports (top 5 each) + complexity
         const chunkImports = r.imports?.slice(0, 5);
         const chunkExports = r.exports?.slice(0, 5);
@@ -1168,6 +1293,7 @@ export async function handle(
           ...(scope && { scope }),
           ...(chunkImports && chunkImports.length > 0 && { imports: chunkImports }),
           ...(chunkExports && chunkExports.length > 0 && { exports: chunkExports }),
+          ...(health && { health }),
           ...(r.metadata?.cyclomaticComplexity && {
             complexity: r.metadata.cyclomaticComplexity
           })
@@ -1175,9 +1301,7 @@ export async function handle(
       }),
       totalResults: results.length,
       ...(relatedMemories.length > 0 && {
-        relatedMemories: relatedMemories
-          .slice(0, 3)
-          .map((m) => `${m.memory} (${m.effectiveConfidence})`)
+        relatedMemories: relatedMemories.slice(0, 3).map((m) => formatMemoryForOutput(m))
       })
     },
     { mode: 'full', pretty: true, transportAware: true }

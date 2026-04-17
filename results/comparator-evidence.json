@@ -1,12 +1,12 @@
 {
   "codebase-memory-mcp": {
-    "averageUsefulness": 0,
-    "averagePayloadBytes": 19,
-    "averageEstimatedTokens": 5,
-    "averageFirstRelevantHit": null,
-    "bestExampleUsefulnessRate": null,
+    "averageUsefulness": 0.1875,
+    "averagePayloadBytes": 2151.0416666666665,
+    "averageEstimatedTokens": 538.2916666666666,
+    "averageFirstRelevantHit": 1.2857142857142858,
+    "bestExampleUsefulnessRate": 0.5,
     "averageToolCallCount": 1,
-    "averageElapsedMs": 0.3333333333333333,
+    "averageElapsedMs": 161.375,
     "status": "ok",
     "taskResults": [
       {
@@ -20,10 +20,10 @@
           "patterns",
           "generated:"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 938,
+        "estimatedTokens": 235,
         "toolCallCount": 1,
-        "elapsedMs": 2
+        "elapsedMs": 17
       },
       {
         "taskId": "as-map-02",
@@ -36,10 +36,10 @@
           "architecture",
           "statistics"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 938,
+        "estimatedTokens": 235,
         "toolCallCount": 1,
-        "elapsedMs": 1
+        "elapsedMs": 3
       },
       {
         "taskId": "as-map-03",
@@ -52,10 +52,10 @@
           "patterns",
           "libraries actually used"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 938,
+        "estimatedTokens": 235,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 2
       },
       {
         "taskId": "as-map-04",
@@ -67,10 +67,10 @@
           "import aliases",
           "tsconfig"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 938,
+        "estimatedTokens": 235,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 3
       },
       {
         "taskId": "as-find-01",
@@ -81,10 +81,11 @@
         "missingSignals": [
           "dependencyInjection"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 62,
+        "estimatedTokens": 16,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 55,
+        "bestExampleUseful": false
       },
       {
         "taskId": "as-find-02",
@@ -95,10 +96,11 @@
         "missingSignals": [
           "stateManagement"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3450,
+        "estimatedTokens": 863,
         "toolCallCount": 1,
-        "elapsedMs": 1
+        "elapsedMs": 45,
+        "bestExampleUseful": false
       },
       {
         "taskId": "as-find-03",
@@ -111,10 +113,11 @@
           "bestExample",
           "patterns"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3395,
+        "estimatedTokens": 849,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 30,
+        "bestExampleUseful": true
       },
       {
         "taskId": "as-find-04",
@@ -126,70 +129,78 @@
           "unitTestFramework",
           "test"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 2067,
+        "estimatedTokens": 517,
         "toolCallCount": 1,
-        "elapsedMs": 1
+        "elapsedMs": 30,
+        "bestExampleUseful": false
       },
       {
         "taskId": "as-search-01",
         "job": "search",
         "surface": "search_codebase",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "results"
+        ],
         "missingSignals": [
-          "results",
           "searchQuality"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3430,
+        "estimatedTokens": 858,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 25,
+        "firstRelevantHit": 1
       },
       {
         "taskId": "as-search-02",
         "job": "search",
         "surface": "search_codebase",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "results"
+        ],
         "missingSignals": [
-          "results",
           "searchQuality"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3421,
+        "estimatedTokens": 856,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 69
       },
       {
         "taskId": "as-search-03",
         "job": "search",
         "surface": "search_codebase",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "results"
+        ],
         "missingSignals": [
-          "results",
           "searchQuality"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3389,
+        "estimatedTokens": 848,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 39,
+        "firstRelevantHit": 3
       },
       {
         "taskId": "as-search-04",
         "job": "search",
         "surface": "search_codebase",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "results"
+        ],
         "missingSignals": [
-          "results",
           "searchQuality"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3535,
+        "estimatedTokens": 884,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 29,
+        "firstRelevantHit": 1
       },
       {
         "taskId": "ex-map-01",
@@ -202,10 +213,10 @@
           "architecture",
           "statistics"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 1009,
+        "estimatedTokens": 253,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 68
       },
       {
         "taskId": "ex-map-02",
@@ -218,10 +229,10 @@
           "libraries actually used",
           "patterns"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 1009,
+        "estimatedTokens": 253,
         "toolCallCount": 1,
-        "elapsedMs": 1
+        "elapsedMs": 15
       },
       {
         "taskId": "ex-map-03",
@@ -233,10 +244,10 @@
           "import aliases",
           "tsconfig"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 1009,
+        "estimatedTokens": 253,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 14
       },
       {
         "taskId": "ex-map-04",
@@ -249,10 +260,10 @@
           "libraries actually used",
           "generated:"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 1009,
+        "estimatedTokens": 253,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 15
       },
       {
         "taskId": "ex-find-01",
@@ -263,10 +274,11 @@
         "missingSignals": [
           "stateManagement"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 2959,
+        "estimatedTokens": 740,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 505,
+        "bestExampleUseful": false
       },
       {
         "taskId": "ex-find-02",
@@ -279,25 +291,28 @@
           "bestExample",
           "patterns"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 2709,
+        "estimatedTokens": 678,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 288,
+        "bestExampleUseful": true
       },
       {
         "taskId": "ex-find-03",
         "job": "find",
         "surface": "get_team_patterns",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "test"
+        ],
         "missingSignals": [
-          "test",
           "framework"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 343,
+        "estimatedTokens": 86,
         "toolCallCount": 1,
-        "elapsedMs": 1
+        "elapsedMs": 291,
+        "bestExampleUseful": true
       },
       {
         "taskId": "ex-find-04",
@@ -308,70 +323,79 @@
         "missingSignals": [
           "dependencyInjection"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3051,
+        "estimatedTokens": 763,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 457,
+        "bestExampleUseful": true
       },
       {
         "taskId": "ex-search-01",
         "job": "search",
         "surface": "search_codebase",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "results"
+        ],
         "missingSignals": [
-          "results",
           "searchQuality"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3009,
+        "estimatedTokens": 753,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 527,
+        "firstRelevantHit": 1
       },
       {
         "taskId": "ex-search-02",
         "job": "search",
         "surface": "search_codebase",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "results"
+        ],
         "missingSignals": [
-          "results",
           "searchQuality"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 2867,
+        "estimatedTokens": 717,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 553,
+        "firstRelevantHit": 1
       },
       {
         "taskId": "ex-search-03",
         "job": "search",
         "surface": "search_codebase",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "results"
+        ],
         "missingSignals": [
-          "results",
           "searchQuality"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3061,
+        "estimatedTokens": 766,
         "toolCallCount": 1,
-        "elapsedMs": 1
+        "elapsedMs": 418,
+        "firstRelevantHit": 1
       },
       {
         "taskId": "ex-search-04",
         "job": "search",
         "surface": "search_codebase",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
+        "usefulnessScore": 0.5,
+        "matchedSignals": [
+          "results"
+        ],
         "missingSignals": [
-          "results",
           "searchQuality"
         ],
-        "payloadBytes": 19,
-        "estimatedTokens": 5,
+        "payloadBytes": 3089,
+        "estimatedTokens": 773,
         "toolCallCount": 1,
-        "elapsedMs": 0
+        "elapsedMs": 375,
+        "firstRelevantHit": 1
       }
     ]
   },
@@ -388,13 +412,13 @@
     "reason": "MCP error -32000: Connection closed"
   },
   "raw Claude Code": {
-    "averageUsefulness": 0,
-    "averagePayloadBytes": 71.54166666666667,
-    "averageEstimatedTokens": 18.5,
+    "averageUsefulness": 0.027777777777777776,
+    "averagePayloadBytes": 127.54166666666667,
+    "averageEstimatedTokens": 32.166666666666664,
     "averageFirstRelevantHit": null,
-    "bestExampleUsefulnessRate": null,
+    "bestExampleUsefulnessRate": 0,
     "averageToolCallCount": null,
-    "averageElapsedMs": 9590.208333333334,
+    "averageElapsedMs": 8270.875,
     "status": "ok",
     "taskResults": [
       {
@@ -408,26 +432,27 @@
           "patterns",
           "generated:"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 1082,
+        "estimatedTokens": 271,
         "toolCallCount": null,
-        "elapsedMs": 12461
+        "elapsedMs": 23238
       },
       {
         "taskId": "as-map-02",
         "job": "map",
         "surface": "get_codebase_metadata",
-        "usefulnessScore": 0,
-        "matchedSignals": [],
-        "missingSignals": [
+        "usefulnessScore": 0.6666666666666666,
+        "matchedSignals": [
           "framework",
-          "architecture",
+          "architecture"
+        ],
+        "missingSignals": [
           "statistics"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 857,
+        "estimatedTokens": 215,
         "toolCallCount": null,
-        "elapsedMs": 9390
+        "elapsedMs": 19844
       },
       {
         "taskId": "as-map-03",
@@ -440,10 +465,10 @@
           "patterns",
           "libraries actually used"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 9836
+        "elapsedMs": 35243
       },
       {
         "taskId": "as-map-04",
@@ -455,10 +480,10 @@
           "import aliases",
           "tsconfig"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 10098
+        "elapsedMs": 5566
       },
       {
         "taskId": "as-find-01",
@@ -469,10 +494,11 @@
         "missingSignals": [
           "dependencyInjection"
         ],
-        "payloadBytes": 70,
-        "estimatedTokens": 18,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8937
+        "elapsedMs": 5474,
+        "bestExampleUseful": false
       },
       {
         "taskId": "as-find-02",
@@ -483,10 +509,11 @@
         "missingSignals": [
           "stateManagement"
         ],
-        "payloadBytes": 75,
-        "estimatedTokens": 19,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8747
+        "elapsedMs": 5550,
+        "bestExampleUseful": false
       },
       {
         "taskId": "as-find-03",
@@ -499,10 +526,11 @@
           "bestExample",
           "patterns"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8747
+        "elapsedMs": 5919,
+        "bestExampleUseful": false
       },
       {
         "taskId": "as-find-04",
@@ -514,10 +542,11 @@
           "unitTestFramework",
           "test"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 9351
+        "elapsedMs": 5777,
+        "bestExampleUseful": false
       },
       {
         "taskId": "as-search-01",
@@ -529,10 +558,10 @@
           "results",
           "searchQuality"
         ],
-        "payloadBytes": 73,
-        "estimatedTokens": 19,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 9376
+        "elapsedMs": 5595
       },
       {
         "taskId": "as-search-02",
@@ -544,10 +573,10 @@
           "results",
           "searchQuality"
         ],
-        "payloadBytes": 70,
-        "estimatedTokens": 18,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 9891
+        "elapsedMs": 5690
       },
       {
         "taskId": "as-search-03",
@@ -559,10 +588,10 @@
           "results",
           "searchQuality"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 11377
+        "elapsedMs": 5911
       },
       {
         "taskId": "as-search-04",
@@ -574,10 +603,10 @@
           "results",
           "searchQuality"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8972
+        "elapsedMs": 5507
       },
       {
         "taskId": "ex-map-01",
@@ -590,10 +619,10 @@
           "architecture",
           "statistics"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 10195
+        "elapsedMs": 6352
       },
       {
         "taskId": "ex-map-02",
@@ -606,10 +635,10 @@
           "libraries actually used",
           "patterns"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8753
+        "elapsedMs": 5791
       },
       {
         "taskId": "ex-map-03",
@@ -621,10 +650,10 @@
           "import aliases",
           "tsconfig"
         ],
-        "payloadBytes": 71,
-        "estimatedTokens": 18,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8860
+        "elapsedMs": 6010
       },
       {
         "taskId": "ex-map-04",
@@ -637,10 +666,10 @@
           "libraries actually used",
           "generated:"
         ],
-        "payloadBytes": 75,
-        "estimatedTokens": 19,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8623
+        "elapsedMs": 5791
       },
       {
         "taskId": "ex-find-01",
@@ -651,10 +680,11 @@
         "missingSignals": [
           "stateManagement"
         ],
-        "payloadBytes": 150,
-        "estimatedTokens": 38,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 12098
+        "elapsedMs": 5813,
+        "bestExampleUseful": false
       },
       {
         "taskId": "ex-find-02",
@@ -667,10 +697,11 @@
           "bestExample",
           "patterns"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8783
+        "elapsedMs": 5574,
+        "bestExampleUseful": false
       },
       {
         "taskId": "ex-find-03",
@@ -682,10 +713,11 @@
           "test",
           "framework"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8785
+        "elapsedMs": 5672,
+        "bestExampleUseful": false
       },
       {
         "taskId": "ex-find-04",
@@ -696,10 +728,11 @@
         "missingSignals": [
           "dependencyInjection"
         ],
-        "payloadBytes": 83,
-        "estimatedTokens": 21,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8912
+        "elapsedMs": 5809,
+        "bestExampleUseful": false
       },
       {
         "taskId": "ex-search-01",
@@ -711,10 +744,10 @@
           "results",
           "searchQuality"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8043
+        "elapsedMs": 5590
       },
       {
         "taskId": "ex-search-02",
@@ -726,10 +759,10 @@
           "results",
           "searchQuality"
         ],
-        "payloadBytes": 75,
-        "estimatedTokens": 19,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8755
+        "elapsedMs": 5591
       },
       {
         "taskId": "ex-search-03",
@@ -741,10 +774,10 @@
           "results",
           "searchQuality"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 12373
+        "elapsedMs": 5653
       },
       {
         "taskId": "ex-search-04",
@@ -756,10 +789,10 @@
           "results",
           "searchQuality"
         ],
-        "payloadBytes": 65,
-        "estimatedTokens": 17,
+        "payloadBytes": 51,
+        "estimatedTokens": 13,
         "toolCallCount": null,
-        "elapsedMs": 8802
+        "elapsedMs": 5541
       }
     ]
   }

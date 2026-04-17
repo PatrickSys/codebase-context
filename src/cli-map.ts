@@ -32,7 +32,8 @@ function printMapUsage(): void {
   console.log('Output the conventions map for the current codebase.');
   console.log('');
   console.log('Options:');
-  console.log('  --export  Write CODEBASE_MAP.md to project root (overrides other flags)');
+  console.log('  --export  Write CODEBASE_MAP.md to project root (still honors --full)');
+  console.log('  --full    Output the exhaustive map instead of the bounded default');
   console.log('  --json    Output raw JSON (CodebaseMapSummary)');
   console.log('  --pretty  Terminal-friendly box layout');
   console.log('  --help    Show this help');
@@ -44,6 +45,7 @@ export async function handleMapCli(args: string[]): Promise<void> {
   const useJson = args.includes('--json');
   const usePretty = args.includes('--pretty');
   const useExport = args.includes('--export');
+  const useFull = args.includes('--full');
   const showHelp = args.includes('--help') || args.includes('-h');
 
   if (showHelp) {
@@ -77,7 +79,7 @@ export async function handleMapCli(args: string[]): Promise<void> {
   project.indexState = indexState;
 
   try {
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: useFull ? 'full' : 'bounded' });
 
     if (useExport) {
       const outPath = path.join(rootPath, 'CODEBASE_MAP.md');

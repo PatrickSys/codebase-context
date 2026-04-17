@@ -12,11 +12,17 @@ import { AngularAnalyzer } from '../dist/analyzers/angular/index.js';
 import { GenericAnalyzer } from '../dist/analyzers/generic/index.js';
 import { evaluateFixture, formatEvalReport } from '../dist/eval/harness.js';
 import {
+  combineEditPreflightSummaries,
+  evaluateEditPreflightFixture,
+  formatEditPreflightReport
+} from '../dist/eval/edit-preflight-harness.js';
+import {
   combineDiscoverySummaries,
   evaluateDiscoveryGate,
   evaluateDiscoveryFixture,
   formatDiscoveryReport
 } from '../dist/eval/discovery-harness.js';
+import { getDefaultFixturePaths, resolveEvalMode } from '../dist/eval/run-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
@@ -24,20 +30,6 @@ const packageJsonPath = path.join(projectRoot, 'package.json');
 
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 
-const defaultFixtureA = path.join(projectRoot, 'tests', 'fixtures', 'eval-angular-spotify.json');
-const defaultFixtureB = path.join(projectRoot, 'tests', 'fixtures', 'eval-controlled.json');
-const defaultDiscoveryFixtureA = path.join(
-  projectRoot,
-  'tests',
-  'fixtures',
-  'discovery-angular-spotify.json'
-);
-const defaultDiscoveryFixtureB = path.join(
-  projectRoot,
-  'tests',
-  'fixtures',
-  'discovery-excalidraw.json'
-);
 const defaultDiscoveryProtocol = path.join(
   projectRoot,
   'tests',
@@ -49,7 +41,7 @@ const usage = [
   `Usage: node scripts/run-eval.mjs <codebaseA> [codebaseB] [options]`,
   ``,
   `Options:`,
-  `  --mode=<retrieval|discovery>  Select benchmark mode (default: retrieval)`,
+  `  --mode=<retrieval|discovery|edit-preflight>  Select benchmark mode (default: retrieval)`,
   `  --fixture-a=<path>  Override fixture for codebaseA`,
   `  --fixture-b=<path>  Override fixture for codebaseB`,
   `  --protocol=<path>   Override discovery benchmark protocol`,
@@ -151,6 +143,17 @@ async function runSingleEvaluation({
       fixturePath: resolvedFixture,
       summary
     });
+  } else if (mode === 'edit-preflight') {
+    console.log(`\n--- Phase 2: Running ${fixture.tasks.length}-task edit-preflight harness ---`);
+    summary = await evaluateEditPreflightFixture({
+      fixture,
+      rootPath: resolvedCodebase
+    });
+    report = formatEditPreflightReport({
+      codebaseLabel: label,
+      fixturePath: resolvedFixture,
+      summary
+    });
   } else {
     console.log(`\n--- Phase 2: Running ${fixture.queries.length}-query eval harness ---`);
     const searcher = new CodebaseSearcher(resolvedCodebase);
@@ -199,6 +202,31 @@ function printCombinedSummary(summaries, mode) {
     console.log(`Average payload: ${Math.round(avgPayload)} bytes`);
     console.log(`Average estimated tokens: ${Math.round(avgTokens)}`);
     console.log(`=================================\n`);
+    return;
+  }
+
+  if (mode === 'edit-preflight') {
+    const combined = combineEditPreflightSummaries(summaries);
+    console.log(`\n=== Combined Edit Preflight Summary ===`);
+    console.log(
+      `Top-target in top-3: ${combined.topTargetInTop3Count}/${combined.targetableTasks} (${combined.topTargetInTop3Rate === null ? 'n/a' : (combined.topTargetInTop3Rate * 100).toFixed(0) + '%'})`
+    );
+    console.log(
+      `Average first relevant hit: ${combined.averageFirstRelevantHit === null ? 'n/a' : combined.averageFirstRelevantHit.toFixed(2)}`
+    );
+    console.log(
+      `Best-example hit rate: ${combined.bestExampleHitCount}/${combined.bestExampleTasks} (${combined.bestExampleHitRate === null ? 'n/a' : (combined.bestExampleHitRate * 100).toFixed(0) + '%'})`
+    );
+    console.log(
+      `Safe ready rate: ${combined.safeTaskReadyCount}/${combined.safeTasks} (${combined.safeTaskReadyRate === null ? 'n/a' : (combined.safeTaskReadyRate * 100).toFixed(0) + '%'})`
+    );
+    console.log(
+      `Unsafe abstain rate: ${combined.unsafeTaskAbstainCount}/${combined.unsafeTasks} (${combined.unsafeTaskAbstainRate === null ? 'n/a' : (combined.unsafeTaskAbstainRate * 100).toFixed(0) + '%'})`
+    );
+    console.log(
+      `Unsafe ready=true false positives: ${combined.unsafeReadyFalsePositiveCount}/${combined.unsafeTasks} (${combined.unsafeReadyFalsePositiveRate === null ? 'n/a' : (combined.unsafeReadyFalsePositiveRate * 100).toFixed(0) + '%'})`
+    );
+    console.log(`=======================================\n`);
     return;
   }
 
@@ -254,17 +282,14 @@ async function main() {
 
   const codebaseA = positionals[0];
   const codebaseB = positionals[1];
-  const mode = values.mode === 'discovery' ? 'discovery' : 'retrieval';
+  const mode = resolveEvalMode(values.mode);
+  const defaultFixtures = getDefaultFixturePaths(projectRoot, mode);
   const fixtureA = values['fixture-a']
     ? path.resolve(values['fixture-a'])
-    : mode === 'discovery'
-      ? defaultDiscoveryFixtureA
-      : defaultFixtureA;
+    : defaultFixtures.fixtureA;
   const fixtureB = values['fixture-b']
     ? path.resolve(values['fixture-b'])
-    : mode === 'discovery'
-      ? defaultDiscoveryFixtureB
-      : defaultFixtureB;
+    : defaultFixtures.fixtureB;
   const protocolPath = values.protocol
     ? path.resolve(values.protocol)
     : defaultDiscoveryProtocol;
@@ -324,6 +349,25 @@ async function main() {
       console.log(`\nResults written to: ${outputPath}`);
     }
     process.exit(gate.status === 'failed' ? 1 : 0);
+  }
+
+  if (mode === 'edit-preflight') {
+    const combinedSummary = combineEditPreflightSummaries(summaries);
+    printCombinedSummary(summaries, mode);
+    console.log(
+      formatEditPreflightReport({
+        codebaseLabel: 'combined-suite',
+        fixturePath: codebaseB ? `${fixtureA}, ${fixtureB}` : fixtureA,
+        summary: combinedSummary
+      })
+    );
+    if (outputPath) {
+      const outputDir = path.dirname(outputPath);
+      if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+      writeFileSync(outputPath, JSON.stringify(combinedSummary, null, 2));
+      console.log(`\nResults written to: ${outputPath}`);
+    }
+    process.exit(0);
   }
 
   if (outputPath && mode === 'discovery' && summaries.length === 1) {

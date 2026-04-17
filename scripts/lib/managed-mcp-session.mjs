@@ -1,4 +1,8 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import process from 'node:process';
+
+const execFileAsync = promisify(execFile);
 
 async function loadSdkClient() {
   const [{ Client }, { StdioClientTransport }] = await Promise.all([
@@ -39,6 +43,82 @@ function delay(timeoutMs) {
   });
 }
 
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code !== 'ESRCH';
+  }
+}
+
+async function waitForProcessExit(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) {
+      return true;
+    }
+    await delay(50);
+  }
+
+  return !isProcessAlive(pid);
+}
+
+async function killProcessTree(pid) {
+  if (!isProcessAlive(pid)) {
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      await execFileAsync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        timeout: 10_000
+      });
+    } catch {
+      // Best-effort fallback below.
+    }
+  }
+
+  if (!isProcessAlive(pid)) {
+    return;
+  }
+
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    return;
+  }
+
+  if (await waitForProcessExit(pid, 1_000)) {
+    return;
+  }
+
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // Best-effort.
+  }
+}
+
+async function ensureProcessTreeExit(pid, timeoutMs = 1_500) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return;
+  }
+
+  if (await waitForProcessExit(pid, timeoutMs)) {
+    return;
+  }
+
+  await killProcessTree(pid);
+  await waitForProcessExit(pid, 5_000);
+}
+
 async function safeClose(client, transport, connected) {
   const closeAttempts = [];
 
@@ -72,22 +152,21 @@ export async function withManagedStdioClientSession(options, callback) {
 
   let connected = false;
   let settling = false;
+  let spawnedPid = null;
   const connectPromise = client.connect(transport);
-  const spawnNotification = (async () => {
-    if (typeof onSpawn !== 'function') {
-      return;
-    }
-
+  const observeSpawn = (async () => {
     while (!settling) {
       if (transport.pid !== null) {
-        onSpawn(transport.pid);
+        spawnedPid = transport.pid;
+        onSpawn?.(transport.pid);
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await delay(10);
     }
 
     if (transport.pid !== null) {
-      onSpawn(transport.pid);
+      spawnedPid = transport.pid;
+      onSpawn?.(transport.pid);
     }
   })();
 
@@ -97,8 +176,10 @@ export async function withManagedStdioClientSession(options, callback) {
     return await callback({ client, transport });
   } finally {
     settling = true;
+    await observeSpawn.catch(() => undefined);
+    const pidToKill = spawnedPid ?? transport.pid;
     await safeClose(client, transport, connected);
-    await spawnNotification.catch(() => undefined);
+    await ensureProcessTreeExit(pidToKill);
     await Promise.race([connectPromise, delay(5_000)]).catch(() => undefined);
   }
 }

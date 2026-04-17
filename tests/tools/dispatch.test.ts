@@ -3,8 +3,8 @@ import { TOOLS, dispatchTool } from '../../src/tools/index.js';
 import type { ToolContext } from '../../src/tools/types.js';
 
 describe('Tool Dispatch', () => {
-  it('exports all 10 tools', () => {
-    expect(TOOLS.length).toBe(10);
+  it('exports all 11 tools', () => {
+    expect(TOOLS.length).toBe(11);
     expect(TOOLS.map((t) => t.name)).toEqual([
       'search_codebase',
       'get_codebase_metadata',
@@ -15,7 +15,8 @@ describe('Tool Dispatch', () => {
       'get_symbol_references',
       'detect_circular_dependencies',
       'remember',
-      'get_memory'
+      'get_memory',
+      'get_codebase_health'
     ]);
   });
 
@@ -59,6 +60,7 @@ describe('Tool Dispatch', () => {
         baseDir: '/tmp',
         memory: '/tmp/memory.jsonl',
         intelligence: '/tmp/intelligence.json',
+        health: '/tmp/health.json',
         keywordIndex: '/tmp/index.json',
         vectorDb: '/tmp/vector-db'
       },
@@ -80,6 +82,7 @@ describe('Tool Dispatch', () => {
         baseDir: '/tmp',
         memory: '/tmp/memory.jsonl',
         intelligence: '/tmp/intelligence.json',
+        health: '/tmp/health.json',
         keywordIndex: '/tmp/index.json',
         vectorDb: '/tmp/vector-db'
       },

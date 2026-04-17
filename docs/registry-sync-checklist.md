@@ -1,6 +1,6 @@
 # Registry Sync Checklist
 
-Use this checklist before publishing any Phase 10-facing metadata or registry copy.
+Use this checklist before publishing any relaunch-facing metadata or registry copy.
 The purpose is to keep the public surface aligned with the current proof bundle.
 
 ## Required Artifacts
@@ -23,9 +23,12 @@ The purpose is to keep the public surface aligned with the current proof bundle.
 ## Required Truth Checks
 
 - If the gate is `pending_evidence`, say so explicitly.
+- If the raw-Claude baseline still has `averageFirstRelevantHit: null`, say the baseline remains `pending_evidence`.
+- If `codebase-memory-mcp` still reads comparator artifact `ok` but gate `failed`, say so explicitly.
 - If any comparator lane is `setup_failed`, say so explicitly.
 - Do not claim benchmark wins against `raw Claude Code`, `GrepAI`, `jCodeMunch`, `codebase-memory-mcp`, or `CodeGraphContext` without real metrics in `results/comparator-evidence.json`.
 - Do not claim implementation quality from this discovery benchmark.
+- Do not turn this discovery-only proof into relaunch-release, risky-edit, or patch-quality proof language.
 - Do not omit the current reranker fallback limitation if the proof run still shows `Protobuf parsing failed`.
 
 ## Before Registry Or README Updates

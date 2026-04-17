@@ -1,8 +1,9 @@
 # CLI Gallery (Human-readable)
 
-`codebase-context` exposes its tools as a local CLI so humans can:
+`codebase-context` exposes its tools as a local CLI so humans can follow the same map-first workflow the MCP server gives to agents:
 
-- Get the conventions map before exploring or editing (`map`)
+- Get the bounded conventions map before exploring or editing (`map`)
+- Search for the right local example after the map narrows the repo shape
 - Onboard themselves onto an unfamiliar repo
 - Debug what the MCP server is doing
 - Use outputs in CI/scripts (via `--json`)
@@ -50,7 +51,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 npx -y codebase-context map
 ```
 
-The conventions map — run this first on an unfamiliar repo. Shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call.
+The conventions map - run this first on an unfamiliar repo. It shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example.
 
 Example output (truncated):
 

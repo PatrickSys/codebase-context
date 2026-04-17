@@ -1,7 +1,7 @@
 # Demo Script
 
 This walkthrough uses real CLI output captured against `repos/angular-spotify` during the Phase 10 proof rerun.
-Run it from the repo root with `CODEBASE_ROOT` pointed at the frozen sample repo.
+Run it from the repo root with `CODEBASE_ROOT` pointed at the frozen sample repo. The public flow is simple: start with the conventions map, then search for the local example you need.
 
 ## 1. Start With The Conventions Map
 
@@ -75,7 +75,7 @@ Captured output excerpt:
 
 What this shows:
 
-- Search remains the second step after the map.
+- Search is the second step after the map, not a separate headline workflow.
 - `intent=edit` adds preflight evidence instead of forcing a separate call.
 - The response stays compact while still surfacing a best example and impact hints.
 
@@ -117,4 +117,4 @@ What this shows:
 ## Caveats
 
 - These excerpts were captured from the current local proof run and will change if the frozen sample repo or index state changes.
-- The benchmark gate is still `pending_evidence`, so this walkthrough demonstrates shipped behavior, not a released performance claim.
+- The discovery benchmark gate is still `pending_evidence`, and `claimAllowed` remains `false`, so this walkthrough demonstrates shipped behavior, not a released performance claim.

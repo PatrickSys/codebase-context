@@ -1,6 +1,6 @@
 # Capabilities Reference
 
-Technical reference for what `codebase-context` ships today. For the user-facing overview, see [README.md](../README.md).
+Technical reference for what `codebase-context` ships today. The public product posture is map first, find second: the bounded conventions map is the first-call surface, and search narrows to the right local example after that. For the user-facing overview, see [README.md](../README.md).
 
 ## Transport Modes
 
@@ -298,6 +298,7 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/
 - **Retrieval metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a gate pass/fail
 - **Discovery metrics:** usefulness score, payload bytes, estimated tokens, first relevant hit, and best-example usefulness
 - **Discovery gate:** discovery mode evaluates the frozen ship gate only when the full public suite and comparator metrics are available; missing comparator evidence is reported as pending, not silently treated as pass/fail
+- **Current checked-in gate truth:** `results/gate-evaluation.json` remains `pending_evidence` with `claimAllowed: false`; the raw-Claude baseline still lacks `averageFirstRelevantHit`, `codebase-memory-mcp` still fails the frozen usefulness comparisons, and the remaining named lanes are still `setup_failed`
 - **Limits:** discovery mode is discovery-only, uses current shipped surfaces only, and does not claim implementation quality; named competitor runs remain a documented hybrid/manual lane rather than a built-in automated benchmark
 
 ## Limitations

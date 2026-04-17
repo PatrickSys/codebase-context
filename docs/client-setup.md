@@ -1,6 +1,6 @@
 # Client Setup
 
-Full setup instructions for each AI client. For the quick-start summary, see [README.md](../README.md).
+Full setup instructions for each AI client. This guide is about transport and wiring, not a different product mode: each client gets the same bounded conventions map first and local-pattern discovery second. For the quick-start summary, see [README.md](../README.md).
 
 ## Transport modes
 

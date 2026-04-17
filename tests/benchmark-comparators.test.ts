@@ -310,3 +310,98 @@ describe('raw Claude result parsing', () => {
     expect(parsed.bestExample).toBe('src/auth/auth.interceptor.ts');
   });
 });
+
+describe('benchmark comparator aggregation', () => {
+  it('marks empty task payloads as pending evidence instead of ok', async () => {
+    const { aggregateResults } = await importRunner();
+    const aggregated = aggregateResults([
+      {
+        taskId: 't1',
+        job: 'search',
+        surface: 'search_codebase',
+        usefulnessScore: 0,
+        matchedSignals: [],
+        missingSignals: ['results'],
+        payloadBytes: 19,
+        estimatedTokens: 5,
+        toolCallCount: 1,
+        elapsedMs: 1
+      }
+    ]);
+
+    expect(aggregated.status).toBe('pending_evidence');
+    expect(aggregated.reason).toMatch(/usable benchmark evidence/i);
+    expect(aggregated.averageFirstRelevantHit).toBeNull();
+    expect(aggregated.bestExampleUsefulnessRate).toBeNull();
+  });
+
+  it('computes ranked-hit and best-example metrics when task evidence exists', async () => {
+    const { aggregateResults } = await importRunner();
+    const aggregated = aggregateResults([
+      {
+        taskId: 'search-1',
+        job: 'search',
+        surface: 'search_codebase',
+        usefulnessScore: 0.5,
+        matchedSignals: ['results'],
+        missingSignals: ['searchQuality'],
+        payloadBytes: 200,
+        estimatedTokens: 50,
+        toolCallCount: 1,
+        elapsedMs: 10,
+        firstRelevantHit: 2
+      },
+      {
+        taskId: 'find-1',
+        job: 'find',
+        surface: 'search_codebase',
+        usefulnessScore: 1,
+        matchedSignals: ['bestExample'],
+        missingSignals: [],
+        payloadBytes: 220,
+        estimatedTokens: 55,
+        toolCallCount: 1,
+        elapsedMs: 12,
+        bestExampleUseful: true
+      }
+    ]);
+
+    expect(aggregated.status).toBe('ok');
+    expect(aggregated.averageFirstRelevantHit).toBe(2);
+    expect(aggregated.bestExampleUsefulnessRate).toBe(1);
+  });
+});
+
+describe('raw Claude result parsing', () => {
+  it('extracts files and bestExample from structured Claude output', async () => {
+    const { parseRawClaudeStructuredResult } = await importRunner();
+    const parsed = parseRawClaudeStructuredResult(
+      JSON.stringify({
+        answer: 'Use AuthInterceptor and auth.effects patterns.',
+        files: ['src/auth/auth.interceptor.ts', 'src/auth/auth.effects.ts'],
+        bestExample: 'src/auth/auth.interceptor.ts'
+      })
+    );
+
+    expect(parsed.payload).toContain('AuthInterceptor');
+    expect(parsed.topFiles).toEqual([
+      'src/auth/auth.interceptor.ts',
+      'src/auth/auth.effects.ts'
+    ]);
+    expect(parsed.bestExample).toBe('src/auth/auth.interceptor.ts');
+  });
+
+  it('extracts files and bestExample from fenced JSON Claude output', async () => {
+    const { parseRawClaudeStructuredResult } = await importRunner();
+    const parsed = parseRawClaudeStructuredResult(`\`\`\`json
+{"answer":"Use AuthInterceptor and auth.effects patterns.","files":["src/auth/auth.interceptor.ts","src/auth/auth.effects.ts"],"bestExample":"src/auth/auth.interceptor.ts"}
+\`\`\``);
+
+    expect(parsed.payload).toContain('AuthInterceptor');
+    expect(parsed.topFiles).toEqual([
+      'src/auth/auth.interceptor.ts',
+      'src/auth/auth.effects.ts'
+    ]);
+    expect(parsed.bestExample).toBe('src/auth/auth.interceptor.ts');
+  });
+});

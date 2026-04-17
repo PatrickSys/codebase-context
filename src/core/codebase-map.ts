@@ -24,7 +24,11 @@ import type {
   PatternsData,
   CodeChunk
 } from '../types/index.js';
-import { RELATIONSHIPS_FILENAME, KEYWORD_INDEX_FILENAME } from '../constants/codebase-context.js';
+import {
+  EXCLUDED_DIRECTORY_NAMES,
+  RELATIONSHIPS_FILENAME,
+  KEYWORD_INDEX_FILENAME
+} from '../constants/codebase-context.js';
 
 // ---------------------------------------------------------------------------
 // Internal types for relationships.json
@@ -50,12 +54,37 @@ interface RelationshipsData {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Entrypoint exclusion pattern
-// ---------------------------------------------------------------------------
+type CodebaseMapMode = 'bounded' | 'full';
 
-const ENTRYPOINT_EXCLUSION_RE =
-  /(?:^|\/)(?:tests?|__tests__|fixtures?|scripts?)\/|\.test\.|\.spec\./;
+type BuildCodebaseMapOptions = {
+  mode?: CodebaseMapMode;
+};
+
+const BOUNDED_SECTION_LIMITS = {
+  entrypoints: 8,
+  hubFiles: 5,
+  keyInterfaces: 8,
+  apiSurfaceFiles: 8,
+  apiSurfaceExports: 3,
+  hotspots: 5,
+  bestExamples: 3
+} as const;
+
+const MAP_EXCLUDED_PATH_PATTERNS = [
+  /^repos\/[^/]+(?:\/|$)/i,
+  /(?:^|\/)(?:tests?|__tests__|specs?|__specs__)(?:\/|$)/i,
+  /\.(?:test|spec)\.[^/]+$/i,
+  /(?:^|\/)(?:fixtures?|__fixtures__)(?:\/|$)/i,
+  /(?:^|\/)(?:generated|__generated__)(?:\/|$)/i,
+  /(?:^|\/)[^/]*\.(?:generated|gen|min)\.[^/]+$/i,
+  /\.snap$/i
+] as const;
+
+const MAP_EXCLUDED_DIRECTORY_NAMES = new Set(
+  [...EXCLUDED_DIRECTORY_NAMES, '__fixtures__', '__generated__', 'fixtures', 'generated'].map(
+    (segment) => segment.toLowerCase()
+  )
+);
 
 // ---------------------------------------------------------------------------
 // Builder
@@ -66,7 +95,11 @@ const ENTRYPOINT_EXCLUSION_RE =
  * Reads `intelligence.json`, `relationships.json`, and `index.json` from project paths.
  * Degrades gracefully when artifacts are missing.
  */
-export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseMapSummary> {
+export async function buildCodebaseMap(
+  project: ProjectState,
+  options: BuildCodebaseMapOptions = {}
+): Promise<CodebaseMapSummary> {
+  const mode = options.mode ?? 'bounded';
   const projectName = path.basename(project.rootPath);
 
   // Read intelligence.json
@@ -100,9 +133,10 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
   }
 
   const graph = relationships.graph ?? {};
-  const graphImports = graph.imports ?? {};
-  const graphImportedBy = graph.importedBy ?? {};
-  const graphExports = graph.exports ?? {};
+  const graphImports = filterAdjacencyGraph(graph.imports ?? {}, mode);
+  const graphImportedBy = filterAdjacencyGraph(graph.importedBy ?? {}, mode);
+  const graphExports = filterExportGraph(graph.exports ?? {}, mode);
+  const filteredChunks = chunks.filter((chunk) => isMapEligiblePath(chunk.relativePath, mode));
   // relationships.json has stats at top level OR inside graph
   const statsSource =
     relationships.stats ??
@@ -133,13 +167,13 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
   const entrypoints: string[] = [];
   for (const [file, imports] of Object.entries(graphImports)) {
     if (imports.length === 0) continue; // no imports — not an entrypoint
-    if (ENTRYPOINT_EXCLUSION_RE.test(file)) continue; // test/script file
     const importers = graphImportedBy[file];
     if (!importers || importers.length === 0) {
       entrypoints.push(file);
     }
   }
   entrypoints.sort();
+  const boundedEntrypoints = maybeLimit(entrypoints, BOUNDED_SECTION_LIMITS.entrypoints, mode);
 
   // --- Hub files ---
   const importedByCounts: Array<{ file: string; count: number }> = Object.entries(
@@ -150,17 +184,17 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
     (x) => x.count,
     (x) => x.file
   )
-    .slice(0, 5)
+    .slice(0, mode === 'bounded' ? BOUNDED_SECTION_LIMITS.hubFiles : undefined)
     .map((x) => x.file);
 
   // --- Key interfaces ---
-  const keyInterfaces = deriveKeyInterfaces(chunks, graphImportedBy);
+  const keyInterfaces = deriveKeyInterfaces(filteredChunks, graphImportedBy, mode);
 
   // --- API surface ---
-  const apiSurface = deriveApiSurface(entrypoints, graphExports);
+  const apiSurface = deriveApiSurface(boundedEntrypoints, graphExports, mode);
 
   // --- Dependency hotspots ---
-  const hotspots = deriveHotspots(graphImports, graphImportedBy);
+  const hotspots = deriveHotspots(graphImports, graphImportedBy, mode);
 
   // --- Active patterns ---
   const patterns: PatternsData = intelligence.patterns ?? {};
@@ -187,8 +221,12 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
   // --- Best examples ---
   const dominantPatternName =
     activePatterns.length > 0 ? activePatterns[0].name : 'high-quality example';
-  const goldenFiles = intelligence.goldenFiles ?? [];
-  const bestExamples: CodebaseMapExample[] = goldenFiles.slice(0, 3).map((gf) => ({
+  const goldenFiles = (intelligence.goldenFiles ?? []).filter((gf) => isMapEligiblePath(gf.file, mode));
+  const bestExamples: CodebaseMapExample[] = maybeLimit(
+    goldenFiles,
+    BOUNDED_SECTION_LIMITS.bestExamples,
+    mode
+  ).map((gf) => ({
     file: gf.file,
     score: gf.score,
     reason: dominantPatternName
@@ -210,7 +248,14 @@ export async function buildCodebaseMap(project: ProjectState): Promise<CodebaseM
 
   return {
     project: projectName,
-    architecture: { layers, entrypoints, hubFiles, keyInterfaces, apiSurface, hotspots },
+    architecture: {
+      layers,
+      entrypoints: boundedEntrypoints,
+      hubFiles,
+      keyInterfaces,
+      apiSurface,
+      hotspots
+    },
     activePatterns,
     bestExamples,
     graphStats,
@@ -236,7 +281,8 @@ function buildSignatureHint(content: string): string {
 
 function deriveKeyInterfaces(
   chunks: CodeChunk[],
-  graphImportedBy: Record<string, string[]>
+  graphImportedBy: Record<string, string[]>,
+  mode: CodebaseMapMode
 ): CodebaseMapKeyInterface[] {
   const symbolChunks = chunks.filter(
     (c) => c.metadata?.symbolAware === true && SYMBOL_KINDS.has(c.metadata.symbolKind ?? '')
@@ -251,18 +297,21 @@ function deriveKeyInterfaces(
     if (lenDiff !== 0) return lenDiff;
     return a.chunk.relativePath.localeCompare(b.chunk.relativePath);
   });
-  return scored.slice(0, 10).map(({ chunk, importerCount }) => ({
-    name: chunk.metadata.symbolName ?? path.basename(chunk.relativePath),
-    kind: chunk.metadata.symbolKind ?? 'unknown',
-    file: chunk.relativePath,
-    importerCount,
-    signatureHint: buildSignatureHint(chunk.content)
-  }));
+  return maybeLimit(scored, BOUNDED_SECTION_LIMITS.keyInterfaces, mode).map(
+    ({ chunk, importerCount }) => ({
+      name: chunk.metadata.symbolName ?? path.basename(chunk.relativePath),
+      kind: chunk.metadata.symbolKind ?? 'unknown',
+      file: chunk.relativePath,
+      importerCount,
+      signatureHint: buildSignatureHint(chunk.content)
+    })
+  );
 }
 
 function deriveApiSurface(
   entrypoints: string[],
-  graphExports: Record<string, Array<{ name: string; type: string }>>
+  graphExports: Record<string, Array<{ name: string; type: string }>>,
+  mode: CodebaseMapMode
 ): CodebaseMapApiSurface[] {
   const results: CodebaseMapApiSurface[] = [];
   for (const ep of entrypoints) {
@@ -271,16 +320,17 @@ function deriveApiSurface(
     const names = exps
       .map((e) => e.name)
       .filter((n) => n && n !== 'default')
-      .slice(0, 5);
+      .slice(0, mode === 'bounded' ? BOUNDED_SECTION_LIMITS.apiSurfaceExports : undefined);
     if (names.length === 0) continue;
     results.push({ file: ep, exports: names });
   }
-  return results;
+  return maybeLimit(results, BOUNDED_SECTION_LIMITS.apiSurfaceFiles, mode);
 }
 
 function deriveHotspots(
   graphImports: Record<string, string[]>,
-  graphImportedBy: Record<string, string[]>
+  graphImportedBy: Record<string, string[]>,
+  mode: CodebaseMapMode
 ): CodebaseMapHotspot[] {
   const allFiles = new Set([...Object.keys(graphImports), ...Object.keys(graphImportedBy)]);
   const hotspots: CodebaseMapHotspot[] = [];
@@ -295,7 +345,7 @@ function deriveHotspots(
     if (b.combined !== a.combined) return b.combined - a.combined;
     return a.file.localeCompare(b.file);
   });
-  return hotspots.slice(0, 5);
+  return maybeLimit(hotspots, BOUNDED_SECTION_LIMITS.hotspots, mode);
 }
 
 function enrichLayers(
@@ -641,4 +691,62 @@ function sortByCountThenAlpha<T>(
     if (diff !== 0) return diff;
     return getName(a).localeCompare(getName(b));
   });
+}
+
+function maybeLimit<T>(items: T[], limit: number, mode: CodebaseMapMode): T[] {
+  return mode === 'bounded' ? items.slice(0, limit) : items;
+}
+
+function filterAdjacencyGraph(
+  graph: Record<string, string[]>,
+  mode: CodebaseMapMode
+): Record<string, string[]> {
+  if (mode === 'full') {
+    return graph;
+  }
+
+  return Object.fromEntries(
+    Object.entries(graph)
+      .filter(([file]) => isMapEligiblePath(file, mode))
+      .map(([file, related]) => [file, related.filter((item) => isMapEligiblePath(item, mode))])
+  );
+}
+
+function filterExportGraph(
+  graph: Record<string, Array<{ name: string; type: string }>>,
+  mode: CodebaseMapMode
+): Record<string, Array<{ name: string; type: string }>> {
+  if (mode === 'full') {
+    return graph;
+  }
+
+  return Object.fromEntries(
+    Object.entries(graph).filter(([file]) => isMapEligiblePath(file, mode))
+  );
+}
+
+function isMapEligiblePath(filePath: string, mode: CodebaseMapMode): boolean {
+  if (mode === 'full') {
+    return true;
+  }
+
+  const normalizedPath = normalizeMapPath(filePath);
+  if (!normalizedPath) {
+    return false;
+  }
+
+  const segments = normalizedPath
+    .split('/')
+    .map((segment) => segment.toLowerCase())
+    .filter(Boolean);
+
+  if (segments.some((segment) => MAP_EXCLUDED_DIRECTORY_NAMES.has(segment))) {
+    return false;
+  }
+
+  return !MAP_EXCLUDED_PATH_PATTERNS.some((pattern) => pattern.test(normalizedPath));
+}
+
+function normalizeMapPath(filePath: string): string {
+  return filePath.replace(/\\/g, '/').replace(/^\.\//, '').trim();
 }

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { createProjectState } from '../src/project-state.js';
 import { buildCodebaseMap, renderMapMarkdown, renderMapPretty } from '../src/core/codebase-map.js';
 import { generateCodebaseIntelligence } from '../src/resources/codebase-intelligence.js';
+import type { CodeChunk } from '../src/types/index.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -17,6 +18,68 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'map-fixture');
+const CURRENT_REPO_ROOT = path.resolve(__dirname, '..');
+const BOUNDED_LIMITS = {
+  entrypoints: 8,
+  hubFiles: 5,
+  keyInterfaces: 8,
+  apiSurfaceFiles: 8,
+  apiSurfaceExports: 3,
+  hotspots: 5,
+  bestExamples: 3
+} as const;
+
+type TempGraph = {
+  imports?: Record<string, string[]>;
+  importedBy?: Record<string, string[]>;
+  exports?: Record<string, Array<{ name: string; type: string }>>;
+  stats?: { files?: number; edges?: number; avgDependencies?: number };
+};
+
+type TempProjectOptions = {
+  projectName?: string;
+  graph?: TempGraph;
+  goldenFiles?: Array<{ file: string; score: number }>;
+  patterns?: Record<string, unknown>;
+  chunks?: CodeChunk[];
+};
+
+async function createTempMapProject(options: TempProjectOptions = {}): Promise<string> {
+  const tempParent = await fs.mkdtemp(path.join(os.tmpdir(), 'codebase-map-project-'));
+  const projectName = options.projectName ?? 'temp-map-project';
+  const rootPath = path.join(tempParent, projectName);
+  const ctxDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
+
+  await fs.mkdir(ctxDir, { recursive: true });
+  await fs.writeFile(
+    path.join(ctxDir, INTELLIGENCE_FILENAME),
+    JSON.stringify(
+      {
+        patterns: options.patterns ?? {},
+        goldenFiles: options.goldenFiles ?? []
+      },
+      null,
+      2
+    ),
+    'utf-8'
+  );
+  await fs.writeFile(
+    path.join(ctxDir, KEYWORD_INDEX_FILENAME),
+    JSON.stringify({ chunks: options.chunks ?? [] }, null, 2),
+    'utf-8'
+  );
+  await fs.writeFile(
+    path.join(ctxDir, RELATIONSHIPS_FILENAME),
+    JSON.stringify({ graph: options.graph ?? {} }, null, 2),
+    'utf-8'
+  );
+
+  return rootPath;
+}
+
+async function removeTempMapProject(rootPath: string): Promise<void> {
+  await fs.rm(path.dirname(rootPath), { recursive: true, force: true });
+}
 
 // ---------------------------------------------------------------------------
 // buildCodebaseMap
@@ -25,13 +88,13 @@ const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'map-fixture');
 describe('buildCodebaseMap', () => {
   it('returns a CodebaseMapSummary with project name from rootPath', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     expect(map.project).toBe('map-fixture');
   });
 
   it('derives architecture layers from graph keys, sorted by count desc then alpha', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     // Use objectContaining — layers may now have hubFile/hubExports from enrichLayers
     expect(map.architecture.layers).toHaveLength(3);
     expect(map.architecture.layers[0]).toMatchObject({ name: 'src', fileCount: 5 });
@@ -47,7 +110,7 @@ describe('buildCodebaseMap', () => {
 
   it('derives hub files: top 5 by importedBy count, sorted count-desc then alpha', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     expect(map.architecture.hubFiles).toEqual([
       'src/core/search.ts',
       'src/utils/helpers.ts',
@@ -57,7 +120,7 @@ describe('buildCodebaseMap', () => {
 
   it('derives active patterns from intelligence.json, sorted by adoption desc', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     expect(map.activePatterns).toEqual([
       { name: 'Injectable', adoption: '100%', trend: 'Stable' },
       { name: 'RxJS', adoption: '72%', trend: 'Rising' },
@@ -67,7 +130,7 @@ describe('buildCodebaseMap', () => {
 
   it('derives best examples from goldenFiles with dominant pattern as reason', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     expect(map.bestExamples).toEqual([
       { file: 'src/core/search.ts', score: 0.95, reason: 'Injectable' },
       { file: 'src/utils/helpers.ts', score: 0.87, reason: 'Injectable' }
@@ -76,13 +139,13 @@ describe('buildCodebaseMap', () => {
 
   it('reads graph stats from relationships.json', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     expect(map.graphStats).toEqual({ files: 8, edges: 9, avgDependencies: 1.1 });
   });
 
   it('adds suggested next calls: split pattern + golden file + fallback', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     // Vitest at 45% triggers split-pattern suggestion
     expect(map.suggestedNextCalls[0]).toEqual({
       tool: 'get_team_patterns',
@@ -107,7 +170,7 @@ describe('buildCodebaseMap', () => {
   it('degrades gracefully when intelligence.json is missing', async () => {
     // Point at a non-existent dir — builder should return empty map, not throw
     const project = createProjectState(path.join(FIXTURE_ROOT, 'nonexistent'));
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     expect(map.architecture.layers).toEqual([]);
     expect(map.architecture.entrypoints).toEqual([]);
     expect(map.architecture.hubFiles).toEqual([]);
@@ -123,15 +186,246 @@ describe('buildCodebaseMap', () => {
 
   it('caps suggested next calls at 3', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     expect(map.suggestedNextCalls.length).toBeLessThanOrEqual(3);
+  });
+
+  it('keeps bounded mode free of tests, fixtures, generated output, dist, vendor, and bundled repos noise', async () => {
+    const rootPath = await createTempMapProject({
+      projectName: 'codebase-context',
+      patterns: {
+        default: {
+          primary: { name: 'Factory', frequency: '80%', trend: 'Stable' }
+        }
+      },
+      goldenFiles: [
+        { file: 'tests/codebase-map.test.ts', score: 0.99 },
+        { file: 'dist/index.js', score: 0.97 },
+        { file: 'repos/external-lib/src/index.ts', score: 0.96 },
+        { file: 'src/core/map.ts', score: 0.95 },
+        { file: 'src/index.ts', score: 0.91 }
+      ],
+      graph: {
+        imports: {
+          'src/index.ts': ['src/core/map.ts'],
+          'src/cli.ts': ['src/core/map.ts'],
+          'src/core/map.ts': [],
+          'tests/codebase-map.test.ts': ['src/core/map.ts'],
+          'dist/index.js': ['src/core/map.ts'],
+          'repos/external-lib/src/index.ts': ['src/core/map.ts'],
+          'vendor/acme/index.ts': ['src/core/map.ts'],
+          'src/generated/api.generated.ts': ['src/core/map.ts'],
+          'src/fixtures/sample.ts': ['src/core/map.ts']
+        },
+        importedBy: {
+          'src/core/map.ts': [
+            'src/index.ts',
+            'src/cli.ts',
+            'tests/codebase-map.test.ts',
+            'dist/index.js',
+            'repos/external-lib/src/index.ts',
+            'vendor/acme/index.ts',
+            'src/generated/api.generated.ts',
+            'src/fixtures/sample.ts'
+          ]
+        },
+        exports: {
+          'src/index.ts': [{ name: 'serve', type: 'function' }],
+          'src/cli.ts': [{ name: 'runCli', type: 'function' }],
+          'tests/codebase-map.test.ts': [{ name: 'suite', type: 'function' }],
+          'dist/index.js': [{ name: 'bundle', type: 'function' }],
+          'repos/external-lib/src/index.ts': [{ name: 'mountExternalRepo', type: 'function' }],
+          'src/generated/api.generated.ts': [{ name: 'GeneratedApi', type: 'interface' }]
+        },
+        stats: { files: 8, edges: 7, avgDependencies: 0.9 }
+      },
+      chunks: [
+        {
+          relativePath: 'src/core/map.ts',
+          content: 'export class MapBuilder { build() {} }',
+          metadata: {
+            symbolAware: true,
+            symbolKind: 'class',
+            symbolName: 'MapBuilder'
+          }
+        } as CodeChunk,
+        {
+          relativePath: 'tests/codebase-map.test.ts',
+          content: 'export class MapBuilderTest { run() {} }',
+          metadata: {
+            symbolAware: true,
+            symbolKind: 'class',
+            symbolName: 'MapBuilderTest'
+          }
+        } as CodeChunk,
+        {
+          relativePath: 'src/generated/api.generated.ts',
+          content: 'export interface GeneratedApi { id: string }',
+          metadata: {
+            symbolAware: true,
+            symbolKind: 'interface',
+            symbolName: 'GeneratedApi'
+          }
+        } as CodeChunk
+      ]
+    });
+
+    try {
+      const project = createProjectState(rootPath);
+      const map = await buildCodebaseMap(project);
+
+      expect(map.project).toBe('codebase-context');
+      expect(map.architecture.layers.map((layer) => layer.name)).toEqual(['src']);
+      expect(map.architecture.entrypoints).toEqual(['src/cli.ts', 'src/index.ts']);
+      expect(map.architecture.hubFiles).toEqual(['src/core/map.ts']);
+      expect(map.architecture.keyInterfaces.map((item) => item.name)).toEqual(['MapBuilder']);
+      expect(map.architecture.apiSurface.map((surface) => surface.file)).toEqual([
+        'src/cli.ts',
+        'src/index.ts'
+      ]);
+      expect(map.architecture.hotspots.every((hotspot) => hotspot.file.startsWith('src/'))).toBe(
+        true
+      );
+      expect(map.bestExamples).toEqual([
+        { file: 'src/core/map.ts', score: 0.95, reason: 'Factory' },
+        { file: 'src/index.ts', score: 0.91, reason: 'Factory' }
+      ]);
+    } finally {
+      await removeTempMapProject(rootPath);
+    }
+  });
+
+  it('restores excluded paths in full mode and removes bounded caps', async () => {
+    const imports: Record<string, string[]> = {};
+    const importedBy: Record<string, string[]> = {};
+    const exportsByFile: Record<string, Array<{ name: string; type: string }>> = {};
+    const chunks: CodeChunk[] = [];
+    const goldenFiles: Array<{ file: string; score: number }> = [];
+
+    for (let index = 0; index < 10; index += 1) {
+      const contractFile = `src/contracts/contract-${index}.ts`;
+      importedBy[contractFile] = [`src/entry-${index}.ts`, 'tests/codebase-map.test.ts'];
+      chunks.push({
+        relativePath: contractFile,
+        content: `export interface Contract${index} { value: string }`,
+        metadata: {
+          symbolAware: true,
+          symbolKind: 'interface',
+          symbolName: `Contract${index}`
+        }
+      } as CodeChunk);
+      goldenFiles.push({ file: contractFile, score: 0.9 - index * 0.01 });
+    }
+
+    for (let index = 0; index < 12; index += 1) {
+      const entryFile = `src/entry-${index}.ts`;
+      const sharedFile = `src/shared-${index}.ts`;
+      imports[entryFile] = [sharedFile];
+      imports[sharedFile] = [];
+      importedBy[sharedFile] = [entryFile];
+      exportsByFile[entryFile] = [
+        { name: `entry${index}A`, type: 'function' },
+        { name: `entry${index}B`, type: 'function' },
+        { name: `entry${index}C`, type: 'function' },
+        { name: `entry${index}D`, type: 'function' }
+      ];
+    }
+
+    imports['tests/codebase-map.test.ts'] = ['src/shared-0.ts'];
+    imports['dist/index.js'] = ['src/shared-1.ts'];
+    imports['repos/external-lib/src/index.ts'] = ['src/shared-2.ts'];
+    imports['vendor/acme/index.ts'] = ['src/shared-2.ts'];
+    exportsByFile['tests/codebase-map.test.ts'] = [{ name: 'suite', type: 'function' }];
+    exportsByFile['dist/index.js'] = [{ name: 'bundle', type: 'function' }];
+    exportsByFile['repos/external-lib/src/index.ts'] = [{ name: 'repoEntry', type: 'function' }];
+    exportsByFile['vendor/acme/index.ts'] = [{ name: 'vendorEntry', type: 'function' }];
+    goldenFiles.unshift(
+      { file: 'tests/codebase-map.test.ts', score: 0.99 },
+      { file: 'dist/index.js', score: 0.98 },
+      { file: 'repos/external-lib/src/index.ts', score: 0.975 },
+      { file: 'vendor/acme/index.ts', score: 0.97 }
+    );
+
+    const rootPath = await createTempMapProject({
+      graph: {
+        imports,
+        importedBy,
+        exports: exportsByFile,
+        stats: { files: 30, edges: 40, avgDependencies: 1.3 }
+      },
+      goldenFiles,
+      chunks
+    });
+
+    try {
+      const project = createProjectState(rootPath);
+      const boundedMap = await buildCodebaseMap(project);
+      const fullMap = await buildCodebaseMap(project, { mode: 'full' });
+
+      expect(boundedMap.architecture.entrypoints).toHaveLength(BOUNDED_LIMITS.entrypoints);
+      expect(fullMap.architecture.entrypoints.length).toBeGreaterThan(
+        boundedMap.architecture.entrypoints.length
+      );
+      expect(boundedMap.architecture.keyInterfaces).toHaveLength(BOUNDED_LIMITS.keyInterfaces);
+      expect(fullMap.architecture.keyInterfaces.length).toBeGreaterThan(
+        boundedMap.architecture.keyInterfaces.length
+      );
+      expect(boundedMap.architecture.apiSurface).toHaveLength(BOUNDED_LIMITS.apiSurfaceFiles);
+      expect(fullMap.architecture.apiSurface.length).toBeGreaterThan(
+        boundedMap.architecture.apiSurface.length
+      );
+      expect(
+        boundedMap.architecture.apiSurface.find((surface) => surface.file === 'src/entry-0.ts')
+          ?.exports
+      ).toHaveLength(BOUNDED_LIMITS.apiSurfaceExports);
+      expect(
+        fullMap.architecture.apiSurface.find((surface) => surface.file === 'src/entry-0.ts')
+          ?.exports
+      ).toHaveLength(4);
+      expect(boundedMap.architecture.hubFiles).toHaveLength(BOUNDED_LIMITS.hubFiles);
+      expect(fullMap.architecture.hubFiles.length).toBeGreaterThan(
+        boundedMap.architecture.hubFiles.length
+      );
+      expect(boundedMap.architecture.hotspots).toHaveLength(BOUNDED_LIMITS.hotspots);
+      expect(fullMap.architecture.hotspots.length).toBeGreaterThan(
+        boundedMap.architecture.hotspots.length
+      );
+      expect(boundedMap.bestExamples).toHaveLength(BOUNDED_LIMITS.bestExamples);
+      expect(fullMap.bestExamples.some((example) => example.file === 'tests/codebase-map.test.ts')).toBe(
+        true
+      );
+      expect(fullMap.bestExamples.some((example) => example.file === 'dist/index.js')).toBe(true);
+      expect(fullMap.bestExamples.some((example) => example.file === 'repos/external-lib/src/index.ts')).toBe(
+        true
+      );
+      expect(fullMap.architecture.layers.map((layer) => layer.name)).toEqual(
+        expect.arrayContaining(['dist', 'repos', 'tests', 'vendor'])
+      );
+    } finally {
+      await removeTempMapProject(rootPath);
+    }
+  });
+
+  it('keeps the repo-root codebase-context map bounded by default', async () => {
+    const project = createProjectState(CURRENT_REPO_ROOT);
+    const map = await buildCodebaseMap(project);
+
+    expect(map.project).toBe(path.basename(CURRENT_REPO_ROOT));
+    expect(map.architecture.layers.map((layer) => layer.name)).not.toContain('tests');
+    expect(map.architecture.layers.map((layer) => layer.name)).not.toContain('dist');
+    expect(map.architecture.layers.map((layer) => layer.name)).not.toContain('repos');
+    expect(map.architecture.entrypoints.length).toBeLessThanOrEqual(8);
+    expect(map.architecture.apiSurface.length).toBeLessThanOrEqual(8);
+    expect(map.architecture.hubFiles.every((file) => !/(?:^|\/)(?:tests?|dist)\//.test(file))).toBe(
+      true
+    );
   });
 
   // --- Structural skeleton (Phase 13) ---
 
   it('derives keyInterfaces from symbolAware chunks, sorted by importer count', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     // SearchOptions and CodebaseSearcher are both in src/core/search.ts (3 importers)
     // SearchResult is in src/types.ts (0 importers)
     // helperUtil is not symbolAware — excluded
@@ -145,7 +439,7 @@ describe('buildCodebaseMap', () => {
 
   it('signatureHint strips trailing { and caps at 200 chars', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     for (const ki of map.architecture.keyInterfaces) {
       expect(ki.signatureHint).not.toMatch(/\{$/);
       expect(ki.signatureHint.length).toBeLessThanOrEqual(200);
@@ -154,14 +448,14 @@ describe('buildCodebaseMap', () => {
 
   it('signatureHint contains the symbol name', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     const iface = map.architecture.keyInterfaces.find((k) => k.name === 'SearchOptions')!;
     expect(iface.signatureHint).toContain('SearchOptions');
   });
 
   it('derives apiSurface from entrypoints x graph.exports', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     // src/cli.ts and src/index.ts are entrypoints; both have exports in fixture
     const cli = map.architecture.apiSurface.find((s) => s.file === 'src/cli.ts');
     expect(cli).toBeDefined();
@@ -172,7 +466,7 @@ describe('buildCodebaseMap', () => {
 
   it('apiSurface excludes default exports', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     for (const surface of map.architecture.apiSurface) {
       expect(surface.exports).not.toContain('default');
     }
@@ -182,9 +476,9 @@ describe('buildCodebaseMap', () => {
     const project = createProjectState(FIXTURE_ROOT);
     const map = await buildCodebaseMap(project);
     expect(map.architecture.hotspots.length).toBeLessThanOrEqual(5);
-    // src/core/search.ts: importedBy=3, imports=2 → combined=5 (highest)
+    // Bounded mode drops test importers, so search.ts keeps two real importers plus two imports.
     expect(map.architecture.hotspots[0].file).toBe('src/core/search.ts');
-    expect(map.architecture.hotspots[0].combined).toBe(5);
+    expect(map.architecture.hotspots[0].combined).toBe(4);
     // combined is always importerCount + importCount
     for (const h of map.architecture.hotspots) {
       expect(h.combined).toBe(h.importerCount + h.importCount);
@@ -193,7 +487,7 @@ describe('buildCodebaseMap', () => {
 
   it('enriches layers with hubFile from importedBy data', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     const srcLayer = map.architecture.layers.find((l) => l.name === 'src')!;
     // src/core/search.ts has 3 importers — highest in the src layer
     expect(srcLayer.hubFile).toBe('src/core/search.ts');
@@ -201,7 +495,7 @@ describe('buildCodebaseMap', () => {
 
   it('enriches layers with hubExports when graph.exports has data', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     // src/cli.ts has exports in fixture but is not the hub of the src layer
     // src/index.ts has exports and is also in src — but search.ts (hub) has no exports in fixture
     const srcLayer = map.architecture.layers.find((l) => l.name === 'src')!;
@@ -248,7 +542,7 @@ describe('buildCodebaseMap', () => {
       );
 
       const project = createProjectState(tempRoot);
-      const map = await buildCodebaseMap(project);
+      const map = await buildCodebaseMap(project, { mode: 'full' });
       const srcLayer = map.architecture.layers.find((layer) => layer.name === 'src');
 
       expect(srcLayer?.hubFile).toBe('src/a.ts');
@@ -273,7 +567,7 @@ describe('renderMapMarkdown', () => {
 
   it('includes all required section headers', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     const md = renderMapMarkdown(map);
     expect(md).toContain('# Codebase Map');
     expect(md).toContain('## Architecture Layers');
@@ -320,7 +614,7 @@ describe('renderMapMarkdown', () => {
 describe('renderMapPretty', () => {
   it('renders box characters in default mode', async () => {
     const project = createProjectState(FIXTURE_ROOT);
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     const pretty = renderMapPretty(map);
     expect(pretty).toContain('┌');
     expect(pretty).toContain('│');
@@ -332,7 +626,7 @@ describe('renderMapPretty', () => {
     process.env.CODEBASE_CONTEXT_ASCII = '1';
     try {
       const project = createProjectState(FIXTURE_ROOT);
-      const map = await buildCodebaseMap(project);
+      const map = await buildCodebaseMap(project, { mode: 'full' });
       const pretty = renderMapPretty(map);
       expect(pretty).toContain('+');
       expect(pretty).toContain('-');

@@ -37,11 +37,18 @@ import { startFileWatcher } from './core/file-watcher.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
   CONTEXT_RESOURCE_URI,
+  FULL_CONTEXT_RESOURCE_URI,
   buildProjectContextResourceUri,
+  buildProjectFullContextResourceUri,
   getProjectPathFromContextResourceUri,
-  isContextResourceUri
+  getProjectPathFromFullContextResourceUri,
+  isContextResourceUri,
+  isFullContextResourceUri
 } from './resources/uri.js';
-import { generateCodebaseIntelligence } from './resources/codebase-intelligence.js';
+import {
+  generateCodebaseIntelligence,
+  generateFullCodebaseIntelligence
+} from './resources/codebase-intelligence.js';
 import { EXCLUDED_GLOB_PATTERNS } from './constants/codebase-context.js';
 import {
   discoverProjectsWithinRoot,
@@ -846,6 +853,27 @@ export function registerHandlers(target: Server): void {
   target.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     const uri = request.params.uri;
     const explicitProjectPath = getProjectPathFromContextResourceUri(uri);
+    const explicitFullProjectPath = getProjectPathFromFullContextResourceUri(uri);
+
+    if (explicitFullProjectPath) {
+      const selection = await resolveProjectSelector(explicitFullProjectPath);
+      if (!selection.ok) {
+        throw new Error(`Unknown project resource: ${uri}`);
+      }
+
+      const project = selection.project;
+      await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+      setActiveProject(project.rootPath);
+      return {
+        contents: [
+          {
+            uri: buildProjectFullContextResourceUri(project.rootPath),
+            mimeType: 'text/plain',
+            text: await generateFullCodebaseIntelligence(project)
+          }
+        ]
+      };
+    }
 
     if (explicitProjectPath) {
       const selection = await resolveProjectSelector(explicitProjectPath);
@@ -862,6 +890,21 @@ export function registerHandlers(target: Server): void {
             uri: buildProjectContextResourceUri(project.rootPath),
             mimeType: 'text/plain',
             text: await generateCodebaseIntelligence(project)
+          }
+        ]
+      };
+    }
+
+    if (isFullContextResourceUri(uri)) {
+      const project = await resolveProjectForResource();
+      return {
+        contents: [
+          {
+            uri: FULL_CONTEXT_RESOURCE_URI,
+            mimeType: 'text/plain',
+            text: project
+              ? await generateFullCodebaseIntelligence(project)
+              : buildProjectSelectionMessage()
           }
         ]
       };
@@ -1010,6 +1053,13 @@ function buildResources(): Resource[] {
       description:
         'Context for the active project in this MCP session. In multi-project sessions, this falls back to a workspace overview until a project is selected.',
       mimeType: 'text/plain'
+    },
+    {
+      uri: FULL_CONTEXT_RESOURCE_URI,
+      name: 'Codebase Intelligence (Full)',
+      description:
+        'Exhaustive conventions map for the active project. Use when you explicitly need the unbounded map instead of the bounded first-call surface.',
+      mimeType: 'text/plain'
     }
   ];
 
@@ -1018,6 +1068,12 @@ function buildResources(): Resource[] {
       uri: buildProjectContextResourceUri(project.rootPath),
       name: `Codebase Intelligence (${project.label})`,
       description: `Project-scoped context for ${project.label}.`,
+      mimeType: 'text/plain'
+    });
+    resources.push({
+      uri: buildProjectFullContextResourceUri(project.rootPath),
+      name: `Codebase Intelligence (Full) (${project.label})`,
+      description: `Exhaustive project-scoped context for ${project.label}.`,
       mimeType: 'text/plain'
     });
   }
@@ -1054,6 +1110,7 @@ function buildProjectSelectionMessage(): string {
     lines.push(`- ${project.label} [${project.indexStatus}]`);
     lines.push(`  project: ${projectPathHint}`);
     lines.push(`  resource: ${buildProjectContextResourceUri(project.rootPath)}`);
+    lines.push(`  full resource: ${buildProjectFullContextResourceUri(project.rootPath)}`);
   }
   lines.push('');
   lines.push('Recommended flow: retry the tool call with `project`.');

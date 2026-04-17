@@ -11,7 +11,12 @@ import {
   KEYWORD_INDEX_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../src/constants/codebase-context.js';
-import { CONTEXT_RESOURCE_URI, buildProjectContextResourceUri } from '../src/resources/uri.js';
+import {
+  CONTEXT_RESOURCE_URI,
+  FULL_CONTEXT_RESOURCE_URI,
+  buildProjectContextResourceUri,
+  buildProjectFullContextResourceUri
+} from '../src/resources/uri.js';
 
 interface SearchResultRow {
   summary: string;
@@ -583,6 +588,64 @@ describe('multi-project routing', () => {
     expect(response.contents[0]?.text).not.toContain('Project selection required');
   });
 
+  it('lists bounded and full context resources for active and project-scoped flows', async () => {
+    const { server } = await import('../src/index.js');
+    const toolHandler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    const resourcesHandler = (server as unknown as TestServer)._requestHandlers.get('resources/list');
+
+    if (!toolHandler || !resourcesHandler) {
+      throw new Error('required handlers not registered');
+    }
+
+    await callTool(toolHandler, 140, 'search_codebase', {
+      query: 'feature',
+      project: secondaryRoot
+    });
+
+    const response = (await resourcesHandler({
+      jsonrpc: '2.0',
+      id: 141,
+      method: 'resources/list',
+      params: {}
+    })) as { resources: Array<{ uri: string }> };
+
+    const uris = response.resources.map((resource) => resource.uri);
+    expect(uris).toContain(CONTEXT_RESOURCE_URI);
+    expect(uris).toContain(FULL_CONTEXT_RESOURCE_URI);
+    expect(uris).toContain(buildProjectContextResourceUri(primaryRoot));
+    expect(uris).toContain(buildProjectFullContextResourceUri(primaryRoot));
+    expect(uris).toContain(buildProjectContextResourceUri(secondaryRoot));
+    expect(uris).toContain(buildProjectFullContextResourceUri(secondaryRoot));
+  });
+
+  it('generic full context resource follows the active project after selection', async () => {
+    const { server } = await import('../src/index.js');
+    const requestHandler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    const resourceHandler = (server as unknown as TestServer)._requestHandlers.get(
+      'resources/read'
+    );
+
+    if (!requestHandler || !resourceHandler) {
+      throw new Error('required handlers not registered');
+    }
+
+    await callTool(requestHandler, 142, 'search_codebase', {
+      query: 'feature',
+      project: secondaryRoot
+    });
+
+    const response = (await resourceHandler({
+      jsonrpc: '2.0',
+      id: 143,
+      method: 'resources/read',
+      params: { uri: FULL_CONTEXT_RESOURCE_URI }
+    })) as ResourceReadResponse;
+
+    expect(response.contents[0]?.uri).toBe(FULL_CONTEXT_RESOURCE_URI);
+    expect(response.contents[0]?.text).toContain('# Codebase Map');
+    expect(response.contents[0]?.text).not.toContain('Project selection required');
+  });
+
   it('builds a workspace overview for multiple configured roots before selection', async () => {
     const { server, refreshKnownRootsFromClient } = await import('../src/index.js');
     const typedServer = server as unknown as TestServer & {
@@ -615,6 +678,7 @@ describe('multi-project routing', () => {
         'client-announced roots as the workspace boundary'
       );
       expect(response.contents[0]?.text).toContain('codebase://context/project/');
+      expect(response.contents[0]?.text).toContain('codebase://context/full/project/');
       expect(response.contents[0]?.text).toContain('retry tool calls with `project`');
       expect(response.contents[0]?.text).toContain('apps/dashboard');
       expect(response.contents[0]?.text).toMatch(/\[(idle|indexing|ready)\]/);
@@ -661,6 +725,18 @@ describe('multi-project routing', () => {
 
     expect(response.contents[0]?.uri).toBe(buildProjectContextResourceUri(payload.project.project));
     expect(response.contents[0]?.text).toContain('# Codebase Map');
+
+    const fullResponse = (await resourceHandler({
+      jsonrpc: '2.0',
+      id: 171,
+      method: 'resources/read',
+      params: { uri: buildProjectFullContextResourceUri(payload.project.project) }
+    })) as ResourceReadResponse;
+
+    expect(fullResponse.contents[0]?.uri).toBe(
+      buildProjectFullContextResourceUri(payload.project.project)
+    );
+    expect(fullResponse.contents[0]?.text).toContain('# Codebase Map');
   });
 
   it('returns unknown_project error when project path does not exist', async () => {

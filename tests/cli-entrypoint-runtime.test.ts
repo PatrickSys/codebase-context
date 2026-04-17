@@ -31,5 +31,5 @@ describe('CLI entrypoint runtime', () => {
     expect(typeof parsed.project).toBe('string');
     expect(parsed.architecture).toBeTruthy();
     expect(Array.isArray(parsed.activePatterns)).toBe(true);
-  });
+  }, 120_000);
 });

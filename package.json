@@ -1,7 +1,7 @@
 {
   "name": "codebase-context",
-  "version": "1.10.0",
-  "description": "Pre-maps your codebase architecture, conventions, and team memory so AI agents navigate with precision instead of exploring. Local-first MCP server with AST-backed hybrid search.",
+  "version": "2.2.0",
+  "description": "Bounded conventions map and local-pattern discovery for AI coding agents. Local-first MCP server with AST-backed hybrid search.",
   "type": "module",
   "main": "./dist/lib.js",
   "types": "./dist/lib.d.ts",
@@ -61,9 +61,9 @@
     "mcp-server",
     "model-context-protocol",
     "codebase-context",
-    "code-intelligence",
     "code-patterns",
     "team-conventions",
+    "conventions-map",
     "pattern-detection",
     "semantic-search",
     "vector-search",
@@ -76,8 +76,6 @@
     "local-first",
     "privacy-first",
     "embeddings",
-    "preflight",
-    "evidence-scoring",
     "golden-files",
     "ai-coding",
     "ai-agents",
@@ -93,9 +91,7 @@
     "developer-tools",
     "static-analysis",
     "code-quality",
-    "team-memory",
-    "code-search",
-    "codebase-intelligence"
+    "code-search"
   ],
   "repository": {
     "type": "git",

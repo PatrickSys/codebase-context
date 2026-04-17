@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## [2.2.0](https://github.com/PatrickSys/codebase-context/compare/v1.10.0...v2.2.0) (2026-04-17)
+
+### Features
+
+* relaunch around a bounded conventions map and local-pattern discovery for `map + find`
+* add explicit full-map resources while keeping the default first-call map bounded and action-oriented
+* align public proof surfaces to the discovery-only benchmark posture (`pending_evidence`, `claimAllowed: false`)
+
+### Bug Fixes
+
+* make the packaged README tarball-safe by sending benchmark, demo, motivation, and contributing links to stable GitHub URLs
+* quarantine historical v1.8.x launch-planning docs so they no longer read as current release guidance
+* stop the built CLI entrypoint from eagerly importing MCP server runtime modules before CLI subcommand dispatch
 
 ## [1.10.0](https://github.com/PatrickSys/codebase-context/compare/v1.9.0...v1.10.0) (2026-04-14)
 

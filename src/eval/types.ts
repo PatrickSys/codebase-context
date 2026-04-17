@@ -64,6 +64,102 @@ export interface FormatEvalReportParams {
   redactPaths?: boolean;
 }
 
+export type EditPreflightRisk = 'safe' | 'unsafe';
+
+export interface EditPreflightTask {
+  id: string;
+  title: string;
+  query: string;
+  risk: EditPreflightRisk;
+  expectedTargetPatterns?: string[];
+  expectedBestExamplePatterns?: string[];
+  limit?: number;
+  notes?: string;
+}
+
+export interface EditPreflightFixture {
+  description?: string;
+  codebase?: string;
+  repository?: string;
+  repositoryUrl?: string;
+  repositoryRef?: string;
+  frozenDate?: string;
+  notes?: string;
+  tasks: EditPreflightTask[];
+}
+
+export interface EditPreflightTaskResult {
+  taskId: string;
+  title: string;
+  query: string;
+  risk: EditPreflightRisk;
+  ready: boolean;
+  abstain: boolean;
+  searchQualityStatus: 'ok' | 'low_confidence' | 'unknown';
+  topFiles: string[];
+  firstRelevantHit: number | null;
+  topTargetInTop3: boolean | null;
+  bestExample: string | null;
+  bestExampleHit: boolean | null;
+  nextAction?: string;
+  warnings?: string[];
+  whatWouldHelp?: string[];
+}
+
+export interface EditPreflightSummary {
+  totalTasks: number;
+  safeTasks: number;
+  unsafeTasks: number;
+  targetableTasks: number;
+  bestExampleTasks: number;
+  topTargetInTop3Count: number;
+  topTargetInTop3Rate: number | null;
+  averageFirstRelevantHit: number | null;
+  bestExampleHitCount: number;
+  bestExampleHitRate: number | null;
+  safeTaskReadyCount: number;
+  safeTaskReadyRate: number | null;
+  unsafeTaskAbstainCount: number;
+  unsafeTaskAbstainRate: number | null;
+  unsafeReadyFalsePositiveCount: number;
+  unsafeReadyFalsePositiveRate: number | null;
+  results: EditPreflightTaskResult[];
+}
+
+export interface EvaluateEditPreflightFixtureParams {
+  fixture: EditPreflightFixture;
+  rootPath: string;
+  runner?: EditPreflightRunner;
+}
+
+export interface FormatEditPreflightReportParams {
+  codebaseLabel: string;
+  fixturePath: string;
+  summary: EditPreflightSummary;
+}
+
+export interface EditPreflightResponse {
+  preflight?: {
+    ready?: boolean;
+    abstain?: boolean;
+    bestExample?: string;
+    nextAction?: string;
+    warnings?: string[];
+    whatWouldHelp?: string[];
+  };
+  searchQuality?: {
+    status?: 'ok' | 'low_confidence';
+  };
+  results?: Array<{
+    file?: string;
+  }>;
+}
+
+export type EditPreflightRunner = (
+  task: EditPreflightTask,
+  rootPath: string
+) => Promise<EditPreflightResponse>;
+
 export type DiscoveryJob = 'map' | 'find' | 'search';
 
 export type DiscoverySurface =

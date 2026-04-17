@@ -10,7 +10,23 @@ import { buildCodebaseMap, renderMapMarkdown } from '../core/codebase-map.js';
  */
 export async function generateCodebaseIntelligence(project: ProjectState): Promise<string> {
   try {
-    const map = await buildCodebaseMap(project);
+    const map = await buildCodebaseMap(project, { mode: 'bounded' });
+    return renderMapMarkdown(map);
+  } catch (error) {
+    return (
+      '# Codebase Intelligence\n\n' +
+      'Intelligence data not yet generated. Run indexing first.\n' +
+      `Error: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
+ * Generate the exhaustive conventions-map payload for the explicit full-mode resources.
+ */
+export async function generateFullCodebaseIntelligence(project: ProjectState): Promise<string> {
+  try {
+    const map = await buildCodebaseMap(project, { mode: 'full' });
     return renderMapMarkdown(map);
   } catch (error) {
     return (

@@ -10,6 +10,7 @@ import {
   CODEBASE_CONTEXT_DIRNAME,
   MEMORY_FILENAME,
   INTELLIGENCE_FILENAME,
+  HEALTH_FILENAME,
   KEYWORD_INDEX_FILENAME,
   VECTOR_DB_DIRNAME
 } from './constants/codebase-context.js';
@@ -107,6 +108,7 @@ async function initToolContext(): Promise<ToolContext> {
     baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
     memory: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
     intelligence: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
+    health: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, HEALTH_FILENAME),
     keywordIndex: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
     vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
   };

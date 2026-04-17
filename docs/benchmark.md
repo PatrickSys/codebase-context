@@ -37,7 +37,7 @@ From `results/gate-evaluation.json`:
 - `claimAllowed`: `false`
 - `totalTasks`: `24`
 - `averageUsefulness`: `0.75`
-- `averageEstimatedTokens`: `1822.25`
+- `averageEstimatedTokens`: `1827.0833`
 - `bestExampleUsefulnessRate`: `0.125`
 
 Repo-level outputs from the same rerun:
@@ -53,8 +53,10 @@ The gate is intentionally still blocked.
 
 - The combined suite covers both public repos.
 - `claimAllowed` remains `false` because comparator evidence still does not support a benchmark-win claim.
-- Two comparator lanes now return `status: "ok"`, but both are effectively near-empty on the frozen tasks and contribute `0` average usefulness.
-- Three comparator lanes still fail setup entirely.
+- Two comparator artifacts now return `status: "ok"`, but that does not yet close the gate:
+  - `raw Claude Code` still leaves the baseline `pending_evidence` because `averageFirstRelevantHit` is `null`
+  - `codebase-memory-mcp` now has real current metrics, but the gate still marks it `failed` on the frozen tolerance rule
+- Three comparator lanes still fail setup entirely: `GrepAI`, `jCodeMunch`, and `CodeGraphContext`.
 
 ## Comparator Reality
 
@@ -62,11 +64,11 @@ The current comparator artifact records incomplete comparator evidence, not benc
 
 | Comparator | Status | Current reason |
 | --- | --- | --- |
-| `codebase-memory-mcp` | `ok` | Runs, but the checked-in artifact still averages `0` usefulness and `5` estimated tokens per task, so it does not yet contribute meaningful benchmark evidence |
+| `codebase-memory-mcp` | comparator artifact: `ok`; gate: `failed` | Runs through the repaired graph-backed path and now records real metrics (`averageUsefulness: 0.1875`, `averageFirstRelevantHit: 1.2857`, `bestExampleUsefulnessRate: 0.5`), but the frozen gate still fails it on the required usefulness comparisons |
 | `jCodeMunch` | `setup_failed` | `MCP error -32000: Connection closed` |
 | `GrepAI` | `setup_failed` | Local Go binary and Ollama model path not present |
 | `CodeGraphContext` | `setup_failed` | `MCP error -32000: Connection closed` |
-| `raw Claude Code` | `ok` | Runs, but the checked-in artifact still averages `0` usefulness and only `18.5` estimated tokens per task, so it does not yet contribute meaningful benchmark evidence |
+| `raw Claude Code` | comparator artifact: `ok`; gate: `pending_evidence` | The explicit Haiku CLI runner now returns current metrics (`averageUsefulness: 0.0278`, `averageEstimatedTokens: 32.1667`), but the baseline still lacks `averageFirstRelevantHit`, so the gate keeps this lane as missing evidence |
 
 `CodeGraphContext` remains part of the frozen comparison frame. It is not omitted from the public story just because the lane still fails to start.
 
@@ -74,9 +76,9 @@ The current comparator artifact records incomplete comparator evidence, not benc
 
 - This benchmark measures discovery usefulness and payload cost only.
 - It does not measure implementation correctness, patch quality, or end-to-end task completion.
-- Comparator setup remains environment-sensitive, and the checked-in comparator outputs are still too weak to justify a claim.
+- Comparator setup remains environment-sensitive, and the checked-in comparator outputs still do not satisfy the frozen claim gate.
 - The reranker cache is currently corrupted on this machine. During the proof rerun, search fell back to original ordering after `Protobuf parsing failed` while still completing the harness.
-- `averageFirstRelevantHit` remains `null` in the current gate output because this compact response surface does not expose a comparable ranked-hit metric across the incomplete comparator set.
+- `averageFirstRelevantHit` remains `null` in the current gate output, which is enough to keep the raw-Claude baseline in `pending_evidence`.
 
 ## What This Proof Can Support
 

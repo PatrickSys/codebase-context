@@ -9,20 +9,9 @@ import { promises as fs } from 'fs';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createServer } from './server/factory.js';
-import { startHttpServer } from './server/http.js';
-import { loadServerConfig } from './server/config.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ProjectConfig } from './server/config.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-  RootsListChangedNotificationSchema,
-  Resource
-} from '@modelcontextprotocol/sdk/types.js';
+import type { Resource } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
 
 import { analyzerRegistry } from './core/analyzer-registry.js';
@@ -37,11 +26,18 @@ import { startFileWatcher } from './core/file-watcher.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
   CONTEXT_RESOURCE_URI,
+  FULL_CONTEXT_RESOURCE_URI,
   buildProjectContextResourceUri,
+  buildProjectFullContextResourceUri,
   getProjectPathFromContextResourceUri,
-  isContextResourceUri
+  getProjectPathFromFullContextResourceUri,
+  isContextResourceUri,
+  isFullContextResourceUri
 } from './resources/uri.js';
-import { generateCodebaseIntelligence } from './resources/codebase-intelligence.js';
+import {
+  generateCodebaseIntelligence,
+  generateFullCodebaseIntelligence
+} from './resources/codebase-intelligence.js';
 import { EXCLUDED_GLOB_PATTERNS } from './constants/codebase-context.js';
 import {
   discoverProjectsWithinRoot,
@@ -69,8 +65,44 @@ analyzerRegistry.register(new NextJsAnalyzer());
 analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
+let createServer!: typeof import('./server/factory.js').createServer;
+let startHttpServer!: typeof import('./server/http.js').startHttpServer;
+let loadServerConfig!: typeof import('./server/config.js').loadServerConfig;
+let StdioServerTransport!: typeof import('@modelcontextprotocol/sdk/server/stdio.js').StdioServerTransport;
+let CallToolRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').CallToolRequestSchema;
+let ListToolsRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ListToolsRequestSchema;
+let ListResourcesRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ListResourcesRequestSchema;
+let ReadResourceRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ReadResourceRequestSchema;
+let RootsListChangedNotificationSchema!: typeof import('@modelcontextprotocol/sdk/types.js').RootsListChangedNotificationSchema;
+let server!: Server;
+let mcpRuntimeReady = false;
+let mcpRuntimePromise: Promise<void> | undefined;
+
 // Flags that are NOT project paths — skip them when resolving the bootstrap root.
 const KNOWN_FLAGS = new Set(['--http', '--port', '--help']);
+const CLI_SUBCOMMANDS = [
+  'memory',
+  'search',
+  'metadata',
+  'status',
+  'reindex',
+  'style-guide',
+  'patterns',
+  'refs',
+  'cycles',
+  'init',
+  'map'
+];
+
+// Check if this module is the entry point.
+const isDirectRun =
+  process.argv[1]?.replace(/\\/g, '/').endsWith('index.js') ||
+  process.argv[1]?.replace(/\\/g, '/').endsWith('index.ts');
+const directSubcommand = process.argv[2];
+const isDirectCliSubcommand =
+  isDirectRun &&
+  typeof directSubcommand === 'string' &&
+  (CLI_SUBCOMMANDS.includes(directSubcommand) || directSubcommand === '--help');
 
 // Resolve optional bootstrap root with validation handled later in main().
 function resolveRootPath(): string | undefined {
@@ -115,6 +147,59 @@ const MAX_WATCHED_PROJECTS = 5;
 const PROJECT_DISCOVERY_MAX_DEPTH = 4;
 const debounceEnv = Number.parseInt(process.env.CODEBASE_CONTEXT_DEBOUNCE_MS ?? '', 10);
 const watcherDebounceMs = Number.isFinite(debounceEnv) && debounceEnv >= 0 ? debounceEnv : 2000;
+const stdioIdleTimeoutEnv = Number.parseInt(
+  process.env.CODEBASE_CONTEXT_STDIO_IDLE_TIMEOUT_MS ?? '',
+  10
+);
+const STDIO_IDLE_TIMEOUT_MS =
+  Number.isFinite(stdioIdleTimeoutEnv) && stdioIdleTimeoutEnv >= 0
+    ? stdioIdleTimeoutEnv
+    : 10 * 60 * 1000;
+let noteSessionActivity: () => void = () => undefined;
+let beginTrackedSessionWork: () => void = () => undefined;
+let endTrackedSessionWork: () => void = () => undefined;
+
+async function withTrackedSessionActivity<T>(handler: () => Promise<T>): Promise<T> {
+  noteSessionActivity();
+  beginTrackedSessionWork();
+  try {
+    return await handler();
+  } finally {
+    noteSessionActivity();
+    endTrackedSessionWork();
+  }
+}
+
+async function ensureMcpRuntimeLoaded(): Promise<void> {
+  if (mcpRuntimeReady) {
+    return;
+  }
+
+  mcpRuntimePromise ??= (async () => {
+    const [factoryModule, httpModule, configModule, stdioModule, sdkTypesModule] =
+      await Promise.all([
+        import('./server/factory.js'),
+        import('./server/http.js'),
+        import('./server/config.js'),
+        import('@modelcontextprotocol/sdk/server/stdio.js'),
+        import('@modelcontextprotocol/sdk/types.js')
+      ]);
+
+    createServer = factoryModule.createServer;
+    startHttpServer = httpModule.startHttpServer;
+    loadServerConfig = configModule.loadServerConfig;
+    StdioServerTransport = stdioModule.StdioServerTransport;
+    CallToolRequestSchema = sdkTypesModule.CallToolRequestSchema;
+    ListToolsRequestSchema = sdkTypesModule.ListToolsRequestSchema;
+    ListResourcesRequestSchema = sdkTypesModule.ListResourcesRequestSchema;
+    ReadResourceRequestSchema = sdkTypesModule.ReadResourceRequestSchema;
+    RootsListChangedNotificationSchema = sdkTypesModule.RootsListChangedNotificationSchema;
+    server = createServer({ name: 'codebase-context', version: PKG_VERSION }, registerHandlers);
+    mcpRuntimeReady = true;
+  })();
+
+  await mcpRuntimePromise;
+}
 
 type ProjectResolution =
   | { ok: true; project: ProjectState }
@@ -558,7 +643,8 @@ export const INDEX_CONSUMING_TOOL_NAMES = [
   'get_symbol_references',
   'detect_circular_dependencies',
   'get_team_patterns',
-  'get_codebase_metadata'
+  'get_codebase_metadata',
+  'get_codebase_health'
 ] as const;
 
 export const INDEX_CONSUMING_RESOURCE_NAMES = ['Codebase Intelligence'] as const;
@@ -835,172 +921,205 @@ const PKG_VERSION: string = JSON.parse(
  * same handler logic that closes over module-level state.
  */
 export function registerHandlers(target: Server): void {
-  target.setRequestHandler(ListToolsRequestSchema, async () => {
-    return { tools: TOOLS };
-  });
+  target.setRequestHandler(ListToolsRequestSchema, async () =>
+    withTrackedSessionActivity(async () => ({ tools: TOOLS }))
+  );
 
-  target.setRequestHandler(ListResourcesRequestSchema, async () => {
-    return { resources: buildResources() };
-  });
+  target.setRequestHandler(ListResourcesRequestSchema, async () =>
+    withTrackedSessionActivity(async () => ({ resources: buildResources() }))
+  );
 
-  target.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const uri = request.params.uri;
-    const explicitProjectPath = getProjectPathFromContextResourceUri(uri);
+  target.setRequestHandler(ReadResourceRequestSchema, async (request) =>
+    withTrackedSessionActivity(async () => {
+      const uri = request.params.uri;
+      const explicitProjectPath = getProjectPathFromContextResourceUri(uri);
+      const explicitFullProjectPath = getProjectPathFromFullContextResourceUri(uri);
 
-    if (explicitProjectPath) {
-      const selection = await resolveProjectSelector(explicitProjectPath);
-      if (!selection.ok) {
-        throw new Error(`Unknown project resource: ${uri}`);
+      if (explicitFullProjectPath) {
+        const selection = await resolveProjectSelector(explicitFullProjectPath);
+        if (!selection.ok) {
+          throw new Error(`Unknown project resource: ${uri}`);
+        }
+
+        const project = selection.project;
+        await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+        setActiveProject(project.rootPath);
+        return {
+          contents: [
+            {
+              uri: buildProjectFullContextResourceUri(project.rootPath),
+              mimeType: 'text/plain',
+              text: await generateFullCodebaseIntelligence(project)
+            }
+          ]
+        };
       }
 
-      const project = selection.project;
-      await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
-      setActiveProject(project.rootPath);
-      return {
-        contents: [
-          {
-            uri: buildProjectContextResourceUri(project.rootPath),
-            mimeType: 'text/plain',
-            text: await generateCodebaseIntelligence(project)
+      if (explicitProjectPath) {
+        const selection = await resolveProjectSelector(explicitProjectPath);
+        if (!selection.ok) {
+          throw new Error(`Unknown project resource: ${uri}`);
+        }
+
+        const project = selection.project;
+        await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
+        setActiveProject(project.rootPath);
+        return {
+          contents: [
+            {
+              uri: buildProjectContextResourceUri(project.rootPath),
+              mimeType: 'text/plain',
+              text: await generateCodebaseIntelligence(project)
+            }
+          ]
+        };
+      }
+
+      if (isFullContextResourceUri(uri)) {
+        const project = await resolveProjectForResource();
+        return {
+          contents: [
+            {
+              uri: FULL_CONTEXT_RESOURCE_URI,
+              mimeType: 'text/plain',
+              text: project
+                ? await generateFullCodebaseIntelligence(project)
+                : buildProjectSelectionMessage()
+            }
+          ]
+        };
+      }
+
+      if (isContextResourceUri(uri)) {
+        const project = await resolveProjectForResource();
+        return {
+          contents: [
+            {
+              uri: CONTEXT_RESOURCE_URI,
+              mimeType: 'text/plain',
+              text: project ? await generateCodebaseIntelligence(project) : buildProjectSelectionMessage()
+            }
+          ]
+        };
+      }
+
+      throw new Error(`Unknown resource: ${uri}`);
+    })
+  );
+
+  target.setRequestHandler(CallToolRequestSchema, async (request) =>
+    withTrackedSessionActivity(async () => {
+      const { name, arguments: args } = request.params;
+      const normalizedArgs =
+        args && typeof args === 'object' && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : {};
+
+      try {
+        if (!toolNames.has(name)) {
+          return await dispatchTool(name, normalizedArgs, createWorkspaceToolContext());
+        }
+
+        const projectResolution = await resolveProjectForTool(normalizedArgs);
+        if (!projectResolution.ok) {
+          return projectResolution.response;
+        }
+
+        const project = projectResolution.project;
+
+        // Gate INDEX_CONSUMING tools on a valid, healthy index
+        let indexSignal: IndexSignal | undefined;
+        if ((INDEX_CONSUMING_TOOL_NAMES as readonly string[]).includes(name)) {
+          if (project.indexState.status === 'indexing') {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'indexing',
+                    message: 'Index build in progress - please retry shortly'
+                  })
+                }
+              ]
+            };
           }
-        ]
-      };
-    }
-
-    if (isContextResourceUri(uri)) {
-      const project = await resolveProjectForResource();
-      return {
-        contents: [
-          {
-            uri: CONTEXT_RESOURCE_URI,
-            mimeType: 'text/plain',
-            text: project
-              ? await generateCodebaseIntelligence(project)
-              : buildProjectSelectionMessage()
+          if (project.indexState.status === 'error') {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'error',
+                    message: `Indexer error: ${project.indexState.error}`
+                  })
+                }
+              ]
+            };
           }
-        ]
-      };
-    }
-
-    throw new Error(`Unknown resource: ${uri}`);
-  });
-
-  target.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-    const normalizedArgs =
-      args && typeof args === 'object' && !Array.isArray(args)
-        ? (args as Record<string, unknown>)
-        : {};
-
-    try {
-      if (!toolNames.has(name)) {
-        return await dispatchTool(name, normalizedArgs, createWorkspaceToolContext());
-      }
-
-      const projectResolution = await resolveProjectForTool(normalizedArgs);
-      if (!projectResolution.ok) {
-        return projectResolution.response;
-      }
-
-      const project = projectResolution.project;
-
-      // Gate INDEX_CONSUMING tools on a valid, healthy index
-      let indexSignal: IndexSignal | undefined;
-      if ((INDEX_CONSUMING_TOOL_NAMES as readonly string[]).includes(name)) {
-        if (project.indexState.status === 'indexing') {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  status: 'indexing',
-                  message: 'Index build in progress - please retry shortly'
-                })
-              }
-            ]
-          };
-        }
-        if (project.indexState.status === 'error') {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  status: 'error',
-                  message: `Indexer error: ${project.indexState.error}`
-                })
-              }
-            ]
-          };
-        }
-        indexSignal = await ensureValidIndexOrAutoHeal(project);
-        if (indexSignal.action === 'rebuild-started') {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  status: 'indexing',
-                  message: 'Index rebuild in progress - please retry shortly',
-                  index: indexSignal
-                })
-              }
-            ]
-          };
-        }
-      }
-
-      const result = await dispatchTool(name, normalizedArgs, createToolContext(project));
-
-      // Inject routing/index metadata into JSON responses so agents can reuse the resolved project safely.
-      if (indexSignal !== undefined && result.content?.[0]) {
-        try {
-          const parsed = JSON.parse(result.content[0].text);
-          result.content[0] = {
-            type: 'text',
-            text: finalizeJsonTextPayload({
-              ...parsed,
-              index: indexSignal,
-              project: buildProjectDescriptor(project.rootPath)
-            })
-          };
-        } catch {
-          /* response wasn't JSON, skip injection */
-        }
-      } else if (result.content?.[0]) {
-        try {
-          const parsed = JSON.parse(result.content[0].text);
-          result.content[0] = {
-            type: 'text',
-            text: finalizeJsonTextPayload({
-              ...parsed,
-              project: buildProjectDescriptor(project.rootPath)
-            })
-          };
-        } catch {
-          /* response wasn't JSON, skip injection */
-        }
-      }
-
-      return result;
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
+          indexSignal = await ensureValidIndexOrAutoHeal(project);
+          if (indexSignal.action === 'rebuild-started') {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'indexing',
+                    message: 'Index rebuild in progress - please retry shortly',
+                    index: indexSignal
+                  })
+                }
+              ]
+            };
           }
-        ],
-        isError: true
-      };
-    }
-  });
+        }
+
+        const result = await dispatchTool(name, normalizedArgs, createToolContext(project));
+
+        // Inject routing/index metadata into JSON responses so agents can reuse the resolved project safely.
+        if (indexSignal !== undefined && result.content?.[0]) {
+          try {
+            const parsed = JSON.parse(result.content[0].text);
+            result.content[0] = {
+              type: 'text',
+              text: finalizeJsonTextPayload({
+                ...parsed,
+                index: indexSignal,
+                project: buildProjectDescriptor(project.rootPath)
+              })
+            };
+          } catch {
+            /* response wasn't JSON, skip injection */
+          }
+        } else if (result.content?.[0]) {
+          try {
+            const parsed = JSON.parse(result.content[0].text);
+            result.content[0] = {
+              type: 'text',
+              text: finalizeJsonTextPayload({
+                ...parsed,
+                project: buildProjectDescriptor(project.rootPath)
+              })
+            };
+          } catch {
+            /* response wasn't JSON, skip injection */
+          }
+        }
+
+        return result;
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
+            }
+          ],
+          isError: true
+        };
+      }
+    })
+  );
 }
-
-const server: Server = createServer(
-  { name: 'codebase-context', version: PKG_VERSION },
-  registerHandlers
-);
 
 function buildResources(): Resource[] {
   const resources: Resource[] = [
@@ -1010,6 +1129,13 @@ function buildResources(): Resource[] {
       description:
         'Context for the active project in this MCP session. In multi-project sessions, this falls back to a workspace overview until a project is selected.',
       mimeType: 'text/plain'
+    },
+    {
+      uri: FULL_CONTEXT_RESOURCE_URI,
+      name: 'Codebase Intelligence (Full)',
+      description:
+        'Exhaustive conventions map for the active project. Use when you explicitly need the unbounded map instead of the bounded first-call surface.',
+      mimeType: 'text/plain'
     }
   ];
 
@@ -1018,6 +1144,12 @@ function buildResources(): Resource[] {
       uri: buildProjectContextResourceUri(project.rootPath),
       name: `Codebase Intelligence (${project.label})`,
       description: `Project-scoped context for ${project.label}.`,
+      mimeType: 'text/plain'
+    });
+    resources.push({
+      uri: buildProjectFullContextResourceUri(project.rootPath),
+      name: `Codebase Intelligence (Full) (${project.label})`,
+      description: `Exhaustive project-scoped context for ${project.label}.`,
       mimeType: 'text/plain'
     });
   }
@@ -1054,6 +1186,7 @@ function buildProjectSelectionMessage(): string {
     lines.push(`- ${project.label} [${project.indexStatus}]`);
     lines.push(`  project: ${projectPathHint}`);
     lines.push(`  resource: ${buildProjectContextResourceUri(project.rootPath)}`);
+    lines.push(`  full resource: ${buildProjectFullContextResourceUri(project.rootPath)}`);
   }
   lines.push('');
   lines.push('Recommended flow: retry the tool call with `project`.');
@@ -1234,6 +1367,8 @@ async function validateClientRootEntries(
 }
 
 async function refreshKnownRootsFromClient(): Promise<void> {
+  await ensureMcpRuntimeLoaded();
+
   try {
     const { roots } = await server.listRoots();
     const fileRoots = await validateClientRootEntries(
@@ -1534,6 +1669,8 @@ async function applyServerConfig(
 }
 
 async function main() {
+  await ensureMcpRuntimeLoaded();
+
   const serverConfig = await loadServerConfig();
   await applyServerConfig(serverConfig);
 
@@ -1600,29 +1737,80 @@ async function main() {
   await server.connect(transport);
 
   // ── Cleanup guards (normal MCP lifecycle) ──────────────────────────────────
+  let shuttingDown = false;
   const stopAllWatchers = () => {
     for (const project of getAllProjects()) {
       project.stopWatcher?.();
     }
   };
 
+  let idleTimer: NodeJS.Timeout | undefined;
+  let activeSessionWork = 0;
+  let mcpClientInitialized = false;
+
+  const clearIdleTimer = () => {
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = undefined;
+    }
+  };
+
+  const shutdown = (code: number) => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    clearIdleTimer();
+    stopAllWatchers();
+    process.exit(code);
+  };
+
+  const scheduleIdleShutdown = () => {
+    clearIdleTimer();
+    if (!mcpClientInitialized || STDIO_IDLE_TIMEOUT_MS <= 0 || activeSessionWork > 0) {
+      return;
+    }
+
+    idleTimer = setTimeout(() => {
+      if (!mcpClientInitialized || activeSessionWork > 0) {
+        return;
+      }
+
+      console.error(
+        `No MCP activity for ${Math.round(STDIO_IDLE_TIMEOUT_MS / 1000)}s after initialize - exiting idle stdio session.`
+      );
+      shutdown(0);
+    }, STDIO_IDLE_TIMEOUT_MS);
+    idleTimer.unref();
+  };
+
+  noteSessionActivity = () => {
+    scheduleIdleShutdown();
+  };
+  beginTrackedSessionWork = () => {
+    activeSessionWork += 1;
+    clearIdleTimer();
+  };
+  endTrackedSessionWork = () => {
+    activeSessionWork = Math.max(0, activeSessionWork - 1);
+    scheduleIdleShutdown();
+  };
+
   process.once('exit', stopAllWatchers);
   process.once('SIGINT', () => {
-    stopAllWatchers();
-    process.exit(0);
+    shutdown(0);
   });
   process.once('SIGTERM', () => {
-    stopAllWatchers();
-    process.exit(0);
+    shutdown(0);
   });
   process.once('SIGHUP', () => {
-    stopAllWatchers();
-    process.exit(0);
+    shutdown(0);
   });
 
-  process.stdin.on('end', () => process.exit(0));
-  process.stdin.on('close', () => process.exit(0));
-  server.onclose = () => process.exit(0);
+  process.stdin.on('end', () => shutdown(0));
+  process.stdin.on('close', () => shutdown(0));
+  process.stdin.on('error', () => shutdown(0));
+  server.onclose = () => shutdown(0);
 
   // ── Zombie process prevention ──────────────────────────────────────────────
   // If no MCP client sends an `initialize` message within 30 seconds, this
@@ -1630,7 +1818,6 @@ async function main() {
   // a shell or AI agent without a subcommand). Exit cleanly to avoid a zombie.
   const HANDSHAKE_TIMEOUT_MS =
     Number.parseInt(process.env.CODEBASE_CONTEXT_HANDSHAKE_TIMEOUT_MS ?? '', 10) || 30_000;
-  let mcpClientInitialized = false;
 
   const handshakeTimer = setTimeout(() => {
     if (!mcpClientInitialized) {
@@ -1643,7 +1830,7 @@ async function main() {
           '  npx codebase-context search --query "..."\n' +
           '  npx codebase-context --help'
       );
-      process.exit(1);
+      shutdown(1);
     }
   }, HANDSHAKE_TIMEOUT_MS);
   handshakeTimer.unref();
@@ -1655,6 +1842,7 @@ async function main() {
   server.oninitialized = async () => {
     mcpClientInitialized = true;
     clearTimeout(handshakeTimer);
+    scheduleIdleShutdown();
 
     if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
 
@@ -1663,7 +1851,8 @@ async function main() {
 
       const startupRoots = getKnownRootPaths();
       if (startupRoots.length === 1) {
-        await initProject(startupRoots[0], watcherDebounceMs, { enableWatcher: true });
+        // Defer persistent watcher handles until the session actually touches a project.
+        await initProject(startupRoots[0], watcherDebounceMs, { enableWatcher: false });
         setActiveProject(startupRoots[0]);
       }
     } catch (error) {
@@ -1673,10 +1862,13 @@ async function main() {
 
   // Subscribe to root changes (lightweight — no project init cost)
   server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+    noteSessionActivity();
     try {
       await refreshKnownRootsFromClient();
     } catch {
       /* best-effort */
+    } finally {
+      noteSessionActivity();
     }
   });
 }
@@ -1691,6 +1883,8 @@ export { performIndexing };
  * sharing the same module-level project state.
  */
 async function startHttp(explicitPort?: number): Promise<void> {
+  await ensureMcpRuntimeLoaded();
+
   const serverConfig = await loadServerConfig();
   await applyServerConfig(serverConfig);
 
@@ -1764,25 +1958,9 @@ async function startHttp(explicitPort?: number): Promise<void> {
   }
 }
 
-// Only auto-start when run directly as CLI (not when imported as module)
-// Check if this module is the entry point
-const isDirectRun =
-  process.argv[1]?.replace(/\\/g, '/').endsWith('index.js') ||
-  process.argv[1]?.replace(/\\/g, '/').endsWith('index.ts');
-
-const CLI_SUBCOMMANDS = [
-  'memory',
-  'search',
-  'metadata',
-  'status',
-  'reindex',
-  'style-guide',
-  'patterns',
-  'refs',
-  'cycles',
-  'init',
-  'map'
-];
+if (!isDirectCliSubcommand) {
+  await ensureMcpRuntimeLoaded();
+}
 
 if (isDirectRun) {
   const subcommand = process.argv[2];

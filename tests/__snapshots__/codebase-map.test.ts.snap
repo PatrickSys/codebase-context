@@ -6,7 +6,6 @@ exports[`renderMapMarkdown > renders deterministic markdown from fixture — sna
 ## Architecture Layers
 
 - **src** (5 files) — hub: \`src/core/search.ts\`
-- **tests** (2 files)
 - **lib** (1 file) — hub: \`lib/utils.ts\`
 
 ## Entrypoints
@@ -16,19 +15,19 @@ exports[`renderMapMarkdown > renders deterministic markdown from fixture — sna
 
 ## Hub Files
 
+- \`lib/utils.ts\`
 - \`src/core/search.ts\`
 - \`src/utils/helpers.ts\`
-- \`lib/utils.ts\`
 
 ## Key Interfaces
 
-- **SearchOptions** \`interface\` — \`src/core/search.ts\` (imported by 3)
+- **SearchOptions** \`interface\` — \`src/core/search.ts\` (imported by 2)
   \`\`\`
   export interface SearchOptions {
   query: string;
   limit?: number;
   \`\`\`
-- **CodebaseSearcher** \`class\` — \`src/core/search.ts\` (imported by 3)
+- **CodebaseSearcher** \`class\` — \`src/core/search.ts\` (imported by 2)
   \`\`\`
   export class CodebaseSearcher {
   private rootPath: string;
@@ -46,11 +45,11 @@ exports[`renderMapMarkdown > renders deterministic markdown from fixture — sna
 
 ## Dependency Hotspots
 
-- \`src/core/search.ts\` — imported by 3, imports 2 (combined: 5)
-- \`src/utils/helpers.ts\` — imported by 3, imports 0 (combined: 3)
+- \`src/core/search.ts\` — imported by 2, imports 2 (combined: 4)
 - \`lib/utils.ts\` — imported by 2, imports 0 (combined: 2)
 - \`src/cli.ts\` — imported by 0, imports 2 (combined: 2)
 - \`src/index.ts\` — imported by 0, imports 2 (combined: 2)
+- \`src/utils/helpers.ts\` — imported by 2, imports 0 (combined: 2)
 
 ## Active Patterns
 

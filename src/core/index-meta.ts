@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import {
   CODEBASE_CONTEXT_DIRNAME,
+  HEALTH_FILENAME,
   INDEX_FORMAT_VERSION,
   INDEX_META_FILENAME,
   INDEX_META_VERSION,
@@ -41,6 +42,30 @@ const RelationshipsFileSchema = z
   })
   .passthrough();
 
+const HealthFileSchema = z.object({
+  header: ArtifactHeaderSchema,
+  generatedAt: z.string().datetime(),
+  summary: z
+    .object({
+      files: z.number().int().nonnegative(),
+      highRiskFiles: z.number().int().nonnegative(),
+      mediumRiskFiles: z.number().int().nonnegative(),
+      lowRiskFiles: z.number().int().nonnegative()
+    })
+    .passthrough(),
+  files: z.array(
+    z
+      .object({
+        file: z.string().min(1),
+        level: z.enum(['low', 'medium', 'high']),
+        score: z.number().nonnegative(),
+        reasons: z.array(z.string()),
+        signals: z.record(z.string(), z.number()).optional()
+      })
+      .passthrough()
+  )
+});
+
 export const IndexMetaSchema = z.object({
   metaVersion: z.number().int().positive(),
   formatVersion: z.number().int().nonnegative(),
@@ -59,6 +84,11 @@ export const IndexMetaSchema = z.object({
         embeddingModel: z.string().optional()
       }),
       intelligence: z
+        .object({
+          path: z.string().min(1)
+        })
+        .optional(),
+      health: z
         .object({
           path: z.string().min(1)
         })
@@ -268,6 +298,36 @@ export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): 
     } catch (error) {
       if (error instanceof IndexCorruptedError) throw error;
       throw asIndexCorrupted('Relationships sidecar corrupted (rebuild required)', error);
+    }
+  }
+
+  // Optional health sidecar: validate if present, but do not require.
+  const healthPath = path.join(contextDir, HEALTH_FILENAME);
+  if (await pathExists(healthPath)) {
+    try {
+      const raw = await fs.readFile(healthPath, 'utf-8');
+      const json = JSON.parse(raw);
+      const parsed = HealthFileSchema.safeParse(json);
+      if (!parsed.success) {
+        throw new IndexCorruptedError(
+          `Health schema mismatch (rebuild required): ${parsed.error.message}`
+        );
+      }
+
+      const { buildId, formatVersion } = parsed.data.header;
+      if (formatVersion !== meta.formatVersion) {
+        throw new IndexCorruptedError(
+          `Health formatVersion mismatch (rebuild required): meta=${meta.formatVersion}, health.json=${formatVersion}`
+        );
+      }
+      if (buildId !== meta.buildId) {
+        throw new IndexCorruptedError(
+          `Health buildId mismatch (rebuild required): meta=${meta.buildId}, health.json=${buildId}`
+        );
+      }
+    } catch (error) {
+      if (error instanceof IndexCorruptedError) throw error;
+      throw asIndexCorrupted('Health sidecar corrupted (rebuild required)', error);
     }
   }
 }

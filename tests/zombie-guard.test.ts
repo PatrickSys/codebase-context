@@ -10,10 +10,16 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  KEYWORD_INDEX_FILENAME
+} from '../src/constants/codebase-context.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENTRY_POINT = path.resolve(__dirname, '..', 'dist', 'index.js');
@@ -49,6 +55,53 @@ function spawnServer(
     // Don't write anything to stdin — simulate the zombie scenario
     // where no MCP client sends an `initialize` message.
   });
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Process ${pid} still alive after ${timeoutMs}ms`);
+}
+
+async function connectClient(
+  args: string[],
+  env: Record<string, string> = {}
+): Promise<{ client: Client; transport: StdioClientTransport; pid: number }> {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [ENTRY_POINT, ...args],
+    env: { ...process.env, ...env }
+  });
+  const client = new Client({ name: 'zombie-guard-test', version: '1.0.0' });
+  await client.connect(transport);
+
+  if (transport.pid === null) {
+    throw new Error('Expected stdio transport pid after initialize');
+  }
+
+  return { client, transport, pid: transport.pid };
+}
+
+function createIdleTestProjectRoot(): string {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), 'codebase-context-idle-'));
+  const contextDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
+  mkdirSync(contextDir, { recursive: true });
+  writeFileSync(path.join(contextDir, KEYWORD_INDEX_FILENAME), '{}', 'utf8');
+  return rootPath;
 }
 
 describe('zombie process prevention', () => {
@@ -119,4 +172,34 @@ describe('zombie process prevention', () => {
     expect(elapsed).toBeGreaterThan(800);
     expect(elapsed).toBeLessThan(8_000);
   }, 12_000);
+
+  it('exits after post-initialize idle timeout when the client stays silent', async () => {
+    const rootPath = createIdleTestProjectRoot();
+    const { client, pid } = await connectClient([rootPath], {
+      CODEBASE_CONTEXT_STDIO_IDLE_TIMEOUT_MS: '1000'
+    });
+
+    expect(isProcessAlive(pid)).toBe(true);
+    await waitForProcessExit(pid, 6000);
+    await client.close().catch(() => undefined);
+  }, 12_000);
+
+  it('resets the idle timer when MCP requests keep arriving', async () => {
+    const rootPath = createIdleTestProjectRoot();
+    const { client, pid } = await connectClient([rootPath], {
+      CODEBASE_CONTEXT_STDIO_IDLE_TIMEOUT_MS: '1500'
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(isProcessAlive(pid)).toBe(true);
+
+    const tools = await client.listTools();
+    expect(tools.tools.length).toBeGreaterThan(0);
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(isProcessAlive(pid)).toBe(true);
+
+    await waitForProcessExit(pid, 6000);
+    await client.close().catch(() => undefined);
+  }, 15_000);
 });

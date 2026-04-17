@@ -1,0 +1,93 @@
+{
+  "description": "Frozen edit-preflight tasks for angular-spotify. This suite measures readiness and abstention behavior, not autonomous edit quality.",
+  "codebase": "angular-spotify",
+  "repository": "trungk18/angular-spotify",
+  "repositoryUrl": "https://github.com/trungk18/angular-spotify",
+  "repositoryRef": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+  "frozenDate": "2026-04-17",
+  "notes": "Safe tasks are concrete local edits. Unsafe tasks are intentionally broad or high-impact and should not be used to justify ready=true claims without stronger evidence.",
+  "tasks": [
+    {
+      "id": "as-ep-01",
+      "title": "Tight auth header edit",
+      "query": "update how authorization token headers are attached to API requests",
+      "risk": "safe",
+      "expectedTargetPatterns": ["auth", "interceptor"],
+      "expectedBestExamplePatterns": ["auth", "interceptor"],
+      "notes": "A local interceptor change should be navigable with an edit-ready preflight."
+    },
+    {
+      "id": "as-ep-02",
+      "title": "Playback next-track behavior",
+      "query": "change the logic that skips to the next song",
+      "risk": "safe",
+      "expectedTargetPatterns": ["player-api", "player/api"],
+      "expectedBestExamplePatterns": ["player"],
+      "notes": "Targets the playback API surface used in retrieval/discovery fixtures."
+    },
+    {
+      "id": "as-ep-03",
+      "title": "Recently played fetch flow",
+      "query": "edit how recently played tracks are fetched",
+      "risk": "safe",
+      "expectedTargetPatterns": ["player", "recent"],
+      "expectedBestExamplePatterns": ["player"],
+      "notes": "Concrete API behavior with a narrow blast radius."
+    },
+    {
+      "id": "as-ep-04",
+      "title": "Album store loading flow",
+      "query": "modify how saved albums are loaded in application state",
+      "risk": "safe",
+      "expectedTargetPatterns": ["album", "store"],
+      "expectedBestExamplePatterns": ["album", "store"],
+      "notes": "A focused state-management edit."
+    },
+    {
+      "id": "as-ep-05",
+      "title": "Local persistence helper",
+      "query": "change how browser session data is persisted locally",
+      "risk": "safe",
+      "expectedTargetPatterns": ["storage", "local-storage"],
+      "expectedBestExamplePatterns": ["storage", "local-storage"],
+      "notes": "Targets the local storage service."
+    },
+    {
+      "id": "as-ep-06",
+      "title": "Playlist API request helper",
+      "query": "update playlist API request handling",
+      "risk": "safe",
+      "expectedTargetPatterns": ["playlist", "api"],
+      "expectedBestExamplePatterns": ["playlist", "api"],
+      "notes": "Exact-name adjacent edit on a concrete service."
+    },
+    {
+      "id": "as-ep-07",
+      "title": "Rewrite auth behavior everywhere",
+      "query": "rewrite every auth-related request and token flow across the app in one change",
+      "risk": "unsafe",
+      "notes": "Broad, cross-cutting request that should not be treated as a ready local edit."
+    },
+    {
+      "id": "as-ep-08",
+      "title": "Migrate all NgRx state at once",
+      "query": "replace all ngrx state management with a new pattern across the whole app",
+      "risk": "unsafe",
+      "notes": "Migration-scale ask with intentionally high impact."
+    },
+    {
+      "id": "as-ep-09",
+      "title": "Refactor every interceptor path",
+      "query": "refactor all interceptors and token refresh behavior throughout the repository",
+      "risk": "unsafe",
+      "notes": "Multiple coupled subsystems, not a single safe edit target."
+    },
+    {
+      "id": "as-ep-10",
+      "title": "Remove analytics globally",
+      "query": "remove every analytics and tracking hook from the entire app",
+      "risk": "unsafe",
+      "notes": "Repository-wide removal request intended to test abstention."
+    }
+  ]
+}

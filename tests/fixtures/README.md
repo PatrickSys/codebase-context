@@ -1,6 +1,6 @@
 # Evaluation Fixtures
 
-This directory contains frozen evaluation sets for testing retrieval and discovery quality.
+This directory contains frozen evaluation sets for testing retrieval, discovery, and edit-preflight quality.
 
 ## Files
 
@@ -8,6 +8,8 @@ This directory contains frozen evaluation sets for testing retrieval and discove
 - `eval-controlled.json` - 20 frozen retrieval queries for the in-repo controlled fixture codebase
 - `discovery-angular-spotify.json` - 12 discovery tasks for `angular-spotify`
 - `discovery-excalidraw.json` - 12 discovery tasks for `Excalidraw`
+- `edit-preflight-angular-spotify.json` - 10 edit-readiness tasks for `angular-spotify`
+- `edit-preflight-excalidraw.json` - 10 edit-readiness tasks for `Excalidraw`
 - `discovery-benchmark-protocol.json` - frozen scope, comparator set, fairness rules, and ship gate for the discovery benchmark
 
 ## Running Evaluations
@@ -42,6 +44,12 @@ node scripts/run-eval.mjs tests/fixtures/codebases/eval-controlled --mode retrie
 node scripts/run-eval.mjs /path/to/angular-spotify /path/to/excalidraw --mode discovery
 ```
 
+### Run Edit-Preflight Evaluation
+
+```bash
+node scripts/run-eval.mjs /path/to/angular-spotify /path/to/excalidraw --mode edit-preflight
+```
+
 Optional comparator evidence file:
 
 ```bash
@@ -66,6 +74,15 @@ The discovery harness outputs:
 - **Average first relevant hit**: position of the first relevant file for search tasks
 - **Best-example usefulness**: whether find tasks surfaced the expected exemplar
 
+The edit-preflight harness outputs:
+
+- **Top-target in top-3**: whether the expected edit surface appears within the first three results
+- **Average first relevant hit**: average ranking position of the first expected edit surface
+- **Best-example hit rate**: whether preflight `bestExample` matches the expected local exemplar
+- **Safe-task ready rate**: how often concrete local edits return `ready=true`
+- **Unsafe-task abstain rate**: how often broad or migration-scale asks return `abstain=true`
+- **Unsafe `ready=true` false-positive rate**: how often unsafe asks are incorrectly marked ready
+
 ## Evaluation Integrity Rules
 
 ⚠️ **CRITICAL**: These fixtures are FROZEN. Once committed:
@@ -80,6 +97,11 @@ For discovery specifically:
 5. **DO NOT** benchmark an unreleased `map` command or a new MCP map tool
 6. **DO NOT** claim implementation quality from this benchmark
 7. **DO** keep comparator setup limitations explicit when a lane requires manual log capture
+
+For edit-preflight specifically:
+
+8. **DO NOT** convert these tasks into patch-quality or autonomous-edit claims
+9. **DO** treat unsafe-task false positives as the critical failure signal
 
 ### Proper Usage
 
@@ -166,6 +188,14 @@ git -C /path/to/excalidraw checkout e18c1dd213000dde0ae94ef7eb00aab537b39708
 2. Use the frozen eval fixture (committed before measurements)
 3. Run eval on both pinned repos
 4. Compare metrics transparently
+
+### Edit-Preflight Scope
+
+Edit-preflight mode is intentionally non-comparator and launch-readiness oriented:
+
+1. It only evaluates the shipped `search_codebase` edit preflight
+2. It measures navigation/readiness signals, not code generation quality
+3. It keeps safe and unsafe tasks explicit so false positives are visible
 
 ## Discovery Benchmark Scope
 

@@ -2,7 +2,7 @@ import process from 'node:process';
 
 async function loadSdkClient() {
   const [{ Client }, { StdioClientTransport }] = await Promise.all([
-    import('@modelcontextprotocol/sdk/client/index.js'),
+    import('@modelcontextprotocol/sdk/client'),
     import('@modelcontextprotocol/sdk/client/stdio.js')
   ]);
 

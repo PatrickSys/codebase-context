@@ -384,7 +384,9 @@ describe('buildCodebaseMap', () => {
         boundedMap.architecture.hotspots.length
       );
       expect(boundedMap.bestExamples).toHaveLength(BOUNDED_LIMITS.bestExamples);
-      expect(fullMap.bestExamples.some((example) => example.file === 'tests/codebase-map.test.ts')).toBe(true);
+      expect(
+        fullMap.bestExamples.some((example) => example.file === 'tests/codebase-map.test.ts')
+      ).toBe(true);
       expect(fullMap.bestExamples.some((example) => example.file === 'dist/index.js')).toBe(true);
       expect(fullMap.architecture.layers.map((layer) => layer.name)).toEqual(
         expect.arrayContaining(['dist', 'tests', 'vendor'])
@@ -398,7 +400,7 @@ describe('buildCodebaseMap', () => {
     const project = createProjectState(CURRENT_REPO_ROOT);
     const map = await buildCodebaseMap(project);
 
-    expect(map.project).toBe('codebase-context');
+    expect(map.project).toBe(path.basename(CURRENT_REPO_ROOT));
     expect(map.architecture.layers.map((layer) => layer.name)).not.toContain('tests');
     expect(map.architecture.layers.map((layer) => layer.name)).not.toContain('dist');
     expect(map.architecture.entrypoints.length).toBeLessThanOrEqual(8);

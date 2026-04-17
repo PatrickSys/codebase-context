@@ -595,7 +595,14 @@ export interface Memory {
   date: string;
   /** Source of the memory: 'user' (default) or 'git' (auto-extracted from commits) */
   source?: 'user' | 'git';
+  /** Optional scope for file-specific or symbol-specific guidance */
+  scope?: MemoryScope;
 }
+
+export type MemoryScope =
+  | { kind: 'global' }
+  | { kind: 'file'; file: string }
+  | { kind: 'symbol'; file: string; symbol: string };
 
 // ============================================================================
 // SHARED PRIMITIVES

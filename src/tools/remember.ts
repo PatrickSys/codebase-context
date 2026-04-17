@@ -1,7 +1,7 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext, ToolResponse } from './types.js';
-import type { Memory, MemoryCategory, MemoryType } from '../types/index.js';
-import { appendMemoryFile } from '../memory/store.js';
+import type { Memory, MemoryCategory, MemoryScope, MemoryType } from '../types/index.js';
+import { appendMemoryFile, buildMemoryIdentityParts, normalizeMemoryScope } from '../memory/store.js';
 
 export const definition: Tool = {
   name: 'remember',
@@ -39,6 +39,23 @@ export const definition: Tool = {
       reason: {
         type: 'string',
         description: 'Why this matters or what breaks otherwise'
+      },
+      scope: {
+        type: 'object',
+        description:
+          'Optional scope for this memory. Use { kind: "file", file } or { kind: "symbol", file, symbol }.',
+        properties: {
+          kind: {
+            type: 'string',
+            enum: ['global', 'file', 'symbol']
+          },
+          file: {
+            type: 'string'
+          },
+          symbol: {
+            type: 'string'
+          }
+        }
       }
     },
     required: ['type', 'category', 'memory', 'reason']
@@ -54,15 +71,17 @@ export async function handle(
     category: MemoryCategory;
     memory: string;
     reason: string;
+    scope?: MemoryScope;
   };
 
   const { type = 'decision', category, memory, reason } = args_typed;
+  const scope = normalizeMemoryScope(args_typed.scope);
 
   try {
     const crypto = await import('crypto');
     const memoryPath = ctx.paths.memory;
 
-    const hashContent = `${type}:${category}:${memory}:${reason}`;
+    const hashContent = buildMemoryIdentityParts({ type, category, memory, reason, scope });
     const hash = crypto.createHash('sha256').update(hashContent).digest('hex');
     const id = hash.substring(0, 12);
 
@@ -72,7 +91,8 @@ export async function handle(
       category,
       memory,
       reason,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      ...(scope && { scope })
     };
 
     const result = await appendMemoryFile(memoryPath, newMemory);

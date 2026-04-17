@@ -21,7 +21,11 @@ import {
 import { assessSearchQuality } from '../core/search-quality.js';
 import { getRerankerStatus } from '../core/reranker.js';
 import { IndexCorruptedError } from '../errors/index.js';
-import { readMemoriesFile, withConfidence } from '../memory/store.js';
+import {
+  formatMemoryScopeText,
+  readMemoriesFile,
+  withConfidence
+} from '../memory/store.js';
 import type { MemoryWithConfidence } from '../memory/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
 import type { FileExport } from '../utils/usage-tracker.js';
@@ -249,12 +253,7 @@ export async function handle(
   const allMemoriesWithConf = withConfidence(allMemories);
 
   const queryTerms = queryStr.toLowerCase().split(/\s+/).filter(Boolean);
-  const relatedMemories = allMemoriesWithConf
-    .filter((m) => {
-      const searchText = `${m.memory} ${m.reason}`.toLowerCase();
-      return queryTerms.some((term: string) => searchText.includes(term));
-    })
-    .sort((a, b) => b.effectiveConfidence - a.effectiveConfidence);
+  const queryTermSet = new Set(queryTerms);
 
   // Load intelligence data for enrichment (all intents, not just preflight)
   let intelligence: IntelligenceData | null = null;
@@ -323,6 +322,67 @@ export async function handle(
   function pathsMatch(a: string, b: string): boolean {
     return a === b || a.endsWith(b) || b.endsWith(a);
   }
+
+  function normalizeSymbolName(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  const resultPathSet = new Set(results.map((result) => normalizeGraphPath(result.filePath)));
+  const resultSymbolSet = new Set(
+    results
+      .map((result) => {
+        const symbolName = result.metadata?.symbolName;
+        return typeof symbolName === 'string' ? normalizeSymbolName(symbolName) : null;
+      })
+      .filter((value): value is string => value !== null)
+  );
+
+  function getMemoryScopeBoost(memory: MemoryWithConfidence): number {
+    if (!memory.scope || memory.scope.kind === 'global') return 0;
+
+    const normalizedFile = normalizeGraphPath(memory.scope.file);
+    if (memory.scope.kind === 'file') {
+      return resultPathSet.has(normalizedFile) ? 3 : 0;
+    }
+
+    const symbolMatch =
+      resultSymbolSet.has(normalizeSymbolName(memory.scope.symbol)) ||
+      queryTermSet.has(normalizeSymbolName(memory.scope.symbol));
+
+    if (resultPathSet.has(normalizedFile) && symbolMatch) return 4;
+    if (resultPathSet.has(normalizedFile)) return 2;
+    if (symbolMatch) return 1;
+    return 0;
+  }
+
+  function getMemoryTextMatchCount(memory: MemoryWithConfidence): number {
+    const haystack = `${memory.memory} ${memory.reason} ${formatMemoryScopeText(memory.scope)}`.toLowerCase();
+    return queryTerms.filter((term) => haystack.includes(term)).length;
+  }
+
+  function formatMemoryForOutput(memory: MemoryWithConfidence): string {
+    const scopeText =
+      !memory.scope || memory.scope.kind === 'global'
+        ? ''
+        : memory.scope.kind === 'file'
+          ? ` [${memory.scope.file}]`
+          : ` [${memory.scope.file}#${memory.scope.symbol}]`;
+    return `${memory.memory}${scopeText} (${memory.effectiveConfidence})`;
+  }
+
+  const relatedMemories = allMemoriesWithConf
+    .map((memory) => ({
+      memory,
+      textMatches: getMemoryTextMatchCount(memory),
+      scopeBoost: getMemoryScopeBoost(memory)
+    }))
+    .filter((entry) => entry.textMatches > 0 || entry.scopeBoost > 0)
+    .sort((a, b) => {
+      if (b.scopeBoost !== a.scopeBoost) return b.scopeBoost - a.scopeBoost;
+      if (b.textMatches !== a.textMatches) return b.textMatches - a.textMatches;
+      return b.memory.effectiveConfidence - a.memory.effectiveConfidence;
+    })
+    .map((entry) => entry.memory);
 
   function computeIndexConfidence(): 'fresh' | 'aging' | 'stale' {
     let confidence: 'fresh' | 'aging' | 'stale' = 'stale';
@@ -568,9 +628,9 @@ export async function handle(
     if (terms.length === 0) return [];
     return memories
       .filter((m) => {
-        const text = `${m.memory} ${m.reason}`.toLowerCase();
+        const text = `${m.memory} ${m.reason} ${formatMemoryScopeText(m.scope)}`.toLowerCase();
         const matchCount = terms.filter((t) => text.includes(t)).length;
-        return matchCount >= 2 && m.effectiveConfidence >= 0.5;
+        return (matchCount >= 2 || getMemoryScopeBoost(m) >= 2) && m.effectiveConfidence >= 0.5;
       })
       .slice(0, 2);
   }
@@ -1114,7 +1174,7 @@ export async function handle(
           };
         }),
         ...(strongMemories.length > 0 && {
-          relatedMemories: strongMemories.map((m) => `${m.memory} (${m.effectiveConfidence})`)
+          relatedMemories: strongMemories.map((m) => formatMemoryForOutput(m))
         })
       },
       { mode: 'compact', pretty: true, transportAware: true }
@@ -1175,9 +1235,7 @@ export async function handle(
       }),
       totalResults: results.length,
       ...(relatedMemories.length > 0 && {
-        relatedMemories: relatedMemories
-          .slice(0, 3)
-          .map((m) => `${m.memory} (${m.effectiveConfidence})`)
+        relatedMemories: relatedMemories.slice(0, 3).map((m) => formatMemoryForOutput(m))
       })
     },
     { mode: 'full', pretty: true, transportAware: true }

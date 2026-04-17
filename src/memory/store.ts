@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { Memory, MemoryCategory, MemoryType } from '../types/index.js';
+import type { Memory, MemoryCategory, MemoryScope, MemoryType } from '../types/index.js';
 
 type RawMemory = Partial<{
   id: unknown;
@@ -11,6 +11,7 @@ type RawMemory = Partial<{
   reason: unknown;
   date: unknown;
   source: unknown;
+  scope: unknown;
 }>;
 
 export type MemoryFilters = {
@@ -21,6 +22,35 @@ export type MemoryFilters = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function normalizePathLike(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+export function normalizeMemoryScope(raw: unknown): MemoryScope | undefined {
+  if (!isRecord(raw)) return undefined;
+  const kind = raw.kind;
+  if (kind === 'global') {
+    return { kind };
+  }
+  if (kind === 'file' && typeof raw.file === 'string' && raw.file.trim()) {
+    return { kind, file: normalizePathLike(raw.file.trim()) };
+  }
+  if (
+    kind === 'symbol' &&
+    typeof raw.file === 'string' &&
+    raw.file.trim() &&
+    typeof raw.symbol === 'string' &&
+    raw.symbol.trim()
+  ) {
+    return {
+      kind,
+      file: normalizePathLike(raw.file.trim()),
+      symbol: raw.symbol.trim()
+    };
+  }
+  return undefined;
 }
 
 export function normalizeMemory(raw: unknown): Memory | null {
@@ -42,7 +72,8 @@ export function normalizeMemory(raw: unknown): Memory | null {
   if (!id || !category || !memory || !reason || !date) return null;
 
   const source = m.source === 'git' ? ('git' as const) : undefined;
-  return { id, type, category, memory, reason, date, ...(source && { source }) };
+  const scope = normalizeMemoryScope(m.scope);
+  return { id, type, category, memory, reason, date, ...(source && { source }), ...(scope && { scope }) };
 }
 
 export function normalizeMemories(raw: unknown): Memory[] {
@@ -104,7 +135,7 @@ export function filterMemories(memories: Memory[], filters: MemoryFilters): Memo
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
     if (terms.length > 0) {
       filtered = filtered.filter((m) => {
-        const haystack = `${m.memory} ${m.reason}`.toLowerCase();
+        const haystack = `${m.memory} ${m.reason} ${formatMemoryScopeText(m.scope)}`.toLowerCase();
         return terms.some((t) => haystack.includes(t));
       });
     }
@@ -173,6 +204,30 @@ export function withConfidence(memories: Memory[], now?: Date): MemoryWithConfid
     ...m,
     ...computeConfidence(m, now)
   }));
+}
+
+export function formatMemoryScopeText(scope?: MemoryScope): string {
+  if (!scope || scope.kind === 'global') return '';
+  if (scope.kind === 'file') {
+    return scope.file;
+  }
+  return `${scope.file} ${scope.symbol}`;
+}
+
+export function buildMemoryIdentityParts(memory: {
+  type: MemoryType;
+  category: MemoryCategory;
+  memory: string;
+  reason: string;
+  scope?: MemoryScope;
+}): string {
+  const scopePart =
+    !memory.scope || memory.scope.kind === 'global'
+      ? 'global'
+      : memory.scope.kind === 'file'
+        ? `file:${normalizePathLike(memory.scope.file)}`
+        : `symbol:${normalizePathLike(memory.scope.file)}:${memory.scope.symbol}`;
+  return `${memory.type}:${memory.category}:${memory.memory}:${memory.reason}:${scopePart}`;
 }
 
 export function applyUnfilteredLimit(

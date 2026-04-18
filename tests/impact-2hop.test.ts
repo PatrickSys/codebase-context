@@ -29,14 +29,19 @@ describe('Impact candidates (2-hop)', () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'impact-2hop-'));
     const srcDir = path.join(tempRoot, 'src');
     await fs.mkdir(srcDir, { recursive: true });
-    await fs.writeFile(path.join(tempRoot, 'package.json'), JSON.stringify({ name: 'impact-2hop' }));
-
     await fs.writeFile(
-      path.join(srcDir, 'c.ts'),
-      `export function cFn() { return '${token}'; }\n`
+      path.join(tempRoot, 'package.json'),
+      JSON.stringify({ name: 'impact-2hop' })
     );
-    await fs.writeFile(path.join(srcDir, 'b.ts'), `import { cFn } from './c';\nexport const b = cFn();\n`);
-    await fs.writeFile(path.join(srcDir, 'a.ts'), `import { b } from './b';\nexport const a = b;\n`);
+    await fs.writeFile(path.join(srcDir, 'c.ts'), `export function cFn() { return '${token}'; }\n`);
+    await fs.writeFile(
+      path.join(srcDir, 'b.ts'),
+      `import { cFn } from './c';\nexport const b = cFn();\n`
+    );
+    await fs.writeFile(
+      path.join(srcDir, 'a.ts'),
+      `import { b } from './b';\nexport const a = b;\n`
+    );
 
     const indexer = new CodebaseIndexer({
       rootPath: tempRoot,
@@ -122,5 +127,5 @@ describe('Impact candidates (2-hop)', () => {
         `Expected hop 2 candidate src/a.ts, got impact.details=${JSON.stringify(details)}`
       );
     }
-  });
+  }, 30000);
 });

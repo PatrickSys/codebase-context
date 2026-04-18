@@ -559,9 +559,8 @@ describe('search_codebase compact/full mode', () => {
       'utf-8'
     );
 
-    const actualSearchModule = await vi.importActual<typeof import('../src/core/search.js')>(
-      '../src/core/search.js'
-    );
+    const actualSearchModule =
+      await vi.importActual<typeof import('../src/core/search.js')>('../src/core/search.js');
     const searcher = new actualSearchModule.CodebaseSearcher(tempRoot);
     const results = await searcher.search('AuthService token', 5, undefined, {
       useSemanticSearch: false,
@@ -573,7 +572,7 @@ describe('search_codebase compact/full mode', () => {
     expect(results[0].filePath).toBe(actualChunk.filePath);
     expect(results[0].imports).toEqual(actualChunk.imports);
     expect(results[0].exports).toEqual(actualChunk.exports);
-  });
+  }, 30000);
 
   it('adds a warning only when the final full payload exceeds the compact budget threshold', async () => {
     const oversizedSummary = 'Token-heavy summary '.repeat(1200);

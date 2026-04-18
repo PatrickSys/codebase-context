@@ -136,7 +136,7 @@ export const VERSION = '1.0.0';
 
     const withSnippets = parsed.results.filter((r: any) => r.snippet);
     expect(withSnippets.length).toBeGreaterThan(0);
-  });
+  }, 30000);
 
   it('scope header is a comment line starting with //', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');

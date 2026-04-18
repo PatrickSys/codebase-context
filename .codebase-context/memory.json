@@ -399,5 +399,175 @@
     "reason": "Auto-extracted from git commit history",
     "date": "2026-03-25T21:19:51.000Z",
     "source": "git"
+  },
+  {
+    "id": "a48da9bb8e95",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(search): durabilize verified search and reranker closure",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-15T15:27:18.000Z",
+    "source": "git"
+  },
+  {
+    "id": "aeab51a23488",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(ci): allow manual release publish recovery",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-15T09:16:53.000Z",
+    "source": "git"
+  },
+  {
+    "id": "393fedcd78d9",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(ci): build before release tests",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-15T09:08:57.000Z",
+    "source": "git"
+  },
+  {
+    "id": "0a34e1a3d18c",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(ci): replace retired pnpm audit endpoint",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-15T08:53:57.000Z",
+    "source": "git"
+  },
+  {
+    "id": "3898f5ad6604",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(search): wire SearchResult imports/exports and stabilize map hub selection (#100)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-14T19:12:34.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c85cfec1fc5c",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: resolve PR #98 review blockers",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-13T19:57:33.000Z",
+    "source": "git"
+  },
+  {
+    "id": "e342f37e425d",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: finalize v2.1.0 token budget advisory",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-13T17:17:26.000Z",
+    "source": "git"
+  },
+  {
+    "id": "47ef7724796b",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(benchmarks): make all comparator lanes cross-platform on Windows (#97) (#97)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-13T07:21:49.000Z",
+    "source": "git"
+  },
+  {
+    "id": "ea2415619ac9",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(metadata): prevent framework misclassification in codebase detection (#96)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-12T09:49:40.000Z",
+    "source": "git"
+  },
+  {
+    "id": "4dd6abb3db15",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: harden managed MCP session cleanup",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-10T13:44:57.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c64b58a9d29d",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: clean up benchmark MCP sessions",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-10T12:58:33.000Z",
+    "source": "git"
+  },
+  {
+    "id": "0e567989e008",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(search): query-aware bestExample, golden file threshold, ONNX thread limits",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-09T13:33:35.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c362f368350e",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: patch vulnerable hono dependencies",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-09T09:06:30.000Z",
+    "source": "git"
+  },
+  {
+    "id": "ce6d238cdffc",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: close Phase 8 review follow-ups",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-09T08:58:32.000Z",
+    "source": "git"
+  },
+  {
+    "id": "e8997af129c4",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): update multi-project routing assertions for new map header",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-08T20:34:12.000Z",
+    "source": "git"
+  },
+  {
+    "id": "d0030da76d02",
+    "type": "failure",
+    "category": "architecture",
+    "memory": "Benchmark cleanup patch only narrows wrapper leak path",
+    "reason": "The 2026-04-17 audit found the managed MCP session patch materially improves Windows wrapper cleanup but does not fully close benchmark lifecycle leaks across the real runner paths.",
+    "date": "2026-04-17T16:05:17.165Z",
+    "scope": {
+      "kind": "file",
+      "file": "scripts/lib/managed-mcp-session.mjs"
+    }
+  },
+  {
+    "id": "6dab60d42f90",
+    "type": "gotcha",
+    "category": "testing",
+    "memory": "Managed-session tests prove onSpawn path, not production path",
+    "reason": "The wrapper cleanup tests pass onSpawn and therefore validate a stronger PID-capture path than the actual benchmark runner currently uses.",
+    "date": "2026-04-17T16:05:17.846Z",
+    "scope": {
+      "kind": "file",
+      "file": "tests/benchmark-comparators.test.ts"
+    }
+  },
+  {
+    "id": "91b65d088f2f",
+    "type": "decision",
+    "category": "architecture",
+    "memory": "Do not call benchmark lifecycle cleanup closed yet",
+    "reason": "The 2026-04-17 audit requires production-path PID proof, non-Windows descendant review, and raw-Claude launcher review before the leaked-process issue can be considered fully fixed.",
+    "date": "2026-04-17T16:07:38.456Z",
+    "scope": {
+      "kind": "global"
+    }
   }
 ]

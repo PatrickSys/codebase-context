@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { describe, it, expect } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -19,6 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'map-fixture');
 const CURRENT_REPO_ROOT = path.resolve(__dirname, '..');
+const ENTRYPOINT = path.join(CURRENT_REPO_ROOT, 'src', 'index.ts');
 const BOUNDED_LIMITS = {
   entrypoints: 8,
   hubFiles: 5,
@@ -79,6 +81,18 @@ async function createTempMapProject(options: TempProjectOptions = {}): Promise<s
 
 async function removeTempMapProject(rootPath: string): Promise<void> {
   await fs.rm(path.dirname(rootPath), { recursive: true, force: true });
+}
+
+function runMapCli(args: string[], rootPath: string) {
+  return spawnSync(process.execPath, ['--import', 'tsx', ENTRYPOINT, 'map', ...args], {
+    cwd: CURRENT_REPO_ROOT,
+    env: {
+      ...process.env,
+      CODEBASE_ROOT: rootPath
+    },
+    encoding: 'utf8',
+    timeout: 120_000
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -671,4 +685,123 @@ describe('generateCodebaseIntelligence (eval guard)', () => {
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
   });
+});
+
+describe('map CLI contract', () => {
+  it('supports --full on the real CLI entrypoint', async () => {
+    const rootPath = await createTempMapProject({
+      projectName: 'codebase-context',
+      patterns: {
+        default: {
+          primary: { name: 'Factory', frequency: '80%', trend: 'Stable' }
+        }
+      },
+      goldenFiles: [
+        { file: 'repos/external-lib/src/index.ts', score: 0.98 },
+        { file: 'src/core/map.ts', score: 0.95 }
+      ],
+      graph: {
+        imports: {
+          'src/index.ts': ['src/core/map.ts'],
+          'repos/external-lib/src/index.ts': ['src/core/map.ts']
+        },
+        importedBy: {
+          'src/core/map.ts': ['src/index.ts', 'repos/external-lib/src/index.ts']
+        },
+        exports: {
+          'src/index.ts': [{ name: 'serve', type: 'function' }],
+          'repos/external-lib/src/index.ts': [{ name: 'mountExternalRepo', type: 'function' }]
+        },
+        stats: { files: 2, edges: 2, avgDependencies: 1 }
+      },
+      chunks: [
+        {
+          relativePath: 'src/core/map.ts',
+          content: 'export class MapBuilder { build() {} }',
+          metadata: {
+            symbolAware: true,
+            symbolKind: 'class',
+            symbolName: 'MapBuilder'
+          }
+        } as CodeChunk
+      ]
+    });
+
+    try {
+      const result = runMapCli(['--full', '--json'], rootPath);
+
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe('');
+
+      const parsed = JSON.parse(result.stdout) as {
+        architecture?: { apiSurface?: Array<{ file: string }> };
+        bestExamples?: Array<{ file: string }>;
+      };
+
+      expect(parsed.architecture?.apiSurface?.map((surface) => surface.file)).toContain(
+        'repos/external-lib/src/index.ts'
+      );
+      expect(parsed.bestExamples?.map((example) => example.file)).toContain(
+        'repos/external-lib/src/index.ts'
+      );
+    } finally {
+      await removeTempMapProject(rootPath);
+    }
+  }, 120_000);
+
+  it('writes the exhaustive markdown map when --export and --full are combined', async () => {
+    const rootPath = await createTempMapProject({
+      projectName: 'codebase-context',
+      patterns: {
+        default: {
+          primary: { name: 'Factory', frequency: '80%', trend: 'Stable' }
+        }
+      },
+      goldenFiles: [
+        { file: 'repos/external-lib/src/index.ts', score: 0.98 },
+        { file: 'src/core/map.ts', score: 0.95 }
+      ],
+      graph: {
+        imports: {
+          'src/index.ts': ['src/core/map.ts'],
+          'repos/external-lib/src/index.ts': ['src/core/map.ts']
+        },
+        importedBy: {
+          'src/core/map.ts': ['src/index.ts', 'repos/external-lib/src/index.ts']
+        },
+        exports: {
+          'src/index.ts': [{ name: 'serve', type: 'function' }],
+          'repos/external-lib/src/index.ts': [{ name: 'mountExternalRepo', type: 'function' }]
+        },
+        stats: { files: 2, edges: 2, avgDependencies: 1 }
+      },
+      chunks: [
+        {
+          relativePath: 'src/core/map.ts',
+          content: 'export class MapBuilder { build() {} }',
+          metadata: {
+            symbolAware: true,
+            symbolKind: 'class',
+            symbolName: 'MapBuilder'
+          }
+        } as CodeChunk
+      ]
+    });
+
+    try {
+      const result = runMapCli(['--export', '--full'], rootPath);
+
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe('');
+
+      const exportPath = path.join(rootPath, 'CODEBASE_MAP.md');
+      const exportedMarkdown = await fs.readFile(exportPath, 'utf-8');
+
+      expect(result.stdout).toContain(`Wrote ${exportPath}`);
+      expect(exportedMarkdown).toContain('repos/external-lib/src/index.ts');
+      expect(exportedMarkdown).toContain('mountExternalRepo');
+    } finally {
+      await removeTempMapProject(rootPath);
+    }
+  }, 120_000);
 });

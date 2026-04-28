@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/patricksys-codebase-context-badge.png)](https://mseep.ai/app/patricksys-codebase-context)
+
 # codebase-context
 
 ## Map your team's conventions before your AI agent starts searching.

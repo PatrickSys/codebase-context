@@ -24,6 +24,18 @@ type TaskManifest = { tasks: Array<{ instance_id: string; base_commit: string }>
 const manifest = manifestFixture as TaskManifest;
 vi.setConfig({ testTimeout: 30000 });
 
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith('GIT_')) delete process.env[key];
+}
+
+function childEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!key.startsWith('GIT_')) env[key] = value;
+  }
+  return { ...env, ...overrides };
+}
+
 function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
   return path.join(
     mkdtempSync(path.join(tmpdir(), `contextbench-${phase}-schema-gate-`)),
@@ -73,15 +85,14 @@ function createClaudeStub(
   chmodSync(shellStub, 0o755);
   return {
     stubDir,
-    env: {
-      ...process.env,
+    env: childEnv({
       PATH: `${stubDir}${path.delimiter}${process.env.PATH ?? ''}`,
       Path: `${stubDir}${path.delimiter}${process.env.Path ?? process.env.PATH ?? ''}`,
       CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubScript]),
       CLAUDE_STUB_STDOUT: stdout,
       CLAUDE_STUB_CWD_PATH: capture?.cwdPath,
       CLAUDE_STUB_STDIN_PATH: capture?.stdinPath
-    }
+    })
   };
 }
 
@@ -99,7 +110,7 @@ function writeTaskPayloads(
 
 function createGitCheckout(): string {
   const repoPath = mkdtempSync(path.join(tmpdir(), 'contextbench-task-repo-'));
-  execFileSync('git', ['init'], { cwd: repoPath, encoding: 'utf8' });
+  execFileSync('git', ['init'], { cwd: repoPath, encoding: 'utf8', env: childEnv() });
   execFileSync(
     'git',
     [
@@ -112,7 +123,7 @@ function createGitCheckout(): string {
       '-m',
       'init'
     ],
-    { cwd: repoPath, encoding: 'utf8' }
+    { cwd: repoPath, encoding: 'utf8', env: childEnv() }
   );
   return repoPath;
 }
@@ -163,8 +174,7 @@ function createAdapterStub(
   );
   return {
     stubDir,
-    env: {
-      ...process.env,
+    env: childEnv({
       [`CONTEXTBENCH_${executor.toUpperCase()}_COMMAND`]: JSON.stringify([
         process.execPath,
         stubScript
@@ -172,7 +182,7 @@ function createAdapterStub(
       ADAPTER_STUB_EXECUTOR: executor,
       ADAPTER_STUB_CWD_PATH: capture?.cwdPath,
       ADAPTER_STUB_ARGS_PATH: capture?.argsPath
-    }
+    })
   };
 }
 

@@ -29,6 +29,10 @@ type BaselineSession = {
 
 vi.setConfig({ testTimeout: 30000 });
 
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith('GIT_')) delete process.env[key];
+}
+
 function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
   return path.join(
     mkdtempSync(path.join(tmpdir(), `contextbench-${phase}-`)),

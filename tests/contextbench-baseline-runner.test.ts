@@ -39,6 +39,23 @@ type TaskManifest = { tasks: Array<{ instance_id: string }> };
 const manifest = manifestFixture as TaskManifest;
 vi.setConfig({ testTimeout: 30000 });
 
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith('GIT_')) delete process.env[key];
+}
+
+function childEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!key.startsWith('GIT_')) env[key] = value;
+  }
+  return { ...env, ...overrides };
+}
+
+function ignoreWindowsTempCleanupRace(error: unknown): void {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code ?? '')) throw error;
+}
+
 function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
   return path.join(
     mkdtempSync(path.join(tmpdir(), `contextbench-${phase}-runner-`)),
@@ -60,12 +77,12 @@ function createCleanGitRepo(root: string): string {
   const repoPath = path.join(root, 'repo');
   mkdirSync(repoPath, { recursive: true });
   writeFileSync(path.join(repoPath, 'README.md'), '# ContextBench fixture\n', 'utf8');
-  execFileSync('git', ['init'], { cwd: repoPath, encoding: 'utf8' });
-  execFileSync('git', ['add', 'README.md'], { cwd: repoPath, encoding: 'utf8' });
+  execFileSync('git', ['init'], { cwd: repoPath, encoding: 'utf8', env: childEnv() });
+  execFileSync('git', ['add', 'README.md'], { cwd: repoPath, encoding: 'utf8', env: childEnv() });
   execFileSync(
     'git',
     ['-c', 'user.name=ContextBench Test', '-c', 'user.email=contextbench@example.invalid', 'commit', '-m', 'fixture'],
-    { cwd: repoPath, encoding: 'utf8' }
+    { cwd: repoPath, encoding: 'utf8', env: childEnv() }
   );
   return repoPath;
 }
@@ -141,7 +158,9 @@ describe('ContextBench Phase 40 baseline runner', () => {
     } finally {
       rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
         recursive: true,
-        force: true
+        force: true,
+        maxRetries: 10,
+        retryDelay: 200
       });
     }
   });
@@ -222,14 +241,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const payloadPath = writePayloadFile(tempRoot, taskId, repoPath);
     const stubClaude = writeStubClaude(tempRoot);
     const stubEvaluator = writeStubEvaluator(tempRoot, 0);
-    const env = {
-      ...process.env,
+    const env = childEnv({
       CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
       CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
       CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
         'raw-native': { proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
       })
-    };
+    });
     try {
       execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
         encoding: 'utf8',
@@ -301,14 +319,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const payloadPath = writePayloadFile(tempRoot, taskId, repoPath);
     const stubClaude = writeStubClaude(tempRoot);
     const stubEvaluator = writeStubEvaluator(tempRoot, 0, 'not json');
-    const env = {
-      ...process.env,
+    const env = childEnv({
       CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
       CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
       CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
         'raw-native': { proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
       })
-    };
+    });
     try {
       execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
         encoding: 'utf8',
@@ -374,14 +391,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
       const payloadPath = writePayloadFile(tempRoot, taskId, repoPath);
       const stubClaude = writeStubClaude(tempRoot);
       const stubEvaluator = writeStubEvaluator(tempRoot, 0, testCase.output);
-      const env = {
-        ...process.env,
+      const env = childEnv({
         CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
         CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
         CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
           'raw-native': { proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
         })
-      };
+      });
       try {
         execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
           encoding: 'utf8',
@@ -426,11 +442,10 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const payloadPath = writePayloadFile(tempRoot, taskId, repoPath);
     const stubClaude = writeStubClaude(tempRoot);
     const stubEvaluator = writeStubEvaluator(tempRoot, 1);
-    const env = {
-      ...process.env,
+    const env = childEnv({
       CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
       CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator])
-    };
+    });
     try {
       execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
         encoding: 'utf8',
@@ -1086,10 +1101,16 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(result.stdout).toContain('phase42 verification failed');
       expect(result.stderr).toContain('baseline seal blocked by Phase 42 evidence gate');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      try {
+        rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 200
+        });
+      } catch (error) {
+        ignoreWindowsTempCleanupRace(error);
+      }
     }
   });
 });

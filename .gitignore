@@ -29,6 +29,26 @@ grammars/*.wasm
 docs/visuals.md
 .repolore/
 .opencode/
-.agents/
 CODEBASE_MAP.md
 repos/
+
+# Local benchmark/lab outputs
+benchmark-runs/
+outputs/
+results/skeptical-user/raw/
+results/skeptical-user/local/
+results/skeptical-user/tmp/
+.tmp-skeptical-user/
+
+# External benchmark/research clones
+matplotlib-repo/
+sympy-contextbench/
+
+# Local agent/vendor artifacts
+**/skills/bmad-*/
+_bmad/
+_bmad-*/
+_bmad-output/
+
+# Local browser automation artifacts
+.playwright-mcp/

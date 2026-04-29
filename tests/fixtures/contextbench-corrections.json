@@ -1,0 +1,71 @@
+{
+  "name": "v2.4-contextbench-corrections-ledger",
+  "protocolVersion": "contextbench-protocol-v1",
+  "frozenDate": "2026-04-27",
+  "corrections": [
+    {
+      "correction_id": "contextbench-hardness-signal-policy-2026-04-27",
+      "date": "2026-04-27",
+      "reason_category": "factual_erratum",
+      "rationale": "Live inspection of Contextbench/ContextBench config contextbench_verified found no explicit hardness field, so the Phase 36 hard-task invariant is replaced with an explicit unavailable-signal policy and proxy hardness scoring remains forbidden.",
+      "affected_fields": [
+        "taskSlicePolicy.coverageConstraints.mustIncludeHardTasks",
+        "taskSlicePolicy.hardnessSignalPolicy"
+      ],
+      "prior_hash": "sha256:e196311c98e6af44c044dbe57321afa28afdacc598cb499720c42e2bbf4ad495",
+      "new_hash": "sha256:b630d813d266f1f814a53f9ca7695fc4b33c553e6cf961764ee76551fa8e63ab",
+      "protocol_version_before": "contextbench-protocol-v1",
+      "protocol_version_after": "contextbench-protocol-v1"
+    }
+  ],
+  "policy": {
+    "silentChangesAllowed": false,
+    "allowedReasonCategories": [
+      "factual_erratum",
+      "ambiguous_task_fix",
+      "repo_pin_correction",
+      "official_evaluator_compatibility_fix"
+    ],
+    "requiresProtocolVersionBumpFor": [
+      "task_ids",
+      "repo_commits",
+      "qrels",
+      "expected_facts",
+      "thresholds",
+      "prompts",
+      "lane_tool_cards",
+      "scoring_commands",
+      "budgets",
+      "metrics",
+      "failure_taxonomy",
+      "terminal_statuses",
+      "blocked_claims",
+      "tripwires",
+      "phase_boundary",
+      "lane_sets",
+      "setup_failure_semantics",
+      "run_manifest_schema",
+      "protocol_fingerprint",
+      "correction_policy"
+    ],
+    "anyFixtureChangeRequiresCorrection": true,
+    "requiredCorrectionFields": [
+      "correction_id",
+      "date",
+      "reason_category",
+      "rationale",
+      "affected_fields",
+      "prior_hash",
+      "new_hash",
+      "protocol_version_before",
+      "protocol_version_after"
+    ],
+    "forbiddenReasons": [
+      "match_system_output",
+      "improve_score",
+      "hide_failure",
+      "reduce_setup_work"
+    ],
+    "comparisonAcrossVersionsRequiresFullRerun": true
+  }
+}

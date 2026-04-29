@@ -1,0 +1,30 @@
+{
+  "name": "v2.4-contextbench-phase37-smoke-pack",
+  "protocolVersion": "contextbench-protocol-v1",
+  "claimBearing": false,
+  "purpose": "local_harness_smoke_only",
+  "selectedInPhase": 37,
+  "mustNotContributeTo": [
+    "contextbench_claim_bearing_aggregates",
+    "wedge_win_decision",
+    "public_benchmark_claims",
+    "product_tuning_before_baseline"
+  ],
+  "executionStatus": "metadata_only_not_executed_in_phase37",
+  "corpora": [
+    {
+      "name": "Excalidraw",
+      "repo": "excalidraw/excalidraw",
+      "claimBearing": false,
+      "purpose": "local_harness_smoke_only",
+      "phase37RunnableTasks": false
+    },
+    {
+      "name": "FastAPI",
+      "repo": "fastapi/fastapi",
+      "claimBearing": false,
+      "purpose": "local_harness_smoke_only",
+      "phase37RunnableTasks": false
+    }
+  ]
+}

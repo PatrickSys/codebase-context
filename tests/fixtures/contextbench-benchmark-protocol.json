@@ -1,0 +1,310 @@
+{
+  "name": "v2.4-contextbench-external-protocol",
+  "protocolVersion": "contextbench-protocol-v1",
+  "frozenDate": "2026-04-27",
+  "status": "protocol_frozen",
+  "claimAllowed": false,
+  "phaseBoundary": {
+    "phase36Freezes": [
+      "protocol_schema",
+      "lane_governance",
+      "correction_policy",
+      "claim_gates",
+      "run_manifest_schema"
+    ],
+    "phase37Freezes": [
+      "actual_contextbench_instance_ids",
+      "repo_urls",
+      "base_commits",
+      "language_distribution",
+      "problem_statement_references"
+    ],
+    "phase36MustNotFreeze": [
+      "actual_task_ids",
+      "actual_repo_commits",
+      "benchmark_outputs",
+      "runner_results"
+    ]
+  },
+  "benchmarkTarget": {
+    "primary": "ContextBench",
+    "sourceRepository": "https://github.com/EuniAI/ContextBench",
+    "datasetCandidates": ["Contextbench/ContextBench", "Schwerli/ContextBench"],
+    "datasetConfig": "contextbench_verified",
+    "officialEvaluatorFirst": true,
+    "officialEvaluatorCommand": "python -m contextbench.evaluate --gold <gold.parquet> --pred <trajectory.traj.json> --out <results.jsonl>",
+    "fallbackScorerPolicy": {
+      "allowed": "only_after_official_evaluator_incompatibility_is_documented",
+      "claimBearing": false,
+      "requiresValidationAgainstOfficialOutputs": true
+    }
+  },
+  "taskSlicePolicy": {
+    "sliceKind": "verified_mini_slice",
+    "taskCount": {
+      "min": 20,
+      "max": 50
+    },
+    "selectedInPhase": 37,
+    "phase36SelectionSchemaOnly": true,
+    "requiredManifestFields": [
+      "instance_id",
+      "original_inst_id",
+      "source",
+      "language",
+      "repo_url",
+      "base_commit",
+      "problem_statement_ref",
+      "problem_statement_hash",
+      "gold_context_ref",
+      "gold_context_hash",
+      "patch_hash",
+      "test_patch_hash",
+      "f2p_hash",
+      "p2p_hash"
+    ],
+    "selectionMethodRequiredFields": [
+      "selection_algorithm",
+      "selection_seed_or_deterministic_order",
+      "task_pool_hash",
+      "selection_timestamp",
+      "inclusion_rationale",
+      "exclusion_log_path",
+      "no_lane_outputs_observed_attestation"
+    ],
+    "coverageConstraints": {
+      "minRepos": 2,
+      "minLanguages": 2,
+      "selectionBeforeOutputs": true
+    },
+    "hardnessSignalPolicy": {
+      "required": false,
+      "status": "unavailable_in_contextbench_verified_schema",
+      "proxyAllowed": false,
+      "selectionMustRecordAbsence": true
+    },
+    "forbiddenSources": [
+      "agent_outputs",
+      "codebase_context_outputs",
+      "competitor_outputs",
+      "post_failure_task_filtering"
+    ]
+  },
+  "smokeOnlyCorpora": [
+    {
+      "name": "Excalidraw",
+      "claimBearing": false,
+      "purpose": "local_harness_smoke_only"
+    },
+    {
+      "name": "FastAPI",
+      "claimBearing": false,
+      "purpose": "local_harness_smoke_only"
+    }
+  ],
+  "runPolicy": {
+    "smokeRunsPerTaskLane": 1,
+    "claimBearingRunsPerTaskLane": 3,
+    "fewerThanClaimRunsMeans": "diagnostic_only_claim_allowed_false",
+    "reportAllRuns": true,
+    "bestOfNReportingAllowed": false
+  },
+  "minimalRunnerBehavior": {
+    "standardizes": [
+      "task_prompt",
+      "lane_tool_card",
+      "model",
+      "budget",
+      "timeout",
+      "trace_capture",
+      "structured_answer_schema"
+    ],
+    "mustNotScript": [
+      "agent_decisions",
+      "file_selection",
+      "query_rewrites",
+      "answer_content",
+      "evidence_selection"
+    ]
+  },
+  "structuredAnswerSchema": {
+    "requiredFields": [
+      "answer",
+      "confidence",
+      "evidence",
+      "filesReferenced",
+      "symbolsReferenced",
+      "unsupportedClaims",
+      "readyToEdit"
+    ],
+    "confidenceValues": ["low", "medium", "high"],
+    "evidenceFields": ["file", "lineRange", "reason"],
+    "invalidSchemaStatus": "invalid_schema"
+  },
+  "trajectorySchema": {
+    "requiredFields": ["pred_steps", "pred_files", "pred_spans"],
+    "optionalFields": ["pred_patch"],
+    "lineRangePolicy": "explicit_ranges_preferred_full_file_spans_must_be_marked",
+    "pathNormalizationRequired": true,
+    "rawTracePreservationRequired": true
+  },
+  "metrics": {
+    "primary": [
+      "context_file_recall",
+      "context_file_precision",
+      "context_symbol_recall",
+      "context_symbol_precision",
+      "context_span_recall",
+      "context_span_precision",
+      "edit_location_recall",
+      "edit_location_precision"
+    ],
+    "secondary": [
+      "auc_coverage",
+      "redundancy",
+      "explored_vs_used_gap",
+      "false_ready_rate",
+      "unsupported_claim_rate",
+      "setup_time_seconds",
+      "index_time_seconds",
+      "task_wall_time_seconds",
+      "context_token_estimate"
+    ],
+    "efficiencyIsSecondary": true,
+    "tokenSavingsWinRequiresCorrectnessNonRegression": true
+  },
+  "factRecallJudgeScope": {
+    "enabled": true,
+    "allowedOnlyFor": [
+      "predefined_atomic_facts",
+      "evidence_presence",
+      "unsupported_claim_detection"
+    ],
+    "forbiddenFor": [
+      "broad_rubric_vibes",
+      "post_hoc_expected_fact_creation",
+      "self_grading_by_solver_agent"
+    ],
+    "uncertainCountsAsSuccess": false
+  },
+  "budgets": {
+    "sameModelAcrossLanes": true,
+    "sameTimeoutAcrossLanes": true,
+    "sameTurnBudgetAcrossLanes": true,
+    "sameContextBudgetAcrossLanes": true,
+    "setupAndIndexingReportedSeparately": true,
+    "defaults": {
+      "maxContextTokens": 12000,
+      "maxAnswerTokens": 2000,
+      "timeoutSeconds": 300
+    }
+  },
+  "thresholds": {
+    "claimBearingRunsPerTaskLane": 3,
+    "setupFailuresBlockBroadClaims": true,
+    "wedgeWinRequires": [
+      "beats_raw_native_on_primary_context_metrics",
+      "beats_or_ties_jcodemunch_on_primary_context_metrics",
+      "no_correctness_regression",
+      "false_ready_rate_not_worse"
+    ],
+    "thresholdChangesRequireCorrection": true
+  },
+  "failureTaxonomy": [
+    "setup_failed",
+    "task_setup_failed",
+    "index_failed",
+    "timeout",
+    "invalid_schema",
+    "no_answer",
+    "wrong_answer",
+    "wrong_evidence",
+    "unsupported_claim",
+    "false_ready",
+    "tool_error",
+    "judge_failed"
+  ],
+  "runManifestSchema": {
+    "appendOnly": true,
+    "claimRunsRequireSlotsForEveryTaskLaneRepeat": true,
+    "requiredFields": [
+      "run_id",
+      "protocol_version",
+      "protocol_hash",
+      "task_manifest_hash",
+      "lane_id",
+      "task_id",
+      "repeat_index",
+      "status",
+      "started_at",
+      "completed_at",
+      "raw_trace_path",
+      "structured_answer_path",
+      "score_path"
+    ],
+    "terminalStatuses": [
+      "completed",
+      "setup_failed",
+      "task_setup_failed",
+      "index_failed",
+      "timeout",
+      "invalid_schema",
+      "no_answer",
+      "wrong_answer",
+      "wrong_evidence",
+      "unsupported_claim",
+      "false_ready",
+      "tool_error",
+      "judge_failed"
+    ],
+    "failedRunsIncludedInAggregates": true
+  },
+  "protocolFingerprint": {
+    "required": true,
+    "algorithm": "sha256",
+    "covers": [
+      "protocol_fixture",
+      "lane_fixture",
+      "correction_fixture",
+      "task_manifest_after_phase37",
+      "prompts",
+      "lane_tool_cards",
+      "budgets",
+      "thresholds",
+      "scoring_commands"
+    ]
+  },
+  "architectureReviewRule": {
+    "requiredBeforePostBaselineProductChanges": true,
+    "mustExplainGeneralMechanism": true,
+    "mustRejectTaskSpecificHeuristics": true,
+    "requiresFrozenRerun": true
+  },
+  "postBaselineCycleGate": {
+    "maxImprovementCyclesBeforeDecision": 1,
+    "requiresBaselineHash": true,
+    "requiresRerunHash": true,
+    "allowedDecisions": ["continue", "pivot", "kill"],
+    "noDecisionMeans": "stop_no_more_product_work"
+  },
+  "tripwires": [
+    "fixture_or_qrel_changed_after_outputs",
+    "threshold_moved_after_failures",
+    "setup_failed_treated_as_win",
+    "smoke_task_used_as_claim",
+    "mixed_context_tools_in_one_lane",
+    "product_change_before_baseline",
+    "benchmark_repo_name_or_task_phrase_heuristic_added",
+    "failed_run_removed_from_denominator",
+    "best_of_n_reported_as_primary",
+    "official_evaluator_bypassed_without_documented_incompatibility"
+  ],
+  "blockedClaims": [
+    "codebase_context_beats_competitors",
+    "codebase_context_improves_patch_correctness",
+    "codebase_context_improves_productivity",
+    "focus_mode_improves_agent_outcomes",
+    "token_savings_superiority",
+    "setup_failed_competitor_is_loss"
+  ]
+}

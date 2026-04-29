@@ -155,12 +155,22 @@ const canonicalizationVersion = 'contextbench-canonical-json-lf-v1';
 const hardnessStatus = 'unavailable_in_contextbench_verified_schema';
 const childGitEnv = (() => {
   const env = { ...process.env };
-  delete env.GIT_DIR;
-  delete env.GIT_WORK_TREE;
-  delete env.GIT_INDEX_FILE;
-  delete env.GIT_PREFIX;
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('GIT_')) delete env[key];
+  }
   return env;
 })();
+
+function poisonedGitEnv(): NodeJS.ProcessEnv {
+  return {
+    ...childGitEnv,
+    GIT_DIR: path.join(tmpdir(), 'contextbench-poisoned-git-dir'),
+    GIT_WORK_TREE: path.join(tmpdir(), 'contextbench-poisoned-work-tree'),
+    GIT_INDEX_FILE: path.join(tmpdir(), 'contextbench-poisoned-index'),
+    GIT_CONFIG_GLOBAL: path.join(tmpdir(), 'contextbench-poisoned-gitconfig'),
+    GIT_SSH_COMMAND: 'false'
+  };
+}
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -387,6 +397,50 @@ describe('ContextBench Phase 37 smoke pack separation', () => {
 });
 
 describe('ContextBench Phase 40 task payload materialization', () => {
+  it('self-checks a frozen manifest without live dataset access', () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-check-requires-rows-'));
+    try {
+      const manifestPath = path.join(tempRoot, 'manifest.json');
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+      const stdout = execFileSync(
+        'node',
+        ['scripts/contextbench-select-slice.mjs', '--check', manifestPath],
+        {
+          encoding: 'utf8'
+        }
+      );
+      expect(stdout).toContain('manifest self-check passed');
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('fails manifest self-check when the frozen content hash is stale', () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-check-stale-hash-'));
+    try {
+      const manifestPath = path.join(tempRoot, 'manifest.json');
+      writeFileSync(
+        manifestPath,
+        `${JSON.stringify({ ...manifest, manifest_hash: 'sha256:stale' }, null, 2)}\n`,
+        'utf8'
+      );
+      let stderr = '';
+      try {
+        execFileSync('node', ['scripts/contextbench-select-slice.mjs', '--check', manifestPath], {
+          encoding: 'utf8'
+        });
+      } catch (error: unknown) {
+        const failure = error as { stderr?: Buffer | string };
+        stderr = Buffer.isBuffer(failure.stderr)
+          ? failure.stderr.toString('utf8')
+          : String(failure.stderr ?? '');
+      }
+      expect(stderr).toContain('manifest_hash does not match manifest content');
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it('writes selected problem statements without observing lane outputs', () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-task-payloads-'));
     try {
@@ -402,7 +456,9 @@ describe('ContextBench Phase 40 task payload materialization', () => {
       const manifestPath = path.join(tempRoot, 'manifest.json');
       const rowsPath = path.join(tempRoot, 'rows.json');
       const payloadPath = path.join(tempRoot, 'payloads.json');
+      const payloadPathB = path.join(tempRoot, 'payloads-b.json');
       const checkoutRoot = path.join(tempRoot, 'checkouts');
+      const checkoutRootB = path.join(tempRoot, 'other-checkouts');
       writeFileSync(
         manifestPath,
         `${JSON.stringify(
@@ -455,6 +511,22 @@ describe('ContextBench Phase 40 task payload materialization', () => {
         ],
         { encoding: 'utf8' }
       );
+      execFileSync(
+        'node',
+        [
+          'scripts/contextbench-select-slice.mjs',
+          '--write-task-payloads',
+          '--rows-file',
+          rowsPath,
+          '--manifest',
+          manifestPath,
+          '--checkout-root',
+          checkoutRootB,
+          '--out',
+          payloadPathB
+        ],
+        { encoding: 'utf8' }
+      );
 
       const payload = JSON.parse(readFileSync(payloadPath, 'utf8')) as {
         claimBearing: boolean;
@@ -469,9 +541,11 @@ describe('ContextBench Phase 40 task payload materialization', () => {
           lane_outputs_observed: boolean;
         }>;
       };
+      const payloadB = JSON.parse(readFileSync(payloadPathB, 'utf8')) as typeof payload;
       expect(payload.claimBearing).toBe(false);
       expect(payload.task_count).toBe(1);
       expect(payload.payload_hash).toMatch(shaPattern);
+      expect(payload.payload_hash).toBe(payloadB.payload_hash);
       expect(payload.tasks[0]).toMatchObject({
         instance_id: task.instance_id,
         problem_statement: problemStatement,
@@ -480,6 +554,87 @@ describe('ContextBench Phase 40 task payload materialization', () => {
         lane_outputs_observed: false
       });
       expect(payload.tasks[0].repo_checkout_path).toContain('owner-repo-1234567890ab');
+      expect(payload.tasks[0].repo_checkout_path).not.toBe(payloadB.tasks[0].repo_checkout_path);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects invalid task payload rows before writing any task payload entry', () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-task-payloads-invalid-'));
+    try {
+      const problemStatement = 'Fix the parser when the input contains nested groups.';
+      const task = {
+        instance_id: 'fixture-task-1',
+        original_inst_id: 'owner__repo-1',
+        repo: 'owner/repo',
+        repo_url: 'https://github.com/owner/repo.git',
+        base_commit: '1234567890abcdef1234567890abcdef12345678',
+        problem_statement_hash: sha256Text(problemStatement)
+      };
+      const manifestPath = path.join(tempRoot, 'manifest.json');
+      const rowsPath = path.join(tempRoot, 'rows.json');
+      const payloadPath = path.join(tempRoot, 'payloads.json');
+      writeFileSync(
+        manifestPath,
+        `${JSON.stringify(
+          {
+            protocolVersion: 'contextbench-protocol-v1',
+            dataset: 'Contextbench/ContextBench',
+            datasetConfig: 'contextbench_verified',
+            split: 'train',
+            manifest_hash: 'sha256:test-manifest',
+            tasks: [task]
+          },
+          null,
+          2
+        )}\n`,
+        'utf8'
+      );
+      writeFileSync(
+        rowsPath,
+        `${JSON.stringify(
+          {
+            rows: [
+              {
+                row: {
+                  instance_id: task.instance_id,
+                  repo_url: task.repo_url,
+                  base_commit: task.base_commit,
+                  problem_statement: 'Different statement.'
+                }
+              }
+            ]
+          },
+          null,
+          2
+        )}\n`,
+        'utf8'
+      );
+      let stderr = '';
+      try {
+        execFileSync(
+          'node',
+          [
+            'scripts/contextbench-select-slice.mjs',
+            '--write-task-payloads',
+            '--rows-file',
+            rowsPath,
+            '--manifest',
+            manifestPath,
+            '--out',
+            payloadPath
+          ],
+          { encoding: 'utf8' }
+        );
+      } catch (error: unknown) {
+        const failure = error as { stderr?: Buffer | string };
+        stderr = Buffer.isBuffer(failure.stderr)
+          ? failure.stderr.toString('utf8')
+          : String(failure.stderr ?? '');
+      }
+      expect(stderr).toContain('problem_statement_hash mismatch');
+      expect(() => readFileSync(payloadPath, 'utf8')).toThrow();
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -561,13 +716,15 @@ describe('ContextBench Phase 40 task payload materialization', () => {
           repo_checkout_status: string;
           repo_actual_head: string;
           base_commit_verified: boolean;
+          repo_clean_verified: boolean;
         }>;
       };
       expect(payload.payload_hash).toMatch(shaPattern);
       expect(payload.tasks[0]).toMatchObject({
         repo_checkout_status: 'verified',
         repo_actual_head: commit,
-        base_commit_verified: true
+        base_commit_verified: true,
+        repo_clean_verified: true
       });
       expect(
         execFileSync('git', ['rev-parse', 'HEAD'], {
@@ -576,6 +733,29 @@ describe('ContextBench Phase 40 task payload materialization', () => {
           env: childGitEnv
         }).trim()
       ).toBe(commit);
+
+      const firstPayloadHash = payload.payload_hash;
+      writeFileSync(path.join(checkoutPath, 'untracked.txt'), 'stale local file\n', 'utf8');
+      execFileSync(
+        'node',
+        [
+          'scripts/contextbench-select-slice.mjs',
+          '--materialize-checkouts',
+          '--payloads',
+          payloadPath,
+          '--max-tasks',
+          '1'
+        ],
+        { encoding: 'utf8', env: poisonedGitEnv() }
+      );
+      const reverifiedPayload = JSON.parse(readFileSync(payloadPath, 'utf8')) as typeof payload;
+      expect(reverifiedPayload.payload_hash).toBe(firstPayloadHash);
+      expect(reverifiedPayload.tasks[0]).toMatchObject({
+        repo_checkout_status: 'verified',
+        repo_actual_head: commit,
+        base_commit_verified: true,
+        repo_clean_verified: true
+      });
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -641,7 +821,10 @@ describe('ContextBench Phase 40 task payload materialization', () => {
               {
                 instance_id: task.instance_id,
                 repo_checkout_path: checkoutPath,
-                repo_checkout_status: 'verified'
+                repo_checkout_status: 'verified',
+                repo_actual_head: task.base_commit,
+                base_commit_verified: true,
+                repo_clean_verified: true
               }
             ]
           },

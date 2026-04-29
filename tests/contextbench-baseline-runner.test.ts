@@ -56,6 +56,19 @@ function ignoreWindowsTempCleanupRace(error: unknown): void {
   if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code ?? '')) throw error;
 }
 
+function cleanupSessionRoot(sessionRoot: string): void {
+  try {
+    rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 200
+    });
+  } catch (error) {
+    ignoreWindowsTempCleanupRace(error);
+  }
+}
+
 function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
   return path.join(
     mkdtempSync(path.join(tmpdir(), `contextbench-${phase}-runner-`)),
@@ -156,12 +169,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(rows.every((row) => row.scoring.officialEvaluatorInvoked === false)).toBe(true);
       expect(rows.every((row) => !('taskWallTimeMs' in row.setupIndex))).toBe(true);
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true,
-        maxRetries: 10,
-        retryDelay: 200
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -226,10 +234,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(rawTrace.scriptedAgentDecisions).toBe(false);
       expect(rawTrace.antiScriptingBoundary).toEqual(expect.arrayContaining(['file_selection']));
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -553,10 +558,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       ) as { phase: number };
       expect(session.phase).toBe(41);
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -617,10 +619,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
         setupLogPath: measurement.setupLogPath
       });
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -656,10 +655,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(attempt?.scoring.fallbackReason).toContain('missing_setup_index_measurement');
       expect(attempt?.setupIndex.setupStatus).toBe('setup_failed');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -740,10 +736,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
         indexLogPath
       });
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -883,10 +876,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(attempt?.status).toBe('setup_failed');
       expect(attempt?.scoring.fallbackReason).toContain('missing_setup_index_measurement');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -936,10 +926,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       ) as { reservations: unknown[] };
       expect(reservations.reservations).toHaveLength(20 * 6 * 3);
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -1102,16 +1089,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(result.stdout).toContain('phase42 verification failed');
       expect(result.stderr).toContain('baseline seal blocked by Phase 42 evidence gate');
     } finally {
-      try {
-        rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-          recursive: true,
-          force: true,
-          maxRetries: 10,
-          retryDelay: 200
-        });
-      } catch (error) {
-        ignoreWindowsTempCleanupRace(error);
-      }
+      cleanupSessionRoot(sessionRoot);
     }
   });
 });

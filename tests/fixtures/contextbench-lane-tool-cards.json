@@ -1,0 +1,203 @@
+{
+  "name": "v2.4-contextbench-lane-tool-cards",
+  "protocolVersion": "contextbench-protocol-v1",
+  "frozenDate": "2026-04-27",
+  "cards": [
+    {
+      "laneId": "raw-native",
+      "displayName": "Raw/native agent tools",
+      "phase38Status": "executable_fake_smoke_only",
+      "phase39Status": "ready_for_phase40",
+      "executableInPhase38": true,
+      "contextTools": ["native-agent-tools"],
+      "allowedTools": ["native-read", "native-search", "native-shell-readonly"],
+      "disallowedTools": [
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
+      "setupCommand": "none",
+      "indexCommand": "none",
+      "queryCommand": "claude --print < prompt.json",
+      "versionCommand": "claude --version",
+      "cachePath": "outputs/contextbench/cache/raw-native/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "codebase-context",
+      "displayName": "codebase-context",
+      "phase38Status": "executable_fake_smoke_only",
+      "phase39Status": "ready_for_phase40",
+      "executableInPhase38": true,
+      "contextTools": ["codebase-context"],
+      "allowedTools": ["codebase-context"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
+      "setupCommand": "pnpm run build && node dist/index.js --version",
+      "indexCommand": "npx codebase-context refresh_index <repo>",
+      "queryCommand": "claude --print < prompt.json",
+      "versionCommand": "npx codebase-context --version",
+      "cachePath": "outputs/contextbench/cache/codebase-context/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "jcodemunch-repomapper",
+      "displayName": "jCodeMunch RepoMapper",
+      "phase38Status": "pending_phase39_setup",
+      "phase39Status": "ready_for_phase40",
+      "executableInPhase38": false,
+      "contextTools": ["jcodemunch-repomapper"],
+      "allowedTools": ["jcodemunch-repomapper"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
+      "setupCommand": "uvx jcodemunch-mcp",
+      "indexCommand": "MCP index_folder {\"path\":\"<repo-under-test>\",\"incremental\":false,\"use_ai_summaries\":false,\"follow_symlinks\":false}",
+      "queryCommand": "MCP search_symbols {\"repo\":\"<resolved-repo>\",\"query\":\"<task-query>\",\"max_results\":10,\"semantic\":false}",
+      "versionCommand": "uvx jcodemunch-mcp --help",
+      "cachePath": "outputs/contextbench/cache/jcodemunch-repomapper/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "grepai",
+      "displayName": "GrepAI",
+      "phase38Status": "pending_phase39_setup",
+      "phase39Status": "invasive_setup_blocked",
+      "executableInPhase38": false,
+      "contextTools": ["grepai"],
+      "allowedTools": ["grepai"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
+      "setupCommand": "grepai init --yes --provider ollama --backend gob --model nomic-embed-text",
+      "indexCommand": "grepai watch --no-ui",
+      "queryCommand": "grepai search <task-query> --json --compact",
+      "versionCommand": "grepai version",
+      "cachePath": "outputs/contextbench/cache/grepai/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "codebase-memory-mcp",
+      "displayName": "codebase-memory-mcp",
+      "phase38Status": "pending_phase39_setup",
+      "phase39Status": "invasive_setup_blocked",
+      "executableInPhase38": false,
+      "contextTools": ["codebase-memory-mcp"],
+      "allowedTools": ["codebase-memory-mcp"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codegraphcontext"
+      ],
+      "setupCommand": "download Windows x86_64 release archive under outputs/contextbench/tool-cache/codebase-memory-mcp and run the extracted binary without installer auto-config",
+      "indexCommand": "MCP prompt/tool action: Index this project",
+      "queryCommand": "MCP structural query through codebase-memory-mcp only",
+      "versionCommand": "codebase-memory-mcp --version",
+      "cachePath": "outputs/contextbench/cache/codebase-memory-mcp/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "codegraphcontext",
+      "displayName": "CodeGraphContext",
+      "phase38Status": "pending_phase39_setup",
+      "phase39Status": "ready_for_phase40",
+      "executableInPhase38": false,
+      "contextTools": ["codegraphcontext"],
+      "allowedTools": ["codegraphcontext"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp"
+      ],
+      "setupCommand": "python -m pip install --target outputs/contextbench/tool-cache/codegraphcontext codegraphcontext kuzu",
+      "indexCommand": "cgc index <repo-under-test>",
+      "queryCommand": "cgc analyze callers <symbol-or-task-anchor>",
+      "versionCommand": "cgc help",
+      "cachePath": "outputs/contextbench/cache/codegraphcontext/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    }
+  ]
+}

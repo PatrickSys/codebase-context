@@ -1,0 +1,147 @@
+{
+  "name": "v2.4-contextbench-lane-setup-evidence",
+  "protocolVersion": "contextbench-protocol-v1",
+  "phase": 39,
+  "claimBearing": false,
+  "generatedOutputsPolicy": "Setup logs, downloaded tools, caches, and probes stay under ignored outputs/contextbench paths and are not Phase 40 baseline artifacts.",
+  "records": [
+    {
+      "laneId": "raw-native",
+      "readinessStatus": "ready_for_phase40",
+      "docsUrl": "https://docs.anthropic.com/en/docs/claude-code/cli-reference",
+      "sourceUrl": "https://docs.anthropic.com/en/docs/claude-code/cli-reference",
+      "workingDirectory": "<repo-under-test>",
+      "platform": { "os": "win32", "shell": "pwsh", "runtime": "node>=18 plus Claude Code CLI" },
+      "redactedEnvVars": [],
+      "commands": [
+        { "kind": "setup", "command": "none", "cwd": "<repo-under-test>", "safeToRunAutomatically": true, "exitCode": 0, "status": "not_required", "durationMs": 0, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": "sha256:not-run-not-required" },
+        { "kind": "index", "command": "none", "cwd": "<repo-under-test>", "safeToRunAutomatically": true, "exitCode": 0, "status": "not_required", "durationMs": 0, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": "sha256:not-run-not-required" },
+        { "kind": "query", "command": "claude --print < prompt.json", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "version", "command": "claude --version", "cwd": "<repo-under-test>", "safeToRunAutomatically": true, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null }
+      ],
+      "setupDurationMs": 0,
+      "indexDurationMs": 0,
+      "setupStatus": "not_required",
+      "indexStatus": "not_required",
+      "logReference": "outputs/contextbench/setup/raw-native/README.md",
+      "evidenceHash": "sha256:documentation-ready-raw-native",
+      "nextHumanAction": "Phase 40 must snapshot the exact Claude CLI version and runtime before baseline runs.",
+      "claimBearing": false
+    },
+    {
+      "laneId": "codebase-context",
+      "readinessStatus": "ready_for_phase40",
+      "docsUrl": "https://github.com/PatrickSys/codebase-context#readme",
+      "sourceUrl": "https://github.com/PatrickSys/codebase-context",
+      "workingDirectory": "<repo-under-test>",
+      "platform": { "os": "win32", "shell": "pwsh", "runtime": "node>=18 pnpm>=10" },
+      "redactedEnvVars": ["OPENAI_API_KEY"],
+      "commands": [
+        { "kind": "setup", "command": "pnpm run build && node dist/index.js --version", "cwd": "<codebase-context-checkout>", "safeToRunAutomatically": true, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "index", "command": "npx codebase-context refresh_index <repo-under-test>", "cwd": "<repo-under-test>", "safeToRunAutomatically": true, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "query", "command": "claude --print < prompt.json with codebase-context as the only context tool", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "version", "command": "npx codebase-context --version", "cwd": "<repo-under-test>", "safeToRunAutomatically": true, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null }
+      ],
+      "setupDurationMs": null,
+      "indexDurationMs": null,
+      "setupStatus": "ready",
+      "indexStatus": "ready",
+      "logReference": "outputs/contextbench/setup/codebase-context/setup-index.json",
+      "evidenceHash": "sha256:documentation-ready-codebase-context",
+      "nextHumanAction": "Phase 40 must measure setup/index duration separately and store raw logs before task execution.",
+      "claimBearing": false
+    },
+    {
+      "laneId": "jcodemunch-repomapper",
+      "readinessStatus": "ready_for_phase40",
+      "docsUrl": "https://github.com/jgravelle/jcodemunch-mcp/blob/main/USER_GUIDE.md",
+      "sourceUrl": "https://github.com/jgravelle/jcodemunch-mcp",
+      "workingDirectory": "<repo-under-test>",
+      "platform": { "os": "win32", "shell": "pwsh", "runtime": "uv or pipx plus MCP stdio" },
+      "redactedEnvVars": [],
+      "commands": [
+        { "kind": "setup", "command": "uvx jcodemunch-mcp", "cwd": "<repo-under-test>", "safeToRunAutomatically": true, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "index", "command": "MCP index_folder {\"path\":\"<repo-under-test>\",\"incremental\":false,\"use_ai_summaries\":false,\"follow_symlinks\":false}", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "query", "command": "MCP search_symbols {\"repo\":\"<resolved-repo>\",\"query\":\"<task-query>\",\"max_results\":10,\"semantic\":false}", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "version", "command": "uvx jcodemunch-mcp --help", "cwd": "<repo-under-test>", "safeToRunAutomatically": true, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null }
+      ],
+      "setupDurationMs": null,
+      "indexDurationMs": null,
+      "setupStatus": "ready",
+      "indexStatus": "ready",
+      "logReference": "outputs/contextbench/setup/jcodemunch-repomapper/setup-index.json",
+      "evidenceHash": "sha256:documentation-ready-jcodemunch-repomapper",
+      "nextHumanAction": "Phase 40 must run uvx in an isolated benchmark cache and capture MCP tool logs before baseline task execution.",
+      "claimBearing": false
+    },
+    {
+      "laneId": "grepai",
+      "readinessStatus": "invasive_setup_blocked",
+      "docsUrl": "https://yoanbernabeu.github.io/grepai/commands/grepai_init/",
+      "sourceUrl": "https://yoanbernabeu.github.io/grepai/watch-guide/",
+      "workingDirectory": "<repo-under-test>",
+      "platform": { "os": "win32", "shell": "pwsh", "runtime": "grepai CLI plus local embedding provider" },
+      "redactedEnvVars": ["OPENAI_API_KEY", "OPENROUTER_API_KEY", "OLLAMA_HOST"],
+      "commands": [
+        { "kind": "setup", "command": "grepai init --yes --provider ollama --backend gob --model nomic-embed-text", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "blocked", "durationMs": null, "stdoutLogPath": "outputs/contextbench/setup/grepai/setup.stdout.log", "stderrLogPath": "outputs/contextbench/setup/grepai/setup.stderr.log", "outputHash": null },
+        { "kind": "index", "command": "grepai watch --no-ui", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "blocked", "durationMs": null, "stdoutLogPath": "outputs/contextbench/setup/grepai/index.stdout.log", "stderrLogPath": "outputs/contextbench/setup/grepai/index.stderr.log", "outputHash": null },
+        { "kind": "query", "command": "grepai search <task-query> --json --compact", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "blocked", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "version", "command": "grepai version", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "blocked", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null }
+      ],
+      "setupDurationMs": null,
+      "indexDurationMs": null,
+      "setupStatus": "blocked",
+      "indexStatus": "blocked",
+      "logReference": "outputs/contextbench/setup/grepai/blocked-evidence.json",
+      "evidenceHash": "sha256:blocked-grepai-local-embedding-prerequisite",
+      "nextHumanAction": "Approve an isolated GrepAI binary install plus local Ollama/model setup, or keep this lane as terminal missing evidence.",
+      "claimBearing": false
+    },
+    {
+      "laneId": "codebase-memory-mcp",
+      "readinessStatus": "invasive_setup_blocked",
+      "docsUrl": "https://github.com/DeusData/codebase-memory-mcp",
+      "sourceUrl": "https://github.com/DeusData/codebase-memory-mcp/releases/latest",
+      "workingDirectory": "<repo-under-test>",
+      "platform": { "os": "win32", "shell": "pwsh", "runtime": "static MCP binary" },
+      "redactedEnvVars": ["CBM_CACHE_DIR", "CBM_DIAGNOSTICS", "CBM_DOWNLOAD_URL"],
+      "commands": [
+        { "kind": "setup", "command": "download Windows x86_64 release archive under outputs/contextbench/tool-cache/codebase-memory-mcp and run the extracted binary without installer auto-config", "cwd": "<codebase-context-checkout>", "safeToRunAutomatically": false, "exitCode": null, "status": "blocked", "durationMs": null, "stdoutLogPath": "outputs/contextbench/setup/codebase-memory-mcp/setup.stdout.log", "stderrLogPath": "outputs/contextbench/setup/codebase-memory-mcp/setup.stderr.log", "outputHash": null },
+        { "kind": "index", "command": "MCP prompt/tool action: Index this project", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "blocked", "durationMs": null, "stdoutLogPath": "outputs/contextbench/setup/codebase-memory-mcp/index.stdout.log", "stderrLogPath": "outputs/contextbench/setup/codebase-memory-mcp/index.stderr.log", "outputHash": null },
+        { "kind": "query", "command": "MCP structural query through codebase-memory-mcp only", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "blocked", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "version", "command": "codebase-memory-mcp --version", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "blocked", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null }
+      ],
+      "setupDurationMs": null,
+      "indexDurationMs": null,
+      "setupStatus": "blocked",
+      "indexStatus": "blocked",
+      "logReference": "outputs/contextbench/setup/codebase-memory-mcp/blocked-evidence.json",
+      "evidenceHash": "sha256:blocked-codebase-memory-mcp-auto-config-installer",
+      "nextHumanAction": "Approve a sandboxed manual binary download path that does not run the auto-configuring installer, or keep this lane as terminal missing evidence.",
+      "claimBearing": false
+    },
+    {
+      "laneId": "codegraphcontext",
+      "readinessStatus": "ready_for_phase40",
+      "docsUrl": "https://pypi.org/project/codegraphcontext/",
+      "sourceUrl": "https://github.com/CodeGraphContext/CodeGraphContext",
+      "workingDirectory": "<repo-under-test>",
+      "platform": { "os": "win32", "shell": "pwsh", "runtime": "python>=3.10 pip plus Kuzu embedded backend" },
+      "redactedEnvVars": [],
+      "commands": [
+        { "kind": "setup", "command": "python -m pip install --target outputs/contextbench/tool-cache/codegraphcontext codegraphcontext kuzu", "cwd": "<codebase-context-checkout>", "safeToRunAutomatically": false, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "index", "command": "cgc index <repo-under-test>", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "query", "command": "cgc analyze callers <symbol-or-task-anchor>", "cwd": "<repo-under-test>", "safeToRunAutomatically": false, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null },
+        { "kind": "version", "command": "cgc help", "cwd": "<repo-under-test>", "safeToRunAutomatically": true, "exitCode": null, "status": "not_run_documented", "durationMs": null, "stdoutLogPath": null, "stderrLogPath": null, "outputHash": null }
+      ],
+      "setupDurationMs": null,
+      "indexDurationMs": null,
+      "setupStatus": "ready",
+      "indexStatus": "ready",
+      "logReference": "outputs/contextbench/setup/codegraphcontext/setup-index.json",
+      "evidenceHash": "sha256:documentation-ready-codegraphcontext",
+      "nextHumanAction": "Phase 40 must install into an isolated benchmark cache, force the embedded Kuzu path where available, and capture setup/index logs before baseline task execution.",
+      "claimBearing": false
+    }
+  ]
+}

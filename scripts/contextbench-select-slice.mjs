@@ -50,7 +50,7 @@ Usage:
   node scripts/contextbench-select-slice.mjs --write-task-payloads --out <file> [--checkout-root <dir>]
   node scripts/contextbench-select-slice.mjs --write-gold --task-id <instance-id> --out <file> [--payloads <file>]
   node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads <file> [--max-tasks <n>]
-  node scripts/contextbench-select-slice.mjs --check <manifest.json> --rows-file <frozen-rows.json>
+  node scripts/contextbench-select-slice.mjs --check <manifest.json> [--rows-file <frozen-rows.json>]
 
 Modes:
   --dry-run          Load ${DATASET}/${DATASET_CONFIG}, validate schema, compute eligible pool, and write audit files under --out.
@@ -59,7 +59,7 @@ Modes:
   --write-task-payloads  Write selected task problem statements and intended checkout paths for Phase 40 live runs.
   --write-gold     Write scorer-only official-evaluator gold input for selected task(s); never pass this to solvers.
   --materialize-checkouts  Clone/fetch selected task repositories to their payload repo_checkout_path and verify base commits.
-  --check <file>    Recompute deterministic selection from frozen rows and verify the frozen manifest.
+  --check <file>    Verify frozen manifest integrity. With --rows-file, also recompute deterministic selection from frozen rows.
 
 Forbidden selection inputs:
   ${FORBIDDEN_SELECTION_SOURCES.join(', ')}
@@ -334,20 +334,24 @@ function buildTaskPayloads(rows, manifest, checkoutRoot) {
   const failures = [];
   const tasks = [];
   for (const task of manifest.tasks ?? []) {
+    const taskFailures = [];
     const row = rowsById.get(task.instance_id);
     if (!row) {
+      taskFailures.push('missing dataset row');
       failures.push(`${task.instance_id}: missing dataset row`);
       continue;
     }
     const problemStatement = typeof row.problem_statement === 'string' ? row.problem_statement : '';
-    if (!problemStatement.trim()) failures.push(`${task.instance_id}: missing problem_statement`);
+    if (!problemStatement.trim()) taskFailures.push('missing problem_statement');
     const problemStatementHash = sha256(canonicalize(problemStatement));
-    if (problemStatementHash !== task.problem_statement_hash) {
-      failures.push(`${task.instance_id}: problem_statement_hash mismatch`);
+    if (problemStatementHash !== task.problem_statement_hash)
+      taskFailures.push('problem_statement_hash mismatch');
+    if (row.repo_url !== task.repo_url) taskFailures.push('repo_url mismatch');
+    if (row.base_commit !== task.base_commit) taskFailures.push('base_commit mismatch');
+    if (taskFailures.length > 0) {
+      failures.push(...taskFailures.map((failure) => `${task.instance_id}: ${failure}`));
+      continue;
     }
-    if (row.repo_url !== task.repo_url) failures.push(`${task.instance_id}: repo_url mismatch`);
-    if (row.base_commit !== task.base_commit)
-      failures.push(`${task.instance_id}: base_commit mismatch`);
     tasks.push({
       instance_id: task.instance_id,
       original_inst_id: task.original_inst_id,
@@ -457,24 +461,27 @@ function buildArtifacts(rows) {
   return { manifest, exclusions, eligible };
 }
 
-function verifyManifest(actual, expected) {
+function verifyManifest(actual, expected = null) {
   const failures = [];
   const actualHash = actual.manifest_hash;
   const actualWithoutHash = { ...actual };
   delete actualWithoutHash.manifest_hash;
   if (actualHash !== hashObject(actualWithoutHash))
     failures.push('manifest_hash does not match manifest content');
-  if (actualHash !== expected.manifest_hash)
+  if (expected && actualHash !== expected.manifest_hash)
     failures.push('manifest differs from deterministic dataset selection');
-  if (actual.tasks.length !== 20) failures.push(`expected 20 tasks, got ${actual.tasks.length}`);
+  if (!Array.isArray(actual.tasks)) failures.push('manifest tasks must be an array');
+  else if (actual.tasks.length !== 20)
+    failures.push(`expected 20 tasks, got ${actual.tasks.length}`);
   if (actual.hardness_proxy_used !== false)
     failures.push('manifest must set hardness_proxy_used false');
   if (actual.hardness_signal_status !== HARDNESS_STATUS)
     failures.push('manifest has wrong hardness signal status');
   if (!actual.no_lane_outputs_observed_attestation) failures.push('missing no-output attestation');
-  if (new Set(actual.tasks.map((task) => task.repo_url)).size < 2)
+  const tasks = Array.isArray(actual.tasks) ? actual.tasks : [];
+  if (new Set(tasks.map((task) => task.repo_url)).size < 2)
     failures.push('selected tasks cover fewer than two repos');
-  if (new Set(actual.tasks.map((task) => task.language)).size < 2)
+  if (new Set(tasks.map((task) => task.language)).size < 2)
     failures.push('selected tasks cover fewer than two languages');
   return failures;
 }
@@ -843,7 +850,11 @@ async function main() {
   }
 
   if (args.check && !args.rowsFile) {
-    throw new Error('--check requires --rows-file <frozen-rows.json> to avoid live dataset drift');
+    const manifest = JSON.parse(readFileSync(resolve(args.check), 'utf8'));
+    const failures = verifyManifest(manifest);
+    if (failures.length > 0) throw new Error(`manifest check failed:\n- ${failures.join('\n- ')}`);
+    console.log(`manifest self-check passed: ${args.check}`);
+    return;
   }
 
   const rows = await loadRowsForArgs(args);

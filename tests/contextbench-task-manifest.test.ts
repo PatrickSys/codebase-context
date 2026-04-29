@@ -397,11 +397,33 @@ describe('ContextBench Phase 37 smoke pack separation', () => {
 });
 
 describe('ContextBench Phase 40 task payload materialization', () => {
-  it('requires frozen rows when checking a frozen manifest', () => {
+  it('self-checks a frozen manifest without live dataset access', () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-check-requires-rows-'));
     try {
       const manifestPath = path.join(tempRoot, 'manifest.json');
-      writeFileSync(manifestPath, '{"tasks":[]}', 'utf8');
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+      const stdout = execFileSync(
+        'node',
+        ['scripts/contextbench-select-slice.mjs', '--check', manifestPath],
+        {
+          encoding: 'utf8'
+        }
+      );
+      expect(stdout).toContain('manifest self-check passed');
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('fails manifest self-check when the frozen content hash is stale', () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-check-stale-hash-'));
+    try {
+      const manifestPath = path.join(tempRoot, 'manifest.json');
+      writeFileSync(
+        manifestPath,
+        `${JSON.stringify({ ...manifest, manifest_hash: 'sha256:stale' }, null, 2)}\n`,
+        'utf8'
+      );
       let stderr = '';
       try {
         execFileSync('node', ['scripts/contextbench-select-slice.mjs', '--check', manifestPath], {
@@ -413,7 +435,7 @@ describe('ContextBench Phase 40 task payload materialization', () => {
           ? failure.stderr.toString('utf8')
           : String(failure.stderr ?? '');
       }
-      expect(stderr).toContain('--check requires --rows-file');
+      expect(stderr).toContain('manifest_hash does not match manifest content');
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -533,6 +555,86 @@ describe('ContextBench Phase 40 task payload materialization', () => {
       });
       expect(payload.tasks[0].repo_checkout_path).toContain('owner-repo-1234567890ab');
       expect(payload.tasks[0].repo_checkout_path).not.toBe(payloadB.tasks[0].repo_checkout_path);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects invalid task payload rows before writing any task payload entry', () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-task-payloads-invalid-'));
+    try {
+      const problemStatement = 'Fix the parser when the input contains nested groups.';
+      const task = {
+        instance_id: 'fixture-task-1',
+        original_inst_id: 'owner__repo-1',
+        repo: 'owner/repo',
+        repo_url: 'https://github.com/owner/repo.git',
+        base_commit: '1234567890abcdef1234567890abcdef12345678',
+        problem_statement_hash: sha256Text(problemStatement)
+      };
+      const manifestPath = path.join(tempRoot, 'manifest.json');
+      const rowsPath = path.join(tempRoot, 'rows.json');
+      const payloadPath = path.join(tempRoot, 'payloads.json');
+      writeFileSync(
+        manifestPath,
+        `${JSON.stringify(
+          {
+            protocolVersion: 'contextbench-protocol-v1',
+            dataset: 'Contextbench/ContextBench',
+            datasetConfig: 'contextbench_verified',
+            split: 'train',
+            manifest_hash: 'sha256:test-manifest',
+            tasks: [task]
+          },
+          null,
+          2
+        )}\n`,
+        'utf8'
+      );
+      writeFileSync(
+        rowsPath,
+        `${JSON.stringify(
+          {
+            rows: [
+              {
+                row: {
+                  instance_id: task.instance_id,
+                  repo_url: task.repo_url,
+                  base_commit: task.base_commit,
+                  problem_statement: 'Different statement.'
+                }
+              }
+            ]
+          },
+          null,
+          2
+        )}\n`,
+        'utf8'
+      );
+      let stderr = '';
+      try {
+        execFileSync(
+          'node',
+          [
+            'scripts/contextbench-select-slice.mjs',
+            '--write-task-payloads',
+            '--rows-file',
+            rowsPath,
+            '--manifest',
+            manifestPath,
+            '--out',
+            payloadPath
+          ],
+          { encoding: 'utf8' }
+        );
+      } catch (error: unknown) {
+        const failure = error as { stderr?: Buffer | string };
+        stderr = Buffer.isBuffer(failure.stderr)
+          ? failure.stderr.toString('utf8')
+          : String(failure.stderr ?? '');
+      }
+      expect(stderr).toContain('problem_statement_hash mismatch');
+      expect(() => readFileSync(payloadPath, 'utf8')).toThrow();
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

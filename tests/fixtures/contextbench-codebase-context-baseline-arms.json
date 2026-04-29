@@ -1,0 +1,49 @@
+{
+  "name": "v2.4-contextbench-codebase-context-baseline-arms",
+  "protocolVersion": "contextbench-protocol-v1",
+  "phase": 40,
+  "claimBearing": false,
+  "denominatorPolicy": "Diagnostic codebase-context arms stay separate from required competitor denominators and cannot change frozen lane identities, tasks, qrels, budgets, thresholds, or public claims.",
+  "arms": [
+    {
+      "baselineArmId": "codebase-context-current-map-search",
+      "laneId": "codebase-context",
+      "sourceIdentity": "current dirty checkout captured by Phase 40 snapshot",
+      "allowedToolSurfaces": ["map", "search_codebase"],
+      "versionOrSourceRef": "dirty-worktree HEAD plus tracked/untracked snapshot hash",
+      "setupCommand": "pnpm run build && node dist/index.js --version",
+      "claimBearing": false,
+      "failurePolicy": "record_terminal_diagnostic_failure"
+    },
+    {
+      "baselineArmId": "codebase-context-current-search-only",
+      "laneId": "codebase-context",
+      "sourceIdentity": "current dirty checkout captured by Phase 40 snapshot",
+      "allowedToolSurfaces": ["search_codebase"],
+      "versionOrSourceRef": "dirty-worktree HEAD plus tracked/untracked snapshot hash",
+      "setupCommand": "pnpm run build && node dist/index.js --version",
+      "claimBearing": false,
+      "failurePolicy": "record_terminal_diagnostic_failure"
+    },
+    {
+      "baselineArmId": "codebase-context-current-map-only",
+      "laneId": "codebase-context",
+      "sourceIdentity": "current dirty checkout captured by Phase 40 snapshot",
+      "allowedToolSurfaces": ["map"],
+      "versionOrSourceRef": "dirty-worktree HEAD plus tracked/untracked snapshot hash",
+      "setupCommand": "pnpm run build && node dist/index.js --version",
+      "claimBearing": false,
+      "failurePolicy": "record_terminal_diagnostic_failure"
+    },
+    {
+      "baselineArmId": "codebase-context-v2.2.0-package-map-search",
+      "laneId": "codebase-context",
+      "sourceIdentity": "published package version 2.2.0 if locally runnable without product patches",
+      "allowedToolSurfaces": ["map", "search_codebase"],
+      "versionOrSourceRef": "npm:codebase-context@2.2.0",
+      "setupCommand": "npx codebase-context@2.2.0 --version",
+      "claimBearing": false,
+      "failurePolicy": "record_terminal_diagnostic_failure"
+    }
+  ]
+}

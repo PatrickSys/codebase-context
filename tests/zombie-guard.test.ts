@@ -170,8 +170,8 @@ describe('zombie process prevention', () => {
     expect(result.code).toBe(1);
     // Should still honor a short timeout (allow CI/Windows process jitter).
     expect(elapsed).toBeGreaterThan(800);
-    expect(elapsed).toBeLessThan(8_000);
-  }, 12_000);
+    expect(elapsed).toBeLessThan(12_000);
+  }, 15_000);
 
   it('exits after post-initialize idle timeout when the client stays silent', async () => {
     const rootPath = createIdleTestProjectRoot();

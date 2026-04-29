@@ -42,6 +42,19 @@ function ignoreWindowsTempCleanupRace(error: unknown): void {
   if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code ?? '')) throw error;
 }
 
+function cleanupSessionRoot(sessionRoot: string): void {
+  try {
+    rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 200
+    });
+  } catch (error) {
+    ignoreWindowsTempCleanupRace(error);
+  }
+}
+
 function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
   return path.join(
     mkdtempSync(path.join(tmpdir(), `contextbench-${phase}-schema-gate-`)),
@@ -298,10 +311,7 @@ describe('ContextBench Phase 40 schema gate', () => {
       };
       expect(fallbackAnswer.unsupportedClaims).toContain('missing_or_invalid_structured_answer');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -404,16 +414,7 @@ describe('ContextBench Phase 40 schema gate', () => {
       };
       expect(trajectory.traj_data.pred_files).toContain('src/a.ts');
     } finally {
-      try {
-        rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-          recursive: true,
-          force: true,
-          maxRetries: 10,
-          retryDelay: 200
-        });
-      } catch (error) {
-        ignoreWindowsTempCleanupRace(error);
-      }
+      cleanupSessionRoot(sessionRoot);
       rmSync(repoPath, { recursive: true, force: true });
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(stubDir, { recursive: true, force: true });
@@ -476,16 +477,7 @@ describe('ContextBench Phase 40 schema gate', () => {
         expect.arrayContaining(['additional_root_field_unexpectedRoot'])
       );
     } finally {
-      try {
-        rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-          recursive: true,
-          force: true,
-          maxRetries: 10,
-          retryDelay: 200
-        });
-      } catch (error) {
-        ignoreWindowsTempCleanupRace(error);
-      }
+      cleanupSessionRoot(sessionRoot);
       rmSync(repoPath, { recursive: true, force: true });
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(stubDir, { recursive: true, force: true });
@@ -539,10 +531,7 @@ describe('ContextBench Phase 40 schema gate', () => {
         ])
       );
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -632,10 +621,7 @@ describe('ContextBench Phase 40 schema gate', () => {
         }
       }
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
       rmSync(repoPath, { recursive: true, force: true });
       rmSync(payloadDir, { recursive: true, force: true });
       for (const stubDir of stubs) rmSync(stubDir, { recursive: true, force: true });
@@ -707,10 +693,7 @@ describe('ContextBench Phase 40 schema gate', () => {
         repoCheckoutPath: repoPath
       });
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
       rmSync(repoPath, { recursive: true, force: true });
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(stubDir, { recursive: true, force: true });
@@ -877,10 +860,7 @@ describe('ContextBench Phase 40 schema gate', () => {
       expect(rawTrace.taskContext.errors).toContain('repo_checkout_dirty');
       expect(rawTrace.taskContext.statusShort).toContain('dirty.txt');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(dirtyRepo, { recursive: true, force: true });
     }
@@ -953,10 +933,7 @@ describe('ContextBench Phase 40 schema gate', () => {
       };
       expect(fallbackAnswer.unsupportedClaims).toContain('missing_or_invalid_structured_answer');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
       rmSync(repoPath, { recursive: true, force: true });
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(stubDir, { recursive: true, force: true });

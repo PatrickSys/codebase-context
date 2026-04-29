@@ -187,8 +187,15 @@ function hasOfficialEvaluatorProof(
   );
 }
 
-function hasDiagnosticFallback(row: ContextBenchRunManifestRow, score: ContextBenchScoreEvidence | undefined): boolean {
-  return row.scoring.claimBearing === false || Boolean(row.scoring.fallbackReason) || score?.mode === 'diagnostic_fallback';
+function hasDiagnosticFallback(
+  row: ContextBenchRunManifestRow,
+  score: ContextBenchScoreEvidence | undefined
+): boolean {
+  return (
+    row.scoring.claimBearing === false ||
+    Boolean(row.scoring.fallbackReason) ||
+    score?.mode === 'diagnostic_fallback'
+  );
 }
 
 function hasLaneIsolationProof(
@@ -198,7 +205,8 @@ function hasLaneIsolationProof(
 ): boolean {
   if (!isolation?.proven) return false;
   if (!policy) return false;
-  if (!isolation.sourceKind || ['not_captured', 'env_override'].includes(isolation.sourceKind)) return false;
+  if (!isolation.sourceKind || ['not_captured', 'env_override'].includes(isolation.sourceKind))
+    return false;
   if (policy.laneId !== row.lane_id) return false;
   if (isolation.laneId !== row.lane_id) return false;
   if (isolation.expectedContextTool !== policy.expectedContextTool) return false;
@@ -219,7 +227,8 @@ function hasRunnerProvenance(
   rawTrace: ContextBenchRawTraceEvidence | undefined,
   expectedRunnerHash: string | undefined
 ): boolean {
-  if (!rawTrace?.executor || !rawTrace.model || !rawTrace.runnerHash || !expectedRunnerHash) return false;
+  if (!rawTrace?.executor || !rawTrace.model || !rawTrace.runnerHash || !expectedRunnerHash)
+    return false;
   return (
     rawTrace.executor === row.taskExecution.executor &&
     rawTrace.model === row.taskExecution.model &&
@@ -228,7 +237,9 @@ function hasRunnerProvenance(
   );
 }
 
-function rowKey(row: Pick<ContextBenchRunManifestRow, 'lane_id' | 'task_id' | 'repeat_index'>): string {
+function rowKey(
+  row: Pick<ContextBenchRunManifestRow, 'lane_id' | 'task_id' | 'repeat_index'>
+): string {
   return `${row.lane_id}\u0000${row.task_id}\u0000${row.repeat_index}`;
 }
 
@@ -252,7 +263,11 @@ export function evaluateContextBenchEvidenceGate(
     });
   }
 
-  if (input.expectedTotalRows <= 0 || input.requiredLaneIds.length === 0 || input.requiredTaskIds.length === 0) {
+  if (
+    input.expectedTotalRows <= 0 ||
+    input.requiredLaneIds.length === 0 ||
+    input.requiredTaskIds.length === 0
+  ) {
     failures.push({
       code: 'denominator_contract_missing',
       message: 'Claim validation requires a frozen denominator contract.'
@@ -289,7 +304,11 @@ export function evaluateContextBenchEvidenceGate(
     }
     if (row.protocol_hash !== input.expectedProtocolHash) {
       failures.push(
-        makeFailure(row, 'protocol_hash_mismatch', 'Row protocol hash does not match the frozen protocol hash.')
+        makeFailure(
+          row,
+          'protocol_hash_mismatch',
+          'Row protocol hash does not match the frozen protocol hash.'
+        )
       );
     }
     if (row.task_manifest_hash !== input.expectedTaskManifestHash) {
@@ -351,7 +370,9 @@ export function evaluateContextBenchEvidenceGate(
 
         const artifacts = input.artifactsByRunId[row.run_id];
         if (row.status !== 'completed') {
-          failures.push(makeFailure(row, 'non_completed_status', 'Claim-bearing runs must complete.'));
+          failures.push(
+            makeFailure(row, 'non_completed_status', 'Claim-bearing runs must complete.')
+          );
         }
 
         if (
@@ -377,11 +398,15 @@ export function evaluateContextBenchEvidenceGate(
           );
         }
 
-        if (!hasLaneIsolationProof(row, artifacts?.laneIsolation, input.lanePoliciesById[row.lane_id])) {
+        if (
+          !hasLaneIsolationProof(row, artifacts?.laneIsolation, input.lanePoliciesById[row.lane_id])
+        ) {
           failures.push(
             makeFailure(
               row,
-              artifacts?.laneIsolation?.violations?.length ? 'lane_isolation_violation' : 'lane_isolation_missing',
+              artifacts?.laneIsolation?.violations?.length
+                ? 'lane_isolation_violation'
+                : 'lane_isolation_missing',
               'Lane isolation must be proven by explicit allowed/observed tool evidence.'
             )
           );
@@ -410,7 +435,9 @@ export function evaluateContextBenchEvidenceGate(
     }
   }
 
-  const blockingFailures = failures.filter((failure) => failure.code !== 'artifact_verification_missing');
+  const blockingFailures = failures.filter(
+    (failure) => failure.code !== 'artifact_verification_missing'
+  );
   const shapePass = blockingFailures.length === 0;
   const claimPass = failures.length === 0;
   return {

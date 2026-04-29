@@ -103,11 +103,11 @@ function isJsonValue(value: unknown): value is JsonValue {
 
 export function isValidEvidenceReference(value: unknown): value is ContextBenchEvidenceReference {
   if (!isRecord(value)) return false;
-  if (findAdditionalFields(value, evidenceReferenceFields, 'evidence_field').length > 0) return false;
+  if (findAdditionalFields(value, evidenceReferenceFields, 'evidence_field').length > 0)
+    return false;
   const lineRange = value.lineRange;
   if (!isRecord(lineRange)) return false;
-  if (findAdditionalFields(lineRange, lineRangeFields, 'line_range_field').length > 0)
-    return false;
+  if (findAdditionalFields(lineRange, lineRangeFields, 'line_range_field').length > 0) return false;
   const start = lineRange.start;
   const end = lineRange.end;
   return (
@@ -134,7 +134,11 @@ function validateStructuredAnswer(value: unknown): StructuredAnswerParseResult {
     if (!(field in value)) errors.push(`missing_${field}`);
   }
   errors.push(
-    ...findAdditionalFields(value, new Set(CONTEXTBENCH_STRUCTURED_ANSWER_REQUIRED_FIELDS), 'root_field')
+    ...findAdditionalFields(
+      value,
+      new Set(CONTEXTBENCH_STRUCTURED_ANSWER_REQUIRED_FIELDS),
+      'root_field'
+    )
   );
 
   if (!isJsonValue(value.answer)) errors.push('answer_not_json_value');

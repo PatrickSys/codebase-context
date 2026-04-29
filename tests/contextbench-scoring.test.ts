@@ -27,17 +27,45 @@ describe('ContextBench official-evaluator-first scoring', () => {
         predictionPath: path.join(outDir, 'trajectory.json'),
         outputPath: path.join(outDir, 'score.json'),
         cachePath: path.join(outDir, 'cache'),
+        claimAllowed: true,
         runner
       });
       expect(result).toMatchObject({
         status: 'completed',
         mode: 'official_evaluator',
-        claimBearing: true
+        claimBearing: true,
+        officialEvaluatorFirst: true,
+        officialEvaluatorAttempted: true,
+        officialEvaluatorInvoked: true,
+        exitCode: 0
       });
       expect(calls[0].command).toBe('python');
       expect(calls[0].args).toEqual(
         expect.arrayContaining(['-m', 'contextbench.evaluate', '--gold', '--pred', '--out'])
       );
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not mark successful official evaluator output claim-bearing without protocol permission', async () => {
+    const outDir = tempDir();
+    const runner: ContextBenchProcessRunner = async () => ({ status: 0, stdout: 'ok', stderr: '' });
+    try {
+      const result = await scoreWithOfficialEvaluatorFirst({
+        goldPath: path.join(outDir, 'gold.parquet'),
+        predictionPath: path.join(outDir, 'trajectory.json'),
+        outputPath: path.join(outDir, 'score.json'),
+        claimAllowed: false,
+        runner
+      });
+      expect(result).toMatchObject({
+        status: 'completed',
+        mode: 'official_evaluator',
+        claimBearing: false,
+        officialEvaluatorInvoked: true,
+        exitCode: 0
+      });
     } finally {
       rmSync(outDir, { recursive: true, force: true });
     }
@@ -61,6 +89,8 @@ describe('ContextBench official-evaluator-first scoring', () => {
         status: 'judge_failed',
         mode: 'diagnostic_fallback',
         claimBearing: false,
+        officialEvaluatorInvoked: true,
+        exitCode: 1,
         fallbackReason: 'official_evaluator_failed'
       });
       expect(result.stderr).toContain('No module named');

@@ -245,7 +245,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
       CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
       CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
-        'raw-native': { proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
+        'raw-native': { sourceKind: 'proxy', proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
       })
     });
     try {
@@ -299,10 +299,11 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(score.stdoutPath).toBeTruthy();
       expect(score.stderrPath).toBeTruthy();
       const rawTrace = JSON.parse(readFileSync(attempt?.raw_trace_path ?? '', 'utf8')) as {
-        laneIsolation?: { proven: boolean; proofSource: string; observedTools: string[] };
+        laneIsolation?: { proven: boolean; sourceKind: string; proofSource: string; observedTools: string[] };
       };
       expect(rawTrace.laneIsolation).toMatchObject({
         proven: true,
+        sourceKind: 'proxy',
         proofSource: 'stubbed_test_proxy',
         observedTools: ['native-read']
       });
@@ -323,7 +324,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
       CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
       CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
-        'raw-native': { proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
+        'raw-native': { sourceKind: 'proxy', proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
       })
     });
     try {
@@ -395,7 +396,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
         CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
         CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
         CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
-          'raw-native': { proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
+          'raw-native': { sourceKind: 'proxy', proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
         })
       });
       try {

@@ -995,6 +995,12 @@ function laneTelemetryOverrides() {
 
 function buildLaneIsolationEvidence(laneCard) {
   const telemetry = laneTelemetryOverrides()[laneCard.laneId];
+  const acceptedSourceKinds = new Set(['not_captured', 'env_override', 'transcript', 'proxy']);
+  const sourceKind = acceptedSourceKinds.has(telemetry?.sourceKind)
+    ? telemetry.sourceKind
+    : telemetry?.proofSource
+      ? 'env_override'
+      : 'not_captured';
   const observedTools = Array.isArray(telemetry?.observedTools)
     ? telemetry.observedTools.filter((tool) => typeof tool === 'string')
     : [];
@@ -1010,7 +1016,7 @@ function buildLaneIsolationEvidence(laneCard) {
   return {
     laneId: laneCard.laneId,
     proven,
-    sourceKind: telemetry?.proofSource ? 'env_override' : 'not_captured',
+    sourceKind,
     proofSource: typeof telemetry?.proofSource === 'string' ? telemetry.proofSource : 'not_captured',
     expectedContextTool,
     allowedTools: laneCard.allowedTools,

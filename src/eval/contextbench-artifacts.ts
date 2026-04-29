@@ -7,6 +7,7 @@ import type {
   ContextBenchLaneSetupEvidenceRecord,
   ContextBenchLaneToolCard,
   ContextBenchRunManifestRow,
+  ContextBenchSetupIndexMetadata,
   ContextBenchTerminalStatus,
   ContextBenchTaskIdentity
 } from './contextbench-types.js';
@@ -125,6 +126,7 @@ export function buildManifestRow(params: {
   startedAt: string;
   completedAt: string;
   paths: ArtifactPathSet;
+  setupIndex: ContextBenchSetupIndexMetadata;
   hashes: Record<string, string>;
   executor: ContextBenchExecutor;
   model: string;
@@ -150,16 +152,7 @@ export function buildManifestRow(params: {
     setup_index_path: params.paths.setupIndexPath,
     prompt_path: params.paths.promptPath,
     lane_tool_card_path: params.paths.laneToolCardPath,
-    setupIndex: {
-      setupCommand: params.laneCard.setupCommand,
-      indexCommand: params.laneCard.indexCommand,
-      setupDurationMs: 0,
-      indexDurationMs: 0,
-      setupLogPath: params.paths.setupIndexPath,
-      indexLogPath: params.paths.setupIndexPath,
-      setupStatus: params.laneCard.setupCommand === 'none' ? 'not_required' : 'completed',
-      indexStatus: params.laneCard.indexCommand === 'none' ? 'not_required' : 'completed'
-    },
+    setupIndex: params.setupIndex,
     taskExecution: {
       model: params.model,
       timeoutSeconds: params.timeoutSeconds,

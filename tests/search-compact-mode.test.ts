@@ -50,6 +50,8 @@ function parseSearchResponse(text: string): SearchResponse {
   return JSON.parse(text) as SearchResponse;
 }
 
+const SLOW_WINDOWS_TEST_TIMEOUT_MS = 60000;
+
 describe('search_codebase compact/full mode', () => {
   let tempRoot: string | null = null;
   let originalArgv: string[] | null = null;
@@ -572,7 +574,7 @@ describe('search_codebase compact/full mode', () => {
     expect(results[0].filePath).toBe(actualChunk.filePath);
     expect(results[0].imports).toEqual(actualChunk.imports);
     expect(results[0].exports).toEqual(actualChunk.exports);
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('adds a warning only when the final full payload exceeds the compact budget threshold', async () => {
     const oversizedSummary = 'Token-heavy summary '.repeat(1200);

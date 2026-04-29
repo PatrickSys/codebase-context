@@ -218,6 +218,16 @@ describe('ContextBench Phase 38 runner contract', () => {
       writeJsonArtifact(paths.structuredAnswerPath, { answer: 'x' });
       writeJsonArtifact(paths.trajectoryPath, { pred_files: [] });
       writeJsonArtifact(paths.scorePath, { claimBearing: false });
+      const setupIndex = {
+        setupCommand: laneCard.setupCommand,
+        indexCommand: laneCard.indexCommand,
+        setupDurationMs: 12,
+        indexDurationMs: 34,
+        setupLogPath: paths.setupIndexPath,
+        indexLogPath: paths.setupIndexPath,
+        setupStatus: 'not_required' as const,
+        indexStatus: 'not_required' as const
+      };
       const row = buildManifestRow({
         runId,
         protocolVersion: protocol.protocolVersion,
@@ -230,6 +240,7 @@ describe('ContextBench Phase 38 runner contract', () => {
         startedAt: '2026-04-27T00:00:00.000Z',
         completedAt: '2026-04-27T00:00:01.000Z',
         paths,
+        setupIndex,
         hashes: { protocol: hashJson(protocol) },
         executor: 'fake',
         model: 'fake-executor',
@@ -247,6 +258,8 @@ describe('ContextBench Phase 38 runner contract', () => {
       expect(rows).toHaveLength(2);
       expect(rows[1].status).toBe('invalid_schema');
       expect(rows[0].setupIndex.setupCommand).toBe(laneCard.setupCommand);
+      expect(rows[0].setupIndex.setupDurationMs).toBe(12);
+      expect(rows[0].setupIndex.indexDurationMs).toBe(34);
     } finally {
       rmSync(outDir, { recursive: true, force: true });
     }

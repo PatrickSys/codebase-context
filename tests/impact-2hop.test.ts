@@ -15,6 +15,8 @@ import {
   RELATIONSHIPS_FILENAME
 } from '../src/constants/codebase-context.js';
 
+const SLOW_WINDOWS_TEST_TIMEOUT_MS = 60000;
+
 vi.mock('../src/core/reranker.js', () => ({
   rerank: vi.fn(async (_query: string, results: unknown) => results),
   getRerankerStatus: vi.fn(() => 'fallback'),
@@ -127,5 +129,5 @@ describe('Impact candidates (2-hop)', () => {
         `Expected hop 2 candidate src/a.ts, got impact.details=${JSON.stringify(details)}`
       );
     }
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 });

@@ -21,6 +21,7 @@ export interface OfficialEvaluatorParams {
   outputPath: string;
   cachePath?: string;
   cwd?: string;
+  claimAllowed?: boolean;
   runner: ContextBenchProcessRunner;
 }
 
@@ -32,6 +33,11 @@ export interface ContextBenchScoreResult {
   stdout: string;
   stderr: string;
   exitStatus: number | null;
+  exitCode: number | null;
+  officialEvaluatorFirst: boolean;
+  officialEvaluatorAttempted: boolean;
+  officialEvaluatorInvoked: boolean;
+  outputPath: string;
   fallbackReason?: string;
 }
 
@@ -67,11 +73,16 @@ export async function scoreWithOfficialEvaluatorFirst(
     const score = {
       status: 'completed' as const,
       mode: 'official_evaluator' as const,
-      claimBearing: true,
+      claimBearing: params.claimAllowed === true,
       command,
       stdout: result.stdout,
       stderr: result.stderr,
-      exitStatus: result.status
+      exitStatus: result.status,
+      exitCode: result.status,
+      officialEvaluatorFirst: true,
+      officialEvaluatorAttempted: true,
+      officialEvaluatorInvoked: true,
+      outputPath: params.outputPath
     };
     writeJson(params.outputPath, score);
     return score;
@@ -85,6 +96,11 @@ export async function scoreWithOfficialEvaluatorFirst(
     stdout: result.stdout,
     stderr: result.stderr,
     exitStatus: result.status,
+    exitCode: result.status,
+    officialEvaluatorFirst: true,
+    officialEvaluatorAttempted: true,
+    officialEvaluatorInvoked: true,
+    outputPath: params.outputPath,
     fallbackReason: 'official_evaluator_failed'
   };
   writeJson(params.outputPath, score);

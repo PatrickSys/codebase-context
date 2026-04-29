@@ -1,0 +1,3861 @@
+{
+  "name": "v2.4-contextbench-phase37-selection-exclusions",
+  "protocolVersion": "contextbench-protocol-v1",
+  "dataset": "Contextbench/ContextBench",
+  "datasetConfig": "contextbench_verified",
+  "split": "train",
+  "selection_algorithm": "deterministic_seeded_coverage_then_rank_fill_v1",
+  "selection_seed_or_deterministic_order": "phase37-contextbench-v1-2026-04-27",
+  "selection_timestamp": "2026-04-27T00:00:00.000Z",
+  "task_pool_hash": "sha256:a6af697f293ec595bccf9c264799f8a55308cc552b20b8ec61714240c2a03b26",
+  "hash_canonicalization_version": "contextbench-canonical-json-lf-v1",
+  "hardness_signal_status": "unavailable_in_contextbench_verified_schema",
+  "hardness_proxy_used": false,
+  "no_lane_outputs_observed_attestation": "No raw/native, codebase-context, competitor, proxy-hardness, or post-failure outputs were observed or used for selection.",
+  "input_row_count": 500,
+  "eligible_row_count": 500,
+  "selected_row_count": 20,
+  "excluded_rows": [],
+  "non_selected_eligible_rows": [
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__838d3d25",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:03cf497e7e4415a656c070848b5c251e3a3e6a4179ee887cad42acb84390f152"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__0307e40c",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:06baeef7c670478f7c787637882732d0baa64ff4f32505d955892d5d1d3527c2"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__634fe9b8",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:076cfb05187984e4cab05aa898d87d8ba219de13cb3a9f9ad8f193d87d950822"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__93721db4",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:07ea5844147f8f772b09eabda751164b99b0d5ad4bbb3f6b960de77cd11b2670"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__5c82134f",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:08f69910c2675a7ca7effaa484f3015b5a8f2daa755d32eb9cb7c8a3568e6675"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__31d4fe9d",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0928f9a14603d2c32812d7598e79450a4efb7029ba992738a946ce388cde7204"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__6da325be",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0a1cad48d81847dad4b28eb18ada007c40d41ca6492956090766a4f8e420b1a5"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__c923cfa8",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0b7b6fbab039f509d6801f6cb3d74f16f18b2418773a83f06ee2a3610431d459"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__4e7b7c81",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0cd437ece62135e58d366417ff3ba5ee9a118a865898770abf010e96866027b4"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__0006beec",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0cf4acef53f32baab2df4a99433fbaac1d6ebcc084099685cec088faa57d3e10"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__2d9d9f71",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/iamkun/dayjs.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0d9f5b490823ebf2a0513a4b47c164abedcb2435cfcb62f4c0d709cc1160d2aa"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__3b4c72f1",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0da8f8ca106b09d10740c819e558cdd71bd2c0440abd584abb3de0936ac74569"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__b31d2f53",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/iamkun/dayjs.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0e1195bfd17ec106c224d7e54045aef1b2fca095e2590f0dc5b461034bfe60c1"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__8c189fda",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0f681bf196a99486aa2fb0f426956a0c79372cbaeba33dc9b9ba2a3e25ebea1b"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__3c69099b",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0f9037edb3dde63aa4464dd6379fc2ab609755340654956cbd7a7b3f997b6cc7"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__3e2d031f",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:0fce488c2ee84d450d3734f01054d840c8d8c58151e35f592e13c534215ec0db"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__07bb383a",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1006923d5364a3032de43f6d15b00b5c56cae3876120005cb106ba96a1105af5"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__994d041f",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:105f873d3ff97062d7d01e9eee57d3844138178d79b630d16dde71930a039311"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__6a53360d",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:10bb0777c8a14ee1bf710dfc37814fa829afc1e71ea96badc874ca31b0bb9c54"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__95b4abc1",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/internetarchive/openlibrary.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:10c8fc62d875aa5cbde0d7c16ac9790e488db26f47d46f3099509b097a17c55c"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__2c34be8a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:11c231ffec3cb7601f1c48f6759db7ed657a895f1cda2e602257f574d793d8f6"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__84fdadf0",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:122e62b3df7ac8c58decd7b4106ff2ca2a1f6298db727e890c7af5b5cd170c51"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__eb5704a5",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:124102c8beff648f813ecf0fde8989bdf42d51b49c37449a7917074a3b687ed8"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__03fdad45",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/tokio-rs/bytes.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:13b3615fee16b8239456863a733234c4ab8c6f54024f563d959a3646d16f7707"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__9c878ad5",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:16284a509303ae4caeae71d49e913e057c12271a801d58e95615206199cf8e0c"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__evolution__feature__07098661",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:17b5cb4894ab5a99686cf09ea54c20de211e43b1eb3a5e836caffe40dff4923b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__67699b64",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:17dd8dbf0cb630e6b465e9b03ff27da9825a836444ccc66648ff04537be88633"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__6b844996",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/facebook/zstd.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:18a2c1a973357bffedb01a16c719b0a14c7ce96c5ca414cd9e1bba381bc84846"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__7db465d6",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1941e11a86608a90ff33cbd18236249a3dd7585cc86191e8dab6fdc9dd6277b2"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__3d378646",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1c06ce9f7cf18ffb7cabf8e39e05e8b0317fbfae26bc7234885fcb7ff771e495"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__05a89a66",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1c662d7109360fea3fb9914255d544d38bf461003cd945c092993427e58eeede"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__5ec14acf",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1ce02f9ffc2e770050dd835d9463a4a75ceea43cbea99546c8e8989293d97ddf"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__6cf8c11d",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1d0accfcbbca86472e03ce1624cdba2002ca9da1a18a47a81d436ba94fed14f8"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__0f495035",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/facebook/zstd.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1e4e46ccd14d323dfeb44e58bc614cf0bfd0a57bc90a015f2ba4a503757184e9"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__05c53458",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1ee25ae1d46d51343052b4cf9453269e9e109c0bc0af81d5d0d79042ab77533d"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__ce7f17a5",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:1fd109441ecfde35bab0ee355bce4462190cfa906d029536ac0164bc2fd261a8"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__evolution__feature__d520ba22",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2033c0f759844814d765212341a7e075c76bc3b7f78dc56f5f981e961578d828"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__07d7817b",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/fasterxml/jackson-databind.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:20c6cc46393e7f838b997bf791c215e5592cc8ef4c301baf2e6dacae110a1840"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__eea782b2",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/iamkun/dayjs.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2122b6100066889299916ede35b082becbdd27f4f798f5044c6bcd41fd2f64cc"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__768d44e5",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:21b0cf95e6eb5ba4379aced23b240436f17a0d7913c88b52720424aa402db15d"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__48e5846a",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:21ee8537e57ab86968caa867c2c2c2ba4e4d223524a602e172c63124b502b2a0"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__c1f435de",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/qutebrowser/qutebrowser.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2272315e6cd2ea8db4d42dbfc36863cfd3633c1fcdcb0ca5f34530bd121e5932"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__497deb6f",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2274a0674571e600418d650e7b46e6a52052225e50087c02067cd2e49f34fec8"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__a65e43ee",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/serverless/serverless.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:22c34eec746aacaca1e24b54dcf714587b4e9cf46fc526bc8b561692f31d5513"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__b9b45262",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/facebook/zstd.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:238c5e7518267abdad83b5cb0dfef1332931ee2a388bd80b1fcb1ed826cc0147"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__c4c8d376",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:23a801198076fc32539641ebf5446e2332a22a6daa5ded1bbb2c722aef7d4ce5"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__450d75e0",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2423d8ecf7f82716dd5fda053c1184f70d5b9a59afc197a0f5ea72ca9e83f920"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__37455515",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/yt-dlp/yt-dlp.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:24484cd1ee507b8cf5024e9e0a42ab381e5f166eb15942f74e1fc2003b499bcb"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__16d1ff7a",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/microsoft/vscode.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:24863767938823e97b130eb622a8e1d4e159437685dd662072fbd887d563b193"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__c3284db4",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2559802d188383102ef01344141f18097ed13e332e53b83a7df48dccc4d26cda"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__5eee261d",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2637639450d32f5b0845ddbd2f1f9db7e4b994de2ba7b824b20ad21f3b617e08"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__80c9776a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:26643c6362bea41db1dc6193aa85ad783c3342c68849a4bc04bb3dd978c88db0"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__ef567ef1",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/alibaba/fastjson2.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:26716eaddfd72568f3d98f40bf55cb3818b1dc4537d4f43a4b882690022de349"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__cb2c6ff3",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pydata/xarray.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:272d7a81ad4d45995f6906384f849802932e94308defae3e82bff71ae11768c9"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__javascript__maintenance__bugfix__e31ec45c",
+      "source": "Pro",
+      "language": "javascript",
+      "repo_url": "https://github.com/NodeBB/NodeBB.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:27889de7044117c889568cbada79dc9062a80b73748a88be5c26db604e79e665"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__ac705f35",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:278f3ecd34a0b7a3e829f2610785ab55ac503c2436eec6ce77d4eeec5feeeb0b"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__3d4cfa9c",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:279fa30273903ce4360195be11f39c49c47f423b730b80c700f02d5299ab31a6"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__15589352",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:291d68196e79c8659b321b0f8be7a73e160b9e2aedb23e5935637ce1b9a97945"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__c9656d7a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2937f2f4d79a3fc5f876211e2f1c1fcfa9a23880849f39f838fc3b797f75379b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__90532e38",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pydata/xarray.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2b067a3eb02e8d4739f8d5221afce5a122ca686b43267d45b92d49b6b9497eed"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__16860730",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/nushell/nushell.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2b32f43866183e19f892f8e8c18fb8319bdc86bb95e7d33b5edfaa367b5cbe3e"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__6ba3d94b",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/fasterxml/jackson-core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2b33ba1457c7d224932d22df1657f4371bdfe2ac8aaec5a2475686c4d53d5580"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__a47dfbbf",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/facebook/zstd.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2bb94c4c97c4f5d8e786a88d03c203ac5515a219984de69fa192c999363c67a7"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__11e78a8d",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2c0b27e3bca5f749e280ba006cad31ceef1f82291d130200a4ffa66deb73fa69"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__074f37ac",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2ccedc8a6e160c727740aceb8cd8044af63a023af6119038283c27e387e661c5"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__dded0f96",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2cfc8ce3ce0a51e13e6abdd2e5c9d9fe8502919aa3e96584279752875b592413"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__91e6ed53",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2d0187c1050864406217fa037da864735b387c6c4d33f7044d24159a28171579"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__0f94ce4d",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2d4cc31785a1d34c59480eca8ab24a61f2fb4668f9c833340ebb3d965e37f976"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__81c5c6fa",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/internetarchive/openlibrary.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2d8bf22b7f5197b0d4f0796fb7252082cf7c4c417fa9da5b13bb559037fabd94"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__c8b82135",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2dd8e944566a34880b0eb3076d4fe1052bd574c2da395acbb8db6da68246bfb8"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__1384380d",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2df3876bed7c1a87d494645449281045b476aa21ff0377d5f6a2816af6077a97"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__64fffdfa",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/qutebrowser/qutebrowser.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2dfe283663f0ebc3824b062e3f8ed0ef0387b7db96e754fc2c6f951c4f6d5682"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__183a2a5b",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2e0173d18815f7832a7613296d032f803f40970a5717634557dd9c4bb6db8b52"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__83a70168",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2e64e5f5583b6fb59a379296e325334b33512df139ac74ac698d0f07d754cc8a"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__42c77239",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pydata/xarray.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2eb0577f818eafa9649d5132854b7fcb5f456d543506fcab47b099e186a5b0fc"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__0f3c174a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2ed40d88eda56cafa7be73895d90ab990579880bc554dd056a4b4dcaf8925fc0"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__d3bf673c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pydata/xarray.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2f267702edb795356e07fc431e11656d9a38e5ef9957720fe127365725db583d"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__98bbaed2",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/axios/axios.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:2ff20a07bf25cf73be95db6b5fe298d7f01fdb989003790fdce08b5c48b117d6"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__9bdfae2c",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:302555472db0e26208aa195618cfb873a8dc589f3822d7612ed2d480e2fbe299"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__9ca0e415",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:30ae54045facf638785b0dfc7994c7516b55b8577b8072e55e26dfd882c64c48"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__45db86cf",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:30c8ea811449d7adca7672c182f3f65cb8f5b41b795fda02254a9bbed2e01360"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__4d9664f3",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:31c58b4ca73871761f33989a961af53e1299257a95ece466a56eb2fa566196b9"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__908342f0",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:322dea2c22c44fd1e0c3991a2b160185655723334ff7c5e876d4520d8efdcbd9"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__42ae5e9f",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:325e77fe6dec496cace3fd5be3faab00f47a6972e00c64b433f745ed29c6ea5f"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__4606de0b",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:32cdee42bf9d7b765923ab739ca76c06fbd908b08d01ece506efd01e028ba1bf"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__2fea5f6b",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3425d8e234195ba036df9bb6bc46ae2362e3d11b491c4cc745b15ca56cc71b76"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__go__maintenance__bugfix__40a717e5",
+      "source": "Pro",
+      "language": "go",
+      "repo_url": "https://github.com/flipt-io/flipt.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:34b963d19ec1e4c9ae69e859bcadb97466ed2cfc14f584ebee4b7320a9a6009e"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__5555e84c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:35cad2696938f93c811b304a7245987e6c3623f18ccba72f3a52e9501dde12c0"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__7439767b",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:37701cce5266f96431c27136ea5ac8eba24a3b1fcef7f6b3c76007891394b652"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__1e195cd6",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3825364f24b94c8f5623eba131a72dc63a24988f34f5087a12377ecc38c19adf"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__2e76c8cd",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pallets/flask.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:38277c285d71902ca97f19f4bb1c9d7ecced4d155b54f39fd6d085285180669f"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__bc1c666f",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:385299b57afd9ba5fed8f1f0443065a8a28f6937385c20e26915a8da3eb1a110"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__45da4482",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:38dea4af43965149078cd83c0a70c21c26d530f1ea083ae6de369fd47dfe94ba"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__ff0cfab5",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3903d17a7e6a39afa977fdec9bfcdedf4f9f861ea0c9639bb354e8235474e8fa"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__4fb8fc10",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3920290fd9832d1e2f3c4c4e5c11e1053607d5016b2e5ab28e4e57bac5979aea"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__7acaca55",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3994bfd3b0c0c2980d5285f4a42cb8a3b42f4e94364bdd21d4c634a52438e31a"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__7c2efe8a",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/internetarchive/openlibrary.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:39f2ea55a8faaf270fa4f6dd07b22f49f4848c3a7130b2f118e23ec4710d49a7"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__8d1c297a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3a6e8fadd6fd8a475642b765db5d7a8fc07df52a90edc3ffe953d555c6a15ff6"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__f0db9a27",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/fasterxml/jackson-core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3a7ca6c1f548555448ac475cd0526f726f7a51c2fd7ad2339d6dd9e59925094b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__d0723f55",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3aaa3928fb4de89ccd3dfd6fe8cd537f0f23c4477bb7402dd4bd6dcee6e364f0"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__e647c8ce",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3b10d62be939d9aa92432446f2b14b25ca9e99dcbe81917efd7b59ef8517e8e6"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__e5a3bf2a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/astropy/astropy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3b2c0cd652714010d038c607053cf1d6c01b443e89bc8615c5c26a49d92e9596"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1efc2b51",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3b6bb198ef59f43402a44124c3fe8601448abcef5bae8bc1c14630ccb40dcda2"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__1e29a469",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3bc93fea6caa989ac25bf866065a361879ab7c95ef9b4dfe42a2e1ce4e99d426"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__8b1080ea",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3bf01c474f20d61cd853d0ad5371878b7a48dee8b40576377de6cbaa2f6a97ed"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__2f88019c",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3c2638e26125f56b90cd59d9fea08448093fbc6f739d649efe43049619e7d55d"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__javascript__maintenance__bugfix__5c001746",
+      "source": "Pro",
+      "language": "javascript",
+      "repo_url": "https://github.com/element-hq/element-web.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3d6e51117088a3557c2b72c8453f2bcf118ccf2acda84bc7dc6500f9edcb2342"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__3185b834",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/astropy/astropy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3dbaeceb0cf71f3603b9cbcb84be604820acdeba1ee9e0b1b2576a4e2759520f"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__0b78ed50",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3fa6341ba87d5effdfafaee3097e66df4ff0da78536c10a04711d78b3dea4e3e"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__88e1ffd3",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/psf/requests.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3fbca068cde77c9a3d87ca965c8563a3865a7e88a69ba1d85b74c00fde315a83"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__ac127191",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:3fe99a63634ecc521ddf8c3195f6685436410459a62ccdf0742a4956aebbae37"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__9907b12d",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:418c4601b3773b4321b6dd8509688745e5eb1c7fac011bc80dc3ebd19dac851a"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__5188c6bc",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:419546367169c45315c9e54cdae9e5194856c3b9e1990e5351237eb8c33fd11d"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__2ccbdc72",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:423c4bc0e5dc7cc7275645bfcbdae0acb7504752dc20eb3641680cb06226e484"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__6a14056a",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:42cbdc9325a3f0490412593e1e5c6e130855a2f1c525af8a818b1260a105c450"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__4d321c4a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:431ea723154d39ddb5b2a0182db3e38ca67b299b3c7e8102b65b222732b4081d"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__ea5a4764",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:438d70abeae92385f74bfb9d6c2c6da52dc4bad3498c07444ccd10d9eb3cd94c"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__4b691a35",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4459cdde1b7c2330e192ff256c9707eb50f18c2f9045a603911bab15eee03cf6"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__52a91dd8",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/langchain-ai/langchain.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4478daa9fdcc199ab420e8fc7c6bf36b84bab63444bf14186e76a03567073f04"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__42a80be0",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4621d1038742dc62a46e026ac0faa92103a45a5cd279bacfddc3dd68d37978c1"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__b4302840",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:463675d2f7fc019f315d4802136c1b406aa63597d0c25dae06835e6eaeb19b14"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__2e3d6eae",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4665f7351006a92fc92a88b503bc558c976b0ffcd1cb2bc8f7a78a46cfb158cb"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__5aed9f96",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:46e15b392e85beadac9ef37f17ee2bf1978576f28cc32272483a273fa5e6196f"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__2487b02a",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/microsoft/vscode.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:47b94c57f154f0cd9144f457e265a495d6c9f3b1fb726a854f5d2301492f7d6a"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__15e5aaa3",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:484a54348ff22d071f69282ec722ce98ac476228842626b3836907d74bf0846d"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__1bb5c0b0",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:488c33518e4122e8a198c1e7b8804f3e0c3885fd21462e5d884f6a6a7c508e0e"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__607fc4ff",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/internetarchive/openlibrary.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:49370aaf658368f0590382a55ed78d8b4dbf835a9383d213600d0696d730ba2d"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__javascript__maintenance__bugfix__7b6185af",
+      "source": "Pro",
+      "language": "javascript",
+      "repo_url": "https://github.com/NodeBB/NodeBB.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4a2c896dd3bbe8aeb08f18b813f1c51f27c28264b73afcab99dccfa48ffb1c6a"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__javascript__maintenance__bugfix__39a9746b",
+      "source": "Pro",
+      "language": "javascript",
+      "repo_url": "https://github.com/element-hq/element-web.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4a72ca03f9ae4a2b34af9734a100746c82b96772a0c8385a7a151af73ef78b23"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__e989ba2d",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/psf/requests.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4a8dfcd074eb451c1d552b1e6b8723efd3bf08c8c34878c852bf693facf2c546"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__18eac778",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4b82b033dc6320aaaca83a04fc230aa33c361b4aaf12de316165da33fc0bfc82"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__1ec2c84a",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/fmtlib/fmt.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4c0f3c256d452c2d157ba3fea7ad9fb5e2c9fef6ced5003c101549066a768fdc"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__07bafddd",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4c827b8c4f2cdde571f9a7d18a6b33ec4147a346cb77b319fe28dcd051d51249"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__2aa6fa4c",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4d4cd2f55d001fd24a0cf217c297c471e88069da3f68bc6855bf0f403de64299"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1ae3c3bd",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4e4199a59ba0bcec91c2b70be32fe313b4c852415268c00d99c865f3c6bb72e3"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__53ca6a30",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/internetarchive/openlibrary.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4f03139321008d9300d49ccb85540c22213606b926a4bcfe329c4749ba8fa01d"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__30065f19",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4f4dcda690d48d5a5e121e4ee01d8140c5683bcba7206bc73bdea7143856f346"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__b9f9961f",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4f62da7451dd325f427814f08c2ef50c3244fb014144951a7f2d5af6f56de075"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__d22bf206",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4f6cf5a824bf120bb14a0d67e80ad54fd292d516deb9bf84f8d96b2f7987656c"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__17a093c8",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4f95b801738cab0738b8e3befee5aad9d904def47f049a4f6393731f5148c8c4"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__14da06bc",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/elastic/logstash.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:4fab17c12c78ee10a62559846664a4822b64e0930fe1cfedc4b30d84fbdf6db2"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__d129d52f",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:500524859a2c1be42a34288dbc4d540079d98d41a30130aeac87d04e1131d547"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__4f130690",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:517db77979a49f50a4e79046d284debb0fea497bdf37cec311cecc9a8382798c"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__214ce29d",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:51928eadb5dc8d4d9f6f5741e050c14ab651ff1232b2d847dba31fae478ccec0"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__a5ec0eec",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:524f737afef9e8538f49defba64d553d27e49b35a5b00903a9efb4395143ed42"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__84effcbc",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:527217b9e22ef19ece5e491dc09f3a9bd07010b8365700bce787a881d4bd94eb"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__20eb5bc8",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pydata/xarray.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:532100d56642791b0696083a6194805f103cc11d692a10af6bd438156eca34df"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__0f79e39c",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:53bb2da8bae618fd3c04a9515f5b3d2efcc60bf152fe70ed9285c0cb3e65dad2"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__evolution__feature__34826a6a",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:53e3958f53705e9513df7399bb4e772b8df2807225672f9363ff3fd63d772386"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__21086305",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/prettier/prettier.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:54597b2edaa48f9e3e74424649f716dca48018304b7ceaf6534ed3ec73956b0b"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__739b23db",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:556427f95d643d5beb651cd221e0fff6fdf9ab22fe1187122c86d8ca9b8029ff"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__4d207ce8",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:559f204ba9c3f7f485b7e7df9fe053ecbcb0695e4ae21a3bf59c0068daf73a39"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__f9bb5442",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/facebook/zstd.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5645e936378cf638659e695b39596fd46bd393ccc8670926ba1f6b37fa6f18e3"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__8cc426dd",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:57ed93eb89b32ff2e1427c509b02198bf4e54821cdf38dc7d365f8fbdeda54ce"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__8f9042e3",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:57f08ae5655ff12c003b5b1156be099370aa40360d206869423ed8352a78f740"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__e43d9aa5",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/catchorg/Catch2.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5818ee91e9fa4b98c14f7fcb147d9f6dfec50377d603644d77578df58a536bda"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__9ff56151",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5821daeed84f963923a1daf44f9a93d679d59420e95ec1988683db229614255c"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__04c51be7",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:585bff0a4a63824adb9de8a46b04a98d7f5790c9fbbb321abcac84e65d9b8e7b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__61a7a81e",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:58b89e3adb8e561a28fa30bb429c70d3721e10abab2b8d64f939ad8ed41a2b4b"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__48468065",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/microsoft/vscode.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:595789856f88dec3707155e8b48a630c128eb0b07c26061f030623057810434a"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__javascript__maintenance__bugfix__09eb0d6d",
+      "source": "Pro",
+      "language": "javascript",
+      "repo_url": "https://github.com/NodeBB/NodeBB.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5a1288d33a47b2f1dd2bcb3d3baf1d64733fd0cd9bc8950e0997003b5e1b4f42"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__javascript__maintenance__bugfix__ac8400d9",
+      "source": "Pro",
+      "language": "javascript",
+      "repo_url": "https://github.com/NodeBB/NodeBB.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5a2ab1e03a31d103409a375f4c91366fbfd7982df9e80243688004e987243a7c"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__ebf021d0",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5ad21b9964fb361fd46b99a64d9e63b809c39f29bb8476d83fb9f5d71ae123c4"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__go__maintenance__bugfix__720b4d92",
+      "source": "Pro",
+      "language": "go",
+      "repo_url": "https://github.com/future-architect/vuls.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5b0cb19c0bea9f60a0c0c1bb2313a7bcc5b4b7a40053f3668854aa21202a32a7"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__9a05fe0c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5b1d0f8838ef362706223a87b68f2e9a93d9b42dd08beead758e4ff64fed7ad7"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__javascript__maintenance__bugfix__4eb0e647",
+      "source": "Pro",
+      "language": "javascript",
+      "repo_url": "https://github.com/NodeBB/NodeBB.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5b5d10862203327b0ad1f3fdcea256fa8f35b58f0a60cbb72fe9489e39447167"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__c017c9ba",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/prettier/prettier.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5b8d1b49ad1ec8a795078709e470a482e4ad24f9fb2e52b8e756ae2fb77d0125"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__5eea2978",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/fasterxml/jackson-core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5c31fbffc692213c38c3f7b8d37d8c946fa92ef4af93955b74887f8a1434607b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__7ec77e9c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5c41cc5ec5b92656be419d1ecbe5778cc618997b6b295b2ae536885461164372"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__681ea2b6",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5cba2062443f7fbe66c61546c6064d077499bd25600aa93a0b0efe2c54de76e9"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__85c030cf",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5ccc8071a1186487184438e09f9513a9d6b044d6ec2f3fffcd982ba61e061d95"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1eaeabf4",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5efb915edc5e15863dbd672e1de1e8ffb040e36b085f5fbbc6d7eca80f51d77a"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__fd8123b1",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:5f509828b0b901c8d6ff3b1f1246f168380b3e99d0558f18928bfefdf3d29b06"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__05c9e61e",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6070fcb691545833d6afe578a801748287e6c2cbbdfd0f07830f5b64ef60de11"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__abfdb2c5",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:60ef9ce0c96aaee01ea666394c010cc8f9088491f2b1992afb587c6b3dc2f112"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__bca55dea",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/simdjson/simdjson.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:612164e013a50678221e5235f1c22ca215c94ff5cf76ab64b4afde9f681c7944"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__7c9ef76c",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/nlohmann/json.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6262dcda36e891b2bfeb48853aaf50d60935957b418bd152fc2f987f5b7beb44"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__fb07ed8b",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:626c684403eea71e8695e58728721e5f71bcafa0915634b2ff9389e891f12aa4"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__52c152ba",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6283859052944efcfbe7f321decd06680d883e3a2cced621fa39a670d2047445"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__3e44d93a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:62cd5384796915a3a413d00cc15af190af3fb84576e46400b50b492253dab784"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__982277e4",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pytest-dev/pytest.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:62e6252dc1659aafd5af8d1b8c51ba41619d4e4fc5a6473b8cbc278838aa955e"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__227490c2",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:631d130596a618701bac4f0f0bc572bfaa697da956b35efb4cfc601faa1f4c17"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__ae8b362a",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6334d348216fbcaa84d739b0fd10fe3d548c2820778ac5883dece03c90c008bb"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__a571e81e",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6357eb2ba324edd60cea4b3c1acee4ddabd3e350206925737f6206aa7bb97908"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__12d848d7",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:63b6924492f7643de4880bdc7a8ea8d2e0aa22c90cdba20b15990f759233e4c0"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__73631dc4",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:642cd7932b06c686ccd8146878f5eab2c0d8f70db29b6f9f43cd298bea841a69"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__9ea965a5",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6466b60cf2e5e7a16c3ef632ae8bbf9922839836cf77551f7e0903b3817fc279"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__1ac60ce9",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:654590e4d83cc87cf287f6d8e7d0904f71a76678678f40066563fdd0d25031a7"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__27393dd8",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:667ea55b2304eb2954167f566d98c4170b3a85f2ac8545fc3bddfbfb104c5a30"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__3f3ff585",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:66e47107227bcee92616fc300c26ea54e5bb6dce79c6a6289b67b49a4bb9215f"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__4f88ede2",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:67a677c6c0855c38175ae597905db6d0c64f2d18522593bc05444004322961c6"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__62badbbf",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:67bce6bcc220c01af7831329348e69a2dcb05c37344efa43a48818cf797a5bc3"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__31f13b61",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:682198791d99566a239e6cc7962c07005848680c84558ab54ad31784ca145d95"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__8c647f3a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:687f21450cd78dd5e5d286b45e9a80067198353860affdb4ef6913a983bd1273"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__7ccc36b7",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:690bf652b97a808097f41b1fa01a11a67acf7a1158f4e1325cd3b119f260155b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__20294df2",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6952068baca8039d3787a2143c31f90e00c8a452a953af5041a4b63d6e77f935"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__607f6b9e",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:69674ac163ae9c3f316ec48e22fbd7a6f17e4404e9d20091736be22e72cf6634"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__afcc47be",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:699f52e3d1fe29cc759e970d09cad300b9116523777dc7cee20fd35017520854"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__54ebe590",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:69c49c6fc9912a2c4c32957137cf60f81d54c4b3226316c2f12ad4c9d2111d0f"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__83fd3b37",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:69cc4d466d9e7651cb9f7cdcb2af53cea552b6733418e56c75419fa87e59562e"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__4d090fc6",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/serverless/serverless.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:69d305681c83e0f5e42d660d5fd17b3709146b13a9dfae7f7a387df49cc652f2"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__evolution__feature__684a3415",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:69d561426d5f8417e806a9a05eb81df822a9c382fb8a7454eb0c1ac2b6a7f727"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__b91692e0",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6b51499b713194c37a3a7e11d568a39f6e14b8d9e27e9e3b2a54d77493935cf0"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__5c1509d5",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6c0498e7e9c26b2bf2db5572115318e280a56100f72ea290de5cc48649b531a3"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__01527b89",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6c0868a9ee0d4d965fbb31aa9b39eae008ce1d9e883ad6a48bb0baca4ca96d28"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__bc999af3",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6c50df73d0fd67795dc3f83734ca786e7efade7109f35c1b70faee584f387132"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__87d9772c",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/iamkun/dayjs.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6d39e2b553c73034cf24f6fc803f08351914fa3e83eceabe162b2c3a688bd654"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__3864c137",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6d53b7668908215a678128156ec1e5f43643e958c31d2b117de9a00da23db353"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__59acbd9a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6da16ae02bfc81249f25aba32ebe0a48755fc42eb7ab9b5c142e5db392053c9b"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__678fa217",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6ddf8e13e41fb086d8516a849a4cf94d97065e64b064d67d006b92e34bc0ed64"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__1081c568",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6f4bc2e66d8070f2eef7d8f111b0d2485f87f6be9c95a167638bbfebf190072c"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__8bb50331",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:6f641114fba66e2f31dc2f429759774d52f7a1560334974f02b84a2209b7723e"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__e3c9c53c",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:70386292933c625d725b45a4096298537198c491d83ea186496bfb139f7ccafa"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__fe080aac",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/nlohmann/json.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:709365140586ef33f4238171e8653b166673dc32968462d68cc658b734ea2213"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__6d48775e",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7098520c00c53b77f6ccae01ebe0259147c88c821799ddf7199deae874e37cee"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__1cadcb7d",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/tokio-rs/tracing.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:718a60e705b98b09ffa67327ed87c2423f4f89fd40668b4897b19fc2150bf6e4"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__158909b8",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:72331d8f1180206a03b37d0c0b6aa0fa43a56acd6eb189d16a05fb8cd3af781c"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__aa16b8b2",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/tokio-rs/tracing.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7279262842927bf02fe97d9d0bf2981475d26eb5b63b1cc4b3740f53826f3fa5"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__c26fd1ab",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:72e5bc55b7100df256b51764ad4df1646a41543822286c55270b8f4318d9dde1"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__cdbc5890",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/jqlang/jq.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:72f3d12cdc56f1f657ccec9a637dfa2c23924b58f8bc077d0c184210f25d4e8a"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__go__maintenance__bugfix__6efcf999",
+      "source": "Pro",
+      "language": "go",
+      "repo_url": "https://github.com/flipt-io/flipt.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:733c8efb41bc8a60bee7708a5f79e638a09801c1975274481e0aacacfdb4b93f"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__6a4e21e9",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/nlohmann/json.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:738476fd9d218f2fe95cd27e84c632a4084ad5cba5328ade17ca4b6624761a14"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__0e4346f7",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:73a8076599d4ab1c5989bf79dbb2d79e43c18d94e208d532c3579d5f5dec698c"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__7b474035",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:742158bfee4796fbd9a5a5a07521accf283337d42f499a0e85832b0cb374eec4"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__023915d6",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:742502385efb81d4e143521b77299cdaa1511bf14a6aa982bee823f63bdde089"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__40f09c26",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7441d8e380beaf496a53272d86cb0dba935b8c45589c8becc040df4c709ea31b"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__1ff281e5",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7449d00d459cb559d046b9e7c350d1c4ea6ab45d12e5771c5f04d72364b8738f"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__6e022940",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:74878b0d9e1f5b48523c925ae1035c6a9923423495bb95290a708445cdad80c6"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__ec6fdd6e",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:74f932d64a485353886fd36f7fc9061d6a0263bcbe595b98e02aad4e3448f0bb"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__2b00c0d1",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:75c2493162d4590a20056e441ce622611e3acd55f0d44a6db0cec72333ab6717"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__3a4062fe",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/tokio-rs/tokio.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7624c6dbc358f48c3b3049e74d36ddfdf02ad78800d3b5b5579bc32fcd46a7a3"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__8bffb1b1",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/facebook/zstd.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:768805d008bcbddaee4dc69545f551ef69b296bad1797fdda61cb327fe97f2f0"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__41a5a6f5",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:76f220128b4fa519de4a33f87f977405cb3cd3cd9a805562793cb9cfb73f074f"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__c6d3e230",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:76fd82196cc4a43c634f82bd8344812e7ea1ab47e3314e04a6fea281262edc84"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__1e842312",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:781b005bd25fe85a69cd1ccefb26833eee312783c9401a97446f50c8aef12003"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__3b6e6f3a",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/prettier/prettier.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7885d2af167c9842b8dc4c03c389f4a3b95c0749272b29f54a82feaec9cf067b"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__9a72b241",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:797706981973d0ee39cabbe1869292d83656d77d8524829675928500adebeefd"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__3deeea9c",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:79bc5a4f3c5d4dcc678e3fa20125568462cf06e6deed4ea05d1fdafdcb040314"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1d90db61",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/astropy/astropy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:79bf99153faf79c643aca034fb5b8871a46080e0ee6692366cc129df86d59b03"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__8d23605c",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7ac6f05dd5ef65360d9846061c91dde317cba102956f613554341f6cec918683"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__b9ce6a70",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7ae9c265822d97293b796dccdd653239ae3cea29466d2be22b1734939634171a"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__refactor__57ad5598",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7ca7f7bb2c6a9a0121ea7b53c0b00ef6cf3bf9c5eead2d6e902b59002da0aa21"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__55a3ef80",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7ce46e6597793134d473cf55b7756461c337c6d8d1b8f68dca60691089e47029"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__eb1411ba",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7d032c20e66dc879f7371d39dff884ba038453f13bd125c68aa2cfad484f710e"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__73fc043b",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7e4e9658bfea48a06dd74e3701fee59d9b5318f99f2ea610ec5f4994e69e389b"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__3d84a3a4",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/iamkun/dayjs.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7e5ac40917f8124268765d35626f1c5dcaf454e5f4eb2925243ab3d6905ea286"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__7827bc22",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:7ea1eed780ccaad7c45ea557b3623edd2d6d2fc217a369d936bbdb1a42d9e334"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__4a329645",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:802df16c6ad396b3c2cc5fd26de530b606796dcb89fd4e000377a5e6d50b10c3"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__0c4f8d13",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8067fe7f87b1a5af783f5be0f476b93c4354cb839cc76fc43aa357b61d49e5aa"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__javascript__maintenance__bugfix__593287ea",
+      "source": "Pro",
+      "language": "javascript",
+      "repo_url": "https://github.com/element-hq/element-web.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8069b2420301ffb272d156b54435dd51ab59bd444de9457e4d0dde1774363232"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__cf01f471",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8104a9ae249ffc6fadf3ddb32ad0c67911ab3e8b16178863e443199bc6c5a37c"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__b52bbc24",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/langchain-ai/langchain.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:81634695810aa7da09bfd586daee2d34e9e2a42ccece0f34e5f48e16dfeee60e"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__e5236b5f",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pytest-dev/pytest.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8211dbad2044e9f0f9a49ed1e50d8470324f4b48a520b2834be68dd1e8578aec"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__41b108ee",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/simdjson/simdjson.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8301da84fc6b696446f4eef5f6d5a7a5ea7f81dbf96f3a0281335e7b22fb9a86"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__016ce55c",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:831b0746590c5cabacfe9996498dbd49bc4bf6099b3e31457df78375fac2493f"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__9c470c46",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8339f7c26125616f718ea13d52e3bc630caaead92dfc97a5657b2722e7f7f424"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__627665a2",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:84739cf0e692f50bea6d46b68b935177c5e872549eb64823a6f1c50ffd460977"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__7d106697",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/microsoft/vscode.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:848c15df1bb22a471a6795292058a6c818d703de7550f6c0e4bc1e7285a00ca9"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__66f97093",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:852ccb732d2036613fb1c2089b6e0cb03b7155c0f33ad162d70229c4efba0ff7"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__726ccefd",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:85520d3c315db14fdbfb58334cf74fa7a74e685afe000440e44fa2db3118c24c"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__2d984316",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:85b10de1276d5d5e1c32d728a815bc9b4e49de93d3c295eda3922a09255cbdf3"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__fcb506a5",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/internetarchive/openlibrary.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:85b8dc3a8e86cb7b95d67f072248ec9d1f7408965f120f1aeddf05612ec8daa7"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__dc72c033",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:85c1b2f4edeb69760f5f128a5466f39d7eb0a096549e0026e2992f05cacc2935"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__4f3cb6be",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/microsoft/vscode.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:86a2a0e0ac94805312cc4c203fd00e7f3644482cdb692a7a741486c51082297c"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__f3695f8d",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:87293e52686da9e8cf238fbfe45c6b7278e8610e016b206ce88396b65c8fc15c"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__34e61891",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:876d70facc5f1b31ceb467b3a1352c649e06fcf1c0f6a593502a966eee34d1fd"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__36b8c9ee",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/qutebrowser/qutebrowser.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:878173c82b326180ff289558ef2fde63920c389c012f732775a808003def3d42"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__cecff61c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:87ab8824a4243aa360682d1b232635bd085fd19a4e3e4da951b15686793e08a8"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__4a37a167",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/nlohmann/json.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:87ec83948f2ca5d61885051328a45da4e37465efd270dfe777a9b1a252c12e33"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__380568e9",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:881129d67125ad82093f90197f9a953894deb5a4cf7c27041dbf8fbfbe396d5a"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__64a006b0",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:886d685ee1671749602dafb4d6e64110c9cfc71fd42aff14c0e4690789f22268"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__d3133dfb",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8888a098b4dc0c8de430bf7bbc3fec0160ab059342fe7a64d65259927e8cfc3b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__d3576321",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:88898a2b5b178ab82652d381a4cad53a9e5bd55f7c12cc772534367334bee7dc"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__03f04397",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:88f3e319bb1058399124b00966a085114cdba079934e77a4c0e6478dfacc3c26"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__462b957d",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:89857fcfcb84aa3d77ca6c547b73d8d5e8e6d3edb47b758b78e28fdff25d78ea"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__10ab7842",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/prettier/prettier.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:89953e9847c6766bac5a1ee08e90a4787808c7ec91d6dd51293ff0a9a6a85bfa"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__453fb844",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8a9ba76716c4daaf02097c4c4d037ecb0100f2707920b5f381978c0b0858b5d4"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__250649eb",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8ad038ef7f9e972db922f29d90da846bfac81f4b1be45d1a0ee84763d91cb5d8"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__deb49033",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/astropy/astropy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8b58d6c1da5b3c2945f4e0aaebea2caf3fd80f143eb49fddcd334dc0bfbbd293"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__evolution__feature__c2e9e5ff",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8bbf0358298981f3c9346ad49d7ad03bb3537ae8a8f8be7684202581e64b3d27"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__2dc6f037",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8c0bdc1c54a999569b5d2dddcf6c64883b0caa61a0633bb4f9d4ae221b46b085"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__abb9b8b0",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pytest-dev/pytest.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8c149eb730ede30053d63b2a7d1c8731296964b5a099477ed6e5319caeea3b20"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__74cafcca",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/grpc/grpc-go.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8ce177589d622b1bfc701d3b18b04690b767b1a99016eb049d63ab1b76258151"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__92158fba",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8d637b2b05b3f0960bfba1f6b40c0af177b267a226fdb339e6a2bde59ae0076d"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__7dfdbbd1",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8e2b67b887c25506673b0e146be4223f4d4eaec539831728bcecfc4b21675097"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__e09a2d75",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8e2f69c39a81cb656bdfbe6554ec3f8f1a480fbbdcda1b63ed1cd24426e3933f"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__cedbb0cb",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8ea95b044c8c6f9e68d358c167589f3306906b6313f57b0e03e1ed3c537104ea"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__d1cb6b19",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8f466469fa28afdbec9f8bec122ce404ae1b0221e82d9c946cadc14ecb3f851d"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1ce4c38e",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/astropy/astropy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:8fb54309bf66b86ffb1dfe7242a76b0a77931902556aed282ab9fdca0ffe5fe3"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__be0b5fff",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/fasterxml/jackson-databind.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9026e34f28fcddcf9f99ddd475ec2221c3d6bbba4b72d1f107d9b7689d1019b1"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__a375715a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:90c24c6321062e4a32b81037cfb33b47550553a0621ee581eeef88c94144a389"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__81f2c925",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9117d6b1bd2320ab129975a7d766bcb56f10a9b2da9897c3762a20656f7f3eef"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1409977d",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pylint-dev/pylint.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:915a010197b66a8286782ed1663fb86163645f13ef6900de807b01f876c5c7b4"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__92782c7b",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/elastic/logstash.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:91a8cd5bb6f4b4378ab85835ae0d6f1c103f404d75869081ba7dc1eb3179765d"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__9dcac3ec",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:92ab853e53a7110f896babba774e59f12094f6e752390403aee845cc7b583ca5"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__e2250ebc",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:938c74f9a745321ff241a3d6cd55482d1ce76b064081e789a7ca578d8de5364b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__2d5d4dcd",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:93bee3a55b0d5b3b67628599739b980343c9248900ec275bc97f98d50b6aae2e"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__3d1b3145",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:93e6d588352c58805a2bb75d8da5d6747ad2979c03391b59786ae2881b8f10b8"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__31f7341a",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9471b423e2d8b8b75896107e8c8b5b8f9b1f8cbdaeeb93bfbbb7f06e1128b975"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__27320d49",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:951a485ebdfd5d85f4e05f538fbfc2a62d18e6f967752b2472bab32c085ad863"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__24342259",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:955daa44f097188a2551ef420b3e9007fceed3161ad4fea4a0b649853f6a03fa"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__2bfb742a",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:970365cfd51f891065027e51738bf4a767b6cf78726be216e421b74987d41648"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__18d389e5",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:97e4c3724cae75adb2bac522fdfde27d4706ed457a34ce53a6f25b44e5adf924"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__4c132bfd",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:994d744d1f4fb4c48d15474bdbffdca55ba83d757dfdaa2e5205f35b3c33052a"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__faa6b3ac",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9c5e9e1dfe4d9d2d86293b3bfb389c11f487ab16c12b464f3528d1f0026904f9"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__5d44a351",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9d62f264d89b1a4862dbf41777d4c50d5c10ec6221b111e8c573a754fa63b0b3"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__708894b2",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/microsoft/vscode.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9db48d2ae4d47cfb2a49729372764fcb49e24a68c38c5f118d7621677c875b91"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__d3babcfe",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9e316ecac7100ff1be961ab46d449e9361ea6e40207c63b7e6665ceaa9c00851"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__2f405b15",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9ece8442cf52efe268a85d50f93e0b836cf3462185dc25a5b03781b12c236538"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__4c3f5d3d",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9f3551b6de5ec60ed6c278f6f7389d83005c441ccdcb80279455ff2b6ec730e5"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__8d36ca39",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:9fec1583003fab61eea9b92595ab03b0ee3c95cd45748c4b1d2fafab6f3c9c04"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__3da242a2",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a078dd8c242522f6c304392f133f62749c5018bc1f27c574fa2919e686aea4c0"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__7afb30f5",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a09fd23399ff1b3fd6f29e330bfa293400d2592e8905bf26abdfbdd680b260fd"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__463d4713",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/prettier/prettier.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a13124ba3ea9b9a03713f7654b473e61ac8a9c8566dd7c6434e9580ff9750ab0"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__27e1903f",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a31b1272ac89e7ed67e0978af287b462853f9ca8df9d481c3ef4db65de38a912"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__58d0e27a",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a397aa0752b239f79d4aaf72e7b07b420ae65793ca98d1f35010ca73f31cfe62"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__go__maintenance__bugfix__997c7afd",
+      "source": "Pro",
+      "language": "go",
+      "repo_url": "https://github.com/flipt-io/flipt.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a43cb294062094d63c6b654f8273631350b46be5afd2c62b8c2f84c233eeecb1"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__22615f27",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/microsoft/vscode.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a4cf99fe00c3e123b13017c2d652de9df98a496fccb1e9e907d4f082f34e5e46"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__0cf27f56",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/keras-team/keras.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a53255907c577b5a41255d44710fd143fe59cc6db0543b30a1c23f88e59c5c54"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__89932d58",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/qutebrowser/qutebrowser.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a56d6c65069da4f88eb8da9856171abe91da6d84c46a73d69251316a204eb640"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__3c9b757f",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a5d546889fb8eb7026432ce8617bff8c61725bc445431c03d27d201206e59e0f"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__ebb79d55",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a5e50460decd41fc727f6ea98aa4889c75693532ca639cd99cad48ae8a3d09aa"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__d6eb75d7",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/prettier/prettier.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a67778023cfa8e8ac3bb22d1a4d1977d43d36f225969227f973dd0e7fdbcfdd3"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__5900c195",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a724c79b23d656ea57ce292a1cec246564263818180a6c7d1b82c77ef1451280"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__5acd9675",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a8796461b752a9d17600fef2f9426ca63b20eda47c181d0e3c5ac97aecd75490"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__f667fa43",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a8ae6f132a4ac4baf95e295e5a7e2495555eae7d800d28415778e7b60a37f88c"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__7c4a11fb",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a922795448000fc9066032ecec5619bb151deba35239e3e5d3f106fe3914c54c"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__3c7d37b7",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:a9b624ba64e17006ccf79a61c399c81ed274a45f5b794de672a31b9fc822f496"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__e6efdd87",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ab34c3b16c69eff7dd5b745a62450015e55ad69fb92c601e81af853436862089"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__9ea927ce",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/yt-dlp/yt-dlp.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:abb6db29be8e92232144e8f3394afabd10cc895f0e786ff1edfcfe7b84aa773a"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__37f525d2",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ac9cf06fc9fa90d7b8f0ba9e74b22a7933a853ab6f483225d21db31f27879d03"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__2bd87230",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/fasterxml/jackson-databind.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ad55a37adab0272127d4ae9ae9b836f8c0dd46628248b32765406444b323d4c7"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__9d623e73",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:aeef444f84a576941668a779614c2cf5cd44a396f04fbd8d88504ac6a12b7bd5"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__2d1b4a72",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:af0fd756106f93628cb6cd7a82efeef9497e6231b2e41c4dec3f3fc4ea2cdf77"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__220feee3",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pydata/xarray.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:af777e69cf4cd57b870980f77503361a4224184dcbcc463da0674b94e1b548ea"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__20f502e0",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/qutebrowser/qutebrowser.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:af98d3f9e096434d5807731942e46ee807670d5469ebd2be80e4d0c9bf484c99"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__dbd7cde5",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b17b955e1cf2793d722b16dcc00dc7bac27af882ec58645ad69c3ffae33880aa"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__91e36e16",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b1aa46a004fb6f490e6a83dfbdac7b011e255cc0d085946f84d85beb6c2f3143"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__512d556b",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b322bf4e06b97016619824e139b94f5adb0750207d7c0bd6611006e43a384af9"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__2a889a1d",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b34bb301adba0b7546712a2d4843e00d280e8e669010b162c6fdf8e7b2920a46"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__67bcb30f",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b39e2600e202b8ead38d9691cd212707da8e8e7223283ac92a32518bf3c62d20"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__a14d0e2e",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b58ffc33c3d7400452dde210adf57809fcc977c134891a725a453833508a75ed"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__da598baa",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pylint-dev/pylint.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b59e4f01b51466dc3f750419b96e165656f12bbb88e37fe4dfa5b8e5ea81b2f0"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__a98dbc6f",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b5dcc16f945ba74861c78ffcb682b080507a5ea5aa44f06ab0c85a73adf4b904"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__0b0f1e0e",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b607c7ef87ca19c0fbe49c9b4d997b36d1d00fc60516c25df4d611515aea81fd"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__0e3febd0",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b6e7d823080ec26bbc97359cf4470a4cb67ba8ec5964c0833dbd3c3f7aea5bd8"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__108b2d38",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/prettier/prettier.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b78c43106ffae42e278d322e5f8502f76340114c43c51acdad7fccee65355a16"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__bb727b6d",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:b87a13924843ff4d14ec115fc92d8a5a38821afaa2f94adb22d5ebdd8612d898"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__3f745086",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ba4fbfe254236de3d71f3f6fb6fe9b2937deb26f42fb24eb5103a8b61bb33b76"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__9a7be8ba",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/facebook/zstd.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:baa752423903b4a2c07a53d7b95cfddb7e9e12de4c89cbc5352d70b7010769d6"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__3d85271b",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bb41d9a50b1108700faa8f19f1babeef09615d17976dfa55e851c020fcbfe587"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__8fcb53e6",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bb680def81fe766e30e2d237bb936103d6ab827d08645799b4ccd29ed3acb896"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__a7aba10f",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bbafd4665b70c0e23e401815ea929865d1eefb6ad0480b6f9f8e2f9e3346b244"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__d561b333",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bc3173a33e29dc2d65a71e2bbcbbd2ca9d4588b0f69a86fc657ef5be84596252"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__3be02163",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bc89e4566bf4836a7834cb5e3dceccd45852e7d167291aa2956a3eb161a1b0fc"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__e2b70931",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bd0a05115773728759e9f20928a059819d94e9a2690c2abd97bd95e43e18bcb3"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__14ce2fa9",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:be055c6a47f67c80939830516f2cbf6649c13bd1075ad2a781c3d73d15765619"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__bdde6d9c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:be42aae569cdc86bbc6addcc35913bd844c096cb09f1bff259a5f7a92dfc9d9b"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__3e92c76b",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bea642adc1d5756b9dbb20e74d1cd5bdb69f9748b1015d6817fc581de0d56bc1"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__986c9e85",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bf04f5771c5bf81fea9fe7fe1f1cfbc6f22d2ca249960183e510b18155af0b39"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__16c72e4c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bf4e55bf239145aab2e150ae921bcd8d188baf46944560490859596e6f48e5cc"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__c2f0f2be",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pytest-dev/pytest.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bf5decd053bd9b45fa9f24c7be564443f67992798b3a78071cf06f32cf63be88"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__c4bcf730",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:bf92c267d19f49b8a8d1d9fd8e4bcbc77bb14bbe7e440218e0205a327bf354bd"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__2fb50735",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/darkreader/darkreader.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c03df0fa030b5e13d21b16577cefea3d0083d761edb5c3f5500a092034909ce9"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__13b74fcf",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c040e5b9d694dc373581825288e0c35b54ad408d06621833d2c97991e6423d49"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__af69d880",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c09fdc8262f86be8e2954ed5638f9c0afc88fd3293ee1ceb444a537cc193555a"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__6f3e4cd9",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c0b7081db523e497688bdcd33dd4d3c4c31ca7bb7394286119abf3b0c157060b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__c20c3c4f",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c150aeef93f1c8dc87128771e7f384bfb3486bf023aa561148272dcfc6f6c004"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__6ef81275",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c1e6af7a82a751ff57f8e49441100ff546670c57cf042ed9d709908d35df6a54"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__84e0afe2",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c26d424b2ac9dfb29f75d9b1893cd777f1ca5bdfa64fa64c1bf744d72e24d5d2"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__ec4f6157",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/fasterxml/jackson-dataformat-xml.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c407c3b62fb4012ba392ab132a3669e9473cc98c91ead5eb4ab62ff60162a994"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__63513ada",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c40d91e2c2e309097be79e45d2f882c0c789e3996e5a8c1adb2f0b22e153896e"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__0eecae1e",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pytest-dev/pytest.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c42e0448a8c6dfc581fe90a8b5b67f5ba3f2cc6b42511b36d2f2c05de375290b"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__8b7cc5e0",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/alibaba/fastjson2.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c5188ffb64e16d530c778a10c0bee86d80c0e791d20dca5562a1cfb61fd03bc9"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__90f381a2",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c6de3035e6bb0a6c7fcd580d2790415cd9ac239be0de00fea749a9bb13f94e33"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__02b5862c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c6f22afeb2fad8e18f1e462aa84aec7163ada6ac2cec60ff79f0f9dd8f5f89a0"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__6809df19",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c771f88c030237b7093328e122d048d3c3915b3dbf24a0607a21d16ab2e6611f"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__52180d42",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c773d0cc7c0ca3162f2856de0e1a5d57d43cf3a62712da70dd45fdce476405c6"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__2ab7d0fc",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c7b1868324f55c1a88ab05b59ea87363f3bc5503fc68e9e23456c54ef307fca6"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__2f838a18",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c7cdf37688ca1a1a49cf40c1eaaefcfe3db6387baf95afc721dfdd4543d49e5c"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__5b47b0dd",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/iamkun/dayjs.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c7f0f503a64e85acd3e2bfb23ed9b4a6ffa4edf2622c38a74f777a920eca4d56"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__1ac0bb81",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c99a754d793203cbc3af02c68003b240e1cd47094a33e1c6511559e8c6fc074a"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__6ebb54dc",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:c9eb75f11edf41e5a6b45640bf8c9f60e374f0c02c523b2d37d0434fb3a59075"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__36a08326",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/fasterxml/jackson-databind.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:cb60e775b06002b7860a7ab3a101827085254c81545b144fc1bcdeab531dda9f"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__35f76ab1",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:cc09ef4c979d53b845e6727aba1806419e20cd901c1e4e421686930bef67b4b4"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__5b2cf9bb",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:cd5ce37ff6f64b8bf143c40d81b446d535431462e5ed061f544a6bb84428015e"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__8d0f55cd",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:cd7ca80fe1212ba6ed9a843596af3efc6223ae7f02650c1b7f8fe2dce98538a6"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__ff629f34",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:cdac954b1ff15e8bbf37a0bdda904afa1458d9847c1fa671eae7dc0f6d389832"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__c0e4893c",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ce1f70f6ea99737232ad8fc8e613c0202200dfd090ab4f2a6a48c50fe0e63c05"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__914c325d",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ce3590710b19812de614ecb55689c77c44d932079a0d3ddab76603f07da4f54b"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__e97ac668",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ceefd7e66d5fc81939e4ea281e9b407a311b1f5054a917694c3681c1db8d624c"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__1ad00901",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:cf9dc0c0e15795e88b328b46f1e6816c5624a22b35cb72b746e63d80c94d1dac"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__9e2901b5",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/langchain-ai/langchain.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d06ddc03f252496f86019dd7916fec3ec60850ade8a2e230a4598011927b58b8"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__cbea412a",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/expressjs/express.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d10b85cdf578037750e570f3b39a0403d83409c166650642ea31d75f3609576c"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__5dc9809e",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d1f805c826a1a8165f18af76dc068dd3ce6f9be4feb7b0129ae907d9d03ab2e7"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__01d1908e",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d24d07a0cd07d9cb39963e7eb47115829dda5893afe6f086e9cbd20c8a7c306e"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__d9d9c3a6",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/internetarchive/openlibrary.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d3490e8d61723a1b2ba6878154013c2241d2c49f5627027346e59ee9e0627e5c"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__70acfaad",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d3a25fe25506cf671f17ccf8ddfe0ae78c30206a6fcd2c7a3db207e11815086c"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__d2a786e2",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d3dae85caa432dba24aff40383ca37a8f2502f75e43e6dc8e4d1c06cb2e4298f"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1a760e52",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d418a6392423a1e564c1e152d4d3b6374b042aeb059739a67cae09734dc479dc"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__60bc9e86",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d4304d1a4c1bb2f3e3db93e39fda409b4e93dbd7b8299f66a95ec091b664060a"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__aaf309d2",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/langchain-ai/langchain.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d4dbe32660e2adde6f36373f7cfa10d8f732e043e3db6267c5dfd8940b771b62"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__71f348da",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/astropy/astropy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d79cecf7c0058211d9b5dde989d4384fbc56271e5f5cbc08398745e472116882"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__49f4a0f4",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/jqlang/jq.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d8413673bc44e9e7a41e0f468c77d0e92326c2e565826361b6f1ace221537595"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__5fdd12f6",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d896cc18071438521d62e6a5e63ffdae5d5a5a1cac3a542137bf9ca39d967caf"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__60b000ec",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d8fde0d461aa5ec223f3243119258d4bc6be63af4ddb1dd8277567d940b781f2"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__9b321036",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:d9f0693080266d8e9c82913d6dded534d9aaf72373d56b758e0e5e5b9fcac957"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__674464fb",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:da7461ac29413735a04f1ab12c942d9f73abfcf5d4d5ff2ad940fde0d2b57860"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__bdc6ab14",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:db49155b884fd003644fba7bd3571443bbcd735d2cf06956e4998b0d909854cc"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__1665de74",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/mockito/mockito.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:db7887ef286d0eac4aa298039ce80017c2cd27343dc6b056408674717f5596f3"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__1ba303a5",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:dc0289179198fe098db70f2aaa5b1a38edb09940b560f8291f54758f0d4c0235"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__0498ad7f",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:dc56a4caf57287fcaffecef2814a7edaeb8247fb90e17131797fadc128e93d3b"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__go__maintenance__bugfix__d3c56cc5",
+      "source": "Pro",
+      "language": "go",
+      "repo_url": "https://github.com/navidrome/navidrome.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:dd3551455c3f5e595334fa75375386ee9eb1d06bd6898caf8e0bdb595da17e3b"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__ab946da6",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/internetarchive/openlibrary.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:de1ffb84da296157c1881430418d4dcc2bc4ba2452e8041eeae2791be45d247b"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__6659fd5a",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:de817fbf20c0088317c22782a929f52d44421a1a05bf2bb07bcfd61f6924f48e"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__78039f77",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:dfa29e49540138a36a54be3366d1de99f12c5cc9c55514cfce550ca38c0df1a0"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__7958c8a7",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:dfef3add36c57eed43a6a52e856b65b1a156723c21ca6d8fefa7b72df72724e2"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__28ed0b77",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e0e23c2eec2b816c50fc9a0c41256dbbb39a2710e38d3df8bd36c317a32d19fa"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__9e8a151e",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e1411ff239f363f833e18a828baa28053031d68ba027ce8a6a88f5f898861045"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__c9cd2b2c",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/clap-rs/clap.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e18e7949a018205b89c4ae9df2f9e073ae3211d6ccf989adf28fb6411b51341f"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__2d7a3934",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/prettier/prettier.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e198e65fd568b37da48c3aef7d3781cf88eca2d55c2dee2cc36bbdffec6603ac"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__8f9e4358",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e1df52a8f391307f3e42a19b86e02d1e60388128d741e9920df5cbceb9b0298f"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__cpp__maintenance__bugfix__8ebb764e",
+      "source": "Multi",
+      "language": "cpp",
+      "repo_url": "https://github.com/fmtlib/fmt.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e22e6a8910fa1024444feb5bbc1f05c7d58df3af2ec327b75d077a1f33d53832"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__765e5e14",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sphinx-doc/sphinx.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e3010e19d080549ef76bf27ca8393f661ebae0b9a238e9e86c811fb04a251917"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__6688f2d9",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e674d637eea55ba86f9b95760203782ea26bc911e7c60ea715a596e41ea07a09"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__5518cb7f",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e68dc076f61a8a4a5ab3c52a5cdb40eb36fd226114a1186ce5d447696fd8dd8d"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__409b7811",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e6a637203cb2f6f5d2cfa099e368d8580fb8165c361ca8802b554b455083c6fa"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__4f685b8e",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pydata/xarray.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e6ff2f46ab05dc61b08fe27f4d2240c3b84d75f5198c9a0e82ea8c2a24e21613"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__186c0af4",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e709777a755e4ac0465d28eae10c9466eff5e249f11303523fbcf99055ecfb75"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__e21304a6",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e77a2798d602646b9e92e25a56db47c5d7d5ebd35d376576970be61643d068e5"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__18d7bbbc",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e79ad706364a163059a99e69e5b723aa61140ea633445d9df5c89ff4d06e22a6"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__04b981d7",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e816451d9d649cc768a43cddb7abbe52b25f3db7becbcf2bafdbd5c71e5c0569"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__51e329de",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/sympy/sympy.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e838b5c6309d3c166f00c15a3dd2ffaaf56796f31b603e51e2fd5f8ec014072a"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__6f9b5ff2",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e8b72142fc0a24e7dd591b9b98eb9ad6a308fc23a236e6f522cb26611aabacd2"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__java__maintenance__bugfix__747c7f60",
+      "source": "Multi",
+      "language": "java",
+      "repo_url": "https://github.com/google/gson.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:e9c4e405c6c37c51edb2432bdb62e5f60523b97ff45a665b88788ae16af73e9a"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__7e3e2bb9",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ea319b40e64f86943d33a01abd0eb23d3bec61d21e3a439b71ec167eaceb395f"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__6cb88b18",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ea76a4ceaa39464c266c223d2db255bc7fb03f44b9f1887ba52b87c80564f0d1"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__f4541fb1",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/serverless/serverless.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ead9d1d11fce0ac7cde7aa8e20a8044d207af076a208e6d626cccc7753df9792"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__7c41997b",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/vuejs/core.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:eb0cede3f2062f0bcdfe36e5be49a2ca7181e07e72b653f372a9474657571df2"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__39769692",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:eb19e6340e006ca6c72914c4e9a68d3df88739b0709ce99599f523990ca51569"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__8971eeba",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:eb290535d9fc724d1bc3efa376a0580d8df0f44e7cb89986dbb0039aaee2a015"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__09457b9b",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:eb5e6a8d6ec18c499fad4cf18749d50a534c334f072061e135ada14d8dc547f2"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__51f3cc91",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:eb82cab056cbde378e2974f1e87eee3492275018e89e7a6a266dbd3cc8a8e517"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__rust__maintenance__bugfix__c363219b",
+      "source": "Multi",
+      "language": "rust",
+      "repo_url": "https://github.com/BurntSushi/ripgrep.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ebbca34412ac4c2b46152226d554934a0a8404e52e46dcb1d0ffb7c1db8341fd"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__b01e9113",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ecbabe3ffe7a3d1b73cb615fd0ae40d46c03402d429fdf1efc5e1e01d49ba76a"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__ed8db47d",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/zeromicro/go-zero.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ecbe41cacda5fcd5a62b1bf24fc6910c214c00215f515b7bee47936c90e1073e"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__ec975b6c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/pydata/xarray.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ed09eb3aaa6539d523efb5fe32ebbd5da963beeb9ba34cc5d48063bdb731522e"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1c5aa714",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:eda5b9e4afe4ea4a07a8738b875a8740e1babc8c2b2759dbb1f59344f8500ceb"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__b8bf59e7",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:edd06f968d2f90329b71e3bccd8f5810a82b670942151bbcefe31bbe400b4cb2"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__b10492be",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ee6278dd5639c45bcc4c9a382cce28e105e6b12967027388d4f03a1e090358ae"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__2a9201a9",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:eeca9dfee0ddefcbd821f5565f673d6a8562e87655dfa772a67d6d3efe9bc570"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__go__maintenance__bugfix__2c512ec3",
+      "source": "Multi",
+      "language": "go",
+      "repo_url": "https://github.com/cli/cli.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ef7f5d41d540783f0d5ee3bfa15765edaffea12d15214c2faa0f2d46799b8ec8"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__538e9f59",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/jqlang/jq.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:ef8571f793165cbb30ea4771819c754cb2960d7b970fe4890279e23c49c7f2c1"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__a8414dbd",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f14bec20b237f5d867c6de7379d918f4bd99cd2b2e09ac0fed87f05a1658dc4f"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__9c9b931e",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/serverless/serverless.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f2410b91cf70a6e4383131e3fb8b8ea037fa57387dde774d1b20d3f06c755a7e"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__c__maintenance__bugfix__b8c88ac8",
+      "source": "Multi",
+      "language": "c",
+      "repo_url": "https://github.com/ponylang/ponyc.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f24e0251614c20ab99d7653b700b2936a4044b41b39f11da02da3969459b36e9"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__59dd675b",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/serverless/serverless.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f3147f4e5b1a1766dda71bec72de481e5ad52d4997f283a13ced15d450ed2866"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__7489fdd8",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f4106b22b700f63f69d8d76b0f4addd891fef58fe16d03cc1f996074b51b9b06"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__3cb539ec",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f42b9b036c1e17742c7944802d01c4b5df88386c1a68a006554fbc4bc14ed439"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__a7a5e8ed",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f48285241b981c9ff86992012e4e65b6d78ff9e9ec4eeb3c7a298faad7d5f9d5"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__d105d187",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f4c380f41af944c6198d95afd7c897d5983d4ea662ebb5cd70eb8db4e0af86bd"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__3146e19b",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f52c200b13fc0ec21998c4c5fdb4c1d2b30761dad2e89ee480ef404c7dc29993"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__2464eadb",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f552958bb89e0388a620e8ab569a3e3593ed63490a9244493ca177e04102593f"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__96afaad2",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f5743e84051031eec7fe11894654ecb3eba9816fb0663b4e6da5a59d0957923b"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__maintenance__bugfix__ac5893a5",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f65990127e80e8c6871f2b4fd7690a2748b555e24067cb0bca63686ccfc8e9c9"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__typescript__maintenance__bugfix__898aa1de",
+      "source": "Multi",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f69202620e70d9ffd6d9aebad0b897f6470514dc20f92641ec01fb0315ffd8c1"
+    },
+    {
+      "instance_id": "SWE-PolyBench__python__evolution__feature__7fe6d907",
+      "source": "Poly",
+      "language": "python",
+      "repo_url": "https://github.com/huggingface/transformers.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f6e9bd2e373b05182142e1e13fb23683dd6ed4b6c1228b3f87eab394fe8380ee"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__1cae51cc",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f70e402f1b485c6b87684cdace52979bede3faeba8d9b889a908ec6ddf77955b"
+    },
+    {
+      "instance_id": "Multi-SWE-Bench__javascript__maintenance__bugfix__d33de279",
+      "source": "Multi",
+      "language": "javascript",
+      "repo_url": "https://github.com/sveltejs/svelte.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f767f04df87c62b1e61fa9c8af648c181c079257ae99a0049540aa9a1ab0b002"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__46dc77a5",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f774555d35bdf8e2faffde259e56b1366592070ac3828c752535d3a578157ab0"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__1ad7449c",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f7a2737359640a608766038265ba1bedc4bcad7b7e8a6c9daa1127bbb52e2b78"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__maintenance__bugfix__1de1bd3c",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/mui/material-ui.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:f8e450cb9fca78cb26913bb7ed689719b77e59f7de463f4f5f5c2854615e6438"
+    },
+    {
+      "instance_id": "SWE-PolyBench__javascript__maintenance__bugfix__0f1fd789",
+      "source": "Poly",
+      "language": "javascript",
+      "repo_url": "https://github.com/serverless/serverless.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:fabe9f2fd696db98fa1fc080b1daa8c30ba267ca9689559babba5ea79c0783b5"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__f8da42bc",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:fae4463a6ff2b6e87c052282343e95897001dfbc9231f0013182a87ea9648442"
+    },
+    {
+      "instance_id": "SWE-PolyBench__typescript__evolution__feature__41cd3842",
+      "source": "Poly",
+      "language": "typescript",
+      "repo_url": "https://github.com/coder/code-server.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:fb77201bce7941a232f8ba992f4ee4adc742a2aef5143bf9f08dd1186dc328b3"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__71253eae",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/qutebrowser/qutebrowser.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:fc2ee2e566b315448824fe160a6abee6fd4af93692e178cf8428da8dc94865b7"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__bebfd692",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/matplotlib/matplotlib.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:fca9b69e05ea88a2af9cb8cadd4ef2b7ec22d3410477107e88d85b1213e5abf2"
+    },
+    {
+      "instance_id": "SWE-Bench-Pro__python__maintenance__bugfix__64469377",
+      "source": "Pro",
+      "language": "python",
+      "repo_url": "https://github.com/ansible/ansible.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:fd00f4982535a09732d7e6ef2d819e519c47f5f43364353945ef2cc4bd50bef0"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__ee10f0e4",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/django/django.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:fe3ad1c49518945395f0eb9522b2c435e8a75b47a61f2b77c07b9673f2db27dd"
+    },
+    {
+      "instance_id": "SWE-Bench-Verified__python__maintenance__bugfix__bdec299d",
+      "source": "Verified",
+      "language": "python",
+      "repo_url": "https://github.com/scikit-learn/scikit-learn.git",
+      "reason": "eligible_not_selected",
+      "deterministic_rank": "sha256:febed0a62f60c8b14f6f7d84c509acba61b0a0ccc849d019c6d562dea85870dc"
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "name": "v2.4-contextbench-lanes",
+  "protocolVersion": "contextbench-protocol-v1",
+  "frozenDate": "2026-04-27",
+  "initialExternalGate": [
+    "raw-native",
+    "codebase-context",
+    "jcodemunch-repomapper"
+  ],
+  "broadClaimLaneSet": [
+    "raw-native",
+    "codebase-context",
+    "jcodemunch-repomapper",
+    "grepai",
+    "codebase-memory-mcp",
+    "codegraphcontext"
+  ],
+  "broadClaimsRequireAllLanesComplete": true,
+  "setupFailedRequiredLaneBlocksBroadClaims": true,
+  "lanes": [
+    {
+      "laneId": "raw-native",
+      "displayName": "Raw/native agent tools",
+      "claimRole": "baseline",
+      "phase36Status": "included_in_initial_gate",
+      "contextTool": "native-agent-tools",
+      "allowedTools": ["native-read", "native-search", "native-shell-readonly"],
+      "disallowedTools": [
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
+      "nativeToolsAllowed": true,
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "cacheIsolationRequired": true
+    },
+    {
+      "laneId": "codebase-context",
+      "displayName": "codebase-context",
+      "claimRole": "candidate",
+      "phase36Status": "included_in_initial_gate",
+      "contextTool": "codebase-context",
+      "allowedTools": ["codebase-context"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
+      "nativeToolsAllowed": false,
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "cacheIsolationRequired": true
+    },
+    {
+      "laneId": "jcodemunch-repomapper",
+      "displayName": "jCodeMunch RepoMapper",
+      "claimRole": "first_serious_retrieval_competitor",
+      "phase36Status": "included_in_initial_gate",
+      "contextTool": "jcodemunch-repomapper",
+      "allowedTools": ["jcodemunch-repomapper"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
+      "nativeToolsAllowed": false,
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "cacheIsolationRequired": true
+    },
+    {
+      "laneId": "grepai",
+      "displayName": "GrepAI",
+      "claimRole": "required_for_broad_claims",
+      "phase36Status": "deferred_to_phase39",
+      "contextTool": "grepai",
+      "allowedTools": ["grepai"],
+      "disallowedTools": ["native-read", "native-search", "native-shell-readonly", "codebase-context", "jcodemunch-repomapper", "codebase-memory-mcp", "codegraphcontext"],
+      "nativeToolsAllowed": false,
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "cacheIsolationRequired": true
+    },
+    {
+      "laneId": "codebase-memory-mcp",
+      "displayName": "codebase-memory-mcp",
+      "claimRole": "required_for_broad_claims",
+      "phase36Status": "deferred_to_phase39",
+      "contextTool": "codebase-memory-mcp",
+      "allowedTools": ["codebase-memory-mcp"],
+      "disallowedTools": ["native-read", "native-search", "native-shell-readonly", "codebase-context", "jcodemunch-repomapper", "grepai", "codegraphcontext"],
+      "nativeToolsAllowed": false,
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "cacheIsolationRequired": true
+    },
+    {
+      "laneId": "codegraphcontext",
+      "displayName": "CodeGraphContext",
+      "claimRole": "required_for_broad_claims",
+      "phase36Status": "deferred_to_phase39",
+      "contextTool": "codegraphcontext",
+      "allowedTools": ["codegraphcontext"],
+      "disallowedTools": ["native-read", "native-search", "native-shell-readonly", "codebase-context", "jcodemunch-repomapper", "grepai", "codebase-memory-mcp"],
+      "nativeToolsAllowed": false,
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "cacheIsolationRequired": true
+    }
+  ],
+  "setupFailureSemantics": {
+    "status": "setup_failed",
+    "winEligible": false,
+    "claimContribution": "missing_evidence",
+    "includedInPublicationRows": true,
+    "blocksBroadClaimsForRequiredLane": true,
+    "requiresReproductionCommand": true,
+    "requiresLogs": true
+  },
+  "laneContaminationRules": {
+    "oneContextToolPerLane": true,
+    "mixedLaneContextInvalidatesRun": true,
+    "sharedCachesForbiddenUnlessReadOnlyAndHashed": true,
+    "memoryStateMustBeIsolated": true,
+    "precomputedContextFromOtherLaneForbidden": true
+  },
+  "laneToolCardRequiredFields": [
+    "laneId",
+    "allowedTools",
+    "disallowedTools",
+    "setupCommand",
+    "indexCommand",
+    "queryCommand",
+    "versionCommand",
+    "cachePath",
+    "artifactPaths"
+  ]
+}

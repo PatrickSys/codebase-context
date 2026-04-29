@@ -479,13 +479,14 @@ function verifyManifest(actual, expected) {
 }
 
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
+  const result = spawnSync(command, args, { cwd, encoding: 'utf8', env: childEnvForCommand(command) });
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
 function runQuiet(command, args, cwd) {
   const result = spawnSync(command, args, {
     cwd,
+    env: childEnvForCommand(command),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -494,6 +495,17 @@ function runQuiet(command, args, cwd) {
     stdout: result.stdout ?? '',
     stderr: result.error?.message ?? result.stderr ?? ''
   };
+}
+
+function childEnvForCommand(command) {
+  if (command !== 'git') return process.env;
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key === 'GIT_DIR' || key === 'GIT_WORK_TREE' || key === 'GIT_INDEX_FILE' || key === 'GIT_PREFIX') {
+      delete env[key];
+    }
+  }
+  return env;
 }
 
 function git(cwd, args) {

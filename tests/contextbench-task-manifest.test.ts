@@ -153,6 +153,14 @@ const smokePack = smokePackFixture as SmokePack;
 const shaPattern = /^sha256:[a-f0-9]{64}$/;
 const canonicalizationVersion = 'contextbench-canonical-json-lf-v1';
 const hardnessStatus = 'unavailable_in_contextbench_verified_schema';
+const childGitEnv = (() => {
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_PREFIX;
+  return env;
+})();
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -482,10 +490,14 @@ describe('ContextBench Phase 40 task payload materialization', () => {
     try {
       const sourceRepo = path.join(tempRoot, 'source-repo');
       const checkoutPath = path.join(tempRoot, 'checkout-repo');
-      execFileSync('git', ['-c', 'core.autocrlf=false', 'init', sourceRepo], { encoding: 'utf8' });
+      execFileSync('git', ['-c', 'core.autocrlf=false', 'init', sourceRepo], {
+        encoding: 'utf8',
+        env: childGitEnv
+      });
       writeFileSync(path.join(sourceRepo, 'README.md'), 'fixture\n', 'utf8');
       execFileSync('git', ['-c', 'core.autocrlf=false', 'add', 'README.md'], {
         cwd: sourceRepo,
+        env: childGitEnv,
         encoding: 'utf8'
       });
       execFileSync(
@@ -499,10 +511,11 @@ describe('ContextBench Phase 40 task payload materialization', () => {
           '-m',
           'fixture'
         ],
-        { cwd: sourceRepo, encoding: 'utf8' }
+        { cwd: sourceRepo, encoding: 'utf8', env: childGitEnv }
       );
       const commit = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: sourceRepo,
+        env: childGitEnv,
         encoding: 'utf8'
       }).trim();
       const payloadPath = path.join(tempRoot, 'payloads.json');
@@ -557,7 +570,11 @@ describe('ContextBench Phase 40 task payload materialization', () => {
         base_commit_verified: true
       });
       expect(
-        execFileSync('git', ['rev-parse', 'HEAD'], { cwd: checkoutPath, encoding: 'utf8' }).trim()
+        execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: checkoutPath,
+          encoding: 'utf8',
+          env: childGitEnv
+        }).trim()
       ).toBe(commit);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });

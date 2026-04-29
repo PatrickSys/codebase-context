@@ -17,6 +17,7 @@ type ManifestRow = {
   structured_answer_path: string;
   trajectory_path: string;
   scoring: { claimBearing: boolean };
+  taskExecution: { model: string; executor: string };
 };
 
 type TaskManifest = { tasks: Array<{ instance_id: string; base_commit: string }> };
@@ -609,11 +610,15 @@ describe('ContextBench Phase 40 schema gate', () => {
         expect(row.status).toBe('completed');
         const rawTrace = JSON.parse(readFileSync(row.raw_trace_path, 'utf8')) as {
           executor: string;
+          model: string;
           executorSchemaMode: string;
           executorArgs: string[];
           taskContext: { materialized: boolean; verificationStrict: boolean };
           structuredAnswerParseErrors: string[];
         };
+        expect(rawTrace.model).toBe('stub');
+        expect(rawTrace.model).toBe(row.taskExecution.model);
+        expect(rawTrace.executor).toBe(row.taskExecution.executor);
         expect(rawTrace.taskContext).toMatchObject({
           materialized: true,
           verificationStrict: false

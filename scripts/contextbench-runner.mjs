@@ -1987,7 +1987,7 @@ function runOneBaselineAttempt(
   };
   const rawTrace = {
     executor,
-    model: executor === 'claude' ? model : 'fake-executor',
+    model: executor === 'fake' ? 'fake-executor' : model,
     runnerHash: runnerSourceHash(),
     claimBearing: false,
     stdout,
@@ -2481,7 +2481,7 @@ function runOneCodebaseContextArmAttempt(
   writeJson(paths.setupIndex, { ...setupIndex, diagnosticBaselineArm: arm });
   writeJson(paths.rawTrace, {
     executor,
-    model: executor === 'claude' ? model : 'fake-executor',
+    model: executor === 'fake' ? 'fake-executor' : model,
     runnerHash: runnerSourceHash(),
     claimBearing: false,
     baselineArmId: arm.baselineArmId,

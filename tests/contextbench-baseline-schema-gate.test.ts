@@ -475,10 +475,16 @@ describe('ContextBench Phase 40 schema gate', () => {
         expect.arrayContaining(['additional_root_field_unexpectedRoot'])
       );
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      try {
+        rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 200
+        });
+      } catch (error) {
+        ignoreWindowsTempCleanupRace(error);
+      }
       rmSync(repoPath, { recursive: true, force: true });
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(stubDir, { recursive: true, force: true });

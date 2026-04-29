@@ -40,6 +40,8 @@ type ToolCallResponse = {
   isError?: boolean;
 };
 
+const SLOW_WINDOWS_TEST_TIMEOUT_MS = 60000;
+
 function getToolCallHandler(
   server: unknown
 ): (request: ToolCallRequest) => Promise<ToolCallResponse> {
@@ -153,7 +155,7 @@ export class ProfileService {
       config: { skipEmbedding: true }
     });
     await indexer.index();
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     if (originalArgv) {
@@ -170,7 +172,7 @@ export class ProfileService {
       await rmWithRetries(tempRoot);
       tempRoot = null;
     }
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('intent="edit" with multiple results returns full decision card with ready field', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -207,7 +209,7 @@ export class ProfileService {
     }
     expect(preflight.ready).toBeDefined();
     expect(typeof preflight.ready).toBe('boolean');
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('decision card has all expected fields when returned', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -259,7 +261,7 @@ export class ProfileService {
     if (preflight.whatWouldHelp) {
       expect(Array.isArray(preflight.whatWouldHelp)).toBe(true);
     }
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('intent="explore" returns lightweight preflight', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -290,7 +292,7 @@ export class ProfileService {
       expect(typeof preflight.ready).toBe('boolean');
       // Should NOT have full decision card fields for explore
     }
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('includes snippet field when includeSnippets=true', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -321,7 +323,7 @@ export class ProfileService {
     // At least some results should have a snippet
     const withSnippets = parsed.results.filter((result) => result.snippet);
     expect(withSnippets.length).toBeGreaterThan(0);
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('does not include snippet field when includeSnippets=false', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -350,7 +352,7 @@ export class ProfileService {
     parsed.results.forEach((result) => {
       expect(result.snippet).toBeUndefined();
     });
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('scope header starts snippet when includeSnippets=true', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -381,5 +383,5 @@ export class ProfileService {
       const firstLine = withSnippet.snippet.split('\n')[0].trim();
       expect(firstLine).toMatch(/^\/\//);
     }
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 });

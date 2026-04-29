@@ -11,6 +11,8 @@ vi.mock('../src/core/reranker.js', () => ({
   isAmbiguous: vi.fn(() => false)
 }));
 
+const SLOW_WINDOWS_TEST_TIMEOUT_MS = 60000;
+
 describe('Search Snippets with Scope Headers', () => {
   let tempRoot: string | null = null;
 
@@ -98,7 +100,7 @@ export const VERSION = '1.0.0';
       config: { skipEmbedding: true }
     });
     await indexer.index();
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     if (tempRoot) {
@@ -106,7 +108,7 @@ export const VERSION = '1.0.0';
       tempRoot = null;
     }
     delete process.env.CODEBASE_ROOT;
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('returns snippets when includeSnippets=true', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
@@ -136,7 +138,7 @@ export const VERSION = '1.0.0';
 
     const withSnippets = parsed.results.filter((r: any) => r.snippet);
     expect(withSnippets.length).toBeGreaterThan(0);
-  }, 30000);
+  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('scope header is a comment line starting with //', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');

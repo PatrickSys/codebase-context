@@ -36,6 +36,11 @@ function childEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return { ...env, ...overrides };
 }
 
+function ignoreWindowsTempCleanupRace(error: unknown): void {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code ?? '')) throw error;
+}
+
 function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
   return path.join(
     mkdtempSync(path.join(tmpdir(), `contextbench-${phase}-schema-gate-`)),
@@ -398,10 +403,16 @@ describe('ContextBench Phase 40 schema gate', () => {
       };
       expect(trajectory.traj_data.pred_files).toContain('src/a.ts');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      try {
+        rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 200
+        });
+      } catch (error) {
+        ignoreWindowsTempCleanupRace(error);
+      }
       rmSync(repoPath, { recursive: true, force: true });
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(stubDir, { recursive: true, force: true });

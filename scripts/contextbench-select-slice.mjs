@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 
 const DATASET = 'Contextbench/ContextBench';
 const DATASET_CONFIG = 'contextbench_verified';
@@ -49,7 +50,7 @@ Usage:
   node scripts/contextbench-select-slice.mjs --write-task-payloads --out <file> [--checkout-root <dir>]
   node scripts/contextbench-select-slice.mjs --write-gold --task-id <instance-id> --out <file> [--payloads <file>]
   node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads <file> [--max-tasks <n>]
-  node scripts/contextbench-select-slice.mjs --check <manifest.json>
+  node scripts/contextbench-select-slice.mjs --check <manifest.json> --rows-file <frozen-rows.json>
 
 Modes:
   --dry-run          Load ${DATASET}/${DATASET_CONFIG}, validate schema, compute eligible pool, and write audit files under --out.
@@ -58,7 +59,7 @@ Modes:
   --write-task-payloads  Write selected task problem statements and intended checkout paths for Phase 40 live runs.
   --write-gold     Write scorer-only official-evaluator gold input for selected task(s); never pass this to solvers.
   --materialize-checkouts  Clone/fetch selected task repositories to their payload repo_checkout_path and verify base commits.
-  --check <file>    Recompute deterministic selection from the dataset and verify the frozen manifest.
+  --check <file>    Recompute deterministic selection from frozen rows and verify the frozen manifest.
 
 Forbidden selection inputs:
   ${FORBIDDEN_SELECTION_SOURCES.join(', ')}
@@ -378,7 +379,7 @@ function buildTaskPayloads(rows, manifest, checkoutRoot) {
     task_count: tasks.length,
     tasks
   };
-  return { ...payloadBase, payload_hash: hashObject(payloadBase) };
+  return withPayloadHash(payloadBase);
 }
 
 function summarize(tasks) {
@@ -479,7 +480,11 @@ function verifyManifest(actual, expected) {
 }
 
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, encoding: 'utf8', env: childEnvForCommand(command) });
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    env: childEnvForCommand(command)
+  });
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
@@ -501,10 +506,17 @@ function childEnvForCommand(command) {
   if (command !== 'git') return process.env;
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (key === 'GIT_DIR' || key === 'GIT_WORK_TREE' || key === 'GIT_INDEX_FILE' || key === 'GIT_PREFIX') {
+    if (key.startsWith('GIT_')) {
       delete env[key];
     }
   }
+  const gitHome = join(tmpdir(), 'contextbench-git-isolated-home');
+  mkdirSync(gitHome, { recursive: true });
+  env.HOME = gitHome;
+  env.USERPROFILE = gitHome;
+  env.XDG_CONFIG_HOME = gitHome;
+  env.GIT_CONFIG_NOSYSTEM = '1';
+  env.GIT_TERMINAL_PROMPT = '0';
   return env;
 }
 
@@ -627,14 +639,25 @@ function readableOfficialEvaluator(path) {
 }
 
 function payloadHashBase(payload) {
-  const copy = { ...payload };
+  const copy = {
+    ...payload,
+    tasks: (payload.tasks ?? []).map((task) => {
+      const taskCopy = { ...task };
+      delete taskCopy.repo_checkout_path;
+      delete taskCopy.repo_status_short;
+      delete taskCopy.materialized_at;
+      return taskCopy;
+    })
+  };
   delete copy.payload_hash;
+  delete copy.checkout_root;
+  delete copy.updated_at;
   return copy;
 }
 
 function withPayloadHash(payload) {
   const base = payloadHashBase(payload);
-  return { ...base, payload_hash: hashObject(base) };
+  return { ...payload, payload_hash: hashObject(base) };
 }
 
 function gitMaybe(cwd, args) {
@@ -697,6 +720,7 @@ function cloneCheckout(task) {
     }
   }
   gitRequired(absoluteCheckoutPath, ['checkout', '--force', '--detach', task.base_commit]);
+  gitRequired(absoluteCheckoutPath, ['clean', '-fd']);
   const actualHead = gitRequired(absoluteCheckoutPath, ['rev-parse', 'HEAD']);
   const statusShort = gitRequired(absoluteCheckoutPath, ['status', '--short']);
   return {
@@ -730,7 +754,7 @@ function materializeCheckouts(args) {
   let attempted = 0;
   const tasks = [];
   for (const task of payload.tasks ?? []) {
-    if (attempted >= maxTasks || task.repo_checkout_status === 'verified') {
+    if (attempted >= maxTasks) {
       tasks.push(task);
       continue;
     }
@@ -738,7 +762,7 @@ function materializeCheckouts(args) {
     attempted += 1;
   }
   const updated = withPayloadHash({
-    ...payloadHashBase(payload),
+    ...payload,
     tasks,
     updated_at: new Date().toISOString()
   });
@@ -763,8 +787,9 @@ function writeGoldInput(rows, args) {
   if (goldHash !== task.gold_context_hash)
     throw new Error(`task ${task.instance_id} gold_context_hash mismatch`);
   const payload = payloadById.get(task.instance_id);
-  const repoUrl =
-    payload?.repo_checkout_status === 'verified' ? payload.repo_checkout_path : task.repo_url;
+  const repoUrl = isVerifiedCheckoutPayload(payload, task)
+    ? payload.repo_checkout_path
+    : task.repo_url;
   const goldInput = {
     inst_id: task.instance_id,
     original_inst_id: task.original_inst_id,
@@ -789,6 +814,17 @@ function writeGoldInput(rows, args) {
   console.log(`wrote scorer-only gold input ${resolve(args.out)}`);
 }
 
+function isVerifiedCheckoutPayload(payload, task) {
+  return (
+    payload?.repo_checkout_status === 'verified' &&
+    typeof payload.repo_checkout_path === 'string' &&
+    payload.repo_checkout_path.length > 0 &&
+    payload.repo_actual_head === task.base_commit &&
+    payload.base_commit_verified === true &&
+    payload.repo_clean_verified === true
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || process.argv.length <= 2) {
@@ -804,6 +840,10 @@ async function main() {
   if (args.materializeCheckouts) {
     materializeCheckouts(args);
     return;
+  }
+
+  if (args.check && !args.rowsFile) {
+    throw new Error('--check requires --rows-file <frozen-rows.json> to avoid live dataset drift');
   }
 
   const rows = await loadRowsForArgs(args);

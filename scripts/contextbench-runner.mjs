@@ -1191,6 +1191,11 @@ function writeBlockedRunRows(sessionRoot, fixtures, reservations) {
     fixtures.laneSetupEvidence.records.map((record) => [record.laneId, record])
   );
   const tasksById = new Map(fixtures.manifest.tasks.map((task) => [task.instance_id, task]));
+  const existingPrimaryKeys = new Set(
+    readManifestRowsIfPresent(sessionRoot)
+      .filter((row) => !row.scoring?.baselineArmId)
+      .map((row) => primaryReservationKey(row.lane_id, row.task_id, row.repeat_index))
+  );
   for (const reservation of reservations.filter(
     (slot) => slot.status === 'terminal_missing_evidence'
   )) {
@@ -1198,6 +1203,8 @@ function writeBlockedRunRows(sessionRoot, fixtures, reservations) {
     const task = tasksById.get(reservation.taskId);
     const evidence = evidenceByLane.get(reservation.laneId);
     if (!laneCard || !task || !evidence) continue;
+    const key = primaryReservationKey(laneCard.laneId, task.instance_id, reservation.repeatIndex);
+    if (existingPrimaryKeys.has(key)) continue;
     const runId = sanitize(
       `${laneCard.laneId}-${task.instance_id}-${reservation.repeatIndex}-missing-evidence`
     );
@@ -1260,6 +1267,7 @@ function writeBlockedRunRows(sessionRoot, fixtures, reservations) {
         )
       })
     );
+    existingPrimaryKeys.add(key);
   }
 }
 
@@ -1885,6 +1893,10 @@ function fakeStdoutForMode(mode, task) {
 
 function runKey(laneId, taskId, repeatIndex, prefix = '') {
   return `${prefix}${laneId}:${taskId}:${repeatIndex}`;
+}
+
+function primaryReservationKey(laneId, taskId, repeatIndex) {
+  return `${laneId}::${taskId}::${repeatIndex}`;
 }
 
 function existingRunKeys(sessionRoot) {
@@ -3313,15 +3325,38 @@ function validateBaselineSession(args) {
     errors.push(`expected ${expectedSlots} reserved slots, found ${reservations.length}`);
   const rows = readManifestRowsIfPresent(sessionRoot);
   validateSessionPaths(sessionRoot, rows, errors);
+  const primaryRowCounts = new Map();
+  for (const row of rows.filter((entry) => !entry.scoring?.baselineArmId)) {
+    const key = primaryReservationKey(row.lane_id, row.task_id, row.repeat_index);
+    primaryRowCounts.set(key, (primaryRowCounts.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of primaryRowCounts) {
+    if (count > 1) errors.push(`duplicate primary baseline row for reservation ${key}`);
+  }
   const blockedReservations = reservations.filter(
     (slot) => slot.status === 'terminal_missing_evidence'
   );
+  const blockedReservationKeys = new Set(
+    blockedReservations.map((slot) => primaryReservationKey(slot.laneId, slot.taskId, slot.repeatIndex))
+  );
+  const blockedRowKeys = new Set();
+  const extraBlockedRowKeys = [];
   const blockedRows = rows.filter(
     (row) =>
-      row.status === 'setup_failed' && ['grepai', 'codebase-memory-mcp'].includes(row.lane_id)
+      !row.scoring?.baselineArmId &&
+      row.status === 'setup_failed' &&
+      String(row.scoring?.fallbackReason ?? '').startsWith('terminal_missing_evidence:')
   );
-  if (blockedRows.length !== blockedReservations.length) {
-    errors.push('terminal missing-evidence rows must be present for every blocked reservation');
+  for (const row of blockedRows) {
+    const key = primaryReservationKey(row.lane_id, row.task_id, row.repeat_index);
+    blockedRowKeys.add(key);
+    if (!blockedReservationKeys.has(key)) extraBlockedRowKeys.push(key);
+  }
+  const missingBlockedRowKeys = [...blockedReservationKeys].filter((key) => !blockedRowKeys.has(key));
+  if (missingBlockedRowKeys.length > 0 || extraBlockedRowKeys.length > 0) {
+    errors.push(
+      `terminal missing-evidence rows must match blocked reservations exactly; missing=${missingBlockedRowKeys.length}, extra=${extraBlockedRowKeys.length}`
+    );
   }
   if (errors.length > 0)
     throw new Error(`baseline session validation failed:\n- ${errors.join('\n- ')}`);

@@ -43,6 +43,13 @@ function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
   );
 }
 
+function readRows(sessionRoot: string): Array<{ status: string; scoring?: { fallbackReason?: string } }> {
+  return readFileSync(path.join(sessionRoot, 'run-manifest.jsonl'), 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as { status: string; scoring?: { fallbackReason?: string } });
+}
+
 describe('ContextBench Phase 40 dirty-worktree snapshot', () => {
   it('captures the current checkout before baseline runs with hashes and validation metadata', () => {
     const sessionRoot = tempSessionRoot();
@@ -113,6 +120,47 @@ describe('ContextBench Phase 40 dirty-worktree snapshot', () => {
       ) as BaselineSession & { phase: number };
       expect(session.phase).toBe(41);
       expect(session.sessionRoot).toContain('/phase41/');
+    } finally {
+      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+        recursive: true,
+        force: true
+      });
+    }
+  });
+
+  it('does not duplicate blocked missing-evidence rows when snapshot is rerun', () => {
+    const sessionRoot = tempSessionRoot('phase41');
+    try {
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        { encoding: 'utf8' }
+      );
+      const firstBlockedRows = readRows(sessionRoot).filter(
+        (row) =>
+          row.status === 'setup_failed' &&
+          row.scoring?.fallbackReason?.startsWith('terminal_missing_evidence:')
+      );
+
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        { encoding: 'utf8' }
+      );
+      const secondBlockedRows = readRows(sessionRoot).filter(
+        (row) =>
+          row.status === 'setup_failed' &&
+          row.scoring?.fallbackReason?.startsWith('terminal_missing_evidence:')
+      );
+      const validateOutput = execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-validate', '--session', sessionRoot],
+        { encoding: 'utf8' }
+      );
+
+      expect(firstBlockedRows).toHaveLength(20 * 2 * 3);
+      expect(secondBlockedRows).toHaveLength(firstBlockedRows.length);
+      expect(validateOutput).toContain('baseline session validation passed');
     } finally {
       rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
         recursive: true,

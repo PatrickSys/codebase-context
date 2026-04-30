@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -170,6 +170,31 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(rows.every((row) => !('taskWallTimeMs' in row.setupIndex))).toBe(true);
     } finally {
       cleanupSessionRoot(sessionRoot);
+    }
+  });
+
+  it('rejects duplicate primary baseline rows during validation', () => {
+    const sessionRoot = tempSessionRoot('phase41');
+    try {
+      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
+        encoding: 'utf8'
+      });
+      const firstRow = readFileSync(path.join(sessionRoot, 'run-manifest.jsonl'), 'utf8').trim().split('\n')[0];
+      appendFileSync(path.join(sessionRoot, 'run-manifest.jsonl'), `${firstRow}\n`, 'utf8');
+
+      const result = spawnSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-validate', '--session', sessionRoot],
+        { encoding: 'utf8' }
+      );
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('duplicate primary baseline row for reservation');
+    } finally {
+      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+        recursive: true,
+        force: true
+      });
     }
   });
 

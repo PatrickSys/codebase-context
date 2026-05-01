@@ -122,6 +122,8 @@ These are non-negotiable. Every PR, feature, and design decision must respect th
 - **Never stage/commit `.planning/**`\*\* (or any other local workflow artifacts) unless the user explicitly asks in that message.
 - **Never use `gsd-tools ... commit` wrappers** in this repo. Use plain `git add <exact files>` and `git commit -m "..."`.
 - **Before every commit:** run `git status --short` and confirm staged files match intent; abort if any `.planning/**` is staged.
+- **Before cleanup, branch recovery, phase closeout, or PR prep:** run `git stash list`, `git worktree list`, and `git status --short --ignored`; classify every stash/worktree/ignored artifact as `PR candidate`, `active evidence`, `local note`, `archive`, or `delete candidate` before deleting or dropping anything.
+- **Never leave valuable work only in a stash:** if a stash contains source/test/doc changes worth keeping, either turn it into an explicit branch/PR candidate or record why it is preserved for later.
 - \*\*Avoid using `any` Type AT ALL COSTS.
 
 ## Evaluation Integrity (NON-NEGOTIABLE)

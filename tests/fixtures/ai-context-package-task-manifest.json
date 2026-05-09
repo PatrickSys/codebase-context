@@ -1,0 +1,203 @@
+{
+  "schemaVersion": "ai-context-package-eval.v0",
+  "frozenAt": "2026-05-09",
+  "claimBearing": false,
+  "claimLimit": "Fixture is frozen before implementation and uses installed public npm packages for local reproducibility. Public claims require rerun from clean package tarballs or source repos with recorded hashes.",
+  "lanes": ["raw-native", "readme-only", "exported-context-package", "live-codebase-context-mcp"],
+  "targets": [
+    {
+      "id": "npm-ignore-5.3.2",
+      "packageName": "ignore",
+      "packageVersion": "5.3.2",
+      "sourceKind": "installed-public-npm-package",
+      "localRoot": "node_modules/ignore",
+      "repository": "https://github.com/kaelzhang/node-ignore"
+    },
+    {
+      "id": "npm-uuid-14.0.0",
+      "packageName": "uuid",
+      "packageVersion": "14.0.0",
+      "sourceKind": "installed-public-npm-package",
+      "localRoot": "node_modules/uuid",
+      "repository": "https://github.com/uuidjs/uuid"
+    },
+    {
+      "id": "npm-fuse-js-7.1.0",
+      "packageName": "fuse.js",
+      "packageVersion": "7.1.0",
+      "sourceKind": "installed-public-npm-package",
+      "localRoot": "node_modules/fuse.js",
+      "repository": "https://github.com/krisk/Fuse"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "aicp-ignore-001",
+      "targetId": "npm-ignore-5.3.2",
+      "category": "api-usage",
+      "prompt": "Show the minimal import and construction pattern for creating an ignore manager.",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-ignore-002",
+      "targetId": "npm-ignore-5.3.2",
+      "category": "example-selection",
+      "prompt": "Find the canonical example for filtering paths after adding ignore rules.",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-ignore-003",
+      "targetId": "npm-ignore-5.3.2",
+      "category": "api-usage",
+      "prompt": "Which method checks whether a single pathname is ignored?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-ignore-004",
+      "targetId": "npm-ignore-5.3.2",
+      "category": "api-usage",
+      "prompt": "Which API returns a predicate suitable for Array.prototype.filter?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-ignore-005",
+      "targetId": "npm-ignore-5.3.2",
+      "category": "docs-to-api",
+      "prompt": "How should a user add the content of an existing .gitignore file?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-ignore-006",
+      "targetId": "npm-ignore-5.3.2",
+      "category": "negative-constraint",
+      "prompt": "Can users pass absolute Windows paths directly to ignores() by default?",
+      "expectedReadyToEdit": false
+    },
+    {
+      "id": "aicp-ignore-007",
+      "targetId": "npm-ignore-5.3.2",
+      "category": "options",
+      "prompt": "What option relaxes relative-path validation and what warning should accompany it?",
+      "expectedReadyToEdit": false
+    },
+    {
+      "id": "aicp-ignore-008",
+      "targetId": "npm-ignore-5.3.2",
+      "category": "api-usage",
+      "prompt": "Which method returns both ignored and unignored booleans?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-001",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "api-usage",
+      "prompt": "Show the documented import pattern for creating a random v4 UUID.",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-002",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "api-usage",
+      "prompt": "Show the documented import pattern for creating a v7 UUID.",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-003",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "api-usage",
+      "prompt": "Which function validates whether a string is a UUID?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-004",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "composition",
+      "prompt": "How should a user validate only v4 UUIDs?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-005",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "edge-case",
+      "prompt": "What version values are returned for NIL and MAX UUID strings?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-006",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "api-usage",
+      "prompt": "Which APIs convert UUID strings to bytes and bytes back to strings?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-007",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "negative-constraint",
+      "prompt": "Should an agent generate CommonJS require() examples for uuid@14?",
+      "expectedReadyToEdit": false
+    },
+    {
+      "id": "aicp-uuid-008",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "cli-usage",
+      "prompt": "What does the uuid command-line utility generate by default and which versions are documented?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-009",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "implementation-detail",
+      "prompt": "When does v4 use crypto.randomUUID() directly?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-uuid-010",
+      "targetId": "npm-uuid-14.0.0",
+      "category": "behavior-change",
+      "prompt": "What changed in uuid@11 about options handling for timestamp UUIDs?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-fuse-001",
+      "targetId": "npm-fuse-js-7.1.0",
+      "category": "api-usage",
+      "prompt": "Show the constructor and search pattern for Fuse.",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-fuse-002",
+      "targetId": "npm-fuse-js-7.1.0",
+      "category": "options",
+      "prompt": "Which option includes match scores in search results?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-fuse-003",
+      "targetId": "npm-fuse-js-7.1.0",
+      "category": "options",
+      "prompt": "What does the threshold option control?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-fuse-004",
+      "targetId": "npm-fuse-js-7.1.0",
+      "category": "indexing",
+      "prompt": "Which APIs create and parse a Fuse index?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-fuse-005",
+      "targetId": "npm-fuse-js-7.1.0",
+      "category": "collection-mutation",
+      "prompt": "Which APIs mutate or replace the Fuse collection?",
+      "expectedReadyToEdit": true
+    },
+    {
+      "id": "aicp-fuse-006",
+      "targetId": "npm-fuse-js-7.1.0",
+      "category": "package-exports",
+      "prompt": "Which package export paths are available besides the root Fuse export?",
+      "expectedReadyToEdit": true
+    }
+  ]
+}

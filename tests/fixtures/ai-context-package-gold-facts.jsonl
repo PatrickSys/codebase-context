@@ -1,0 +1,24 @@
+{"taskId":"aicp-ignore-001","facts":["Use the default ignore factory to create an ignore manager.","The package exposes an isPathValid helper."]}
+{"taskId":"aicp-ignore-002","facts":["Call add() before filter().","The canonical filter example keeps .abc/d/e.js after a negative pattern."]}
+{"taskId":"aicp-ignore-003","facts":["ignores(pathname) returns a boolean for one pathname."]}
+{"taskId":"aicp-ignore-004","facts":["createFilter() returns a predicate usable with Array.prototype.filter."]}
+{"taskId":"aicp-ignore-005","facts":["Read the ignore file contents and pass the string to add()."]}
+{"taskId":"aicp-ignore-006","facts":["Pathnames should be relative by default.","Absolute Windows paths are invalid by default."]}
+{"taskId":"aicp-ignore-007","facts":["allowRelativePaths relaxes validation.","The docs warn that ./foo or ../foo can lead to unexpected behavior."]}
+{"taskId":"aicp-ignore-008","facts":["test(pathname) returns ignored and unignored booleans."]}
+{"taskId":"aicp-uuid-001","facts":["Import v4 as uuidv4 from uuid.","v4 creates a random UUID."]}
+{"taskId":"aicp-uuid-002","facts":["Import v7 as uuidv7 from uuid.","v7 creates a Unix epoch time-based UUID."]}
+{"taskId":"aicp-uuid-003","facts":["validate(str) returns true for valid UUIDs and false otherwise."]}
+{"taskId":"aicp-uuid-004","facts":["Combine validate(uuid) with version(uuid) === 4 for v4-only validation."]}
+{"taskId":"aicp-uuid-005","facts":["version() returns 0 for NIL and 15 for MAX."]}
+{"taskId":"aicp-uuid-006","facts":["parse converts a UUID string to bytes.","stringify converts bytes to a UUID string."]}
+{"taskId":"aicp-uuid-007","facts":["Starting with uuid@12, CommonJS is no longer supported.","uuid@14 is an ES module package."]}
+{"taskId":"aicp-uuid-008","facts":["The CLI defaults to v4 UUIDs.","The documented CLI supports v1, v3, v4, v5, and v7."]}
+{"taskId":"aicp-uuid-009","facts":["v4 uses crypto.randomUUID() when no buffer, no options, and crypto.randomUUID is available."]}
+{"taskId":"aicp-uuid-010","facts":["Starting in uuid@11, the presence of options selects separate behavior for timestamp UUIDs."]}
+{"taskId":"aicp-fuse-001","facts":["Construct Fuse with a list and options, then call search(pattern)."]}
+{"taskId":"aicp-fuse-002","facts":["includeScore includes result scores."]}
+{"taskId":"aicp-fuse-003","facts":["threshold controls when the match algorithm gives up."]}
+{"taskId":"aicp-fuse-004","facts":["Fuse.createIndex creates an index.","Fuse.parseIndex parses a serialized index."]}
+{"taskId":"aicp-fuse-005","facts":["setCollection replaces docs.","add adds a document.","remove and removeAt remove documents."]}
+{"taskId":"aicp-fuse-006","facts":["Package exports include root, min, basic, and min-basic entry points."]}

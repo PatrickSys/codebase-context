@@ -41,6 +41,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 - `status` — index status/progress
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
+- `package build|preview|check` — build and validate an AI Context Package for a library or SDK
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
 
 ---
@@ -149,6 +150,23 @@ Example output (truncated):
 ```bash
 npx -y codebase-context refs --symbol "startFileWatcher" --limit 10
 ```
+
+## `package build`
+
+```bash
+npx -y codebase-context package build ./packages/ui --out ./packages/ui/.context
+```
+
+Builds a local AI Context Package for a library, SDK, or component package. The output is a `.context/` directory with `manifest.json`, graph JSONL, agent-facing packets, and provenance hashes.
+
+Use this when the package itself is the product and agents need public APIs, examples, tests, docs, stories, and migrations before they write package-using code.
+
+```bash
+npx -y codebase-context package preview ./packages/ui/.context
+npx -y codebase-context package check ./packages/ui/.context
+```
+
+`package check` validates the artifact shape and, when the source package is still present, checks source hashes. A failed check means the context package is stale or incomplete.
 
 Example output (truncated):
 

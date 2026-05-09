@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "ai-context-package-benchmark-report.v0",
+  "createdAt": "2026-05-09",
+  "status": "fixture_frozen_no_outcome_run",
+  "claimAllowed": false,
+  "summary": "The AI Context Package eval fixtures are frozen before implementation work, but no claim-bearing agent outcome matrix has been run.",
+  "fixtures": {
+    "taskManifest": "tests/fixtures/ai-context-package-task-manifest.json",
+    "goldContext": "tests/fixtures/ai-context-package-gold-context.jsonl",
+    "goldFacts": "tests/fixtures/ai-context-package-gold-facts.jsonl",
+    "laneToolCards": "tests/fixtures/ai-context-package-lane-tool-cards.json",
+    "budgetPolicy": "tests/fixtures/ai-context-package-budget-policy.json",
+    "corrections": "tests/fixtures/ai-context-package-corrections.json"
+  },
+  "frozenTaskCount": 24,
+  "targetPackages": [
+    {
+      "name": "ignore",
+      "version": "5.3.2",
+      "source": "installed public npm package"
+    },
+    {
+      "name": "uuid",
+      "version": "14.0.0",
+      "source": "installed public npm package"
+    },
+    {
+      "name": "fuse.js",
+      "version": "7.1.0",
+      "source": "installed public npm package"
+    }
+  ],
+  "lanes": ["raw-native", "readme-only", "exported-context-package", "live-codebase-context-mcp"],
+  "blockedClaims": [
+    "agent success improvement",
+    "token savings",
+    "competitor superiority",
+    "general package-use correctness"
+  ],
+  "nextStepForClaims": "Run the frozen lanes from clean package tarballs or source repo SHAs, preserve raw traces and costs, and report wins and failures together."
+}

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "ai-context-package-lexical.v0",
+  "records": [
+    {
+      "id": "artifact:index-d-ts",
+      "path": "index.d.ts",
+      "kind": "source",
+      "title": "index.d.ts",
+      "tokens": [
+        "index",
+        "ts",
+        "source"
+      ]
+    },
+    {
+      "id": "artifact:index-js",
+      "path": "index.js",
+      "kind": "source",
+      "title": "index.js",
+      "tokens": [
+        "index",
+        "js",
+        "source"
+      ]
+    },
+    {
+      "id": "artifact:legacy-js",
+      "path": "legacy.js",
+      "kind": "source",
+      "title": "legacy.js",
+      "tokens": [
+        "legacy",
+        "js",
+        "source"
+      ]
+    },
+    {
+      "id": "artifact:license-mit",
+      "path": "LICENSE-MIT",
+      "kind": "documentation",
+      "title": "LICENSE-MIT",
+      "tokens": [
+        "license",
+        "mit",
+        "documentation"
+      ]
+    },
+    {
+      "id": "artifact:package-json",
+      "path": "package.json",
+      "kind": "package_manifest",
+      "title": "package.json",
+      "tokens": [
+        "package",
+        "json",
+        "package_manifest"
+      ]
+    },
+    {
+      "id": "artifact:readme-md",
+      "path": "README.md",
+      "kind": "documentation",
+      "title": "README.md",
+      "tokens": [
+        "readme",
+        "md",
+        "documentation"
+      ]
+    }
+  ]
+}

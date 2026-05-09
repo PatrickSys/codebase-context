@@ -8,6 +8,8 @@ You're tired of AI agents writing code that "just works" but still misses how yo
 
 `codebase-context` changes the first step. Start with a bounded conventions map that shows the architecture, dominant patterns, and strongest local examples. Then search for the exact file, symbol, or workflow you need.
 
+It can also build an **AI Context Package** for a library, SDK, or component package. That package is a local `.context/` artifact with public API entries, docs, examples, tests, graph records, and provenance so an agent has reviewable source evidence before it guesses how to use the package.
+
 Here's what codebase-context does:
 
 **Starts with a bounded conventions map** - The first call shows architecture layers, active patterns, golden files, and next calls without dumping vendored repos, fixtures, generated output, or oversized entrypoint lists into the default surface.
@@ -17,6 +19,8 @@ Here's what codebase-context does:
 **Knows what is current** - Conventions are detected from your code and git history, not only from rules you wrote. The map distinguishes what is common from what is rising or declining, and points at the files that best represent the current direction.
 
 **Adds support signals when you need them** - Team memory and edit-readiness checks stay available, but as supporting context after the map and search have already narrowed the work.
+
+**Exports AI-usable package context** - For libraries and SDKs, `package build` writes a reviewable `.context/` directory. The artifact is text/JSONL, not an opaque database, and every generated entry carries source evidence and confidence.
 
 Map first, search second, local-first throughout. Your code never leaves your machine by default.
 
@@ -83,6 +87,16 @@ npx -y codebase-context search --query "auth middleware"
 
 Your AI agent uses the same map via the `codebase://context` MCP resource on first call.
 
+Build an AI Context Package for a library or component package:
+
+```bash
+npx -y codebase-context package build ./packages/ui --out ./packages/ui/.context
+npx -y codebase-context package preview ./packages/ui/.context
+npx -y codebase-context package check ./packages/ui/.context
+```
+
+The package export is a Track A feature: local, inspectable, and source-linked. It does not prove that agents perform better yet; benchmark fixtures are frozen first, and public outcome claims remain blocked until a clean eval run supports them.
+
 ## Common First Commands
 
 Three commands to understand a repo before you edit it:
@@ -134,6 +148,37 @@ Memory types: `convention`, `decision`, `gotcha`, `failure`. Confidence decay: c
 | `detect_circular_dependencies` | Import cycles between files                           |
 | `refresh_index`                | Full or incremental re-index + git memory extraction  |
 | `get_indexing_status`          | Progress and stats for the current index              |
+
+## AI Context Package
+
+`package build` turns a package repo into a `.context/` directory:
+
+```text
+.context/
+  manifest.json
+  README.md
+  graph/
+    artifacts.jsonl
+    symbols.jsonl
+    edges.jsonl
+    public-surface.jsonl
+  packets/
+    overview.json
+    api-surface.json
+    examples.json
+    testing.json
+    decisions.json
+    migrations.json
+    storybook.json
+  indexes/
+    lexical.json
+  provenance/
+    source-manifest.json
+    hashes.json
+    extractor-report.json
+```
+
+The default extractor is deterministic: package metadata, public exports, docs, examples, tests, stories, changelogs, and migration files. It does not call a model, upload code, or require embeddings. Maintainer review is still required before publishing the artifact as guidance for other agents.
 
 ## Multi-project
 

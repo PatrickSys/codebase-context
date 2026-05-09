@@ -1,0 +1,19 @@
+{
+  "package": {
+    "name": "ignore",
+    "version": "5.3.2",
+    "description": "Ignore is a manager and filter for .gitignore rules, the one used by eslint, gitbook and many others."
+  },
+  "guidance": [
+    "Use public-surface entries before guessing APIs from internal files.",
+    "Prefer examples, tests, and docs with high or medium confidence evidence.",
+    "Treat low-confidence entries as starting points, not authoritative guidance."
+  ],
+  "counts": {
+    "artifacts": 6,
+    "symbols": 66,
+    "publicSurface": 5,
+    "edges": 15
+  },
+  "warnings": []
+}

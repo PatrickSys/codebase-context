@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "ai-context-package.v0",
+  "generatedAt": "2026-05-09T18:02:13.789Z",
+  "generator": {
+    "name": "codebase-context",
+    "feature": "package-context"
+  },
+  "package": {
+    "name": "ignore",
+    "version": "5.3.2",
+    "description": "Ignore is a manager and filter for .gitignore rules, the one used by eslint, gitbook and many others.",
+    "rootPath": "C:\\Users\\bitaz\\Repos\\codebase-context\\node_modules\\ignore"
+  },
+  "outputs": {
+    "readme": "README.md",
+    "graph": {
+      "artifacts": "graph/artifacts.jsonl",
+      "symbols": "graph/symbols.jsonl",
+      "edges": "graph/edges.jsonl",
+      "publicSurface": "graph/public-surface.jsonl"
+    },
+    "packets": {
+      "overview": "packets/overview.json",
+      "apiSurface": "packets/api-surface.json",
+      "examples": "packets/examples.json",
+      "testing": "packets/testing.json",
+      "decisions": "packets/decisions.json",
+      "migrations": "packets/migrations.json",
+      "storybook": "packets/storybook.json"
+    },
+    "provenance": {
+      "sourceManifest": "provenance/source-manifest.json",
+      "hashes": "provenance/hashes.json",
+      "extractorReport": "provenance/extractor-report.json"
+    }
+  },
+  "limits": {
+    "maxFileBytes": 262144,
+    "maxArtifacts": 400
+  }
+}

@@ -6,14 +6,7 @@
 
 import path from 'path';
 import { promises as fs } from 'fs';
-import {
-  CODEBASE_CONTEXT_DIRNAME,
-  MEMORY_FILENAME,
-  INTELLIGENCE_FILENAME,
-  HEALTH_FILENAME,
-  KEYWORD_INDEX_FILENAME,
-  VECTOR_DB_DIRNAME
-} from './constants/codebase-context.js';
+import { makePaths } from './project-state.js';
 import { CodebaseIndexer } from './core/indexer.js';
 import { dispatchTool } from './tools/index.js';
 import type { ToolContext } from './tools/index.js';
@@ -28,6 +21,7 @@ import { handleMemoryCli } from './cli-memory.js';
 export { handleMemoryCli } from './cli-memory.js';
 import { handleInitCli } from './cli-init.js';
 import { handleMapCli } from './cli-map.js';
+import { handlePackageCli } from './cli-package.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
@@ -45,7 +39,8 @@ const _CLI_COMMANDS = [
   'refs',
   'cycles',
   'init',
-  'map'
+  'map',
+  'package'
 ] as const;
 
 type CliCommand = (typeof _CLI_COMMANDS)[number];
@@ -79,13 +74,14 @@ function printUsage(): void {
   console.log('         [--limit <n>] [--lang <l>] [--framework <f>] [--layer <l>]');
   console.log('  metadata                           Project structure, frameworks, deps');
   console.log('  status                             Index state and progress');
-  console.log('  reindex [--incremental] [--reason <r>]  Re-index the codebase');
+  console.log('  reindex [--incremental] [--skip-embedding] [--reason <r>]  Re-index the codebase');
   console.log('  style-guide [--query <q>] [--category <c>]  Style guide rules');
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
   console.log('  init                               Interactive setup wizard for AI clients');
   console.log('  map [--json] [--pretty]              Conventions map');
+  console.log('  package <build|preview|check>     Build or inspect an AI context package');
   console.log('');
   console.log('Global flags:');
   console.log('  --json    Output raw JSON (default: human-readable)');
@@ -93,6 +89,8 @@ function printUsage(): void {
   console.log('');
   console.log('Environment:');
   console.log('  CODEBASE_ROOT    Project root path (default: cwd for CLI only)');
+  console.log('  CODEBASE_CONTEXT_DIR  Store index artifacts outside the project root');
+  console.log('  CODEBASE_CONTEXT_SKIP_EMBEDDING=1  Build a keyword-only local index');
   console.log('  CODEBASE_CONTEXT_ASCII=1  Force ASCII-only box output');
   console.log('  CODEBASE_CONTEXT_DEBUG=1  Enable verbose logs');
 }
@@ -101,17 +99,24 @@ function resolveCliRootPath(): string {
   return path.resolve(process.env.CODEBASE_ROOT || process.cwd());
 }
 
-async function initToolContext(): Promise<ToolContext> {
-  const rootPath = resolveCliRootPath();
+interface CliToolContextOptions {
+  skipEmbedding?: boolean;
+}
 
-  const paths = {
-    baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
-    memory: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
-    intelligence: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
-    health: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, HEALTH_FILENAME),
-    keywordIndex: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
-    vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
-  };
+function resolveCliContextDir(_rootPath: string): string | undefined {
+  return process.env.CODEBASE_CONTEXT_DIR
+    ? path.resolve(process.env.CODEBASE_CONTEXT_DIR)
+    : undefined;
+}
+
+function isTruthyEnv(value: string | undefined): boolean {
+  if (!value) return false;
+  return ['1', 'true', 'yes'].includes(value.trim().toLowerCase());
+}
+
+async function initToolContext(options: CliToolContextOptions = {}): Promise<ToolContext> {
+  const rootPath = resolveCliRootPath();
+  const paths = makePaths(rootPath, resolveCliContextDir(rootPath));
 
   let indexExists = false;
   try {
@@ -134,6 +139,8 @@ async function initToolContext(): Promise<ToolContext> {
       let lastLoggedProgress = { phase: '', percentage: -1 };
       const indexer = new CodebaseIndexer({
         rootPath,
+        contextDir: paths.baseDir,
+        ...(options.skipEmbedding ? { config: { skipEmbedding: true } } : {}),
         incrementalOnly,
         onProgress: (progress) => {
           const shouldLog =
@@ -277,11 +284,21 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
     return handleMapCli(argv.slice(1));
   }
 
+  if (command === 'package') {
+    return handlePackageCli(argv.slice(1));
+  }
+
   const useJson = argv.includes('--json');
 
   const flags = parseFlags(argv);
 
-  const ctx = await initToolContext();
+  const reindexUsage = 'codebase-context reindex [--incremental] [--skip-embedding] [--reason <r>]';
+  const reindexSkipEmbedding =
+    command === 'reindex'
+      ? booleanFlag(flags, 'skip-embedding', reindexUsage) ||
+        isTruthyEnv(process.env.CODEBASE_CONTEXT_SKIP_EMBEDDING)
+      : false;
+  const ctx = await initToolContext({ skipEmbedding: reindexSkipEmbedding });
 
   type DispatchSpec =
     | { toolName: 'search_codebase'; toolArgs: SearchToolArgs }
@@ -354,7 +371,7 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
       break;
     }
     case 'reindex': {
-      const usage = 'codebase-context reindex [--incremental] [--reason <r>]';
+      const usage = reindexUsage;
       const reason = optionalStringFlag(flags, 'reason', usage);
       const incremental = booleanFlag(flags, 'incremental', usage);
       await ctx.performIndexing(incremental, reason);

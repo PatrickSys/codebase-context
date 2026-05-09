@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Add `codebase-context package build|preview|check` for local AI Context Package exports. The artifact is text/JSONL, source-linked, and validated with provenance hashes.
+- Freeze a non-claim-bearing AI Context Package eval fixture pack with 24 tasks across installed public npm packages before product implementation work.
+
+### Documentation
+
+- Document the package export surface in the README, CLI gallery, and capabilities reference without claiming agent-performance gains.
+
 ## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-04-30)
 
 

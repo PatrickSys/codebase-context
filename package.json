@@ -30,6 +30,10 @@
       "import": "./dist/analyzers/generic/index.js",
       "types": "./dist/analyzers/generic/index.d.ts"
     },
+    "./package-context": {
+      "import": "./dist/package-context/index.js",
+      "types": "./dist/package-context/index.d.ts"
+    },
     "./embeddings": {
       "import": "./dist/embeddings/index.js",
       "types": "./dist/embeddings/index.d.ts"
@@ -73,6 +77,8 @@
     "rrf",
     "cross-encoder",
     "context-engineering",
+    "ai-context-package",
+    "context-package",
     "local-first",
     "privacy-first",
     "embeddings",

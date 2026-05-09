@@ -45,6 +45,9 @@ For a command gallery with examples, see `docs/cli.md`.
 | `patterns`             | `--category all\|di\|state\|testing\|libraries`                                                            | `get_team_patterns`                    |
 | `refs --symbol <name>` | `--limit <n>`                                                                                              | `get_symbol_references`                |
 | `cycles`               | `--scope <path>`                                                                                           | `detect_circular_dependencies`         |
+| `package build`        | `[root]`, `--out <dir>`, `--json`                                                                          | AI Context Package export              |
+| `package preview`      | `[dir]`, `--json`                                                                                          | AI Context Package preview             |
+| `package check`        | `[dir]`, `--json`                                                                                          | AI Context Package validation          |
 | `memory list`          | `--category`, `--type`, `--query`, `--json`                                                                | —                                      |
 | `memory add`           | `--type`, `--category`, `--memory`, `--reason`                                                             | `remember`                             |
 | `memory remove <id>`   | —                                                                                                          | —                                      |
@@ -58,7 +61,38 @@ npx codebase-context search --query "auth middleware" --intent edit
 npx codebase-context refs --symbol "UserService" --limit 10
 npx codebase-context cycles --scope src/features
 npx codebase-context reindex --incremental
+npx codebase-context package build ./packages/ui --out ./packages/ui/.context
 ```
+
+## AI Context Package Export
+
+`codebase-context package build` creates a local `.context/` artifact for a library, SDK, or component package. The artifact is meant to be read by humans and agents before package-use work starts.
+
+Generated files:
+
+| Path                             | Purpose                                                     |
+| -------------------------------- | ----------------------------------------------------------- |
+| `manifest.json`                  | Schema, package identity, generator, and output paths        |
+| `README.md`                      | Human-readable package summary with the generated-file warning |
+| `graph/artifacts.jsonl`          | Source, docs, examples, tests, stories, migration records    |
+| `graph/symbols.jsonl`            | Syntactic symbol declarations and exports                    |
+| `graph/edges.jsonl`              | Source-linked relationships such as exports, mentions, tests |
+| `graph/public-surface.jsonl`     | Public package surface entries with confidence and evidence  |
+| `packets/*.json`                 | Agent-facing overview, API, examples, testing, and migration packets |
+| `indexes/lexical.json`           | Small deterministic lexical index                            |
+| `provenance/*.json`              | Source file hashes and extractor limitations                 |
+
+Validation:
+
+- `package check` verifies generated artifact files exist.
+- When the source package is still available, it checks source hashes against `provenance/source-manifest.json`.
+- Hash mismatches fail the check; missing source files fail the check.
+
+Current limits:
+
+- Syntactic extraction only; no type checker or build-system proof.
+- No framework-specific core fields. Storybook and similar systems are represented as generic `story` artifacts with namespaced metadata when available.
+- No agent-performance claim is attached to this export. The frozen package-eval fixtures are diagnostic until rerun from clean package sources.
 
 ## Tool Surface
 

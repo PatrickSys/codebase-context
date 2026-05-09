@@ -38,10 +38,25 @@
 // Core classes
 export { CodebaseIndexer, type IndexerOptions } from './core/indexer.js';
 import { CodebaseIndexer } from './core/indexer.js';
-export { CodebaseSearcher, type SearchOptions } from './core/search.js';
+export { CodebaseSearcher, type SearchOptions, type SearcherOptions } from './core/search.js';
 import { CodebaseSearcher } from './core/search.js';
 export { AnalyzerRegistry, analyzerRegistry } from './core/analyzer-registry.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
+export {
+  buildContextPackage,
+  checkContextPackage,
+  previewContextPackage,
+  renderContextPackagePreview,
+  type ContextArtifactRecord,
+  type ContextEdgeRecord,
+  type ContextPackageBuildOptions,
+  type ContextPackageBuildResult,
+  type ContextPackageCheckResult,
+  type ContextPackageManifest,
+  type ContextPackagePreview,
+  type ContextPublicSurfaceRecord,
+  type ContextSymbolRecord
+} from './package-context/index.js';
 
 // Embedding providers
 export {
@@ -183,6 +198,9 @@ export function createIndexer(
  * @param rootPath - Path to the indexed project root
  * @returns A configured CodebaseSearcher instance
  */
-export function createSearcher(rootPath: string): import('./core/search.js').CodebaseSearcher {
-  return new CodebaseSearcher(rootPath);
+export function createSearcher(
+  rootPath: string,
+  options?: import('./core/search.js').SearcherOptions
+): import('./core/search.js').CodebaseSearcher {
+  return new CodebaseSearcher(rootPath, options);
 }

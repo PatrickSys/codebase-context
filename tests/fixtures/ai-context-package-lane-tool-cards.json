@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "ai-context-package-lanes.v0",
+  "lanes": [
+    {
+      "id": "raw-native",
+      "allowedDiscovery": ["native-read", "native-search"],
+      "requiredFirstStep": "Use only native filesystem search/read.",
+      "forbidden": ["ai-context-package", "codebase-context-mcp"]
+    },
+    {
+      "id": "readme-only",
+      "allowedDiscovery": ["package-readme", "package-manifest"],
+      "requiredFirstStep": "Read only README and package manifest unless line proof requires a source file.",
+      "forbidden": ["full-source-crawl", "codebase-context-mcp"]
+    },
+    {
+      "id": "exported-context-package",
+      "allowedDiscovery": ["ai-context-package"],
+      "requiredFirstStep": "Use the exported AI context package before any package source read.",
+      "forbidden": ["codebase-context-mcp"]
+    },
+    {
+      "id": "live-codebase-context-mcp",
+      "allowedDiscovery": ["codebase-context-mcp"],
+      "requiredFirstStep": "Use live codebase-context context tools first.",
+      "forbidden": []
+    }
+  ]
+}

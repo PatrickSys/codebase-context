@@ -1,0 +1,5 @@
+{
+  "schemaVersion": "ai-context-package-corrections.v0",
+  "policy": "Append-only factual errata only. Do not tune expected results after solver outputs.",
+  "corrections": []
+}

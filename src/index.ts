@@ -91,7 +91,8 @@ const CLI_SUBCOMMANDS = [
   'refs',
   'cycles',
   'init',
-  'map'
+  'map',
+  'package'
 ];
 
 // Check if this module is the entry point.
@@ -661,8 +662,8 @@ export type IndexSignal = {
 };
 
 async function requireValidIndex(rootPath: string, paths: ToolPaths): Promise<IndexSignal> {
-  const meta = await readIndexMeta(rootPath);
-  await validateIndexArtifacts(rootPath, meta);
+  const meta = await readIndexMeta(rootPath, paths.baseDir);
+  await validateIndexArtifacts(rootPath, meta, paths.baseDir);
 
   // Optional artifact presence informs confidence.
   const hasIntelligence = await fileExists(paths.intelligence);
@@ -1246,6 +1247,7 @@ async function performIndexingOnce(
     let lastLoggedProgress = { phase: '', percentage: -1 };
     const indexer = new CodebaseIndexer({
       rootPath: project.rootPath,
+      contextDir: project.paths.baseDir,
       ...(project.runtimeOverrides.extraExcludePatterns?.length
         ? {
             config: {

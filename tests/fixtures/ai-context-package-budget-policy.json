@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "ai-context-package-budget.v0",
+  "model": "gpt-5.4-mini",
+  "reasoningEffort": "high",
+  "taskTimeoutSeconds": 180,
+  "maxToolCalls": 12,
+  "maxAnswerCharacters": 2000,
+  "maxContextCharacters": 24000,
+  "repeatCount": 1,
+  "costReporting": {
+    "required": true,
+    "separateSetupFromPerTask": true,
+    "tokenFields": ["grossInput", "cachedInput", "toolOutput", "output", "reasoning"]
+  }
+}

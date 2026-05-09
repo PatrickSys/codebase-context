@@ -17,6 +17,7 @@ describe('CLI', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
   let logSpy: ReturnType<typeof vi.spyOn>;
+  let stdoutWriteSpy: ReturnType<typeof vi.spyOn>;
   let originalEnvRoot: string | undefined;
 
   beforeEach(() => {
@@ -30,12 +31,16 @@ describe('CLI', () => {
     }) as unknown as typeof process.exit);
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    stdoutWriteSpy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((() => true) as unknown as typeof process.stdout.write);
   });
 
   afterEach(() => {
     exitSpy.mockRestore();
     errorSpy.mockRestore();
     logSpy.mockRestore();
+    stdoutWriteSpy.mockRestore();
 
     if (originalEnvRoot === undefined) delete process.env.CODEBASE_ROOT;
     else process.env.CODEBASE_ROOT = originalEnvRoot;
@@ -196,6 +201,45 @@ describe('CLI', () => {
     } finally {
       if (originalEnvRoot === undefined) delete process.env.CODEBASE_ROOT;
       else process.env.CODEBASE_ROOT = originalEnvRoot;
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('routes package build without initializing MCP tool context', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cli-package-build-'));
+    const outDir = path.join(tempDir, '.context');
+
+    try {
+      await fs.writeFile(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(
+          {
+            name: '@example/cli-package',
+            version: '1.0.0',
+            exports: {
+              '.': './index.ts'
+            }
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(tempDir, 'index.ts'),
+        'export function publicHelper(): string { return "ok"; }\n',
+        'utf-8'
+      );
+
+      await handleCliCommand(['package', 'build', tempDir, '--out', outDir, '--json']);
+
+      expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
+      const stdout = stdoutWriteSpy.mock.calls.map((call) => String(call[0] ?? '')).join('');
+      const output = JSON.parse(stdout) as {
+        publicSurfaceCount?: number;
+      };
+      expect(output.publicSurfaceCount).toBeGreaterThan(0);
+    } finally {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
   });

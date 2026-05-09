@@ -1,0 +1,15 @@
+{
+  "extractor": "deterministic-package-context-v0",
+  "warnings": [],
+  "counts": {
+    "artifacts": 6,
+    "symbols": 66,
+    "edges": 15,
+    "publicSurface": 5
+  },
+  "limitations": [
+    "Syntactic extraction only; no build or type checker proof.",
+    "LLM summaries are not generated.",
+    "Framework-specific extractors are not enabled in this Track A surface."
+  ]
+}

@@ -1,0 +1,56 @@
+name: ContextBench Selected CBM Score
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-selected-cbm-score.yml
+      - scripts/contextbench-score-selected-prediction.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selected-cbm-score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ROOT: /tmp/contextbench-selected-cbm-score
+      TASK_PAYLOADS: /tmp/contextbench-selected-cbm-score/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
+      OFFICIAL_CONTEXTBENCH: /tmp/contextbench-selected-cbm-score/ContextBench-official
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and materialize Go task quietly
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/logs"
+          pnpm install --frozen-lockfile > "$ROOT/logs/pnpm-install.log" 2>&1
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow > "$ROOT/logs/pip-install.log" 2>&1
+          git clone --depth 1 https://github.com/EuniAI/ContextBench.git "$OFFICIAL_CONTEXTBENCH" > "$ROOT/logs/contextbench-clone.log" 2>&1
+          node scripts/contextbench-runner.mjs --validate-fixtures > "$ROOT/logs/validate-fixtures.log" 2>&1
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT" > "$ROOT/logs/write-payloads.log" 2>&1
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 3 > "$ROOT/logs/materialize.log" 2>&1
+          echo "selected_score_setup_completed"
+      - name: Score selected gpt-5.4-mini-high prediction
+        shell: bash
+        run: node scripts/contextbench-score-selected-prediction.mjs
+      - name: Upload selected score artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-selected-cbm-score
+          path: /tmp/contextbench-selected-cbm-score
+          retention-days: 14

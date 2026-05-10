@@ -2,10 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+const targetTaskId = 'SWE-Bench-Pro__go__maintenance__bugfix__4df06349';
 const root = process.env.ROOT;
 const officialContextBench = process.env.OFFICIAL_CONTEXTBENCH;
 const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
-const task = payloads.tasks[2];
+const task = payloads.tasks.find((candidate) => candidate.instance_id === targetTaskId);
+if (!task) throw new Error(`target task ${targetTaskId} missing from payloads`);
 const runDir = join(root, 'selected-codebase-memory-mcp');
 mkdirSync(runDir, { recursive: true });
 

@@ -1,0 +1,561 @@
+name: ContextBench Real GPT54 Mini
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-real-gpt54mini.yml
+  workflow_dispatch:
+    inputs:
+      max_tasks:
+        description: 'Frozen ContextBench tasks to run from the manifest prefix'
+        required: true
+        default: '3'
+      repeats:
+        description: 'Repeats per lane/task'
+        required: true
+        default: '1'
+      lanes:
+        description: 'Comma-separated lanes'
+        required: true
+        default: 'raw-native,codebase-context,jcodemunch-repomapper,grepai,codebase-memory-mcp,codegraphcontext'
+
+permissions:
+  contents: read
+
+jobs:
+  real-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      ROOT: /tmp/contextbench-real-gpt54mini
+      TASK_PAYLOADS: /tmp/contextbench-real-gpt54mini/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
+      MAX_TASKS: ${{ github.event.inputs.max_tasks || '3' }}
+      REPEATS: ${{ github.event.inputs.repeats || '1' }}
+      LANES: ${{ github.event.inputs.lanes || 'raw-native,codebase-context,jcodemunch-repomapper,grepai,codebase-memory-mcp,codegraphcontext' }}
+      OPENAI_MODEL: gpt-5.4-mini
+      OPENAI_REASONING_EFFORT: high
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CBM_VERSION: v0.6.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install repo, evaluator, and lane tooling
+        run: |
+          set -euxo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/tool"
+          pnpm install --frozen-lockfile
+          pnpm run build
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow uv codegraphcontext kuzu
+          curl -sSL https://raw.githubusercontent.com/yoanbernabeu/grepai/main/install.sh | sh || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -fsSL "https://github.com/DeusData/codebase-memory-mcp/releases/download/${CBM_VERSION}/codebase-memory-mcp-linux-amd64.tar.gz" -o "$ROOT/tool/cbm.tar.gz"
+          tar -xzf "$ROOT/tool/cbm.tar.gz" -C "$ROOT/tool"
+          chmod +x "$ROOT/tool/codebase-memory-mcp" || true
+          for i in 1 2 3; do git clone --depth 1 https://github.com/EuniAI/ContextBench.git "$ROOT/ContextBench-official" && break || { rm -rf "$ROOT/ContextBench-official"; sleep 5; }; done
+
+      - name: Materialize frozen ContextBench task checkouts
+        run: |
+          set -euxo pipefail
+          node scripts/contextbench-runner.mjs --validate-fixtures
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks "$MAX_TASKS"
+
+      - name: Run gpt-5.4-mini-high scoreable matrix
+        env:
+          CBM_BIN: /tmp/contextbench-real-gpt54mini/tool/codebase-memory-mcp
+          OFFICIAL_CONTEXTBENCH: /tmp/contextbench-real-gpt54mini/ContextBench-official
+        run: |
+          cat > "$ROOT/run-real-matrix.mjs" <<'NODE'
+          import { spawn, spawnSync } from 'node:child_process';
+          import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          import { basename, join } from 'node:path';
+
+          const root = process.env.ROOT;
+          const outRoot = join(root, 'matrix');
+          const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
+          const maxTasks = Number(process.env.MAX_TASKS || '3');
+          const repeats = Number(process.env.REPEATS || '1');
+          const lanes = String(process.env.LANES || '').split(',').map((lane) => lane.trim()).filter(Boolean);
+          const tasks = payloads.tasks.slice(0, maxTasks);
+          mkdirSync(outRoot, { recursive: true });
+
+          function run(cmd, args, opts = {}) {
+            const started = Date.now();
+            const result = spawnSync(cmd, args, {
+              cwd: opts.cwd || process.cwd(),
+              env: opts.env || process.env,
+              encoding: 'utf8',
+              timeout: opts.timeoutMs || 20 * 60 * 1000,
+              maxBuffer: 96 * 1024 * 1024
+            });
+            return {
+              command: [cmd, ...args].join(' '),
+              cwd: opts.cwd || process.cwd(),
+              status: result.status,
+              signal: result.signal,
+              error: result.error?.message || null,
+              durationMs: Date.now() - started,
+              stdout: result.stdout || '',
+              stderr: result.stderr || ''
+            };
+          }
+
+          function sanitize(value) {
+            return String(value).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180);
+          }
+
+          function queryOf(problem) {
+            const stop = new Set(['that', 'this', 'with', 'from', 'when', 'then', 'into', 'should', 'would', 'could', 'there', 'where', 'which', 'about', 'after', 'before']);
+            return String(problem || '')
+              .replace(/[`*_#>\[\](){},.;:!?/\\]/g, ' ')
+              .split(/\s+/)
+              .filter((w) => w.length >= 4 && !stop.has(w.toLowerCase()) && !/^https?$/.test(w))
+              .slice(0, 10)
+              .join(' ');
+          }
+
+          function add(locations, file, start = 1, end = start, source = 'tool') {
+            if (typeof file !== 'string' || file.length === 0) return;
+            if (file.includes('://')) return;
+            const clean = file.replace(/^\/+/, '').replace(/^\.\//, '');
+            if (!clean || clean.includes('..')) return;
+            const s = Math.max(1, Number(start) || 1);
+            const e = Math.max(s, Number(end) || s);
+            locations.push({ file: clean, start: s, end: e, source });
+          }
+
+          function walk(value, locations, source = 'tool') {
+            if (!value || typeof value !== 'object') return;
+            if (Array.isArray(value)) { for (const item of value) walk(item, locations, source); return; }
+            const file = value.file || value.path || value.file_path || value.relative_path || value.filename || value.source_path || value.uri;
+            const start = value.start_line || value.startLine || value.line || value.line_number || value.start || 1;
+            const end = value.end_line || value.endLine || value.end || start;
+            add(locations, file, start, end, source);
+            for (const item of Object.values(value)) walk(item, locations, source);
+          }
+
+          function jsonish(text) {
+            const raw = String(text || '').trim();
+            if (!raw) return null;
+            try { return JSON.parse(raw); } catch {}
+            for (const [open, close] of [['{', '}'], ['[', ']']]) {
+              const first = raw.indexOf(open);
+              const last = raw.lastIndexOf(close);
+              if (first >= 0 && last > first) {
+                try { return JSON.parse(raw.slice(first, last + 1)); } catch {}
+              }
+            }
+            return null;
+          }
+
+          function collectFromText(text, locations, source = 'tool') {
+            const re = /([A-Za-z0-9_.\/-]+\.(?:js|jsx|ts|tsx|py|go|rs|java|c|cc|cpp|h|hpp|rb|php|cs|kt|swift|vue|svelte|json|yml|yaml|md))(?::|#L|\s+line\s+)?(\d+)?/g;
+            let match;
+            while ((match = re.exec(String(text || ''))) !== null) add(locations, match[1], match[2] || 1, match[2] || 1, source);
+          }
+
+          function collect(result, locations, source) {
+            for (const text of [result?.stdout, result?.stderr]) {
+              const parsed = jsonish(text);
+              if (parsed) walk(parsed, locations, source);
+              collectFromText(text, locations, source);
+            }
+          }
+
+          function uniqueLocations(locations) {
+            const seen = new Set();
+            const out = [];
+            for (const loc of locations) {
+              const key = `${loc.file}:${loc.start}:${loc.end}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              out.push(loc);
+              if (out.length >= 80) break;
+            }
+            return out;
+          }
+
+          function buildPrediction(task, modelSelection) {
+            const spans = new Map();
+            for (const span of modelSelection.spans || []) {
+              addSpan(spans, span.file, span.start, span.end);
+            }
+            for (const file of modelSelection.files || []) addSpan(spans, file, 1, 1);
+            const predFiles = [...spans.keys()].slice(0, 20);
+            const predSpans = Object.fromEntries([...spans.entries()].slice(0, 20));
+            return {
+              instance_id: task.instance_id,
+              repo_url: task.repo_checkout_path,
+              commit: task.base_commit,
+              traj_data: { pred_steps: [{ files: predFiles, spans: predSpans }], pred_files: predFiles, pred_spans: predSpans },
+              model_patch: ''
+            };
+          }
+
+          function addSpan(spans, file, start = 1, end = start) {
+            if (typeof file !== 'string' || !file) return;
+            const clean = file.replace(/^\/+/, '').replace(/^\.\//, '');
+            const s = Math.max(1, Number(start) || 1);
+            const e = Math.max(s, Number(end) || s);
+            const list = spans.get(clean) || [];
+            list.push({ start: s, end: e });
+            spans.set(clean, list);
+          }
+
+          function parseScores(scorePath) {
+            if (!existsSync(scorePath)) return null;
+            const lines = readFileSync(scorePath, 'utf8').trim().split(/\n+/).filter(Boolean);
+            if (lines.length === 0) return null;
+            try { return JSON.parse(lines.at(-1)); } catch { return null; }
+          }
+
+          async function callOpenAI(runDir, task, lane, query, candidates) {
+            const started = Date.now();
+            if (!process.env.OPENAI_API_KEY) {
+              return { ok: false, status: 'model_unavailable', durationMs: 0, error: 'missing_OPENAI_API_KEY_secret' };
+            }
+            const candidateFiles = new Set(candidates.map((c) => c.file));
+            const request = {
+              model: process.env.OPENAI_MODEL || 'gpt-5.4-mini',
+              reasoning: { effort: process.env.OPENAI_REASONING_EFFORT || 'high' },
+              max_output_tokens: 1800,
+              instructions: 'You are selecting likely edit locations for ContextBench. Use only the provided candidate locations from the lane tool. Return JSON only.',
+              input: JSON.stringify({
+                taskId: task.instance_id,
+                repo: task.repo,
+                lane,
+                query,
+                problemStatement: task.problem_statement,
+                candidateLocations: candidates.slice(0, 60)
+              }),
+              text: {
+                format: {
+                  type: 'json_schema',
+                  name: 'contextbench_location_selection',
+                  strict: true,
+                  schema: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['files', 'spans', 'notes'],
+                    properties: {
+                      files: { type: 'array', maxItems: 20, items: { type: 'string' } },
+                      spans: {
+                        type: 'array',
+                        maxItems: 40,
+                        items: {
+                          type: 'object',
+                          additionalProperties: false,
+                          required: ['file', 'start', 'end'],
+                          properties: {
+                            file: { type: 'string' },
+                            start: { type: 'integer', minimum: 1 },
+                            end: { type: 'integer', minimum: 1 }
+                          }
+                        }
+                      },
+                      notes: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            };
+            writeFileSync(join(runDir, 'openai-request.redacted.json'), JSON.stringify({ ...request, input: JSON.parse(request.input) }, null, 2));
+            let responseText = '';
+            let responseJson = null;
+            try {
+              const response = await fetch('https://api.openai.com/v1/responses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+                body: JSON.stringify(request)
+              });
+              responseText = await response.text();
+              writeFileSync(join(runDir, 'openai-response.json'), responseText);
+              if (!response.ok) return { ok: false, status: 'model_error', durationMs: Date.now() - started, httpStatus: response.status, error: responseText.slice(0, 2000) };
+              responseJson = JSON.parse(responseText);
+            } catch (error) {
+              return { ok: false, status: 'model_error', durationMs: Date.now() - started, error: String(error?.message || error) };
+            }
+            const outputText = responseJson.output_text || (responseJson.output || []).flatMap((item) => item.content || []).filter((item) => item.type === 'output_text').map((item) => item.text).join('\n');
+            let parsed;
+            try { parsed = JSON.parse(outputText); } catch (error) { return { ok: false, status: 'model_parse_error', durationMs: Date.now() - started, error: String(error?.message || error), outputText }; }
+            const files = [...new Set((parsed.files || []).filter((file) => candidateFiles.has(file)))].slice(0, 20);
+            const spans = (parsed.spans || []).filter((span) => candidateFiles.has(span.file)).slice(0, 40);
+            if (files.length === 0 && spans.length === 0) return { ok: false, status: 'model_empty_after_lane_filter', durationMs: Date.now() - started, parsed };
+            return { ok: true, status: 'completed', durationMs: Date.now() - started, parsed: { files, spans, notes: parsed.notes || '' }, responseId: responseJson.id || null, usage: responseJson.usage || null };
+          }
+
+          async function callMcp(command, args, cwd, calls, env = process.env) {
+            const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+            const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+            const transport = new StdioClientTransport({ command, args, cwd, env });
+            const client = new Client({ name: 'contextbench-ci', version: '1.0.0' }, { capabilities: {} });
+            const started = Date.now();
+            const outputs = [];
+            try {
+              await client.connect(transport);
+              const tools = await client.listTools();
+              outputs.push({ tool: 'tools/list', result: tools });
+              for (const call of calls) {
+                const result = await client.callTool({ name: call.name, arguments: call.arguments });
+                outputs.push({ tool: call.name, arguments: call.arguments, result });
+              }
+              await client.close();
+              return { status: 0, signal: null, error: null, durationMs: Date.now() - started, stdout: JSON.stringify(outputs), stderr: '', command: [command, ...args].join(' '), cwd };
+            } catch (error) {
+              try { await client.close(); } catch {}
+              return { status: 1, signal: null, error: String(error?.message || error), durationMs: Date.now() - started, stdout: JSON.stringify(outputs), stderr: String(error?.stack || error), command: [command, ...args].join(' '), cwd };
+            }
+          }
+
+          async function retrieve(lane, task, runDir, query) {
+            const repo = task.repo_checkout_path;
+            const firstTerm = query.split(/\s+/).find(Boolean) || 'main';
+            const locations = [];
+            const commands = [];
+            let setupStatus = 'completed';
+            let indexStatus = 'completed';
+            const startedSetup = Date.now();
+            let setupDurationMs = 0;
+            let indexDurationMs = 0;
+            let queryDurationMs = 0;
+
+            if (lane === 'raw-native') {
+              setupDurationMs = Date.now() - startedSetup;
+              const qTerms = query.split(/\s+/).slice(0, 5);
+              const started = Date.now();
+              for (const term of qTerms) {
+                const result = run('rg', ['-n', '-i', '--glob', '!.git', '--glob', '!vendor/**', '--glob', '!node_modules/**', term, repo], { timeoutMs: 60_000 });
+                commands.push(result);
+                collect(result, locations, 'raw-native');
+              }
+              queryDurationMs = Date.now() - started;
+            } else if (lane === 'codebase-context') {
+              const env = { ...process.env, CODEBASE_ROOT: repo, CODEBASE_CONTEXT_ASCII: '1' };
+              const version = run('node', ['dist/index.js', '--version'], { env, timeoutMs: 60_000 });
+              commands.push(version);
+              setupDurationMs = version.durationMs;
+              const reindex = run('node', ['dist/index.js', 'reindex'], { env, timeoutMs: 20 * 60_000 });
+              commands.push(reindex);
+              indexDurationMs = reindex.durationMs;
+              if (reindex.status !== 0) indexStatus = 'index_failed';
+              const search = run('node', ['dist/index.js', 'search', '--query', query, '--intent', 'edit', '--limit', '25', '--json'], { env, timeoutMs: 5 * 60_000 });
+              commands.push(search);
+              queryDurationMs = search.durationMs;
+              collect(search, locations, 'codebase-context');
+            } else if (lane === 'codebase-memory-mcp') {
+              const env = { ...process.env, CBM_CACHE_DIR: join(runDir, 'cbm-cache'), CBM_DIAGNOSTICS: '1' };
+              const version = run(process.env.CBM_BIN, ['--version'], { env, timeoutMs: 60_000 });
+              commands.push(version);
+              setupDurationMs = version.durationMs;
+              const index = run(process.env.CBM_BIN, ['cli', 'index_repository', JSON.stringify({ repo_path: repo })], { cwd: repo, env, timeoutMs: 45 * 60_000 });
+              commands.push(index);
+              indexDurationMs = index.durationMs;
+              if (index.status !== 0) indexStatus = 'index_failed';
+              const projectObj = jsonish(index.stdout) || jsonish(index.stderr) || {};
+              const project = projectObj.project || basename(repo);
+              const started = Date.now();
+              const graph = run(process.env.CBM_BIN, ['cli', 'search_graph', JSON.stringify({ project, query, limit: 25 })], { cwd: repo, env, timeoutMs: 120_000 });
+              const code = run(process.env.CBM_BIN, ['cli', 'search_code', JSON.stringify({ project, pattern: firstTerm, mode: 'compact', limit: 25 })], { cwd: repo, env, timeoutMs: 120_000 });
+              commands.push(graph, code);
+              queryDurationMs = Date.now() - started;
+              collect(graph, locations, 'codebase-memory-mcp');
+              collect(code, locations, 'codebase-memory-mcp');
+            } else if (lane === 'grepai') {
+              const grepai = 'grepai';
+              const version = run(grepai, ['version'], { timeoutMs: 60_000 });
+              commands.push(version);
+              const initArgs = process.env.OPENAI_API_KEY ? ['init', '--yes', '--provider', 'openai', '--backend', 'gob', '--model', 'text-embedding-3-small'] : ['init', '--yes', '--provider', 'synthetic', '--backend', 'gob'];
+              const init = run(grepai, initArgs, { cwd: repo, timeoutMs: 120_000 });
+              commands.push(init);
+              setupDurationMs = version.durationMs + init.durationMs;
+              if (init.status !== 0) setupStatus = 'setup_failed';
+              const startedIndex = Date.now();
+              const watch = run(grepai, ['watch', '--background'], { cwd: repo, timeoutMs: 120_000 });
+              commands.push(watch);
+              await new Promise((resolve) => setTimeout(resolve, 25_000));
+              const status = run(grepai, ['watch', '--status'], { cwd: repo, timeoutMs: 60_000 });
+              commands.push(status);
+              indexDurationMs = Date.now() - startedIndex;
+              if (watch.status !== 0 && status.status !== 0) indexStatus = 'index_failed';
+              const search = run(grepai, ['search', query, '--json', '--compact'], { cwd: repo, timeoutMs: 180_000 });
+              commands.push(search);
+              queryDurationMs = search.durationMs;
+              collect(search, locations, 'grepai');
+              commands.push(run(grepai, ['watch', '--stop'], { cwd: repo, timeoutMs: 60_000 }));
+            } else if (lane === 'jcodemunch-repomapper') {
+              const version = run('uvx', ['jcodemunch-mcp', '--help'], { timeoutMs: 180_000 });
+              commands.push(version);
+              setupDurationMs = version.durationMs;
+              const mcp = await callMcp('uvx', ['jcodemunch-mcp'], repo, [
+                { name: 'index_folder', arguments: { path: repo, incremental: false, use_ai_summaries: false, follow_symlinks: false } },
+                { name: 'search_symbols', arguments: { repo, query, max_results: 25, semantic: false } },
+                { name: 'search_symbols', arguments: { repo: basename(repo), query, max_results: 25, semantic: false } }
+              ]);
+              commands.push(mcp);
+              indexDurationMs = mcp.durationMs;
+              queryDurationMs = 0;
+              if (mcp.status !== 0) indexStatus = 'index_or_query_failed';
+              collect(mcp, locations, 'jcodemunch-repomapper');
+            } else if (lane === 'codegraphcontext') {
+              const version = run('cgc', ['--help'], { timeoutMs: 60_000 });
+              commands.push(version);
+              setupDurationMs = version.durationMs;
+              const index = run('cgc', ['index', repo], { cwd: repo, timeoutMs: 30 * 60_000 });
+              commands.push(index);
+              indexDurationMs = index.durationMs;
+              if (index.status !== 0) indexStatus = 'index_failed';
+              const started = Date.now();
+              const complexity = run('cgc', ['analyze', 'complexity', '--limit', '25'], { cwd: repo, timeoutMs: 180_000 });
+              const callers = run('cgc', ['analyze', 'callers', firstTerm], { cwd: repo, timeoutMs: 120_000 });
+              const dead = run('cgc', ['analyze', 'dead-code', '--limit', '25'], { cwd: repo, timeoutMs: 180_000 });
+              commands.push(complexity, callers, dead);
+              queryDurationMs = Date.now() - started;
+              collect(complexity, locations, 'codegraphcontext');
+              collect(callers, locations, 'codegraphcontext');
+              collect(dead, locations, 'codegraphcontext');
+            } else {
+              setupStatus = 'setup_failed';
+              commands.push({ command: lane, cwd: repo, status: 1, signal: null, error: 'unknown_lane', durationMs: 0, stdout: '', stderr: '' });
+            }
+
+            for (const [i, command] of commands.entries()) writeFileSync(join(runDir, `command-${i + 1}.json`), JSON.stringify(command, null, 2));
+            const unique = uniqueLocations(locations);
+            writeFileSync(join(runDir, 'candidate-locations.json'), JSON.stringify(unique, null, 2));
+            return { lane, setupStatus, indexStatus, toolCallable: commands.some((command) => command.status === 0), candidates: unique, costs: { setupDurationMs, indexDurationMs, queryDurationMs }, commands };
+          }
+
+          const rows = [];
+          const scoreableRows = [];
+          for (const task of tasks) {
+            const query = queryOf(task.problem_statement);
+            for (const lane of lanes) {
+              for (let repeat = 1; repeat <= repeats; repeat += 1) {
+                const runId = sanitize(`${lane}-${task.instance_id}-r${repeat}`);
+                const runDir = join(outRoot, 'runs', runId);
+                mkdirSync(runDir, { recursive: true });
+                const startedAt = new Date().toISOString();
+                let row;
+                try {
+                  const retrieval = await retrieve(lane, task, runDir, query);
+                  const model = await callOpenAI(runDir, task, lane, query, retrieval.candidates);
+                  const prediction = model.ok ? buildPrediction(task, model.parsed) : buildPrediction(task, { files: [], spans: [] });
+                  const predictionPath = join(runDir, 'prediction.json');
+                  writeFileSync(predictionPath, JSON.stringify(prediction, null, 2));
+                  const predFiles = prediction.traj_data.pred_files;
+                  const predSpans = prediction.traj_data.pred_spans;
+                  const goldPath = join(runDir, 'gold.json');
+                  const gold = run('node', ['scripts/contextbench-select-slice.mjs', '--write-gold', '--task-id', task.instance_id, '--out', goldPath, '--payloads', process.env.TASK_PAYLOADS], { timeoutMs: 10 * 60_000 });
+                  const scorePath = join(runDir, 'official-score.jsonl');
+                  const evaluator = model.ok && predFiles.length > 0
+                    ? run('python', ['-m', 'contextbench.evaluate', '--gold', goldPath, '--pred', predictionPath, '--cache', join(runDir, 'repo-cache'), '--out', scorePath], { cwd: process.env.OFFICIAL_CONTEXTBENCH, timeoutMs: 20 * 60_000 })
+                    : { command: 'python -m contextbench.evaluate', cwd: process.env.OFFICIAL_CONTEXTBENCH, status: null, signal: null, error: 'skipped_no_model_prediction', durationMs: 0, stdout: '', stderr: '' };
+                  writeFileSync(join(runDir, 'gold-command.json'), JSON.stringify(gold, null, 2));
+                  writeFileSync(join(runDir, 'evaluator-command.json'), JSON.stringify(evaluator, null, 2));
+                  const score = parseScores(scorePath);
+                  const officialEvaluatorScoreable = evaluator.status === 0 && Boolean(score);
+                  const status = officialEvaluatorScoreable ? 'completed' : (model.ok ? 'judge_failed' : model.status);
+                  row = {
+                    run_id: runId,
+                    lane_id: lane,
+                    task_id: task.instance_id,
+                    repeat_index: repeat,
+                    status,
+                    model: `${process.env.OPENAI_MODEL || 'gpt-5.4-mini'}-${process.env.OPENAI_REASONING_EFFORT || 'high'}`,
+                    started_at: startedAt,
+                    completed_at: new Date().toISOString(),
+                    setupIndex: retrieval.costs,
+                    setupStatus: retrieval.setupStatus,
+                    indexStatus: retrieval.indexStatus,
+                    toolCallable: retrieval.toolCallable,
+                    candidateCount: retrieval.candidates.length,
+                    nonEmptyPrediction: predFiles.length > 0 && Object.keys(predSpans).length > 0,
+                    predFiles: predFiles.length,
+                    officialEvaluatorScoreable,
+                    modelStatus: model.status,
+                    modelDurationMs: model.durationMs,
+                    modelUsage: model.usage || null,
+                    score,
+                    paths: { runDir, predictionPath, scorePath }
+                  };
+                  if (officialEvaluatorScoreable) scoreableRows.push(row);
+                } catch (error) {
+                  row = { run_id: runId, lane_id: lane, task_id: task.instance_id, repeat_index: repeat, status: 'tool_error', error: String(error?.stack || error), started_at: startedAt, completed_at: new Date().toISOString(), officialEvaluatorScoreable: false };
+                  writeFileSync(join(runDir, 'row-error.txt'), row.error);
+                }
+                rows.push(row);
+                writeFileSync(join(runDir, 'row.json'), JSON.stringify(row, null, 2));
+                console.log(JSON.stringify({ run_id: row.run_id, lane_id: row.lane_id, task_id: row.task_id, status: row.status, scoreable: row.officialEvaluatorScoreable, predFiles: row.predFiles || 0, candidateCount: row.candidateCount || 0 }));
+              }
+            }
+          }
+
+          const byLane = {};
+          for (const row of scoreableRows) {
+            const bucket = byLane[row.lane_id] || { lane: row.lane_id, scoreableRows: 0, fileCoverage: [], filePrecision: [], symbolCoverage: [], spanCoverage: [], lineCoverage: [], editlocRecall: [] };
+            bucket.scoreableRows += 1;
+            bucket.fileCoverage.push(row.score?.final?.file?.coverage ?? null);
+            bucket.filePrecision.push(row.score?.final?.file?.precision ?? null);
+            bucket.symbolCoverage.push(row.score?.final?.symbol?.coverage ?? null);
+            bucket.spanCoverage.push(row.score?.final?.span?.coverage ?? null);
+            bucket.lineCoverage.push(row.score?.final?.line?.coverage ?? null);
+            bucket.editlocRecall.push(row.score?.editloc?.recall ?? null);
+            byLane[row.lane_id] = bucket;
+          }
+          function mean(values) {
+            const nums = values.filter((value) => Number.isFinite(value));
+            return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+          }
+          const resultsTable = Object.values(byLane).map((bucket) => ({
+            lane: bucket.lane,
+            scoreableRows: bucket.scoreableRows,
+            fileCoverage: mean(bucket.fileCoverage),
+            filePrecision: mean(bucket.filePrecision),
+            symbolCoverage: mean(bucket.symbolCoverage),
+            spanCoverage: mean(bucket.spanCoverage),
+            lineCoverage: mean(bucket.lineCoverage),
+            editlocRecall: mean(bucket.editlocRecall)
+          })).sort((a, b) => (b.fileCoverage ?? -1) - (a.fileCoverage ?? -1));
+          const summary = {
+            createdAt: new Date().toISOString(),
+            model: `${process.env.OPENAI_MODEL || 'gpt-5.4-mini'}-${process.env.OPENAI_REASONING_EFFORT || 'high'}`,
+            maxTasks,
+            repeats,
+            lanes,
+            attemptedRows: rows.length,
+            scoreableRows: scoreableRows.length,
+            nonScoreableRows: rows.length - scoreableRows.length,
+            statusCounts: rows.reduce((acc, row) => { acc[row.status] = (acc[row.status] || 0) + 1; return acc; }, {}),
+            setupIndexCostReportedSeparately: true,
+            resultsTable,
+            rows
+          };
+          writeFileSync(join(outRoot, 'summary.json'), JSON.stringify(summary, null, 2));
+          writeFileSync(join(outRoot, 'results-table.json'), JSON.stringify(resultsTable, null, 2));
+          console.log(JSON.stringify({ attemptedRows: summary.attemptedRows, scoreableRows: summary.scoreableRows, statusCounts: summary.statusCounts, resultsTable }, null, 2));
+          if (scoreableRows.length === 0) process.exitCode = 1;
+          NODE
+          node "$ROOT/run-real-matrix.mjs"
+
+      - name: Upload real benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-real-gpt54mini
+          path: /tmp/contextbench-real-gpt54mini
+          retention-days: 14

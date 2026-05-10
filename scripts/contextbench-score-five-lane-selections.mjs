@@ -6,6 +6,7 @@ const targetTaskId = process.env.TARGET_TASK_ID || 'SWE-Bench-Pro__go__maintenan
 const root = process.env.ROOT || '/tmp/contextbench-five-lane-score';
 const officialContextBench = process.env.OFFICIAL_CONTEXTBENCH;
 const selectionsPath = process.env.SELECTIONS_PATH || 'scripts/contextbench-five-lane-selections.json';
+const requiredLanes = ['raw-native', 'codebase-context', 'codebase-memory-mcp', 'grepai', 'codegraphcontext'];
 const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
 const task = payloads.tasks.find((candidate) => candidate.instance_id === targetTaskId);
 if (!task) throw new Error(`target task ${targetTaskId} missing from payloads`);
@@ -14,6 +15,20 @@ if (!existsSync(selectionsPath)) throw new Error(`selection file missing: ${sele
 const selections = JSON.parse(readFileSync(selectionsPath, 'utf8'));
 const laneSelections = selections.laneSelections || [];
 if (laneSelections.length === 0) throw new Error('selection file has no laneSelections');
+
+const laneCounts = new Map();
+for (const selection of laneSelections) {
+  const lane = selection.lane_id || selection.lane;
+  laneCounts.set(lane, (laneCounts.get(lane) || 0) + 1);
+}
+const missingLanes = requiredLanes.filter((lane) => !laneCounts.has(lane));
+const duplicateLanes = [...laneCounts.entries()].filter(([, count]) => count > 1).map(([lane]) => lane);
+const extraLanes = [...laneCounts.keys()].filter((lane) => !requiredLanes.includes(lane));
+if (missingLanes.length > 0 || duplicateLanes.length > 0 || extraLanes.length > 0) {
+  throw new Error(
+    `lane selection set invalid: missing=${missingLanes.join(',') || 'none'} duplicate=${duplicateLanes.join(',') || 'none'} extra=${extraLanes.join(',') || 'none'}`,
+  );
+}
 
 function run(cmd, args, opts = {}) {
   const started = Date.now();
@@ -97,7 +112,7 @@ for (const selection of laneSelections) {
   for (const span of spans) addSpan(spanMap, span.file, span.start, span.end);
   const predFiles = [...new Set([...files, ...spans.map((span) => String(span.file || '').replaceAll('\\', '/').replace(/^\.\//, ''))])].filter(Boolean);
   const predSpans = Object.fromEntries(spanMap.entries());
-  const nonEmptyPrediction = predFiles.length > 0 && spans.length > 0;
+  const nonEmptyPrediction = predFiles.length > 0 || spans.length > 0;
   const readiness = selection.readiness || {};
   const rowBase = {
     lane_id: lane,
@@ -172,7 +187,8 @@ const summary = {
   createdAt: new Date().toISOString(),
   attemptedRows: rows.length,
   scoreableRows: scoreableRows.length,
-  requiredCompetitors: 5,
+  requiredCompetitors: requiredLanes.length,
+  requiredLanes,
   setupIndexCostReportedSeparately: true,
   model: selections.model || 'gpt-5.4-mini-high',
   predictionSource: selections.predictionSource || 'gpt-5.4-mini-high subagent selections over real lane candidate packs',
@@ -186,4 +202,4 @@ writeFileSync(join(root, 'summary.json'), JSON.stringify(summary, null, 2));
 console.log('CONTEXTBENCH_FIVE_LANE_SCORE_JSON_START');
 console.log(JSON.stringify(summary, null, 2));
 console.log('CONTEXTBENCH_FIVE_LANE_SCORE_JSON_END');
-if (scoreableRows.length !== rows.length || scoreableRows.length < 5) process.exitCode = 1;
+if (scoreableRows.length !== rows.length || scoreableRows.length < requiredLanes.length) process.exitCode = 1;

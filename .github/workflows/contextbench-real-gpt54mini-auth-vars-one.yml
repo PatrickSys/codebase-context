@@ -1,0 +1,82 @@
+name: ContextBench Real GPT54 Mini Auth Vars One
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-real-gpt54mini-auth-vars-one.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cbm-go-auth-vars-one:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ROOT: /tmp/contextbench-real-gpt54mini-auth-vars-one
+      TASK_PAYLOADS: /tmp/contextbench-real-gpt54mini-auth-vars-one/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
+      OPENAI_MODEL: gpt-5.4-mini
+      OPENAI_REASONING_EFFORT: high
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || vars.OPENAI_API_KEY || secrets.CODEX_OPENAI_API_KEY || vars.CODEX_OPENAI_API_KEY || secrets.OPENAI_KEY || vars.OPENAI_KEY || secrets.OPENAI_API_KEY_GPT54 || vars.OPENAI_API_KEY_GPT54 || secrets.CONTEXTBENCH_OPENAI_API_KEY || vars.CONTEXTBENCH_OPENAI_API_KEY }}
+      CBM_BIN: /tmp/contextbench-real-gpt54mini-auth-vars-one/tool/codebase-memory-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check model auth from secrets or vars
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::Missing model auth in Actions secrets and variables. Set OPENAI_API_KEY or one of the checked aliases."
+            exit 78
+          fi
+
+      - name: Install and materialize frozen Go task
+        run: |
+          set -euxo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/tool"
+          pnpm install --frozen-lockfile
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow
+          curl -fsSL "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.6.1/codebase-memory-mcp-linux-amd64.tar.gz" -o "$ROOT/tool/cbm.tar.gz"
+          tar -xzf "$ROOT/tool/cbm.tar.gz" -C "$ROOT/tool"
+          chmod +x "$CBM_BIN" || true
+          git clone --depth 1 https://github.com/EuniAI/ContextBench.git "$ROOT/ContextBench-official"
+          node scripts/contextbench-runner.mjs --validate-fixtures
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 3
+
+      - name: Run same authenticated scoreable CBM row script
+        env:
+          OFFICIAL_CONTEXTBENCH: /tmp/contextbench-real-gpt54mini-auth-vars-one/ContextBench-official
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/contextbench-real-gpt54mini-auth-one.yml').read_text()
+          marker = '          cat > "$ROOT/run.mjs" <<\'NODE\'\n'
+          start = text.index(marker) + len(marker)
+          end = text.index('          NODE\n          node "$ROOT/run.mjs"', start)
+          lines = []
+          for line in text[start:end].splitlines():
+              lines.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/contextbench-real-gpt54mini-auth-vars-one/run.mjs').write_text('\n'.join(lines) + '\n')
+          PY
+          node "$ROOT/run.mjs"
+
+      - name: Upload authenticated vars one-row artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-real-gpt54mini-auth-vars-one
+          path: /tmp/contextbench-real-gpt54mini-auth-vars-one
+          retention-days: 14

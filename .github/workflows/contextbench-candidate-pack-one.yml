@@ -1,0 +1,127 @@
+name: ContextBench Candidate Pack One
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-candidate-pack-one.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ROOT: /tmp/contextbench-candidate-pack-one
+      TASK_PAYLOADS: /tmp/contextbench-candidate-pack-one/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
+      CBM_BIN: /tmp/contextbench-candidate-pack-one/tool/codebase-memory-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install tools and materialize frozen Go task
+        run: |
+          set -euxo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/tool"
+          pnpm install --frozen-lockfile
+          pnpm run build
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow uv codegraphcontext kuzu
+          curl -fsSL "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.6.1/codebase-memory-mcp-linux-amd64.tar.gz" -o "$ROOT/tool/cbm.tar.gz"
+          tar -xzf "$ROOT/tool/cbm.tar.gz" -C "$ROOT/tool"
+          chmod +x "$CBM_BIN" || true
+          curl -sSL https://raw.githubusercontent.com/yoanbernabeu/grepai/main/install.sh | sh || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          git clone --depth 1 https://github.com/EuniAI/ContextBench.git "$ROOT/ContextBench-official"
+          node scripts/contextbench-runner.mjs --validate-fixtures
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 3
+      - name: Generate candidate pack
+        run: |
+          cat > "$ROOT/pack.mjs" <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          import { basename, relative, sep } from 'node:path';
+          const root = process.env.ROOT;
+          const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
+          const task = payloads.tasks[2];
+          const repo = task.repo_checkout_path;
+          const outDir = root + '/pack';
+          mkdirSync(outDir, { recursive: true });
+          function run(cmd, args, opts = {}) { const started = Date.now(); const r = spawnSync(cmd, args, { cwd: opts.cwd || process.cwd(), env: opts.env || process.env, encoding: 'utf8', timeout: opts.timeoutMs || 300000, maxBuffer: 96 * 1024 * 1024 }); return { command: [cmd, ...args].join(' '), cwd: opts.cwd || process.cwd(), status: r.status, signal: r.signal, error: r.error?.message || null, durationMs: Date.now() - started, stdout: r.stdout || '', stderr: r.stderr || '' }; }
+          function queryOf(text) { const stop = new Set(['that','this','with','from','when','then','into','should','would','could','there','where','which','about','after','before','have','will','been','than','also']); return String(text || '').replace(/[`*_#>\[\](){},.;:!?/\\]/g, ' ').split(/\s+/).filter((w) => w.length >= 4 && !stop.has(w.toLowerCase())).slice(0, 12).join(' '); }
+          function jsonish(text) { const raw = String(text || '').trim(); if (!raw) return null; try { return JSON.parse(raw); } catch {} for (const [a,b] of [['{','}'],['[',']']]) { const i = raw.indexOf(a), j = raw.lastIndexOf(b); if (i >= 0 && j > i) { try { return JSON.parse(raw.slice(i, j + 1)); } catch {} } } return null; }
+          function norm(file) { let f = String(file || '').replace(/^file:\/\//, ''); if (!f) return ''; if (f.startsWith(repo)) f = relative(repo, f); f = f.replaceAll('\\\\', '/').replace(/^\/+/, '').replace(/^\.\//, ''); if (f.startsWith('tmp/') || f.includes('://') || f.includes('..')) return ''; return f; }
+          function add(locs, file, start = 1, end = start, source = 'tool') { const clean = norm(file); if (!clean) return; const s = Math.max(1, Number(start) || 1); locs.push({ file: clean, start: s, end: Math.max(s, Number(end) || s), source }); }
+          function walk(value, locs, source) { if (!value || typeof value !== 'object') return; if (Array.isArray(value)) { for (const item of value) walk(item, locs, source); return; } add(locs, value.file || value.path || value.file_path || value.relative_path || value.filename || value.source_path || value.uri, value.start_line || value.startLine || value.line || value.line_number || value.start || 1, value.end_line || value.endLine || value.end || value.line || 1, source); for (const item of Object.values(value)) walk(item, locs, source); }
+          function collect(text, locs, source) { const parsed = jsonish(text); if (parsed) walk(parsed, locs, source); const re = /([A-Za-z0-9_.\/-]+\.(?:js|jsx|ts|tsx|py|go|rs|java|c|cc|cpp|h|hpp|rb|php|cs|kt|swift|vue|svelte|json|yml|yaml|md))(?::|#L|\s+line\s+)?(\d+)?/g; let m; while ((m = re.exec(String(text || ''))) !== null) add(locs, m[1], m[2] || 1, m[2] || 1, source); }
+          function uniq(locs, max = 60) { const seen = new Set(), out = []; for (const loc of locs) { const key = `${loc.file}:${loc.start}:${loc.end}`; if (!seen.has(key)) { seen.add(key); out.push(loc); if (out.length >= max) break; } } return out; }
+          function laneResult(lane, commands, locs, setupStatus = 'completed', indexStatus = 'completed') { for (const [i,c] of commands.entries()) writeFileSync(`${outDir}/${lane}-command-${i + 1}.json`, JSON.stringify(c, null, 2)); return { lane, setupStatus, indexStatus, toolCallable: commands.some((c) => c.status === 0), costs: { totalMs: commands.reduce((a,c) => a + c.durationMs, 0) }, candidates: uniq(locs) }; }
+          const query = queryOf(task.problem_statement);
+          const lanes = [];
+          {
+            const commands = [], locs = [];
+            for (const term of query.split(/\s+/).slice(0, 6)) { const r = run('rg', ['-n', '-i', '--glob', '!.git', '--glob', '!vendor/**', '--glob', '!node_modules/**', term, '.'], { cwd: repo, timeoutMs: 60000 }); commands.push(r); collect(r.stdout, locs, 'raw-native'); collect(r.stderr, locs, 'raw-native'); }
+            lanes.push(laneResult('raw-native', commands, locs));
+          }
+          {
+            const commands = [], locs = []; const env = { ...process.env, CODEBASE_ROOT: repo, CODEBASE_CONTEXT_ASCII: '1' };
+            const v = run('node', ['dist/index.js', '--version'], { env, timeoutMs: 60000 }); commands.push(v);
+            const idx = run('node', ['dist/index.js', 'reindex'], { env, timeoutMs: 1200000 }); commands.push(idx);
+            const s = run('node', ['dist/index.js', 'search', '--query', query, '--intent', 'edit', '--limit', '30', '--json'], { env, timeoutMs: 300000 }); commands.push(s); collect(s.stdout, locs, 'codebase-context'); collect(s.stderr, locs, 'codebase-context');
+            lanes.push(laneResult('codebase-context', commands, locs, 'completed', idx.status === 0 ? 'completed' : 'index_failed'));
+          }
+          {
+            const commands = [], locs = []; const env = { ...process.env, CBM_CACHE_DIR: outDir + '/cbm-cache', CBM_DIAGNOSTICS: '1' };
+            const v = run(process.env.CBM_BIN, ['--version'], { env, timeoutMs: 60000 }); commands.push(v);
+            const idx = run(process.env.CBM_BIN, ['cli', 'index_repository', JSON.stringify({ repo_path: repo })], { cwd: repo, env, timeoutMs: 2700000 }); commands.push(idx);
+            const project = (jsonish(idx.stdout) || jsonish(idx.stderr) || {}).project || basename(repo);
+            const g = run(process.env.CBM_BIN, ['cli', 'search_graph', JSON.stringify({ project, query, limit: 30 })], { cwd: repo, env, timeoutMs: 120000 }); commands.push(g);
+            const c = run(process.env.CBM_BIN, ['cli', 'search_code', JSON.stringify({ project, pattern: query.split(/\s+/)[0] || '.', mode: 'compact', limit: 30 })], { cwd: repo, env, timeoutMs: 120000 }); commands.push(c);
+            for (const r of [g, c]) { collect(r.stdout, locs, 'codebase-memory-mcp'); collect(r.stderr, locs, 'codebase-memory-mcp'); }
+            lanes.push(laneResult('codebase-memory-mcp', commands, locs, 'completed', idx.status === 0 ? 'completed' : 'index_failed'));
+          }
+          {
+            const commands = [], locs = [];
+            const v = run('grepai', ['version'], { timeoutMs: 60000 }); commands.push(v);
+            const init = run('grepai', ['init', '--yes', '--provider', 'synthetic', '--backend', 'gob'], { cwd: repo, timeoutMs: 120000 }); commands.push(init);
+            const watch = run('grepai', ['watch', '--background'], { cwd: repo, timeoutMs: 120000 }); commands.push(watch);
+            const status = run('grepai', ['watch', '--status'], { cwd: repo, timeoutMs: 60000 }); commands.push(status);
+            const s = run('grepai', ['search', query, '--json', '--compact'], { cwd: repo, timeoutMs: 180000 }); commands.push(s); collect(s.stdout, locs, 'grepai'); collect(s.stderr, locs, 'grepai');
+            commands.push(run('grepai', ['watch', '--stop'], { cwd: repo, timeoutMs: 60000 }));
+            lanes.push(laneResult('grepai', commands, locs, init.status === 0 ? 'completed' : 'setup_failed', (watch.status === 0 || status.status === 0) ? 'completed' : 'index_failed'));
+          }
+          {
+            const commands = [], locs = [];
+            const v = run('cgc', ['--help'], { timeoutMs: 60000 }); commands.push(v);
+            const idx = run('cgc', ['index', repo], { cwd: repo, timeoutMs: 1200000 }); commands.push(idx);
+            const a = run('cgc', ['analyze', 'complexity', '--limit', '30'], { cwd: repo, timeoutMs: 180000 }); commands.push(a);
+            const d = run('cgc', ['analyze', 'dead-code', '--limit', '30'], { cwd: repo, timeoutMs: 180000 }); commands.push(d);
+            const call = run('cgc', ['analyze', 'callers', query.split(/\s+/)[0] || 'main'], { cwd: repo, timeoutMs: 120000 }); commands.push(call);
+            for (const r of [a, d, call]) { collect(r.stdout, locs, 'codegraphcontext'); collect(r.stderr, locs, 'codegraphcontext'); }
+            lanes.push(laneResult('codegraphcontext', commands, locs, 'completed', idx.status === 0 ? 'completed' : 'index_failed'));
+          }
+          const pack = { createdAt: new Date().toISOString(), task: { instance_id: task.instance_id, repo: task.repo, base_commit: task.base_commit, problem_statement: task.problem_statement }, query, lanes };
+          writeFileSync(`${outDir}/candidate-pack.json`, JSON.stringify(pack, null, 2));
+          console.log(JSON.stringify({ task: pack.task, query, lanes: lanes.map((l) => ({ lane: l.lane, setupStatus: l.setupStatus, indexStatus: l.indexStatus, toolCallable: l.toolCallable, candidateCount: l.candidates.length, candidates: l.candidates.slice(0, 30) })) }, null, 2));
+          NODE
+          node "$ROOT/pack.mjs"
+      - name: Upload candidate pack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-candidate-pack-one
+          path: /tmp/contextbench-candidate-pack-one/pack
+          retention-days: 14

@@ -1,0 +1,66 @@
+name: ContextBench Raw Readiness
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-raw-readiness.yml
+      - scripts/contextbench-single-lane-candidate-pack.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  raw-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      ROOT: /tmp/contextbench-raw-readiness
+      TASK_PAYLOADS: /tmp/contextbench-raw-readiness/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts-raw
+      TARGET_TASK_ID: SWE-Bench-Pro__go__maintenance__bugfix__4df06349
+      LANE_ID: raw-native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Materialize selected task and install ripgrep
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/logs" "$ROOT/tool"
+          sudo apt-get update > "$ROOT/logs/apt-update.log" 2>&1
+          sudo apt-get install -y ripgrep > "$ROOT/logs/apt-ripgrep.log" 2>&1
+          pnpm install --frozen-lockfile > "$ROOT/logs/pnpm-install.log" 2>&1
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow > "$ROOT/logs/pip-shared.log" 2>&1
+          node scripts/contextbench-runner.mjs --validate-fixtures > "$ROOT/logs/validate-fixtures.log" 2>&1
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS.all" --checkout-root "$CHECKOUT_ROOT" > "$ROOT/logs/write-payloads.log" 2>&1
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const payloadPath = process.env.TASK_PAYLOADS;
+          const target = process.env.TARGET_TASK_ID;
+          const payload = JSON.parse(fs.readFileSync(`${payloadPath}.all`, 'utf8'));
+          const task = payload.tasks.find((candidate) => candidate.instance_id === target);
+          if (!task) throw new Error(`target task ${target} not found`);
+          fs.writeFileSync(payloadPath, `${JSON.stringify({ ...payload, task_count: 1, tasks: [task] }, null, 2)}\n`);
+          NODE
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 1 > "$ROOT/logs/materialize.log" 2>&1
+      - name: Generate raw-native readiness candidate pack
+        shell: bash
+        run: node scripts/contextbench-single-lane-candidate-pack.mjs
+      - name: Upload raw readiness artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-raw-readiness
+          path: /tmp/contextbench-raw-readiness
+          retention-days: 14

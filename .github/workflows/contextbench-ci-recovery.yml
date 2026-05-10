@@ -46,6 +46,9 @@ jobs:
       - name: Install repo dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install official evaluator dependencies
+        run: python -m pip install tree-sitter tree-sitter-languages
+
       - name: Validate frozen ContextBench fixtures
         run: node scripts/contextbench-runner.mjs --validate-fixtures
 
@@ -156,11 +159,11 @@ jobs:
             };
             const setup = run(cbmBin, ['--version'], { env, timeoutMs: 60_000 });
             const indexRun = run(cbmBin, ['cli', 'index_repository', JSON.stringify({ repo_path: task.repo_checkout_path })], { env, timeoutMs: 45 * 60 * 1000 });
-            const listProjects = run(cbmBin, ['cli', '--raw', 'list_projects', '{}'], { env, timeoutMs: 120_000 });
-            const graphSchema = run(cbmBin, ['cli', '--raw', 'get_graph_schema', '{}'], { env, timeoutMs: 120_000 });
-            const graphSearch = run(cbmBin, ['cli', '--raw', 'search_graph', JSON.stringify({ label: 'Function', limit: 25 })], { env, timeoutMs: 120_000 });
+            const listProjects = run(cbmBin, ['cli', 'list_projects'], { env, timeoutMs: 120_000 });
+            const graphSchema = run(cbmBin, ['cli', 'get_graph_schema'], { env, timeoutMs: 120_000 });
+            const graphSearch = run(cbmBin, ['cli', 'search_graph', JSON.stringify({ label: 'Function', limit: 25 })], { env, timeoutMs: 120_000 });
             const query = makeQuery(task.problem_statement);
-            const codeSearch = run(cbmBin, ['cli', '--raw', 'search_code', JSON.stringify({ query, output: 'compact', limit: 25 })], { env, timeoutMs: 120_000 });
+            const codeSearch = run(cbmBin, ['cli', 'search_code', JSON.stringify({ query, output: 'compact', limit: 25 })], { env, timeoutMs: 120_000 });
 
             const parsed = [codeSearch.stdout, graphSearch.stdout, graphSchema.stdout, listProjects.stdout]
               .map(parseJsonish)
@@ -186,9 +189,13 @@ jobs:
             writeFileSync(join(runDir, 'index.stdout.log'), indexRun.stdout);
             writeFileSync(join(runDir, 'index.stderr.log'), indexRun.stderr);
             writeFileSync(join(runDir, 'list-projects.stdout.log'), listProjects.stdout);
+            writeFileSync(join(runDir, 'list-projects.stderr.log'), listProjects.stderr);
             writeFileSync(join(runDir, 'graph-schema.stdout.log'), graphSchema.stdout);
+            writeFileSync(join(runDir, 'graph-schema.stderr.log'), graphSchema.stderr);
             writeFileSync(join(runDir, 'graph-search.stdout.log'), graphSearch.stdout);
+            writeFileSync(join(runDir, 'graph-search.stderr.log'), graphSearch.stderr);
             writeFileSync(join(runDir, 'code-search.stdout.log'), codeSearch.stdout);
+            writeFileSync(join(runDir, 'code-search.stderr.log'), codeSearch.stderr);
 
             const goldPath = join(runDir, 'gold.json');
             const gold = run('node', ['scripts/contextbench-select-slice.mjs', '--write-gold', '--task-id', task.instance_id, '--out', goldPath, '--payloads', payloadPath], { timeoutMs: 10 * 60 * 1000 });
@@ -204,7 +211,7 @@ jobs:
               allowedTool: 'codebase-memory-mcp',
               observedCommands: [setup.command, indexRun.command, listProjects.command, graphSchema.command, graphSearch.command, codeSearch.command],
               disallowedNativeReadSearchUsedForPrediction: false,
-              note: 'Prediction spans are derived only from codebase-memory-mcp CLI JSON/stdout outputs.'
+              note: 'Prediction spans are derived only from codebase-memory-mcp CLI outputs.'
             };
             const report = {
               taskId: task.instance_id,

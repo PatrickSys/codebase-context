@@ -1,0 +1,72 @@
+name: ContextBench Five Lane Candidates
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-five-lane-candidates.yml
+      - scripts/contextbench-five-lane-candidate-pack.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      ROOT: /tmp/contextbench-five-lane-candidates
+      TASK_PAYLOADS: /tmp/contextbench-five-lane-candidates/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
+      CBM_BIN: /tmp/contextbench-five-lane-candidates/tool/codebase-memory-mcp
+      TARGET_TASK_ID: SWE-Bench-Pro__go__maintenance__bugfix__4df06349
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install tools and materialize selected Go task quietly
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/tool" "$ROOT/logs"
+          pnpm install --frozen-lockfile > "$ROOT/logs/pnpm-install.log" 2>&1
+          pnpm run build > "$ROOT/logs/build.log" 2>&1
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow uv codegraphcontext kuzu > "$ROOT/logs/pip-install.log" 2>&1
+          curl -fsSL "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.6.1/codebase-memory-mcp-linux-amd64.tar.gz" -o "$ROOT/tool/cbm.tar.gz"
+          tar -xzf "$ROOT/tool/cbm.tar.gz" -C "$ROOT/tool"
+          chmod +x "$CBM_BIN" || true
+          curl -sSL https://raw.githubusercontent.com/yoanbernabeu/grepai/main/install.sh | sh > "$ROOT/logs/grepai-install.log" 2>&1 || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          node scripts/contextbench-runner.mjs --validate-fixtures > "$ROOT/logs/validate-fixtures.log" 2>&1
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS.all" --checkout-root "$CHECKOUT_ROOT" > "$ROOT/logs/write-payloads.log" 2>&1
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const payloadPath = process.env.TASK_PAYLOADS;
+          const target = process.env.TARGET_TASK_ID;
+          const payload = JSON.parse(fs.readFileSync(`${payloadPath}.all`, 'utf8'));
+          const task = payload.tasks.find((candidate) => candidate.instance_id === target);
+          if (!task) throw new Error(`target task ${target} not found`);
+          fs.writeFileSync(payloadPath, `${JSON.stringify({ ...payload, task_count: 1, tasks: [task] }, null, 2)}\n`);
+          NODE
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 1 > "$ROOT/logs/materialize.log" 2>&1
+          echo "five_lane_setup_completed"
+      - name: Generate five-lane readiness candidate pack
+        shell: bash
+        run: node scripts/contextbench-five-lane-candidate-pack.mjs
+      - name: Upload five-lane candidate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-five-lane-candidates
+          path: /tmp/contextbench-five-lane-candidates
+          retention-days: 14

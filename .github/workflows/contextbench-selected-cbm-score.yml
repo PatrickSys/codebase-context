@@ -14,12 +14,13 @@ permissions:
 jobs:
   selected-cbm-score:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       ROOT: /tmp/contextbench-selected-cbm-score
       TASK_PAYLOADS: /tmp/contextbench-selected-cbm-score/task-payloads.json
       CHECKOUT_ROOT: /tmp/contextbench-checkouts
       OFFICIAL_CONTEXTBENCH: /tmp/contextbench-selected-cbm-score/ContextBench-official
+      TARGET_TASK_ID: SWE-Bench-Pro__go__maintenance__bugfix__4df06349
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
@@ -32,7 +33,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install and materialize Go task quietly
+      - name: Install and materialize selected Go task quietly
         shell: bash
         run: |
           set -euo pipefail
@@ -41,8 +42,17 @@ jobs:
           python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow > "$ROOT/logs/pip-install.log" 2>&1
           git clone --depth 1 https://github.com/EuniAI/ContextBench.git "$OFFICIAL_CONTEXTBENCH" > "$ROOT/logs/contextbench-clone.log" 2>&1
           node scripts/contextbench-runner.mjs --validate-fixtures > "$ROOT/logs/validate-fixtures.log" 2>&1
-          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT" > "$ROOT/logs/write-payloads.log" 2>&1
-          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 3 > "$ROOT/logs/materialize.log" 2>&1
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS.all" --checkout-root "$CHECKOUT_ROOT" > "$ROOT/logs/write-payloads.log" 2>&1
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const payloadPath = process.env.TASK_PAYLOADS;
+          const target = process.env.TARGET_TASK_ID;
+          const payload = JSON.parse(fs.readFileSync(`${payloadPath}.all`, 'utf8'));
+          const task = payload.tasks.find((candidate) => candidate.instance_id === target);
+          if (!task) throw new Error(`target task ${target} not found`);
+          fs.writeFileSync(payloadPath, `${JSON.stringify({ ...payload, task_count: 1, tasks: [task] }, null, 2)}\n`);
+          NODE
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 1 > "$ROOT/logs/materialize.log" 2>&1
           echo "selected_score_setup_completed"
       - name: Score selected gpt-5.4-mini-high prediction
         shell: bash

@@ -66,7 +66,7 @@ jobs:
           cat > "$ROOT/readiness.mjs" <<'NODE'
           import { spawnSync } from 'node:child_process';
           import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-          import { join } from 'node:path';
+          import { basename, join } from 'node:path';
 
           const root = process.env.ROOT;
           const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
@@ -112,6 +112,39 @@ jobs:
             return null;
           }
 
+          function payloadsFrom(result) {
+            const out = [];
+            for (const text of [result?.stdout, result?.stderr]) {
+              const parsed = jsonish(text);
+              if (!parsed) continue;
+              out.push(parsed);
+              const content = parsed.content;
+              if (Array.isArray(content)) {
+                for (const item of content) {
+                  const nested = jsonish(item?.text);
+                  if (nested) out.push(nested);
+                }
+              }
+            }
+            return out;
+          }
+
+          function projectFrom(...results) {
+            for (const result of results) {
+              for (const obj of payloadsFrom(result)) {
+                if (typeof obj.project === 'string' && obj.project) return obj.project;
+                if (Array.isArray(obj.projects)) {
+                  for (const entry of obj.projects) {
+                    if (typeof entry === 'string' && entry) return entry;
+                    if (typeof entry?.project === 'string' && entry.project) return entry.project;
+                    if (typeof entry?.name === 'string' && entry.name) return entry.name;
+                  }
+                }
+              }
+            }
+            return '';
+          }
+
           function add(spans, file, start = 1, end = start) {
             if (typeof file !== 'string' || !file) return;
             const clean = file.replace(/^\/+/, '');
@@ -138,6 +171,10 @@ jobs:
             while ((m = re.exec(String(s || ''))) !== null) add(spans, m[1], m[2] || 1, m[2] || 1);
           }
 
+          function regexLiteral(value) {
+            return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          }
+
           const reports = [];
           let ready = true;
           for (const [i, task] of tasks.entries()) {
@@ -148,11 +185,20 @@ jobs:
             const query = queryOf(task.problem_statement);
             const firstTerm = query.split(/\s+/)[0] || 'import';
             const setup = run(cbm, ['--version'], { env, timeoutMs: 60_000 });
-            const indexRun = run(cbm, ['cli', 'index_repository', JSON.stringify({ repo_path: '.' })], { ...opts, timeoutMs: 45 * 60 * 1000 });
+            const indexRun = run(cbm, ['cli', 'index_repository', JSON.stringify({ repo_path: task.repo_checkout_path })], { ...opts, timeoutMs: 45 * 60 * 1000 });
             const listProjects = firstOk('list_projects', [['cli', 'list_projects'], ['cli', 'list_projects', '{}']], opts);
-            const graphSchema = firstOk('get_graph_schema', [['cli', 'get_graph_schema'], ['cli', 'get_graph_schema', '{}']], opts);
-            const graphSearch = firstOk('search_graph', [['cli', 'search_graph', JSON.stringify({ label: 'Function', limit: 25 })], ['cli', 'search_graph', JSON.stringify({ label: 'Class', limit: 25 })]], opts);
-            const codeSearch = firstOk('search_code', [['cli', 'search_code', JSON.stringify({ pattern: query, limit: 25 })], ['cli', 'search_code', JSON.stringify({ pattern: firstTerm, limit: 25 })], ['cli', 'search_code', JSON.stringify({ pattern: '.', limit: 25 })]], opts);
+            const project = projectFrom(indexRun, listProjects) || basename(task.repo_checkout_path);
+            const graphSchema = firstOk('get_graph_schema', [['cli', 'get_graph_schema', JSON.stringify({ project })]], opts);
+            const graphSearch = firstOk('search_graph', [
+              ['cli', 'search_graph', JSON.stringify({ project, query, limit: 25 })],
+              ['cli', 'search_graph', JSON.stringify({ project, label: 'Function', query: firstTerm, limit: 25 })],
+              ['cli', 'search_graph', JSON.stringify({ project, label: 'Function', name_pattern: `.*${regexLiteral(firstTerm)}.*`, limit: 25 })]
+            ], opts);
+            const codeSearch = firstOk('search_code', [
+              ['cli', 'search_code', JSON.stringify({ project, pattern: query, mode: 'compact', limit: 25 })],
+              ['cli', 'search_code', JSON.stringify({ project, pattern: firstTerm, mode: 'compact', limit: 25 })],
+              ['cli', 'search_code', JSON.stringify({ project, pattern: '.', mode: 'compact', limit: 25 })]
+            ], opts);
 
             const spans = new Map();
             for (const r of [listProjects, graphSchema, graphSearch, codeSearch]) for (const text of [r.stdout, r.stderr]) { const parsed = jsonish(text); if (parsed) walk(parsed, spans); textPaths(text, spans); }
@@ -168,7 +214,7 @@ jobs:
             if (!existsSync(join(official, 'contextbench', 'evaluate.py'))) run('git', ['clone', '--depth', '1', 'https://github.com/EuniAI/ContextBench.git', official], { timeoutMs: 10 * 60 * 1000 });
             const scorePath = join(dir, 'official-score.jsonl');
             const evaluator = run('python', ['-m', 'contextbench.evaluate', '--gold', goldPath, '--pred', predictionPath, '--cache', join(dir, 'repo-cache'), '--out', scorePath], { cwd: official, timeoutMs: 20 * 60 * 1000 });
-            const report = { taskId: task.instance_id, repo: task.repo, setupStatus: setup.status, indexStatus: indexRun.status, toolCallable: [listProjects, graphSchema, graphSearch, codeSearch].some((r) => r.status === 0), nonEmptyPrediction: predFiles.length > 0 && Object.keys(predSpans).length > 0, officialEvaluatorStatus: evaluator.status, officialEvaluatorScoreable: evaluator.status === 0 && existsSync(scorePath), costs: { setupDurationMs: setup.durationMs, indexDurationMs: indexRun.durationMs, queryDurationMs: listProjects.durationMs + graphSchema.durationMs + graphSearch.durationMs + codeSearch.durationMs, evaluatorDurationMs: evaluator.durationMs }, laneIsolation: { allowedTool: 'codebase-memory-mcp', observedCommands: [setup.command, indexRun.command, listProjects.command, graphSchema.command, graphSearch.command, codeSearch.command], observedCwds: [setup.cwd, indexRun.cwd, listProjects.cwd, graphSchema.cwd, graphSearch.cwd, codeSearch.cwd], disallowedNativeReadSearchUsedForPrediction: false }, query, predFiles, commands: { setup, indexRun, listProjects, graphSchema, graphSearch, codeSearch, gold, evaluator } };
+            const report = { taskId: task.instance_id, repo: task.repo, project, setupStatus: setup.status, indexStatus: indexRun.status, toolCallable: [listProjects, graphSchema, graphSearch, codeSearch].some((r) => r.status === 0), nonEmptyPrediction: predFiles.length > 0 && Object.keys(predSpans).length > 0, officialEvaluatorStatus: evaluator.status, officialEvaluatorScoreable: evaluator.status === 0 && existsSync(scorePath), costs: { setupDurationMs: setup.durationMs, indexDurationMs: indexRun.durationMs, queryDurationMs: listProjects.durationMs + graphSchema.durationMs + graphSearch.durationMs + codeSearch.durationMs, evaluatorDurationMs: evaluator.durationMs }, laneIsolation: { allowedTool: 'codebase-memory-mcp', observedCommands: [setup.command, indexRun.command, listProjects.command, graphSchema.command, graphSearch.command, codeSearch.command], observedCwds: [setup.cwd, indexRun.cwd, listProjects.cwd, graphSchema.cwd, graphSearch.cwd, codeSearch.cwd], disallowedNativeReadSearchUsedForPrediction: false }, query, predFiles, commands: { setup, indexRun, listProjects, graphSchema, graphSearch, codeSearch, gold, evaluator } };
             writeFileSync(join(dir, 'readiness-report.json'), JSON.stringify(report, null, 2));
             reports.push(report);
             if (!(report.setupStatus === 0 && report.indexStatus === 0 && report.toolCallable && report.nonEmptyPrediction && report.officialEvaluatorScoreable)) ready = false;

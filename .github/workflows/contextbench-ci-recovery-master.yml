@@ -98,6 +98,7 @@ jobs:
             });
             return {
               command: [command, ...args].join(' '),
+              cwd: options.cwd ?? process.cwd(),
               status: result.status,
               signal: result.signal,
               error: result.error?.message ?? null,
@@ -178,18 +179,27 @@ jobs:
             mkdirSync(runDir, { recursive: true });
             const env = { ...process.env, CBM_CACHE_DIR: join(runDir, 'cbm-cache'), CBM_DIAGNOSTICS: '1' };
             const query = makeQuery(task.problem_statement);
+            const firstTerm = query.split(/\s+/).find(Boolean) || 'TODO';
+            const toolOptions = { env, cwd: task.repo_checkout_path, timeoutMs: 120_000 };
             const setup = run(cbmBin, ['--version'], { env, timeoutMs: 60_000 });
-            const indexRun = run(cbmBin, ['cli', 'index_repository', JSON.stringify({ repo_path: task.repo_checkout_path })], { env, timeoutMs: 45 * 60 * 1000 });
-            const listProjects = runCandidates('list_projects', [['cli', '--raw', 'list_projects'], ['cli', 'list_projects'], ['cli', 'list_projects', '{}']], { env, timeoutMs: 120_000 });
-            const graphSchema = runCandidates('get_graph_schema', [['cli', '--raw', 'get_graph_schema'], ['cli', 'get_graph_schema'], ['cli', 'get_graph_schema', '{}']], { env, timeoutMs: 120_000 });
-            const graphSearch = runCandidates('search_graph', [['cli', '--raw', 'search_graph', JSON.stringify({ label: 'Function', limit: 25 })], ['cli', 'search_graph', JSON.stringify({ label: 'Function', limit: 25 })]], { env, timeoutMs: 120_000 });
-            const codeSearch = runCandidates('search_code', [['cli', '--raw', 'search_code', JSON.stringify({ query, limit: 25 })], ['cli', 'search_code', JSON.stringify({ query, limit: 25 })]], { env, timeoutMs: 120_000 });
+            const indexRun = run(cbmBin, ['cli', 'index_repository', JSON.stringify({ repo_path: task.repo_checkout_path })], { env, cwd: task.repo_checkout_path, timeoutMs: 45 * 60 * 1000 });
+            const listProjects = runCandidates('list_projects', [['cli', '--raw', 'list_projects'], ['cli', 'list_projects'], ['cli', 'list_projects', '{}']], toolOptions);
+            const graphSchema = runCandidates('get_graph_schema', [['cli', '--raw', 'get_graph_schema'], ['cli', 'get_graph_schema'], ['cli', 'get_graph_schema', '{}']], toolOptions);
+            const graphSearch = runCandidates('search_graph', [['cli', '--raw', 'search_graph', JSON.stringify({ label: 'Function', limit: 25 })], ['cli', 'search_graph', JSON.stringify({ label: 'Function', limit: 25 })]], toolOptions);
+            const codeSearch = runCandidates('search_code', [
+              ['cli', '--raw', 'search_code', JSON.stringify({ pattern: query, limit: 25 })],
+              ['cli', 'search_code', JSON.stringify({ pattern: query, limit: 25 })],
+              ['cli', 'search_code', JSON.stringify({ pattern: firstTerm, limit: 25 })],
+              ['cli', 'search_code', JSON.stringify({ query, limit: 25 })]
+            ], toolOptions);
 
             const spans = new Map();
-            for (const text of [codeSearch.stdout, graphSearch.stdout, graphSchema.stdout, listProjects.stdout]) {
-              const parsed = parseJsonish(text);
-              if (parsed) collectSpans(parsed, spans);
-              collectTextSpans(text, spans);
+            for (const result of [codeSearch, graphSearch, graphSchema, listProjects]) {
+              for (const text of [result.stdout, result.stderr]) {
+                const parsed = parseJsonish(text);
+                if (parsed) collectSpans(parsed, spans);
+                collectTextSpans(text, spans);
+              }
             }
             const predFiles = [...spans.keys()].slice(0, 20);
             const predSpans = Object.fromEntries([...spans.entries()].slice(0, 20));
@@ -227,6 +237,7 @@ jobs:
               laneIsolation: {
                 allowedTool: 'codebase-memory-mcp',
                 observedCommands: [setup.command, indexRun.command, listProjects.command, graphSchema.command, graphSearch.command, codeSearch.command],
+                observedCwds: [setup.cwd, indexRun.cwd, listProjects.cwd, graphSchema.cwd, graphSearch.cwd, codeSearch.cwd],
                 disallowedNativeReadSearchUsedForPrediction: false,
                 note: 'Prediction spans are derived only from codebase-memory-mcp CLI outputs.'
               },

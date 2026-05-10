@@ -39,6 +39,10 @@ function run(cmd, args, opts = {}) {
   };
 }
 
+function durationOf(commands) {
+  return commands.reduce((sum, command) => sum + command.durationMs, 0);
+}
+
 function queryOf(text) {
   const stop = new Set([
     'that',
@@ -217,7 +221,7 @@ function writeCommands(lane, commands) {
   }
 }
 
-function laneResult(lane, commands, locs, setupStatus = 'completed', indexStatus = 'completed') {
+function laneResult(lane, commands, locs, setupStatus, indexStatus, setupIndex) {
   writeCommands(lane, commands);
   const candidates = uniq(locs);
   return {
@@ -226,11 +230,7 @@ function laneResult(lane, commands, locs, setupStatus = 'completed', indexStatus
     indexStatus,
     toolCallable: commands.some((command) => command.status === 0),
     candidateCount: candidates.length,
-    setupIndex: {
-      setupDurationMs: commands.slice(0, 1).reduce((sum, command) => sum + command.durationMs, 0),
-      indexDurationMs: commands.slice(1, 2).reduce((sum, command) => sum + command.durationMs, 0),
-      queryDurationMs: commands.slice(2).reduce((sum, command) => sum + command.durationMs, 0),
-    },
+    setupIndex,
     commands: commands.map((command) => ({
       command: command.command,
       status: command.status,
@@ -279,7 +279,13 @@ const lanes = [];
     collect(r.stdout, locs, 'raw-native');
     collect(r.stderr, locs, 'raw-native');
   }
-  lanes.push(laneResult('raw-native', commands, locs));
+  lanes.push(
+    laneResult('raw-native', commands, locs, 'not_required', 'not_required', {
+      setupDurationMs: 0,
+      indexDurationMs: 0,
+      queryDurationMs: durationOf(commands),
+    }),
+  );
 }
 
 {
@@ -290,16 +296,24 @@ const lanes = [];
   commands.push(setup);
   const index = run('node', ['dist/index.js', 'reindex'], { env, timeoutMs: 1200000 });
   commands.push(index);
+  const searches = [];
   for (const q of queryVariants) {
     const search = run('node', ['dist/index.js', 'search', '--query', q, '--intent', 'edit', '--limit', '40', '--json'], {
       env,
       timeoutMs: 300000,
     });
     commands.push(search);
+    searches.push(search);
     collect(search.stdout, locs, 'codebase-context');
     collect(search.stderr, locs, 'codebase-context');
   }
-  lanes.push(laneResult('codebase-context', commands, locs, setup.status === 0 ? 'completed' : 'setup_failed', index.status === 0 ? 'completed' : 'index_failed'));
+  lanes.push(
+    laneResult('codebase-context', commands, locs, setup.status === 0 ? 'completed' : 'setup_failed', index.status === 0 ? 'completed' : 'index_failed', {
+      setupDurationMs: setup.durationMs,
+      indexDurationMs: index.durationMs,
+      queryDurationMs: durationOf(searches),
+    }),
+  );
 }
 
 {
@@ -315,6 +329,7 @@ const lanes = [];
   });
   commands.push(index);
   const project = (jsonish(index.stdout) || jsonish(index.stderr) || {}).project || basename(repo);
+  const searches = [];
   for (const q of queryVariants) {
     const graph = run(process.env.CBM_BIN, ['cli', 'search_graph', JSON.stringify({ project, query: q, limit: 50 })], {
       cwd: repo,
@@ -322,6 +337,7 @@ const lanes = [];
       timeoutMs: 120000,
     });
     commands.push(graph);
+    searches.push(graph);
     collect(graph.stdout, locs, 'codebase-memory-mcp');
     collect(graph.stderr, locs, 'codebase-memory-mcp');
   }
@@ -332,10 +348,17 @@ const lanes = [];
       { cwd: repo, env, timeoutMs: 120000 },
     );
     commands.push(code);
+    searches.push(code);
     collect(code.stdout, locs, 'codebase-memory-mcp');
     collect(code.stderr, locs, 'codebase-memory-mcp');
   }
-  lanes.push(laneResult('codebase-memory-mcp', commands, locs, setup.status === 0 ? 'completed' : 'setup_failed', index.status === 0 ? 'completed' : 'index_failed'));
+  lanes.push(
+    laneResult('codebase-memory-mcp', commands, locs, setup.status === 0 ? 'completed' : 'setup_failed', index.status === 0 ? 'completed' : 'index_failed', {
+      setupDurationMs: setup.durationMs,
+      indexDurationMs: index.durationMs,
+      queryDurationMs: durationOf(searches),
+    }),
+  );
 }
 
 {
@@ -347,21 +370,32 @@ const lanes = [];
   commands.push(init);
   const watch = run('grepai', ['watch', '--background'], { cwd: repo, timeoutMs: 120000 });
   commands.push(watch);
+  const statusChecks = [];
   for (let i = 0; i < 12; i += 1) {
     const status = run('grepai', ['status', '--no-ui'], { cwd: repo, timeoutMs: 60000 });
     commands.push(status);
+    statusChecks.push(status);
     if (/chunks?\D+[1-9]|indexed files?\D+[1-9]/i.test(`${status.stdout}\n${status.stderr}`)) break;
     run('sleep', ['5'], { timeoutMs: 10000 });
   }
+  const searches = [];
   for (const q of queryVariants) {
     const search = run('grepai', ['search', q, '--json', '--compact', '--limit', '40'], { cwd: repo, timeoutMs: 180000 });
     commands.push(search);
+    searches.push(search);
     collect(search.stdout, locs, 'grepai');
     collect(search.stderr, locs, 'grepai');
   }
   const stop = run('grepai', ['watch', '--stop'], { cwd: repo, timeoutMs: 60000 });
   commands.push(stop);
-  lanes.push(laneResult('grepai', commands, locs, setup.status === 0 && init.status === 0 ? 'completed' : 'setup_failed', watch.status === 0 ? 'completed' : 'index_failed'));
+  lanes.push(
+    laneResult('grepai', commands, locs, setup.status === 0 && init.status === 0 ? 'completed' : 'setup_failed', watch.status === 0 ? 'completed' : 'index_failed', {
+      setupDurationMs: setup.durationMs + init.durationMs,
+      indexDurationMs: watch.durationMs + durationOf(statusChecks),
+      queryDurationMs: durationOf(searches),
+      teardownDurationMs: stop.durationMs,
+    }),
+  );
 }
 
 {
@@ -369,31 +403,46 @@ const lanes = [];
   const locs = [];
   const commandProbe = run('codegraphcontext', ['--help'], { timeoutMs: 60000 });
   const cgcCommand = commandProbe.status === 0 ? 'codegraphcontext' : 'cgc';
-  commands.push(commandProbe.status === 0 ? commandProbe : run(cgcCommand, ['--help'], { timeoutMs: 60000 }));
+  const setup = commandProbe.status === 0 ? commandProbe : run(cgcCommand, ['--help'], { timeoutMs: 60000 });
+  commands.push(setup);
   const index = run(cgcCommand, ['index', '.'], { cwd: repo, timeoutMs: 1200000 });
   commands.push(index);
+  const queries = [];
   for (const pattern of ['Metrics', 'Prometheus', 'Authorization', 'Bearer', 'Token', 'Subsonic', 'Header']) {
     const found = run(cgcCommand, ['find', 'pattern', pattern], { cwd: repo, timeoutMs: 180000 });
     commands.push(found);
+    queries.push(found);
     collect(found.stdout, locs, 'codegraphcontext');
     collect(found.stderr, locs, 'codegraphcontext');
   }
   for (const symbol of ['main', 'init', 'WriteInitialMetrics', 'ServeHTTP', 'GetUser']) {
     const callers = run(cgcCommand, ['analyze', 'callers', symbol], { cwd: repo, timeoutMs: 180000 });
     commands.push(callers);
+    queries.push(callers);
     collect(callers.stdout, locs, 'codegraphcontext');
     collect(callers.stderr, locs, 'codegraphcontext');
   }
   const complexity = run(cgcCommand, ['analyze', 'complexity', '--limit', '80'], { cwd: repo, timeoutMs: 180000 });
   commands.push(complexity);
+  queries.push(complexity);
   collect(complexity.stdout, locs, 'codegraphcontext');
   collect(complexity.stderr, locs, 'codegraphcontext');
-  lanes.push(laneResult('codegraphcontext', commands, locs, commands[0].status === 0 ? 'completed' : 'setup_failed', index.status === 0 ? 'completed' : 'index_failed'));
+  lanes.push(
+    laneResult('codegraphcontext', commands, locs, setup.status === 0 ? 'completed' : 'setup_failed', index.status === 0 ? 'completed' : 'index_failed', {
+      setupDurationMs: setup.durationMs,
+      indexDurationMs: index.durationMs,
+      queryDurationMs: durationOf(queries),
+    }),
+  );
 }
 
 const readiness = lanes.map((lane) => ({
   lane: lane.lane,
-  ready: lane.setupStatus === 'completed' && lane.indexStatus === 'completed' && lane.toolCallable && lane.candidateCount > 0,
+  ready:
+    (lane.setupStatus === 'completed' || lane.setupStatus === 'not_required') &&
+    (lane.indexStatus === 'completed' || lane.indexStatus === 'not_required') &&
+    lane.toolCallable &&
+    lane.candidateCount > 0,
   setupStatus: lane.setupStatus,
   indexStatus: lane.indexStatus,
   toolCallable: lane.toolCallable,

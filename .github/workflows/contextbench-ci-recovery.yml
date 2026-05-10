@@ -22,9 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      CI_READINESS_ROOT: ${{ runner.temp }}/contextbench-readiness
-      TASK_PAYLOADS: ${{ runner.temp }}/contextbench-readiness/task-payloads.json
-      CHECKOUT_ROOT: ${{ runner.temp }}/contextbench-checkouts
+      CI_READINESS_ROOT: /tmp/contextbench-readiness
+      TASK_PAYLOADS: /tmp/contextbench-readiness/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
       CBM_VERSION: ${{ github.event.inputs.codebase_memory_version || 'v0.6.1' }}
       MAX_TASKS: ${{ github.event.inputs.max_tasks || '3' }}
     steps:
@@ -67,7 +67,7 @@ jobs:
 
       - name: Run codebase-memory-mcp first3 readiness with official evaluator
         env:
-          CBM_BIN: ${{ runner.temp }}/contextbench-readiness/tool/codebase-memory-mcp
+          CBM_BIN: /tmp/contextbench-readiness/tool/codebase-memory-mcp
         run: |
           cat > "$CI_READINESS_ROOT/codebase-memory-first3-readiness.mjs" <<'NODE'
           import { spawnSync } from 'node:child_process';
@@ -252,5 +252,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: contextbench-codebase-memory-first3-readiness
-          path: ${{ runner.temp }}/contextbench-readiness
+          path: /tmp/contextbench-readiness
           retention-days: 14

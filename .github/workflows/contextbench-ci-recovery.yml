@@ -1,0 +1,256 @@
+name: ContextBench CI Recovery
+
+on:
+  push:
+    branches: [bench/contextbench-ci-recovery-20260510]
+  workflow_dispatch:
+    inputs:
+      max_tasks:
+        description: 'Number of first tasks to run for codebase-memory readiness'
+        required: true
+        default: '3'
+      codebase_memory_version:
+        description: 'codebase-memory-mcp release tag'
+        required: true
+        default: 'v0.6.1'
+
+permissions:
+  contents: read
+
+jobs:
+  codebase-memory-first3-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      CI_READINESS_ROOT: ${{ runner.temp }}/contextbench-readiness
+      TASK_PAYLOADS: ${{ runner.temp }}/contextbench-readiness/task-payloads.json
+      CHECKOUT_ROOT: ${{ runner.temp }}/contextbench-checkouts
+      CBM_VERSION: ${{ github.event.inputs.codebase_memory_version || 'v0.6.1' }}
+      MAX_TASKS: ${{ github.event.inputs.max_tasks || '3' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install repo dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate frozen ContextBench fixtures
+        run: node scripts/contextbench-runner.mjs --validate-fixtures
+
+      - name: Materialize first task payloads and checkouts
+        run: |
+          mkdir -p "$CI_READINESS_ROOT" "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks "$MAX_TASKS"
+
+      - name: Download codebase-memory-mcp
+        run: |
+          set -euxo pipefail
+          mkdir -p "$CI_READINESS_ROOT/tool"
+          curl -fsSL "https://github.com/DeusData/codebase-memory-mcp/releases/download/${CBM_VERSION}/codebase-memory-mcp-linux-amd64.tar.gz" -o "$CI_READINESS_ROOT/tool/cbm.tar.gz"
+          tar -xzf "$CI_READINESS_ROOT/tool/cbm.tar.gz" -C "$CI_READINESS_ROOT/tool"
+          find "$CI_READINESS_ROOT/tool" -maxdepth 3 -type f -name 'codebase-memory-mcp*' -print
+          chmod +x "$CI_READINESS_ROOT/tool/codebase-memory-mcp" || true
+          "$CI_READINESS_ROOT/tool/codebase-memory-mcp" --version || true
+
+      - name: Run codebase-memory-mcp first3 readiness with official evaluator
+        env:
+          CBM_BIN: ${{ runner.temp }}/contextbench-readiness/tool/codebase-memory-mcp
+        run: |
+          cat > "$CI_READINESS_ROOT/codebase-memory-first3-readiness.mjs" <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+
+          const root = process.env.CI_READINESS_ROOT;
+          const payloadPath = process.env.TASK_PAYLOADS;
+          const cbmBin = process.env.CBM_BIN;
+          const maxTasks = Number(process.env.MAX_TASKS || '3');
+          const payloads = JSON.parse(readFileSync(payloadPath, 'utf8'));
+          const tasks = payloads.tasks.slice(0, maxTasks);
+          const outRoot = join(root, 'codebase-memory-first3');
+          mkdirSync(outRoot, { recursive: true });
+
+          function run(command, args, options = {}) {
+            const started = Date.now();
+            const result = spawnSync(command, args, {
+              encoding: 'utf8',
+              timeout: options.timeoutMs ?? 20 * 60 * 1000,
+              env: options.env ?? process.env,
+              cwd: options.cwd ?? process.cwd(),
+              maxBuffer: 64 * 1024 * 1024
+            });
+            return {
+              command: [command, ...args].join(' '),
+              status: result.status,
+              signal: result.signal,
+              error: result.error?.message ?? null,
+              durationMs: Date.now() - started,
+              stdout: result.stdout ?? '',
+              stderr: result.stderr ?? ''
+            };
+          }
+
+          function parseJsonish(text) {
+            const trimmed = String(text || '').trim();
+            if (!trimmed) return null;
+            try { return JSON.parse(trimmed); } catch {}
+            const first = trimmed.indexOf('{');
+            const last = trimmed.lastIndexOf('}');
+            if (first >= 0 && last > first) {
+              try { return JSON.parse(trimmed.slice(first, last + 1)); } catch {}
+            }
+            return null;
+          }
+
+          function collectSpans(value, spans = new Map()) {
+            if (!value || typeof value !== 'object') return spans;
+            if (Array.isArray(value)) {
+              for (const item of value) collectSpans(item, spans);
+              return spans;
+            }
+            const file = value.file || value.path || value.file_path || value.rel_path || value.relative_path;
+            const start = value.start_line || value.startLine || value.line || value.line_start || value.start;
+            const end = value.end_line || value.endLine || value.line_end || value.end || start;
+            if (typeof file === 'string' && file.length > 0 && Number.isFinite(Number(start))) {
+              const clean = file.replace(/^\/+/, '');
+              const span = { start: Math.max(1, Number(start)), end: Math.max(Number(start), Number(end) || Number(start)) };
+              const list = spans.get(clean) || [];
+              list.push(span);
+              spans.set(clean, list);
+            }
+            for (const item of Object.values(value)) collectSpans(item, spans);
+            return spans;
+          }
+
+          function makeQuery(problem) {
+            return String(problem || '')
+              .replace(/[`*_#>\[\](){},.;:!?/\\]/g, ' ')
+              .split(/\s+/)
+              .filter((w) => w.length >= 4 && !/^https?$/.test(w))
+              .slice(0, 8)
+              .join(' ');
+          }
+
+          const reports = [];
+          let ready = true;
+          for (const [index, task] of tasks.entries()) {
+            const runDir = join(outRoot, `${index + 1}-${task.instance_id}`);
+            mkdirSync(runDir, { recursive: true });
+            const env = {
+              ...process.env,
+              CBM_CACHE_DIR: join(runDir, 'cbm-cache'),
+              CBM_DIAGNOSTICS: '1'
+            };
+            const setup = run(cbmBin, ['--version'], { env, timeoutMs: 60_000 });
+            const indexRun = run(cbmBin, ['cli', 'index_repository', JSON.stringify({ repo_path: task.repo_checkout_path })], { env, timeoutMs: 45 * 60 * 1000 });
+            const listProjects = run(cbmBin, ['cli', '--raw', 'list_projects', '{}'], { env, timeoutMs: 120_000 });
+            const graphSchema = run(cbmBin, ['cli', '--raw', 'get_graph_schema', '{}'], { env, timeoutMs: 120_000 });
+            const graphSearch = run(cbmBin, ['cli', '--raw', 'search_graph', JSON.stringify({ label: 'Function', limit: 25 })], { env, timeoutMs: 120_000 });
+            const query = makeQuery(task.problem_statement);
+            const codeSearch = run(cbmBin, ['cli', '--raw', 'search_code', JSON.stringify({ query, output: 'compact', limit: 25 })], { env, timeoutMs: 120_000 });
+
+            const parsed = [codeSearch.stdout, graphSearch.stdout, graphSchema.stdout, listProjects.stdout]
+              .map(parseJsonish)
+              .filter(Boolean);
+            const spans = new Map();
+            for (const parsedOutput of parsed) collectSpans(parsedOutput, spans);
+            const predFiles = [...spans.keys()].slice(0, 20);
+            const predSpans = Object.fromEntries([...spans.entries()].slice(0, 20));
+            const prediction = {
+              instance_id: task.instance_id,
+              repo_url: task.repo_checkout_path,
+              commit: task.base_commit,
+              traj_data: {
+                pred_steps: [{ files: predFiles, spans: predSpans }],
+                pred_files: predFiles,
+                pred_spans: predSpans
+              },
+              model_patch: ''
+            };
+            writeFileSync(join(runDir, 'prediction.json'), JSON.stringify(prediction, null, 2));
+            writeFileSync(join(runDir, 'setup.stdout.log'), setup.stdout);
+            writeFileSync(join(runDir, 'setup.stderr.log'), setup.stderr);
+            writeFileSync(join(runDir, 'index.stdout.log'), indexRun.stdout);
+            writeFileSync(join(runDir, 'index.stderr.log'), indexRun.stderr);
+            writeFileSync(join(runDir, 'list-projects.stdout.log'), listProjects.stdout);
+            writeFileSync(join(runDir, 'graph-schema.stdout.log'), graphSchema.stdout);
+            writeFileSync(join(runDir, 'graph-search.stdout.log'), graphSearch.stdout);
+            writeFileSync(join(runDir, 'code-search.stdout.log'), codeSearch.stdout);
+
+            const goldPath = join(runDir, 'gold.json');
+            const gold = run('node', ['scripts/contextbench-select-slice.mjs', '--write-gold', '--task-id', task.instance_id, '--out', goldPath, '--payloads', payloadPath], { timeoutMs: 10 * 60 * 1000 });
+            const officialRepo = join(root, 'ContextBench-official');
+            if (!existsSync(join(officialRepo, 'contextbench', 'evaluate.py'))) {
+              run('git', ['clone', '--depth', '1', 'https://github.com/EuniAI/ContextBench.git', officialRepo], { timeoutMs: 10 * 60 * 1000 });
+            }
+            const scorePath = join(runDir, 'official-score.jsonl');
+            const evaluator = run('python', ['-m', 'contextbench.evaluate', '--gold', goldPath, '--pred', join(runDir, 'prediction.json'), '--cache', join(runDir, 'repo-cache'), '--out', scorePath], { cwd: officialRepo, timeoutMs: 20 * 60 * 1000 });
+            const scoreable = evaluator.status === 0 && existsSync(scorePath);
+            const nonEmptyPrediction = predFiles.length > 0 && Object.keys(predSpans).length > 0;
+            const laneIsolation = {
+              allowedTool: 'codebase-memory-mcp',
+              observedCommands: [setup.command, indexRun.command, listProjects.command, graphSchema.command, graphSearch.command, codeSearch.command],
+              disallowedNativeReadSearchUsedForPrediction: false,
+              note: 'Prediction spans are derived only from codebase-memory-mcp CLI JSON/stdout outputs.'
+            };
+            const report = {
+              taskId: task.instance_id,
+              repo: task.repo,
+              setupStatus: setup.status,
+              indexStatus: indexRun.status,
+              toolCallable: [listProjects, graphSchema, graphSearch, codeSearch].some((r) => r.status === 0),
+              nonEmptyPrediction,
+              officialEvaluatorStatus: evaluator.status,
+              officialEvaluatorScoreable: scoreable,
+              laneIsolation,
+              costs: {
+                setupDurationMs: setup.durationMs,
+                indexDurationMs: indexRun.durationMs,
+                queryDurationMs: listProjects.durationMs + graphSchema.durationMs + graphSearch.durationMs + codeSearch.durationMs,
+                evaluatorDurationMs: evaluator.durationMs
+              },
+              query,
+              predFiles,
+              commands: { setup, indexRun, listProjects, graphSchema, graphSearch, codeSearch, gold, evaluator }
+            };
+            writeFileSync(join(runDir, 'readiness-report.json'), JSON.stringify(report, null, 2));
+            reports.push(report);
+            if (!(setup.status === 0 && indexRun.status === 0 && report.toolCallable && nonEmptyPrediction && scoreable)) ready = false;
+          }
+
+          const summary = {
+            createdAt: new Date().toISOString(),
+            lane: 'codebase-memory-mcp',
+            ready,
+            attemptedRows: reports.length,
+            scoreableRows: reports.filter((r) => r.officialEvaluatorScoreable).length,
+            nonEmptyPredictionRows: reports.filter((r) => r.nonEmptyPrediction).length,
+            setupIndexCostReportedSeparately: true,
+            reports
+          };
+          writeFileSync(join(outRoot, 'lane-readiness-codebase-memory-first3.json'), JSON.stringify(summary, null, 2));
+          console.log(JSON.stringify(summary, null, 2));
+          if (!ready) process.exitCode = 1;
+          NODE
+          node "$CI_READINESS_ROOT/codebase-memory-first3-readiness.mjs"
+
+      - name: Upload ContextBench recovery artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-codebase-memory-first3-readiness
+          path: ${{ runner.temp }}/contextbench-readiness
+          retention-days: 14

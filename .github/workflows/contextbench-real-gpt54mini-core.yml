@@ -1,0 +1,112 @@
+name: ContextBench Real GPT54 Mini Core
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-real-gpt54mini-core.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-go-task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      ROOT: /tmp/contextbench-real-gpt54mini-core
+      TASK_PAYLOADS: /tmp/contextbench-real-gpt54mini-core/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
+      OPENAI_MODEL: gpt-5.4-mini
+      OPENAI_REASONING_EFFORT: high
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CBM_BIN: /tmp/contextbench-real-gpt54mini-core/tool/codebase-memory-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies and materialize Go task
+        run: |
+          set -euxo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/tool"
+          pnpm install --frozen-lockfile
+          pnpm run build
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow
+          curl -fsSL "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.6.1/codebase-memory-mcp-linux-amd64.tar.gz" -o "$ROOT/tool/cbm.tar.gz"
+          tar -xzf "$ROOT/tool/cbm.tar.gz" -C "$ROOT/tool"
+          chmod +x "$CBM_BIN" || true
+          git clone --depth 1 https://github.com/EuniAI/ContextBench.git "$ROOT/ContextBench-official"
+          node scripts/contextbench-runner.mjs --validate-fixtures
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 3
+      - name: Run bounded core scoreable rows
+        env:
+          OFFICIAL_CONTEXTBENCH: /tmp/contextbench-real-gpt54mini-core/ContextBench-official
+        run: |
+          cat > "$ROOT/core.mjs" <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          import { basename, join } from 'node:path';
+          const root = process.env.ROOT;
+          const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
+          const task = payloads.tasks[2];
+          const outRoot = join(root, 'core-go');
+          mkdirSync(outRoot, { recursive: true });
+          const lanes = ['raw-native', 'codebase-context', 'codebase-memory-mcp'];
+          function run(cmd, args, opts = {}) {
+            const started = Date.now();
+            const r = spawnSync(cmd, args, { cwd: opts.cwd || process.cwd(), env: opts.env || process.env, encoding: 'utf8', timeout: opts.timeoutMs || 600000, maxBuffer: 96 * 1024 * 1024 });
+            return { command: [cmd, ...args].join(' '), cwd: opts.cwd || process.cwd(), status: r.status, signal: r.signal, error: r.error?.message || null, durationMs: Date.now() - started, stdout: r.stdout || '', stderr: r.stderr || '' };
+          }
+          function q(problem) { return String(problem || '').replace(/[`*_#>\[\](){},.;:!?/\\]/g, ' ').split(/\s+/).filter((w) => w.length >= 4).slice(0, 10).join(' '); }
+          function add(locs, file, start = 1, end = start, source = 'tool') { if (!file || typeof file !== 'string' || file.includes('://')) return; const clean = file.replace(/^\/+/, '').replace(/^\.\//, ''); if (!clean || clean.includes('..')) return; const s = Math.max(1, Number(start) || 1); locs.push({ file: clean, start: s, end: Math.max(s, Number(end) || s), source }); }
+          function jsonish(s) { const t = String(s || '').trim(); if (!t) return null; try { return JSON.parse(t); } catch {} for (const [a,b] of [['{','}'],['[',']']]) { const i=t.indexOf(a), j=t.lastIndexOf(b); if (i>=0 && j>i) { try { return JSON.parse(t.slice(i,j+1)); } catch {} } } return null; }
+          function walk(v, locs, source) { if (!v || typeof v !== 'object') return; if (Array.isArray(v)) { for (const x of v) walk(x, locs, source); return; } add(locs, v.file || v.path || v.file_path || v.relative_path || v.filename || v.source_path, v.start_line || v.line || 1, v.end_line || v.line || 1, source); for (const x of Object.values(v)) walk(x, locs, source); }
+          function collect(text, locs, source) { const parsed = jsonish(text); if (parsed) walk(parsed, locs, source); const re = /([A-Za-z0-9_.\/-]+\.(?:js|jsx|ts|tsx|py|go|rs|java|c|cc|cpp|h|hpp|rb|php|cs|kt|swift|vue|svelte|json|yml|yaml|md))(?::|#L|\s+line\s+)?(\d+)?/g; let m; while ((m = re.exec(String(text || ''))) !== null) add(locs, m[1], m[2] || 1, m[2] || 1, source); }
+          function uniq(locs) { const seen = new Set(), out = []; for (const loc of locs) { const k = `${loc.file}:${loc.start}:${loc.end}`; if (!seen.has(k)) { seen.add(k); out.push(loc); if (out.length >= 80) break; } } return out; }
+          function addSpan(map, file, start = 1, end = start) { if (!file) return; const s = Math.max(1, Number(start) || 1); const e = Math.max(s, Number(end) || s); const list = map.get(file) || []; list.push({ start: s, end: e }); map.set(file, list); }
+          function prediction(selection) { const spans = new Map(); for (const span of selection.spans || []) addSpan(spans, span.file, span.start, span.end); for (const file of selection.files || []) addSpan(spans, file, 1, 1); const predFiles = [...spans.keys()].slice(0, 20); return { instance_id: task.instance_id, repo_url: task.repo_checkout_path, commit: task.base_commit, traj_data: { pred_steps: [{ files: predFiles, spans: Object.fromEntries([...spans.entries()].slice(0, 20)) }], pred_files: predFiles, pred_spans: Object.fromEntries([...spans.entries()].slice(0, 20)) }, model_patch: '' }; }
+          async function askModel(runDir, lane, query, candidates) {
+            if (!process.env.OPENAI_API_KEY) return { ok: false, status: 'model_unavailable', error: 'missing_OPENAI_API_KEY_secret', durationMs: 0 };
+            const started = Date.now(); const candidateFiles = new Set(candidates.map((c) => c.file));
+            const body = { model: process.env.OPENAI_MODEL, reasoning: { effort: process.env.OPENAI_REASONING_EFFORT }, max_output_tokens: 1600, instructions: 'Select likely ContextBench edit locations using only provided candidate locations. Return JSON only.', input: JSON.stringify({ taskId: task.instance_id, repo: task.repo, lane, problemStatement: task.problem_statement, query, candidateLocations: candidates.slice(0, 60) }), text: { format: { type: 'json_schema', name: 'contextbench_selection', strict: true, schema: { type: 'object', additionalProperties: false, required: ['files','spans','notes'], properties: { files: { type: 'array', maxItems: 20, items: { type: 'string' } }, spans: { type: 'array', maxItems: 40, items: { type: 'object', additionalProperties: false, required: ['file','start','end'], properties: { file: { type: 'string' }, start: { type: 'integer', minimum: 1 }, end: { type: 'integer', minimum: 1 } } } }, notes: { type: 'string' } } } } } };
+            writeFileSync(join(runDir, 'openai-request.redacted.json'), JSON.stringify({ ...body, input: JSON.parse(body.input) }, null, 2));
+            const res = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify(body) });
+            const text = await res.text(); writeFileSync(join(runDir, 'openai-response.json'), text);
+            if (!res.ok) return { ok: false, status: 'model_error', httpStatus: res.status, error: text.slice(0, 2000), durationMs: Date.now() - started };
+            const json = JSON.parse(text); const out = json.output_text || (json.output || []).flatMap((i) => i.content || []).filter((i) => i.type === 'output_text').map((i) => i.text).join('\n');
+            const parsed = JSON.parse(out); const files = [...new Set((parsed.files || []).filter((f) => candidateFiles.has(f)))].slice(0, 20); const spans = (parsed.spans || []).filter((s) => candidateFiles.has(s.file)).slice(0, 40);
+            if (files.length === 0 && spans.length === 0) return { ok: false, status: 'model_empty_after_lane_filter', parsed, durationMs: Date.now() - started };
+            return { ok: true, status: 'completed', parsed: { files, spans, notes: parsed.notes || '' }, usage: json.usage || null, durationMs: Date.now() - started };
+          }
+          async function retrieve(lane, runDir, query) {
+            const repo = task.repo_checkout_path; const locs = []; const commands = []; let setupDurationMs = 0, indexDurationMs = 0, queryDurationMs = 0, setupStatus = 'completed', indexStatus = 'completed';
+            if (lane === 'raw-native') { const start = Date.now(); for (const term of query.split(/\s+/).slice(0, 6)) { const r = run('rg', ['-n', '-i', '--glob', '!.git', term, repo], { timeoutMs: 60000 }); commands.push(r); collect(r.stdout, locs, lane); collect(r.stderr, locs, lane); } queryDurationMs = Date.now() - start; }
+            if (lane === 'codebase-context') { const env = { ...process.env, CODEBASE_ROOT: repo, CODEBASE_CONTEXT_ASCII: '1' }; const v = run('node', ['dist/index.js', '--version'], { env, timeoutMs: 60000 }); commands.push(v); setupDurationMs = v.durationMs; const idx = run('node', ['dist/index.js', 'reindex'], { env, timeoutMs: 1200000 }); commands.push(idx); indexDurationMs = idx.durationMs; if (idx.status !== 0) indexStatus = 'index_failed'; const s = run('node', ['dist/index.js', 'search', '--query', query, '--intent', 'edit', '--limit', '25', '--json'], { env, timeoutMs: 300000 }); commands.push(s); queryDurationMs = s.durationMs; collect(s.stdout, locs, lane); collect(s.stderr, locs, lane); }
+            if (lane === 'codebase-memory-mcp') { const env = { ...process.env, CBM_CACHE_DIR: join(runDir, 'cbm-cache'), CBM_DIAGNOSTICS: '1' }; const v = run(process.env.CBM_BIN, ['--version'], { env, timeoutMs: 60000 }); commands.push(v); setupDurationMs = v.durationMs; const idx = run(process.env.CBM_BIN, ['cli', 'index_repository', JSON.stringify({ repo_path: repo })], { cwd: repo, env, timeoutMs: 2700000 }); commands.push(idx); indexDurationMs = idx.durationMs; if (idx.status !== 0) indexStatus = 'index_failed'; const project = (jsonish(idx.stdout) || jsonish(idx.stderr) || {}).project || basename(repo); const start = Date.now(); const g = run(process.env.CBM_BIN, ['cli', 'search_graph', JSON.stringify({ project, query, limit: 25 })], { cwd: repo, env, timeoutMs: 120000 }); const c = run(process.env.CBM_BIN, ['cli', 'search_code', JSON.stringify({ project, pattern: query.split(/\s+/)[0] || '.', mode: 'compact', limit: 25 })], { cwd: repo, env, timeoutMs: 120000 }); commands.push(g, c); queryDurationMs = Date.now() - start; for (const r of [g,c]) { collect(r.stdout, locs, lane); collect(r.stderr, locs, lane); } }
+            for (const [i, cmd] of commands.entries()) writeFileSync(join(runDir, `command-${i+1}.json`), JSON.stringify(cmd, null, 2)); const candidates = uniq(locs); writeFileSync(join(runDir, 'candidate-locations.json'), JSON.stringify(candidates, null, 2)); return { setupStatus, indexStatus, toolCallable: commands.some((c) => c.status === 0), costs: { setupDurationMs, indexDurationMs, queryDurationMs }, candidates };
+          }
+          const rows = []; const scoreable = []; const query = q(task.problem_statement);
+          for (const lane of lanes) { const runDir = join(outRoot, lane); mkdirSync(runDir, { recursive: true }); const retrieval = await retrieve(lane, runDir, query); const model = await askModel(runDir, lane, query, retrieval.candidates); const pred = model.ok ? prediction(model.parsed) : prediction({ files: [], spans: [] }); const predPath = join(runDir, 'prediction.json'); writeFileSync(predPath, JSON.stringify(pred, null, 2)); const goldPath = join(runDir, 'gold.json'); const gold = run('node', ['scripts/contextbench-select-slice.mjs', '--write-gold', '--task-id', task.instance_id, '--out', goldPath, '--payloads', process.env.TASK_PAYLOADS], { timeoutMs: 600000 }); writeFileSync(join(runDir, 'gold-command.json'), JSON.stringify(gold, null, 2)); const scorePath = join(runDir, 'official-score.jsonl'); const evaluator = model.ok && pred.traj_data.pred_files.length > 0 ? run('python', ['-m', 'contextbench.evaluate', '--gold', goldPath, '--pred', predPath, '--cache', join(runDir, 'repo-cache'), '--out', scorePath], { cwd: process.env.OFFICIAL_CONTEXTBENCH, timeoutMs: 1200000 }) : { status: null, error: 'skipped_no_model_prediction', durationMs: 0 }; writeFileSync(join(runDir, 'evaluator-command.json'), JSON.stringify(evaluator, null, 2)); let score = null; if (existsSync(scorePath)) { const lines = readFileSync(scorePath, 'utf8').trim().split(/\n+/).filter(Boolean); if (lines.length) score = JSON.parse(lines.at(-1)); } const row = { lane_id: lane, task_id: task.instance_id, status: evaluator.status === 0 && score ? 'completed' : (model.status || 'judge_failed'), model: `${process.env.OPENAI_MODEL}-${process.env.OPENAI_REASONING_EFFORT}`, setupStatus: retrieval.setupStatus, indexStatus: retrieval.indexStatus, toolCallable: retrieval.toolCallable, candidateCount: retrieval.candidates.length, nonEmptyPrediction: pred.traj_data.pred_files.length > 0, predFiles: pred.traj_data.pred_files.length, officialEvaluatorScoreable: evaluator.status === 0 && Boolean(score), setupIndex: retrieval.costs, modelStatus: model.status, modelUsage: model.usage || null, score }; rows.push(row); if (row.officialEvaluatorScoreable) scoreable.push(row); writeFileSync(join(runDir, 'row.json'), JSON.stringify(row, null, 2)); console.log(JSON.stringify({ lane: lane, status: row.status, scoreable: row.officialEvaluatorScoreable, predFiles: row.predFiles, candidateCount: row.candidateCount })); }
+          function mean(values) { const nums = values.filter((v) => Number.isFinite(v)); return nums.length ? nums.reduce((a,b) => a + b, 0) / nums.length : null; }
+          const table = scoreable.map((r) => ({ lane: r.lane_id, fileCoverage: r.score.final.file.coverage, filePrecision: r.score.final.file.precision, symbolCoverage: r.score.final.symbol.coverage, spanCoverage: r.score.final.span.coverage, lineCoverage: r.score.final.line.coverage, editlocRecall: r.score.editloc?.recall ?? null }));
+          const summary = { createdAt: new Date().toISOString(), model: `${process.env.OPENAI_MODEL}-${process.env.OPENAI_REASONING_EFFORT}`, taskId: task.instance_id, attemptedRows: rows.length, scoreableRows: scoreable.length, statusCounts: rows.reduce((a,r) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {}), setupIndexCostReportedSeparately: true, resultsTable: table, rows };
+          writeFileSync(join(outRoot, 'summary.json'), JSON.stringify(summary, null, 2)); console.log(JSON.stringify(summary, null, 2)); if (scoreable.length === 0) process.exitCode = 1;
+          NODE
+          node "$ROOT/core.mjs"
+      - name: Upload bounded core artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-real-gpt54mini-core
+          path: /tmp/contextbench-real-gpt54mini-core
+          retention-days: 14

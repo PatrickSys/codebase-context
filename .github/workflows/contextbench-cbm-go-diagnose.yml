@@ -1,0 +1,94 @@
+name: ContextBench CBM Go Diagnose
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-cbm-go-diagnose.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      ROOT: /tmp/contextbench-cbm-go-diagnose
+      TASK_PAYLOADS: /tmp/contextbench-cbm-go-diagnose/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
+      CBM_BIN: /tmp/contextbench-cbm-go-diagnose/tool/codebase-memory-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow
+      - name: Materialize Go task
+        run: |
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 3
+      - name: Download CBM
+        run: |
+          mkdir -p "$ROOT/tool"
+          curl -fsSL "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.6.1/codebase-memory-mcp-linux-amd64.tar.gz" -o "$ROOT/tool/cbm.tar.gz"
+          tar -xzf "$ROOT/tool/cbm.tar.gz" -C "$ROOT/tool"
+          chmod +x "$CBM_BIN"
+      - name: Run Go row and print scorer diagnostics
+        run: |
+          cat > "$ROOT/go-diagnose.mjs" <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          import { basename, join } from 'node:path';
+          const root = process.env.ROOT;
+          const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
+          const task = payloads.tasks[2];
+          const cbm = process.env.CBM_BIN;
+          const dir = join(root, 'go-row');
+          mkdirSync(dir, { recursive: true });
+          const env = { ...process.env, CBM_CACHE_DIR: join(dir, 'cbm-cache'), CBM_DIAGNOSTICS: '1' };
+          function run(cmd, args, opts = {}) {
+            const started = Date.now();
+            const r = spawnSync(cmd, args, { cwd: opts.cwd || process.cwd(), env: opts.env || process.env, encoding: 'utf8', timeout: opts.timeoutMs || 1200000, maxBuffer: 128 * 1024 * 1024 });
+            return { command: [cmd, ...args].join(' '), cwd: opts.cwd || process.cwd(), status: r.status, signal: r.signal, error: r.error?.message || null, durationMs: Date.now() - started, stdout: r.stdout || '', stderr: r.stderr || '' };
+          }
+          function jsonish(s) { try { return JSON.parse(String(s || '').trim()); } catch { return null; } }
+          function add(spans, file, start = 1, end = start) { if (!file) return; const clean = String(file).replace(/^\/+/, ''); const s = Math.max(1, Number(start) || 1); const e = Math.max(s, Number(end) || s); const list = spans.get(clean) || []; list.push({ start: s, end: e }); spans.set(clean, list); }
+          function walk(v, spans) { if (!v || typeof v !== 'object') return; if (Array.isArray(v)) { for (const x of v) walk(x, spans); return; } add(spans, v.file || v.path || v.file_path || v.relative_path || v.filename || v.source_path, v.start_line || v.line || 1, v.end_line || v.line || 1); for (const x of Object.values(v)) walk(x, spans); }
+          function textPaths(s, spans) { const re = /([A-Za-z0-9_.\/-]+\.(?:js|jsx|ts|tsx|py|go|rs|java|c|cc|cpp|h|hpp|rb|php|cs|kt|swift|vue|svelte|json|yml|yaml|md))(?::|#L|\s+line\s+)?(\d+)?/g; let m; while ((m = re.exec(String(s || ''))) !== null) add(spans, m[1], m[2] || 1, m[2] || 1); }
+          const query = 'Title System metrics written start Description system metrics';
+          const setup = run(cbm, ['--version'], { env });
+          const indexRun = run(cbm, ['cli', 'index_repository', JSON.stringify({ repo_path: task.repo_checkout_path })], { cwd: task.repo_checkout_path, env, timeoutMs: 2700000 });
+          const projectObj = jsonish(indexRun.stdout) || jsonish(indexRun.stderr) || {};
+          const project = projectObj.project || basename(task.repo_checkout_path);
+          const graphSearch = run(cbm, ['cli', 'search_graph', JSON.stringify({ project, query, limit: 25 })], { cwd: task.repo_checkout_path, env });
+          const codeSearch = run(cbm, ['cli', 'search_code', JSON.stringify({ project, pattern: '.', mode: 'compact', limit: 25 })], { cwd: task.repo_checkout_path, env });
+          const spans = new Map();
+          for (const r of [graphSearch, codeSearch]) for (const text of [r.stdout, r.stderr]) { const parsed = jsonish(text); if (parsed) walk(parsed, spans); textPaths(text, spans); }
+          const predFiles = [...spans.keys()].slice(0, 20);
+          const predSpans = Object.fromEntries([...spans.entries()].slice(0, 20));
+          const predictionPath = join(dir, 'prediction.json');
+          writeFileSync(predictionPath, JSON.stringify({ instance_id: task.instance_id, repo_url: task.repo_checkout_path, commit: task.base_commit, traj_data: { pred_steps: [{ files: predFiles, spans: predSpans }], pred_files: predFiles, pred_spans: predSpans }, model_patch: '' }, null, 2));
+          const goldPath = join(dir, 'gold.json');
+          const gold = run('node', ['scripts/contextbench-select-slice.mjs', '--write-gold', '--task-id', task.instance_id, '--out', goldPath, '--payloads', process.env.TASK_PAYLOADS], { timeoutMs: 600000 });
+          const official = join(root, 'ContextBench-official');
+          const clone = existsSync(join(official, 'contextbench', 'evaluate.py')) ? { skipped: true } : run('git', ['clone', '--depth', '1', 'https://github.com/EuniAI/ContextBench.git', official], { timeoutMs: 600000 });
+          const scorePath = join(dir, 'official-score.jsonl');
+          const evaluator = run('python', ['-m', 'contextbench.evaluate', '--gold', goldPath, '--pred', predictionPath, '--cache', join(dir, 'repo-cache'), '--out', scorePath], { cwd: official, timeoutMs: 1200000 });
+          const scoreText = existsSync(scorePath) ? readFileSync(scorePath, 'utf8') : '';
+          console.log(JSON.stringify({ taskId: task.instance_id, setupStatus: setup.status, indexStatus: indexRun.status, indexSignal: indexRun.signal, project, graphStatus: graphSearch.status, codeStatus: codeSearch.status, predFiles: predFiles.length, goldStatus: gold.status, goldStderr: gold.stderr, clone, evaluatorStatus: evaluator.status, evaluatorSignal: evaluator.signal, evaluatorError: evaluator.error, evaluatorStdout: evaluator.stdout, evaluatorStderr: evaluator.stderr, scorePathExists: existsSync(scorePath), scoreBytes: scoreText.length, scoreHead: scoreText.slice(0, 1000) }, null, 2));
+          if (!(indexRun.status === 0 && graphSearch.status === 0 && predFiles.length > 0 && evaluator.status === 0 && scoreText.length > 0)) process.exitCode = 1;
+          NODE
+          node "$ROOT/go-diagnose.mjs"

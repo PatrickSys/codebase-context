@@ -1,0 +1,83 @@
+{
+  "model": "gpt-5.4-mini-high",
+  "predictionSource": "gpt-5.4-mini-high selector subagents over real readiness candidate packs",
+  "caveats": [
+    "This selection set intentionally excludes grepai and codegraphcontext because their strict readiness gates produced candidateCount=0 and are not scoreable quality rows.",
+    "grepai installed and searched with Ollama, but indexing failed and no candidates were returned.",
+    "CodeGraphContext installed and indexed, but strict task-relevant retrieval returned no candidates; the earlier broad file-list run is not counted as readiness evidence."
+  ],
+  "laneSelections": [
+    {
+      "lane_id": "raw-native",
+      "files": ["cmd/root.go", "core/metrics/prometheus.go", "server/subsonic/helpers.go"],
+      "spans": [
+        {"file": "core/metrics/prometheus.go", "start": 15, "end": 123},
+        {"file": "cmd/root.go", "start": 194, "end": 220},
+        {"file": "server/subsonic/helpers.go", "start": 129, "end": 201},
+        {"file": "server/subsonic/helpers.go", "start": 256, "end": 268}
+      ],
+      "rationale": "cmd/root.go covers startup wiring, core/metrics/prometheus.go contains the startup metrics implementation path, and server/subsonic/helpers.go covers Subsonic authorization token parsing branches.",
+      "readiness": {
+        "setupStatus": "not_required",
+        "indexStatus": "not_required",
+        "toolCallable": true,
+        "candidateCount": 120,
+        "setupIndex": {"setupDurationMs": 0, "indexDurationMs": 0, "queryDurationMs": 130},
+        "sourceRun": 25642669946,
+        "sourceJob": 75265688816
+      }
+    },
+    {
+      "lane_id": "codebase-context",
+      "files": ["core/metrics/prometheus.go", "server/auth.go", "server/server.go", "scanner/scanner.go", "cmd/root.go", "cmd/wire_gen.go", "conf/configuration.go", "consts/consts.go"],
+      "spans": [
+        {"file": "core/metrics/prometheus.go", "start": 1, "end": 160},
+        {"file": "server/auth.go", "start": 165, "end": 230},
+        {"file": "server/server.go", "start": 170, "end": 185},
+        {"file": "scanner/scanner.go", "start": 50, "end": 230},
+        {"file": "cmd/root.go", "start": 100, "end": 170},
+        {"file": "cmd/wire_gen.go", "start": 60, "end": 140},
+        {"file": "conf/configuration.go", "start": 145, "end": 155},
+        {"file": "conf/configuration.go", "start": 425, "end": 432},
+        {"file": "consts/consts.go", "start": 68, "end": 82}
+      ],
+      "rationale": "This is the selector output over the real codebase-context candidate pack, covering metrics startup wiring plus auth/header/config surfaces it judged relevant.",
+      "readiness": {
+        "setupStatus": "completed",
+        "indexStatus": "completed",
+        "toolCallable": true,
+        "candidateCount": 36,
+        "setupIndex": {"setupDurationMs": 570, "indexDurationMs": null, "queryDurationMs": null},
+        "sourceRun": 25642303130,
+        "sourceJob": 75264700845
+      }
+    },
+    {
+      "lane_id": "codebase-memory-mcp",
+      "files": ["core/metrics/prometheus.go", "cmd/root.go", "server/subsonic/helpers.go"],
+      "spans": [
+        {"file": "core/metrics/prometheus.go", "start": 15, "end": 17},
+        {"file": "core/metrics/prometheus.go", "start": 19, "end": 25},
+        {"file": "core/metrics/prometheus.go", "start": 33, "end": 38},
+        {"file": "core/metrics/prometheus.go", "start": 40, "end": 49},
+        {"file": "core/metrics/prometheus.go", "start": 51, "end": 100},
+        {"file": "core/metrics/prometheus.go", "start": 102, "end": 123},
+        {"file": "cmd/root.go", "start": 194, "end": 201},
+        {"file": "cmd/root.go", "start": 204, "end": 220},
+        {"file": "server/subsonic/helpers.go", "start": 129, "end": 187},
+        {"file": "server/subsonic/helpers.go", "start": 189, "end": 201},
+        {"file": "server/subsonic/helpers.go", "start": 256, "end": 268}
+      ],
+      "rationale": "These spans cover the startup metrics write path, the startup wiring that should invoke it, and the Subsonic auth-token parsing path.",
+      "readiness": {
+        "setupStatus": "completed",
+        "indexStatus": "completed",
+        "toolCallable": true,
+        "candidateCount": 100,
+        "setupIndex": {"setupDurationMs": 4, "indexDurationMs": 2038, "queryDurationMs": 365},
+        "sourceRun": 25642583473,
+        "sourceJob": 75265447999
+      }
+    }
+  ]
+}

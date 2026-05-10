@@ -1,0 +1,90 @@
+name: ContextBench CBM Candidates One
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-cbm-candidates-one.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cbm-candidates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ROOT: /tmp/contextbench-cbm-candidates-one
+      TASK_PAYLOADS: /tmp/contextbench-cbm-candidates-one/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-checkouts
+      CBM_BIN: /tmp/contextbench-cbm-candidates-one/tool/codebase-memory-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and materialize Go task
+        run: |
+          set -euxo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/tool"
+          pnpm install --frozen-lockfile
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow
+          curl -fsSL "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.6.1/codebase-memory-mcp-linux-amd64.tar.gz" -o "$ROOT/tool/cbm.tar.gz"
+          tar -xzf "$ROOT/tool/cbm.tar.gz" -C "$ROOT/tool"
+          chmod +x "$CBM_BIN" || true
+          git clone --depth 1 https://github.com/EuniAI/ContextBench.git "$ROOT/ContextBench-official"
+          node scripts/contextbench-runner.mjs --validate-fixtures
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS" --checkout-root "$CHECKOUT_ROOT"
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 3
+      - name: Print CBM candidates
+        run: |
+          cat > "$ROOT/cbm-pack.mjs" <<'NODE'
+          import { spawnSync } from 'node:child_process';
+          import { basename, relative } from 'node:path';
+          import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          const root = process.env.ROOT;
+          const outDir = root + '/pack';
+          mkdirSync(outDir, { recursive: true });
+          const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
+          const task = payloads.tasks[2];
+          const repo = task.repo_checkout_path;
+          function run(cmd, args, opts = {}) { const started = Date.now(); const r = spawnSync(cmd, args, { cwd: opts.cwd || process.cwd(), env: opts.env || process.env, encoding: 'utf8', timeout: opts.timeoutMs || 600000, maxBuffer: 128 * 1024 * 1024 }); return { command: [cmd, ...args].join(' '), cwd: opts.cwd || process.cwd(), status: r.status, signal: r.signal, error: r.error?.message || null, durationMs: Date.now() - started, stdout: r.stdout || '', stderr: r.stderr || '' }; }
+          function q(s) { return String(s || '').replace(/[`*_#>\[\](){},.;:!?/\\]/g, ' ').split(/\s+/).filter((w) => w.length >= 4).slice(0, 10).join(' '); }
+          function jsonish(s) { const t = String(s || '').trim(); if (!t) return null; try { return JSON.parse(t); } catch {} for (const [a,b] of [['{','}'],['[',']']]) { const i=t.indexOf(a), j=t.lastIndexOf(b); if (i>=0 && j>i) { try { return JSON.parse(t.slice(i,j+1)); } catch {} } } return null; }
+          function norm(file) { let f = String(file || '').replace(/^file:\/\//, ''); if (!f) return ''; if (f.startsWith(repo)) f = relative(repo, f); f = f.replaceAll('\\\\','/').replace(/^\/+/, '').replace(/^\.\//, ''); if (!f || f.startsWith('tmp/') || f.includes('://') || f.includes('..')) return ''; return f; }
+          function add(locs, file, start = 1, end = start) { const clean = norm(file); if (!clean) return; const s = Math.max(1, Number(start) || 1); locs.push({ file: clean, start: s, end: Math.max(s, Number(end) || s), source: 'codebase-memory-mcp' }); }
+          function walk(v, locs) { if (!v || typeof v !== 'object') return; if (Array.isArray(v)) { for (const x of v) walk(x, locs); return; } add(locs, v.file || v.path || v.file_path || v.relative_path || v.filename || v.source_path, v.start_line || v.line || 1, v.end_line || v.line || 1); for (const x of Object.values(v)) walk(x, locs); }
+          function collect(text, locs) { const parsed = jsonish(text); if (parsed) walk(parsed, locs); const re = /([A-Za-z0-9_.\/-]+\.(?:go|mod|sum|json|yml|yaml|md|ts|tsx|js|jsx|py|rs|java|c|cc|cpp|h|hpp))(?::|#L|\s+line\s+)?(\d+)?/g; let m; while ((m = re.exec(String(text || ''))) !== null) add(locs, m[1], m[2] || 1, m[2] || 1); }
+          function uniq(locs) { const seen = new Set(), out = []; for (const loc of locs) { const k = `${loc.file}:${loc.start}:${loc.end}`; if (!seen.has(k)) { seen.add(k); out.push(loc); if (out.length >= 80) break; } } return out; }
+          const query = q(task.problem_statement);
+          const env = { ...process.env, CBM_CACHE_DIR: outDir + '/cbm-cache', CBM_DIAGNOSTICS: '1' };
+          const setup = run(process.env.CBM_BIN, ['--version'], { env, timeoutMs: 60000 });
+          const index = run(process.env.CBM_BIN, ['cli', 'index_repository', JSON.stringify({ repo_path: repo })], { cwd: repo, env, timeoutMs: 2700000 });
+          const project = (jsonish(index.stdout) || jsonish(index.stderr) || {}).project || basename(repo);
+          const graph = run(process.env.CBM_BIN, ['cli', 'search_graph', JSON.stringify({ project, query, limit: 40 })], { cwd: repo, env, timeoutMs: 120000 });
+          const code = run(process.env.CBM_BIN, ['cli', 'search_code', JSON.stringify({ project, pattern: query.split(/\s+/)[0] || '.', mode: 'compact', limit: 40 })], { cwd: repo, env, timeoutMs: 120000 });
+          for (const [name, value] of Object.entries({ setup, index, graph, code })) writeFileSync(`${outDir}/${name}.json`, JSON.stringify(value, null, 2));
+          const locs = []; for (const r of [graph, code]) { collect(r.stdout, locs); collect(r.stderr, locs); }
+          const candidates = uniq(locs);
+          const pack = { task: { instance_id: task.instance_id, repo: task.repo, base_commit: task.base_commit, problem_statement: task.problem_statement }, query, lane: { lane: 'codebase-memory-mcp', setupStatus: setup.status === 0 ? 'completed' : 'setup_failed', indexStatus: index.status === 0 ? 'completed' : 'index_failed', toolCallable: graph.status === 0 || code.status === 0, candidateCount: candidates.length, setupIndex: { setupDurationMs: setup.durationMs, indexDurationMs: index.durationMs, queryDurationMs: graph.durationMs + code.durationMs }, candidates } };
+          writeFileSync(`${outDir}/cbm-candidate-pack.json`, JSON.stringify(pack, null, 2));
+          console.log('CBM_CANDIDATE_PACK_JSON_START');
+          console.log(JSON.stringify({ ...pack, lane: { ...pack.lane, candidates: candidates.slice(0, 60) } }, null, 2));
+          console.log('CBM_CANDIDATE_PACK_JSON_END');
+          NODE
+          node "$ROOT/cbm-pack.mjs"
+      - name: Upload CBM candidate pack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-cbm-candidates-one
+          path: /tmp/contextbench-cbm-candidates-one/pack
+          retention-days: 14

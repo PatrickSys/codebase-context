@@ -63,6 +63,13 @@ jobs:
           fs.writeFileSync(payloadPath, `${JSON.stringify({ ...payload, task_count: 1, tasks: [task] }, null, 2)}\n`);
           NODE
           node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 1 > "$ROOT/logs/materialize.log" 2>&1
+      - name: Install raw-native lane
+        if: matrix.lane == 'raw-native'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update > "$ROOT/logs/apt-update.log" 2>&1
+          sudo apt-get install -y ripgrep > "$ROOT/logs/apt-ripgrep.log" 2>&1
       - name: Build codebase-context lane
         if: matrix.lane == 'codebase-context'
         shell: bash

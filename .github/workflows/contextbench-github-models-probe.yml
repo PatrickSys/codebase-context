@@ -1,0 +1,66 @@
+name: ContextBench GitHub Models Probe
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-github-models-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ROOT: /tmp/contextbench-github-models-probe
+    steps:
+      - name: Probe model catalog and smoke calls
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ROOT"
+          api=https://models.github.ai
+          curl -sS -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "$api/catalog/models" > "$ROOT/catalog.json"
+          node - <<'NODE'
+          const fs = require('fs');
+          const raw = fs.readFileSync(process.env.ROOT + '/catalog.json', 'utf8');
+          let json;
+          try { json = JSON.parse(raw); } catch (error) { console.error(raw.slice(0, 2000)); throw error; }
+          const list = Array.isArray(json) ? json : (json.models || json.data || []);
+          const ids = list.map((m) => m.id || m.name || m.model).filter(Boolean);
+          const interesting = ids.filter((id) => /openai|gpt-5|gpt-5\.4|mini/i.test(id));
+          fs.writeFileSync(process.env.ROOT + '/interesting-models.json', JSON.stringify(interesting, null, 2));
+          console.log(JSON.stringify({ total: ids.length, interesting: interesting.slice(0, 80) }, null, 2));
+          NODE
+          for model in openai/gpt-5.4-mini openai/gpt-5-mini gpt-5.4-mini gpt-5-mini; do
+            safe=$(echo "$model" | tr '/.' '__')
+            echo "Trying $model"
+            code=$(curl -sS -L -o "$ROOT/smoke-$safe.json" -w '%{http_code}' \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              -H "Content-Type: application/json" \
+              "$api/inference/chat/completions" \
+              -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"Return JSON: {\\\"ok\\\": true}\"}],\"response_format\":{\"type\":\"json_object\"},\"max_tokens\":32}") || code=000
+            echo "$model $code" | tee -a "$ROOT/smoke-status.txt"
+          done
+          if grep -E ' 2[0-9][0-9]$' "$ROOT/smoke-status.txt"; then
+            exit 0
+          fi
+          exit 1
+      - name: Upload GitHub Models probe artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-github-models-probe
+          path: /tmp/contextbench-github-models-probe
+          retention-days: 14

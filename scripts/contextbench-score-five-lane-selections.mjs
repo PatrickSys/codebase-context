@@ -6,7 +6,10 @@ const targetTaskId = process.env.TARGET_TASK_ID || 'SWE-Bench-Pro__go__maintenan
 const root = process.env.ROOT || '/tmp/contextbench-five-lane-score';
 const officialContextBench = process.env.OFFICIAL_CONTEXTBENCH;
 const selectionsPath = process.env.SELECTIONS_PATH || 'scripts/contextbench-five-lane-selections.json';
-const requiredLanes = ['raw-native', 'codebase-context', 'codebase-memory-mcp', 'grepai', 'codegraphcontext'];
+const requiredLanes = (process.env.REQUIRED_LANES || 'raw-native,codebase-context,codebase-memory-mcp,grepai,codegraphcontext')
+  .split(',')
+  .map((lane) => lane.trim())
+  .filter(Boolean);
 const payloads = JSON.parse(readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
 const task = payloads.tasks.find((candidate) => candidate.instance_id === targetTaskId);
 if (!task) throw new Error(`target task ${targetTaskId} missing from payloads`);
@@ -79,7 +82,7 @@ function resultTableRow(row) {
   };
 }
 
-const runDir = join(root, 'five-lane-score');
+const runDir = join(root, 'lane-score');
 mkdirSync(runDir, { recursive: true });
 writeFileSync(join(runDir, 'selections.json'), JSON.stringify(selections, null, 2));
 
@@ -199,7 +202,7 @@ const summary = {
 
 writeFileSync(join(runDir, 'summary.json'), JSON.stringify(summary, null, 2));
 writeFileSync(join(root, 'summary.json'), JSON.stringify(summary, null, 2));
-console.log('CONTEXTBENCH_FIVE_LANE_SCORE_JSON_START');
+console.log('CONTEXTBENCH_LANE_SCORE_JSON_START');
 console.log(JSON.stringify(summary, null, 2));
-console.log('CONTEXTBENCH_FIVE_LANE_SCORE_JSON_END');
+console.log('CONTEXTBENCH_LANE_SCORE_JSON_END');
 if (scoreableRows.length !== rows.length || scoreableRows.length < requiredLanes.length) process.exitCode = 1;

@@ -1,0 +1,147 @@
+name: ContextBench Tool Diagnostics
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-tool-diagnostics.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        lane:
+          - grepai
+          - codegraphcontext
+    env:
+      ROOT: /tmp/contextbench-tool-diagnostics/${{ matrix.lane }}
+      TASK_PAYLOADS: /tmp/contextbench-tool-diagnostics/${{ matrix.lane }}/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-tool-diagnostics-checkouts-${{ matrix.lane }}
+      TARGET_TASK_ID: SWE-Bench-Pro__go__maintenance__bugfix__4df06349
+      LANE_ID: ${{ matrix.lane }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Materialize selected Go task
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/logs"
+          pnpm install --frozen-lockfile > "$ROOT/logs/pnpm-install.log" 2>&1
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow > "$ROOT/logs/pip-shared.log" 2>&1
+          node scripts/contextbench-runner.mjs --validate-fixtures > "$ROOT/logs/validate-fixtures.log" 2>&1
+          node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS.all" --checkout-root "$CHECKOUT_ROOT" > "$ROOT/logs/write-payloads.log" 2>&1
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const payloadPath = process.env.TASK_PAYLOADS;
+          const target = process.env.TARGET_TASK_ID;
+          const payload = JSON.parse(fs.readFileSync(`${payloadPath}.all`, 'utf8'));
+          const task = payload.tasks.find((candidate) => candidate.instance_id === target);
+          if (!task) throw new Error(`target task ${target} not found`);
+          fs.writeFileSync(payloadPath, `${JSON.stringify({ ...payload, task_count: 1, tasks: [task] }, null, 2)}\n`);
+          NODE
+          node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 1 > "$ROOT/logs/materialize.log" 2>&1
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync(process.env.TASK_PAYLOADS, 'utf8'));
+          fs.writeFileSync(`${process.env.ROOT}/repo-path.txt`, payload.tasks[0].repo_checkout_path);
+          NODE
+      - name: grepai diagnostics
+        if: matrix.lane == 'grepai'
+        shell: bash
+        run: |
+          set +euo pipefail
+          REPO="$(cat "$ROOT/repo-path.txt")"
+          curl -sSL https://raw.githubusercontent.com/yoanbernabeu/grepai/main/install.sh | sh
+          export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+          cd "$REPO"
+          echo '--- grepai version ---'
+          grepai version
+          echo '--- grepai init synthetic gob ---'
+          grepai init --yes --provider synthetic --backend gob
+          echo '--- .grepai/config.yaml ---'
+          cat .grepai/config.yaml || true
+          echo '--- grepai status before watch ---'
+          grepai status --no-ui
+          echo '--- grepai watch --help ---'
+          grepai watch --help
+          echo '--- grepai watch --no-ui direct ---'
+          timeout 45s grepai watch --no-ui
+          echo "watch_direct_status=$?"
+          echo '--- grepai status after direct watch ---'
+          grepai status --no-ui
+          echo '--- grepai watch --background ---'
+          grepai watch --background
+          echo "watch_background_status=$?"
+          sleep 10
+          echo '--- grepai watch --status ---'
+          grepai watch --status
+          echo '--- grepai status final ---'
+          grepai status --no-ui
+          echo '--- grepai search smoke ---'
+          grepai search "system metrics startup prometheus" --json --compact --limit 5
+          echo "search_status=$?"
+          grepai watch --stop
+      - name: CodeGraphContext diagnostics
+        if: matrix.lane == 'codegraphcontext'
+        shell: bash
+        run: |
+          set +euo pipefail
+          REPO="$(cat "$ROOT/repo-path.txt")"
+          python -m pip install codegraphcontext kuzu real_ladybug || python -m pip install codegraphcontext kuzu
+          cd "$REPO"
+          echo '--- cgc --version ---'
+          cgc --version
+          echo '--- cgc --help ---'
+          cgc --help
+          echo '--- cgc find --help ---'
+          cgc find --help
+          echo '--- cgc analyze --help ---'
+          cgc analyze --help
+          echo '--- cgc index . ---'
+          cgc index .
+          echo '--- cgc stats ---'
+          cgc stats
+          echo '--- cgc list ---'
+          cgc list
+          echo '--- cgc analyze complexity --limit 20 ---'
+          cgc analyze complexity --limit 20
+          echo 'complexity_status='$?
+          echo '--- cgc analyze dead-code ---'
+          cgc analyze dead-code
+          echo 'dead_code_status='$?
+          echo '--- cgc analyze callers main ---'
+          cgc analyze callers main
+          echo 'callers_main_status='$?
+          echo '--- cgc analyze calls main ---'
+          cgc analyze calls main
+          echo 'calls_main_status='$?
+          echo '--- cgc find metrics variants ---'
+          cgc find metrics
+          echo 'find_metrics_status='$?
+          cgc find --fuzzy metrics
+          echo 'find_fuzzy_metrics_status='$?
+      - name: Upload diagnostics artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-tool-diagnostics-${{ matrix.lane }}
+          path: /tmp/contextbench-tool-diagnostics/${{ matrix.lane }}
+          retention-days: 14

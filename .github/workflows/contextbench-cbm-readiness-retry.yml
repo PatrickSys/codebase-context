@@ -92,9 +92,22 @@ jobs:
             for (const args of candidates) {
               const attempt = run(cbm, args, opts);
               attempts.push(attempt);
-              if (attempt.status === 0) return { ...attempt, label, attempts };
+              if (attempt.status === 0) return { ...attempt, label, attempts, selectedBecause: 'status0' };
             }
-            return { ...(attempts.at(-1) || {}), label, attempts };
+            return { ...(attempts.at(-1) || {}), label, attempts, selectedBecause: 'no_status0' };
+          }
+
+          function firstUseful(label, candidates, opts) {
+            const attempts = [];
+            let firstSuccess = null;
+            for (const args of candidates) {
+              const attempt = run(cbm, args, opts);
+              attempts.push(attempt);
+              if (attempt.status === 0 && !firstSuccess) firstSuccess = attempt;
+              if (attempt.status === 0 && hasUsefulLocations(attempt)) return { ...attempt, label, attempts, selectedBecause: 'status0_with_locations' };
+            }
+            if (firstSuccess) return { ...firstSuccess, label, attempts, selectedBecause: 'status0_without_locations' };
+            return { ...(attempts.at(-1) || {}), label, attempts, selectedBecause: 'no_status0' };
           }
 
           function queryOf(text) {
@@ -171,8 +184,31 @@ jobs:
             while ((m = re.exec(String(s || ''))) !== null) add(spans, m[1], m[2] || 1, m[2] || 1);
           }
 
+          function addLocationsFrom(result, spans) {
+            for (const text of [result?.stdout, result?.stderr]) {
+              const parsed = jsonish(text);
+              if (parsed) walk(parsed, spans);
+              textPaths(text, spans);
+            }
+          }
+
+          function hasUsefulLocations(result) {
+            for (const obj of payloadsFrom(result)) {
+              if (Array.isArray(obj.results) && obj.results.length > 0) return true;
+              if (Array.isArray(obj.raw_matches) && obj.raw_matches.length > 0) return true;
+              if (Number(obj.total_results || 0) > 0 || Number(obj.raw_match_count || 0) > 0 || Number(obj.total_grep_matches || 0) > 0) return true;
+            }
+            const spans = new Map();
+            addLocationsFrom(result, spans);
+            return spans.size > 0;
+          }
+
           function regexLiteral(value) {
             return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          }
+
+          function allAttempts(...results) {
+            return results.flatMap((result) => Array.isArray(result?.attempts) && result.attempts.length ? result.attempts : [result]);
           }
 
           const reports = [];
@@ -189,19 +225,21 @@ jobs:
             const listProjects = firstOk('list_projects', [['cli', 'list_projects'], ['cli', 'list_projects', '{}']], opts);
             const project = projectFrom(indexRun, listProjects) || basename(task.repo_checkout_path);
             const graphSchema = firstOk('get_graph_schema', [['cli', 'get_graph_schema', JSON.stringify({ project })]], opts);
-            const graphSearch = firstOk('search_graph', [
+            const graphSearch = firstUseful('search_graph', [
               ['cli', 'search_graph', JSON.stringify({ project, query, limit: 25 })],
               ['cli', 'search_graph', JSON.stringify({ project, label: 'Function', query: firstTerm, limit: 25 })],
-              ['cli', 'search_graph', JSON.stringify({ project, label: 'Function', name_pattern: `.*${regexLiteral(firstTerm)}.*`, limit: 25 })]
+              ['cli', 'search_graph', JSON.stringify({ project, label: 'Function', name_pattern: `.*${regexLiteral(firstTerm)}.*`, limit: 25 })],
+              ['cli', 'search_graph', JSON.stringify({ project, label: 'Function', limit: 25 })],
+              ['cli', 'search_graph', JSON.stringify({ project, label: 'Class', limit: 25 })]
             ], opts);
-            const codeSearch = firstOk('search_code', [
+            const codeSearch = firstUseful('search_code', [
               ['cli', 'search_code', JSON.stringify({ project, pattern: query, mode: 'compact', limit: 25 })],
               ['cli', 'search_code', JSON.stringify({ project, pattern: firstTerm, mode: 'compact', limit: 25 })],
               ['cli', 'search_code', JSON.stringify({ project, pattern: '.', mode: 'compact', limit: 25 })]
             ], opts);
 
             const spans = new Map();
-            for (const r of [listProjects, graphSchema, graphSearch, codeSearch]) for (const text of [r.stdout, r.stderr]) { const parsed = jsonish(text); if (parsed) walk(parsed, spans); textPaths(text, spans); }
+            for (const r of allAttempts(listProjects, graphSchema, graphSearch, codeSearch)) addLocationsFrom(r, spans);
             const predFiles = [...spans.keys()].slice(0, 20);
             const predSpans = Object.fromEntries([...spans.entries()].slice(0, 20));
             const predictionPath = join(dir, 'prediction.json');
@@ -214,14 +252,15 @@ jobs:
             if (!existsSync(join(official, 'contextbench', 'evaluate.py'))) run('git', ['clone', '--depth', '1', 'https://github.com/EuniAI/ContextBench.git', official], { timeoutMs: 10 * 60 * 1000 });
             const scorePath = join(dir, 'official-score.jsonl');
             const evaluator = run('python', ['-m', 'contextbench.evaluate', '--gold', goldPath, '--pred', predictionPath, '--cache', join(dir, 'repo-cache'), '--out', scorePath], { cwd: official, timeoutMs: 20 * 60 * 1000 });
-            const report = { taskId: task.instance_id, repo: task.repo, project, setupStatus: setup.status, indexStatus: indexRun.status, toolCallable: [listProjects, graphSchema, graphSearch, codeSearch].some((r) => r.status === 0), nonEmptyPrediction: predFiles.length > 0 && Object.keys(predSpans).length > 0, officialEvaluatorStatus: evaluator.status, officialEvaluatorScoreable: evaluator.status === 0 && existsSync(scorePath), costs: { setupDurationMs: setup.durationMs, indexDurationMs: indexRun.durationMs, queryDurationMs: listProjects.durationMs + graphSchema.durationMs + graphSearch.durationMs + codeSearch.durationMs, evaluatorDurationMs: evaluator.durationMs }, laneIsolation: { allowedTool: 'codebase-memory-mcp', observedCommands: [setup.command, indexRun.command, listProjects.command, graphSchema.command, graphSearch.command, codeSearch.command], observedCwds: [setup.cwd, indexRun.cwd, listProjects.cwd, graphSchema.cwd, graphSearch.cwd, codeSearch.cwd], disallowedNativeReadSearchUsedForPrediction: false }, query, predFiles, commands: { setup, indexRun, listProjects, graphSchema, graphSearch, codeSearch, gold, evaluator } };
+            const scoreText = existsSync(scorePath) ? readFileSync(scorePath, 'utf8').trim() : '';
+            const report = { taskId: task.instance_id, repo: task.repo, project, setupStatus: setup.status, indexStatus: indexRun.status, toolCallable: [graphSearch, codeSearch].some((r) => r.status === 0), nonEmptyPrediction: predFiles.length > 0 && Object.keys(predSpans).length > 0, officialEvaluatorStatus: evaluator.status, officialEvaluatorScoreable: evaluator.status === 0 && scoreText.length > 0, costs: { setupDurationMs: setup.durationMs, indexDurationMs: indexRun.durationMs, queryDurationMs: listProjects.durationMs + graphSchema.durationMs + graphSearch.durationMs + codeSearch.durationMs, evaluatorDurationMs: evaluator.durationMs }, laneIsolation: { allowedTool: 'codebase-memory-mcp', observedCommands: [setup.command, indexRun.command, listProjects.command, graphSchema.command, graphSearch.command, codeSearch.command], observedCwds: [setup.cwd, indexRun.cwd, listProjects.cwd, graphSchema.cwd, graphSearch.cwd, codeSearch.cwd], disallowedNativeReadSearchUsedForPrediction: false }, query, predFiles, selectedBecause: { graphSearch: graphSearch.selectedBecause, codeSearch: codeSearch.selectedBecause }, commands: { setup, indexRun, listProjects, graphSchema, graphSearch, codeSearch, gold, evaluator } };
             writeFileSync(join(dir, 'readiness-report.json'), JSON.stringify(report, null, 2));
             reports.push(report);
             if (!(report.setupStatus === 0 && report.indexStatus === 0 && report.toolCallable && report.nonEmptyPrediction && report.officialEvaluatorScoreable)) ready = false;
           }
           const summary = { createdAt: new Date().toISOString(), lane: 'codebase-memory-mcp', ready, attemptedRows: reports.length, scoreableRows: reports.filter((r) => r.officialEvaluatorScoreable).length, nonEmptyPredictionRows: reports.filter((r) => r.nonEmptyPrediction).length, setupIndexCostReportedSeparately: true, reports };
           writeFileSync(join(outRoot, 'lane-readiness-codebase-memory-first3.json'), JSON.stringify(summary, null, 2));
-          console.log(JSON.stringify(summary, null, 2));
+          console.log(JSON.stringify({ ready: summary.ready, attemptedRows: summary.attemptedRows, scoreableRows: summary.scoreableRows, nonEmptyPredictionRows: summary.nonEmptyPredictionRows, reports: summary.reports.map((r) => ({ taskId: r.taskId, setupStatus: r.setupStatus, indexStatus: r.indexStatus, toolCallable: r.toolCallable, nonEmptyPrediction: r.nonEmptyPrediction, officialEvaluatorScoreable: r.officialEvaluatorScoreable, predFiles: r.predFiles.length, selectedBecause: r.selectedBecause, costs: r.costs })) }, null, 2));
           if (!ready) process.exitCode = 1;
           NODE
           node "$ROOT/readiness.mjs"

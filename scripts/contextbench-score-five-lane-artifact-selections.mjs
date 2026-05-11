@@ -11,6 +11,60 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+function normalizePath(path) {
+  return String(path || '').replaceAll('\\', '/').replace(/^\.\//, '');
+}
+
+function estimateTokensFromBytes(bytes) {
+  if (!Number.isFinite(bytes)) return null;
+  return Math.ceil(bytes / 4);
+}
+
+function candidateText(candidate) {
+  return String(candidate.text || candidate.content || candidate.snippet || candidate.preview || candidate.summary || candidate.excerpt || '');
+}
+
+function candidateStart(candidate) {
+  return candidate.start ?? candidate.startLine ?? candidate.lineStart ?? candidate.range?.start ?? null;
+}
+
+function candidateEnd(candidate) {
+  return candidate.end ?? candidate.endLine ?? candidate.lineEnd ?? candidate.range?.end ?? null;
+}
+
+function candidateMetricsFromReadiness(readiness) {
+  const candidates = Array.isArray(readiness.candidates) ? readiness.candidates : [];
+  const candidateCount = Number(readiness.candidateCount ?? candidates.length ?? 0);
+  if (candidates.length === 0) {
+    return {
+      candidateCount,
+      fileCount: null,
+      spanCount: null,
+      bytes: null,
+      estimatedTokens: null,
+      source: 'readiness artifact',
+      unavailableReason: 'readiness artifact did not include candidate payloads, only candidateCount',
+    };
+  }
+  const normalized = candidates.map((candidate) => ({
+    file: normalizePath(candidate.file || candidate.path),
+    start: candidateStart(candidate),
+    end: candidateEnd(candidate),
+    score: candidate.score ?? candidate.rank ?? candidate.weight ?? null,
+    text: candidateText(candidate),
+  }));
+  const files = new Set(normalized.map((candidate) => candidate.file).filter(Boolean));
+  const bytes = Buffer.byteLength(JSON.stringify(normalized), 'utf8');
+  return {
+    candidateCount,
+    fileCount: files.size,
+    spanCount: normalized.length,
+    bytes,
+    estimatedTokens: estimateTokensFromBytes(bytes),
+    source: 'normalized readiness.candidates JSON',
+  };
+}
+
 function loadReadiness(lane, artifactName) {
   const candidates = [
     join(externalRoot, artifactName, 'pack', `${artifactName}-readiness.json`),
@@ -33,12 +87,12 @@ function loadReadiness(lane, artifactName) {
 
 function assertSelectedFilesCameFromCandidates(selection, readiness) {
   if (selection.validateCandidateFiles === false) return;
-  const candidateFiles = new Set((readiness.candidates || []).map((candidate) => String(candidate.file || '').replaceAll('\\', '/')));
+  const candidateFiles = new Set((readiness.candidates || []).map((candidate) => normalizePath(candidate.file || candidate.path)));
   if (candidateFiles.size === 0) return;
   const selectedFiles = new Set([
     ...(selection.files || []),
     ...(selection.spans || []).map((span) => span.file),
-  ].filter(Boolean).map((file) => String(file).replaceAll('\\', '/')));
+  ].filter(Boolean).map((file) => normalizePath(file)));
   const missing = [...selectedFiles].filter((file) => !candidateFiles.has(file));
   if (missing.length > 0) {
     throw new Error(`${selection.lane_id || selection.lane} selected files missing from readiness candidates: ${missing.join(', ')}`);
@@ -53,14 +107,17 @@ const resolved = {
     if (!selection.readinessArtifact) return selection;
     const readiness = loadReadiness(lane, selection.readinessArtifact);
     assertSelectedFilesCameFromCandidates(selection, readiness);
+    const candidateMetrics = candidateMetricsFromReadiness(readiness);
     return {
       ...selection,
+      candidateMetrics,
       readiness: {
         setupStatus: readiness.setupStatus,
         indexStatus: readiness.indexStatus,
         toolCallable: readiness.toolCallable,
         candidateCount: readiness.candidateCount,
         setupIndex: readiness.setupIndex,
+        candidateMetrics,
         sourceRun: selection.sourceRun,
         sourceJob: selection.sourceJob,
         sourceArtifact: selection.sourceArtifact,

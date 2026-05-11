@@ -1,0 +1,103 @@
+name: ContextBench Infra Lane Readiness
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/contextbench-infra-lane-readiness.yml
+      - scripts/contextbench-infra-lane-readiness.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  infra-lane-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        lane:
+          - grepai
+          - codegraphcontext
+    env:
+      ROOT: /tmp/contextbench-infra-lane/${{ matrix.lane }}
+      TASK_PAYLOADS: /tmp/contextbench-infra-lane/${{ matrix.lane }}/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-infra-checkouts-${{ matrix.lane }}
+      TARGET_TASK_ID: SWE-Bench-Pro__go__maintenance__bugfix__4df06349
+      LANE_ID: ${{ matrix.lane }}
+      OLLAMA_HOST: http://127.0.0.1:11434
+      OLLAMA_NUM_PARALLEL: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install shared setup and materialize selected Go task
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/tool" "$ROOT/logs"
+          pnpm install --frozen-lockfile > "$ROOT/logs/pnpm-install.log" 2>&1
+          python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow > "$ROOT/logs/pip-shared.log" 2>&1
+          node scripts/contextbench-runner.mjs --validate-fixtures > "$ROOT/logs/validate-fixtures.log" 2>&1
+          for attempt in 1 2 3; do
+            node scripts/contextbench-select-slice.mjs --write-task-payloads --out "$TASK_PAYLOADS.all" --checkout-root "$CHECKOUT_ROOT" > "$ROOT/logs/write-payloads-$attempt.log" 2>&1 && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            sleep 5
+          done
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const payloadPath = process.env.TASK_PAYLOADS;
+          const target = process.env.TARGET_TASK_ID;
+          const payload = JSON.parse(fs.readFileSync(`${payloadPath}.all`, 'utf8'));
+          const task = payload.tasks.find((candidate) => candidate.instance_id === target);
+          if (!task) throw new Error(`target task ${target} not found`);
+          fs.writeFileSync(payloadPath, `${JSON.stringify({ ...payload, task_count: 1, tasks: [task] }, null, 2)}\n`);
+          NODE
+          for attempt in 1 2 3; do
+            node scripts/contextbench-select-slice.mjs --materialize-checkouts --payloads "$TASK_PAYLOADS" --max-tasks 1 > "$ROOT/logs/materialize-$attempt.log" 2>&1 && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            sleep 5
+          done
+      - name: Install grepai with local Ollama embeddings
+        if: matrix.lane == 'grepai'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSL https://raw.githubusercontent.com/yoanbernabeu/grepai/main/install.sh | sh > "$ROOT/logs/grepai-install.log" 2>&1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -fsSL https://ollama.com/install.sh | sh > "$ROOT/logs/ollama-install.log" 2>&1
+          nohup ollama serve > "$ROOT/logs/ollama-serve.log" 2>&1 &
+          for i in {1..45}; do
+            if curl -fsS "$OLLAMA_HOST/api/version" > "$ROOT/logs/ollama-version.log" 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS "$OLLAMA_HOST/api/version" >> "$ROOT/logs/ollama-version.log" 2>&1
+          ollama pull nomic-embed-text > "$ROOT/logs/ollama-pull-nomic-embed-text.log" 2>&1
+      - name: Install CodeGraphContext lane
+        if: matrix.lane == 'codegraphcontext'
+        shell: bash
+        run: python -m pip install codegraphcontext kuzu real_ladybug > "$ROOT/logs/pip-codegraphcontext.log" 2>&1
+      - name: Generate infra lane readiness candidate pack
+        shell: bash
+        run: node scripts/contextbench-infra-lane-readiness.mjs
+      - name: Upload infra lane readiness artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextbench-infra-lane-readiness-${{ matrix.lane }}
+          path: /tmp/contextbench-infra-lane/${{ matrix.lane }}
+          retention-days: 14

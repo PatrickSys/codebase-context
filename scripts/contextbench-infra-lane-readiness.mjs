@@ -238,12 +238,12 @@ pid=$!
 ready=0
 for i in $(seq 1 180); do
   status="$(grepai status --no-ui 2>&1 || true)"
-  printf '--- status attempt %s ---\n%s\n' "$i" "$status" >> "$STATUSLOG"
-  if printf '%s\n' "$status" | grep -Eiq 'Files indexed:[[:space:]]*[1-9]|Total chunks:[[:space:]]*[1-9]|chunks created|files indexed'; then
+  printf -- '--- status attempt %s ---\n%s\n' "$i" "$status" >> "$STATUSLOG"
+  if printf -- '%s\n' "$status" | grep -Eiq 'Files indexed:[[:space:]]*[1-9][0-9]*|Total chunks:[[:space:]]*[1-9][0-9]*|[1-9][0-9]* chunks created|[1-9][0-9]* files indexed'; then
     ready=1
     break
   fi
-  if grep -Eiq 'Initial scan complete|[0-9]+ files indexed|[0-9]+ chunks created' "$LOG"; then
+  if grep -Eiq 'Initial scan complete|[1-9][0-9]* files indexed|[1-9][0-9]* chunks created' "$LOG"; then
     ready=1
     break
   fi
@@ -263,6 +263,13 @@ if [ "$ready" -ne 1 ]; then
   exit 1
 fi
 kill -INT "$pid" 2>/dev/null || true
+for i in $(seq 1 60); do
+  if ! kill -0 "$pid" 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+kill -TERM "$pid" 2>/dev/null || true
 wait "$pid" || true
 grepai status --no-ui || true
 tail -200 "$STATUSLOG" || true

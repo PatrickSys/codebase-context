@@ -8,6 +8,7 @@ on:
       - scripts/contextbench-score-five-lane-selections.mjs
       - scripts/contextbench-score-five-lane-artifact-selections.mjs
       - scripts/contextbench-build-publishable-report.mjs
+      - scripts/contextbench-print-publishable-report.mjs
       - scripts/contextbench-five-lane-selections.json
       - tests/fixtures/contextbench-benchmark-protocol.json
       - tests/fixtures/contextbench-lanes.json
@@ -99,6 +100,9 @@ jobs:
             --out "$ROOT/publishable-summary.json" \
             --validation-out "$ROOT/publishable-validation.json" \
             --humanized-out "$ROOT/humanized-summary.md"
+      - name: Print compact publishable pilot report
+        shell: bash
+        run: node scripts/contextbench-print-publishable-report.mjs "$ROOT/publishable-summary.json"
       - name: Upload five-lane score artifacts
         if: always()
         uses: actions/upload-artifact@v4

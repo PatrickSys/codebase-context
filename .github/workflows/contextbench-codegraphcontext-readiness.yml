@@ -5,7 +5,7 @@ on:
     branches: [master]
     paths:
       - .github/workflows/contextbench-codegraphcontext-readiness.yml
-      - scripts/contextbench-infra-lane-readiness.mjs
+      - scripts/contextbench-codegraphcontext-ready-pack.mjs
   workflow_dispatch:
 
 permissions:
@@ -14,13 +14,12 @@ permissions:
 jobs:
   codegraphcontext-readiness:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
     env:
-      ROOT: /tmp/contextbench-infra-lane/codegraphcontext
-      TASK_PAYLOADS: /tmp/contextbench-infra-lane/codegraphcontext/task-payloads.json
-      CHECKOUT_ROOT: /tmp/contextbench-infra-checkouts-codegraphcontext
+      ROOT: /tmp/contextbench-codegraphcontext-readiness
+      TASK_PAYLOADS: /tmp/contextbench-codegraphcontext-readiness/task-payloads.json
+      CHECKOUT_ROOT: /tmp/contextbench-codegraphcontext-readiness-checkouts
       TARGET_TASK_ID: SWE-Bench-Pro__go__maintenance__bugfix__4df06349
-      LANE_ID: codegraphcontext
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
@@ -37,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/tool" "$ROOT/logs"
+          mkdir -p "$ROOT" "$CHECKOUT_ROOT" "$ROOT/logs"
           pnpm install --frozen-lockfile > "$ROOT/logs/pnpm-install.log" 2>&1
           python -m pip install "tree-sitter==0.20.4" "tree-sitter-languages==1.10.2" datasets pyarrow > "$ROOT/logs/pip-shared.log" 2>&1
           node scripts/contextbench-runner.mjs --validate-fixtures > "$ROOT/logs/validate-fixtures.log" 2>&1
@@ -65,11 +64,11 @@ jobs:
         run: python -m pip install codegraphcontext kuzu real_ladybug > "$ROOT/logs/pip-codegraphcontext.log" 2>&1
       - name: Generate CodeGraphContext readiness candidate pack
         shell: bash
-        run: node scripts/contextbench-infra-lane-readiness.mjs
+        run: node scripts/contextbench-codegraphcontext-ready-pack.mjs
       - name: Upload CodeGraphContext readiness artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: contextbench-codegraphcontext-readiness
-          path: /tmp/contextbench-infra-lane/codegraphcontext
+          path: /tmp/contextbench-codegraphcontext-readiness
           retention-days: 14

@@ -89,6 +89,12 @@ const queries = [
 
 const commands = [];
 const candidates = [];
+const install = run(
+  'bash',
+  ['-lc', 'command -v rg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ripgrep)'],
+  { timeoutMs: 300000 },
+);
+commands.push(install);
 const version = run('rg', ['--version'], { timeoutMs: 60000 });
 commands.push(version);
 
@@ -117,8 +123,8 @@ for (const query of queries) {
 }
 
 const uniqueCandidates = uniq(candidates);
-const setupStatus = version.status === 0 ? 'completed' : 'setup_failed';
-const queryCommands = commands.slice(1);
+const setupStatus = install.status === 0 && version.status === 0 ? 'completed' : 'setup_failed';
+const queryCommands = commands.slice(2);
 const toolCallable = queryCommands.some((command) => command.status === 0 || command.status === 1);
 const queryOk = queryCommands.every((command) => command.status === 0 || command.status === 1);
 const readiness = {
@@ -129,7 +135,7 @@ const readiness = {
   toolCallable,
   candidateCount: uniqueCandidates.length,
   setupIndex: {
-    setupDurationMs: version.durationMs,
+    setupDurationMs: install.durationMs + version.durationMs,
     indexDurationMs: 0,
     queryDurationMs: queryCommands.reduce((sum, command) => sum + command.durationMs, 0),
   },

@@ -30,6 +30,7 @@ function writeJson(path, data) {
 }
 
 function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 }
@@ -41,7 +42,7 @@ function metricValue(metric) {
 
 function hasMetricOrReason(metric) {
   if (!metric || typeof metric !== 'object') return false;
-  if (Number.isFinite(Number(metric.value))) return true;
+  if (numberOrNull(metric.value) !== null) return true;
   return typeof metric.unavailableReason === 'string' && metric.unavailableReason.length > 0;
 }
 

@@ -7,7 +7,11 @@ on:
       - .github/workflows/contextbench-five-lane-score.yml
       - scripts/contextbench-score-five-lane-selections.mjs
       - scripts/contextbench-score-five-lane-artifact-selections.mjs
+      - scripts/contextbench-build-publishable-report.mjs
       - scripts/contextbench-five-lane-selections.json
+      - tests/fixtures/contextbench-benchmark-protocol.json
+      - tests/fixtures/contextbench-lanes.json
+      - tests/fixtures/contextbench-task-manifest.json
   workflow_dispatch:
 
 permissions:
@@ -84,6 +88,17 @@ jobs:
       - name: Score five ready lane selections
         shell: bash
         run: node scripts/contextbench-score-five-lane-artifact-selections.mjs
+      - name: Build publishable pilot report
+        shell: bash
+        run: |
+          node scripts/contextbench-build-publishable-report.mjs \
+            --summary "$ROOT/summary.json" \
+            --protocol tests/fixtures/contextbench-benchmark-protocol.json \
+            --lanes tests/fixtures/contextbench-lanes.json \
+            --task-manifest tests/fixtures/contextbench-task-manifest.json \
+            --out "$ROOT/publishable-summary.json" \
+            --validation-out "$ROOT/publishable-validation.json" \
+            --humanized-out "$ROOT/humanized-summary.md"
       - name: Upload five-lane score artifacts
         if: always()
         uses: actions/upload-artifact@v4

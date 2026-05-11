@@ -229,7 +229,9 @@ function validate(summary, protocol, taskManifest, qualityRows, reliabilityRows)
     },
     {
       id: 'token_metrics_present',
-      pass: summary.rows.every((row) => row.tokenMetrics?.prediction?.estimatedTokens && row.tokenMetrics?.candidatePack?.estimatedTokens && row.tokenMetrics?.selectorUsage?.totalTokens),
+      pass: summary.rows.every((row) => hasMetricOrReason(row.tokenMetrics?.prediction?.estimatedTokens)
+        && hasMetricOrReason(row.tokenMetrics?.candidatePack?.estimatedTokens)
+        && hasMetricOrReason(row.tokenMetrics?.selectorUsage?.totalTokens)),
       detail: 'Each row needs prediction, candidate-pack, and selector token fields; unavailable provider usage must be explicit.',
     },
     {
@@ -251,8 +253,10 @@ function validate(summary, protocol, taskManifest, qualityRows, reliabilityRows)
 
 function formatNumber(value) {
   if (value === null || value === undefined) return 'n/a';
+  if (typeof value === 'string') return value;
   if (Number.isInteger(value)) return String(value);
-  return Number(value).toFixed(3);
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(3) : String(value);
 }
 
 function markdownTable(rows, columns) {

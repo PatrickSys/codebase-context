@@ -1,3 +1,4 @@
+// Focused CodeGraphContext readiness gate for the ContextBench Go task.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';

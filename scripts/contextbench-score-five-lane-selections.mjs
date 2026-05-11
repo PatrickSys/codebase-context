@@ -54,14 +54,97 @@ function run(cmd, args, opts = {}) {
   };
 }
 
+function cleanPath(path) {
+  return String(path || '').replaceAll('\\', '/').replace(/^\.\//, '');
+}
+
 function addSpan(map, file, start, end) {
-  const clean = String(file || '').replaceAll('\\', '/').replace(/^\.\//, '');
+  const clean = cleanPath(file);
   if (!clean) return;
   const s = Math.max(1, Number(start) || 1);
   const e = Math.max(s, Number(end) || s);
   const list = map.get(clean) || [];
   list.push({ start: s, end: e });
   map.set(clean, list);
+}
+
+function estimateTokensFromBytes(bytes) {
+  if (!Number.isFinite(bytes)) return null;
+  return Math.ceil(bytes / 4);
+}
+
+function measuredNumber(value, unit, source, unavailableReason = 'not captured in source artifact') {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return { value: numeric, unit, source };
+  return { value: null, unit, source, unavailableReason };
+}
+
+function byteCount(text) {
+  return Buffer.byteLength(String(text || ''), 'utf8');
+}
+
+function buildTimeMetrics(readiness, evaluator, rowWallDurationMs, evaluatorSkippedReason = null) {
+  const setupIndex = readiness.setupIndex || {};
+  return {
+    setupDurationMs: measuredNumber(setupIndex.setupDurationMs, 'ms', 'lane readiness setupIndex', 'readiness artifact did not report setupDurationMs'),
+    indexDurationMs: measuredNumber(setupIndex.indexDurationMs, 'ms', 'lane readiness setupIndex', 'readiness artifact did not report indexDurationMs'),
+    queryDurationMs: measuredNumber(setupIndex.queryDurationMs, 'ms', 'lane readiness setupIndex', 'readiness artifact did not report queryDurationMs'),
+    selectorDurationMs: measuredNumber(null, 'ms', 'selector stage', 'selector ran before scoring and did not emit wall-clock telemetry'),
+    evaluatorDurationMs: evaluator
+      ? measuredNumber(evaluator.durationMs, 'ms', 'official ContextBench evaluator command')
+      : measuredNumber(null, 'ms', 'official ContextBench evaluator command', evaluatorSkippedReason || 'evaluator did not run'),
+    rowWallDurationMs: measuredNumber(rowWallDurationMs, 'ms', 'scorer per-lane wall clock'),
+  };
+}
+
+function buildTokenMetrics(selection, prediction) {
+  const candidateMetrics = selection.candidateMetrics || selection.readiness?.candidateMetrics || {};
+  const candidateBytes = Number(candidateMetrics.bytes);
+  const candidateEstimatedTokens = Number(candidateMetrics.estimatedTokens);
+  const predictionBytes = byteCount(JSON.stringify(prediction || {}));
+  const selectorUsage = selection.selectorUsage || {};
+  return {
+    estimator: 'ceil(utf8_bytes/4); cost estimate only, not provider billing telemetry',
+    candidatePack: {
+      candidateCount: Number(selection.readiness?.candidateCount ?? selection.candidateCount ?? candidateMetrics.candidateCount ?? 0),
+      fileCount: Number.isFinite(Number(candidateMetrics.fileCount)) ? Number(candidateMetrics.fileCount) : null,
+      spanCount: Number.isFinite(Number(candidateMetrics.spanCount)) ? Number(candidateMetrics.spanCount) : null,
+      bytes: Number.isFinite(candidateBytes)
+        ? measuredNumber(candidateBytes, 'bytes', candidateMetrics.source || 'candidate pack artifact')
+        : measuredNumber(null, 'bytes', candidateMetrics.source || 'candidate pack artifact', candidateMetrics.unavailableReason || 'candidate pack bytes were not emitted for this lane'),
+      estimatedTokens: Number.isFinite(candidateEstimatedTokens)
+        ? measuredNumber(candidateEstimatedTokens, 'tokens', candidateMetrics.source || 'candidate pack artifact')
+        : measuredNumber(null, 'tokens', candidateMetrics.source || 'candidate pack artifact', candidateMetrics.unavailableReason || 'candidate pack token estimate was not emitted for this lane'),
+    },
+    prediction: {
+      bytes: measuredNumber(predictionBytes, 'bytes', 'official evaluator prediction JSON'),
+      estimatedTokens: measuredNumber(estimateTokensFromBytes(predictionBytes), 'tokens', 'official evaluator prediction JSON'),
+    },
+    selectorUsage: {
+      model: selection.selectorModel || selections.model || 'gpt-5.4-mini-high',
+      inputTokens: measuredNumber(selectorUsage.inputTokens, 'tokens', 'selector provider usage', 'selector usage telemetry was not captured for this proof artifact'),
+      outputTokens: measuredNumber(selectorUsage.outputTokens, 'tokens', 'selector provider usage', 'selector usage telemetry was not captured for this proof artifact'),
+      cachedInputTokens: measuredNumber(selectorUsage.cachedInputTokens, 'tokens', 'selector provider usage', 'selector usage telemetry was not captured for this proof artifact'),
+      reasoningTokens: measuredNumber(selectorUsage.reasoningTokens, 'tokens', 'selector provider usage', 'selector usage telemetry was not captured for this proof artifact'),
+      totalTokens: measuredNumber(selectorUsage.totalTokens, 'tokens', 'selector provider usage', 'selector usage telemetry was not captured for this proof artifact'),
+    },
+  };
+}
+
+function reliabilityFor(selection, rowBase, status, scoreable) {
+  return {
+    status,
+    officialEvaluatorScoreable: scoreable,
+    setupStatus: rowBase.setupStatus,
+    indexStatus: rowBase.indexStatus,
+    toolCallable: rowBase.toolCallable,
+    nonEmptyPrediction: rowBase.nonEmptyPrediction,
+    candidateCount: rowBase.candidateCount,
+    sourceRun: selection.readiness?.sourceRun || selection.sourceRun || null,
+    sourceJob: selection.readiness?.sourceJob || selection.sourceJob || null,
+    sourceArtifact: selection.readiness?.sourceArtifact || selection.sourceArtifact || null,
+    sourceDigest: selection.readiness?.sourceDigest || selection.sourceDigest || null,
+  };
 }
 
 function resultTableRow(row) {
@@ -79,9 +162,17 @@ function resultTableRow(row) {
     linePrecision: final.line?.precision ?? null,
     editlocRecall: row.score?.editloc?.recall ?? null,
     editlocPrecision: row.score?.editloc?.precision ?? null,
+    setupDurationMs: row.timeMetrics?.setupDurationMs?.value ?? null,
+    indexDurationMs: row.timeMetrics?.indexDurationMs?.value ?? null,
+    queryDurationMs: row.timeMetrics?.queryDurationMs?.value ?? null,
+    evaluatorDurationMs: row.timeMetrics?.evaluatorDurationMs?.value ?? null,
+    rowWallDurationMs: row.timeMetrics?.rowWallDurationMs?.value ?? null,
+    candidateEstimatedTokens: row.tokenMetrics?.candidatePack?.estimatedTokens?.value ?? null,
+    predictionEstimatedTokens: row.tokenMetrics?.prediction?.estimatedTokens?.value ?? null,
   };
 }
 
+const runStarted = Date.now();
 const runDir = join(root, 'lane-score');
 mkdirSync(runDir, { recursive: true });
 writeFileSync(join(runDir, 'selections.json'), JSON.stringify(selections, null, 2));
@@ -106,6 +197,7 @@ if (gold.status !== 0) throw new Error(`gold materialization failed: ${gold.stde
 
 const rows = [];
 for (const selection of laneSelections) {
+  const rowStarted = Date.now();
   const lane = selection.lane_id || selection.lane;
   const laneDir = join(runDir, lane);
   mkdirSync(laneDir, { recursive: true });
@@ -113,7 +205,7 @@ for (const selection of laneSelections) {
   const files = Array.isArray(selection.files) ? selection.files : [];
   const spanMap = new Map();
   for (const span of spans) addSpan(spanMap, span.file, span.start, span.end);
-  const predFiles = [...new Set([...files, ...spans.map((span) => String(span.file || '').replaceAll('\\', '/').replace(/^\.\//, ''))])].filter(Boolean);
+  const predFiles = [...new Set([...files, ...spans.map((span) => cleanPath(span.file))])].filter(Boolean);
   const predSpans = Object.fromEntries(spanMap.entries());
   const nonEmptyPrediction = predFiles.length > 0 || spans.length > 0;
   const readiness = selection.readiness || {};
@@ -135,7 +227,17 @@ for (const selection of laneSelections) {
 
   writeFileSync(join(laneDir, 'selection.json'), JSON.stringify(selection, null, 2));
   if (!nonEmptyPrediction) {
-    rows.push({ ...rowBase, status: 'empty_prediction', officialEvaluatorScoreable: false, score: null });
+    const timeMetrics = buildTimeMetrics(readiness, null, Date.now() - rowStarted, 'prediction was empty');
+    const row = {
+      ...rowBase,
+      status: 'empty_prediction',
+      officialEvaluatorScoreable: false,
+      score: null,
+      timeMetrics,
+      tokenMetrics: buildTokenMetrics(selection, null),
+    };
+    row.reliability = reliabilityFor(selection, rowBase, row.status, row.officialEvaluatorScoreable);
+    rows.push(row);
     continue;
   }
 
@@ -177,12 +279,16 @@ for (const selection of laneSelections) {
     if (lines.length > 0) score = JSON.parse(lines.at(-1));
   }
   const scoreable = evaluator.status === 0 && Boolean(score);
-  rows.push({
+  const row = {
     ...rowBase,
     status: scoreable ? 'completed' : 'judge_failed',
     officialEvaluatorScoreable: scoreable,
     score,
-  });
+    timeMetrics: buildTimeMetrics(readiness, evaluator, Date.now() - rowStarted),
+    tokenMetrics: buildTokenMetrics(selection, prediction),
+  };
+  row.reliability = reliabilityFor(selection, rowBase, row.status, row.officialEvaluatorScoreable);
+  rows.push(row);
 }
 
 const scoreableRows = rows.filter((row) => row.officialEvaluatorScoreable);
@@ -193,9 +299,14 @@ const summary = {
   requiredCompetitors: requiredLanes.length,
   requiredLanes,
   setupIndexCostReportedSeparately: true,
+  officialEvaluatorQualityRowsOnly: true,
   model: selections.model || 'gpt-5.4-mini-high',
   predictionSource: selections.predictionSource || 'gpt-5.4-mini-high subagent selections over real lane candidate packs',
   caveats: selections.caveats || [],
+  runMetrics: {
+    goldMaterializationDurationMs: gold.durationMs,
+    totalWallDurationMs: Date.now() - runStarted,
+  },
   resultsTable: scoreableRows.map(resultTableRow),
   rows,
 };

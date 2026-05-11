@@ -68,7 +68,7 @@ function parseRgJson(output, candidates, source) {
   }
 }
 
-function uniq(candidates, max = 160) {
+function uniq(candidates, max = 500) {
   const seen = new Set();
   const out = [];
   for (const candidate of candidates) {

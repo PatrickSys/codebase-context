@@ -68,14 +68,20 @@ function addSpan(map, file, start, end) {
   map.set(clean, list);
 }
 
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 function estimateTokensFromBytes(bytes) {
   if (!Number.isFinite(bytes)) return null;
   return Math.ceil(bytes / 4);
 }
 
 function measuredNumber(value, unit, source, unavailableReason = 'not captured in source artifact') {
-  const numeric = Number(value);
-  if (Number.isFinite(numeric)) return { value: numeric, unit, source };
+  const numeric = finiteNumber(value);
+  if (numeric !== null) return { value: numeric, unit, source };
   return { value: null, unit, source, unavailableReason };
 }
 
@@ -99,20 +105,20 @@ function buildTimeMetrics(readiness, evaluator, rowWallDurationMs, evaluatorSkip
 
 function buildTokenMetrics(selection, prediction) {
   const candidateMetrics = selection.candidateMetrics || selection.readiness?.candidateMetrics || {};
-  const candidateBytes = Number(candidateMetrics.bytes);
-  const candidateEstimatedTokens = Number(candidateMetrics.estimatedTokens);
+  const candidateBytes = finiteNumber(candidateMetrics.bytes);
+  const candidateEstimatedTokens = finiteNumber(candidateMetrics.estimatedTokens);
   const predictionBytes = byteCount(JSON.stringify(prediction || {}));
   const selectorUsage = selection.selectorUsage || {};
   return {
     estimator: 'ceil(utf8_bytes/4); cost estimate only, not provider billing telemetry',
     candidatePack: {
-      candidateCount: Number(selection.readiness?.candidateCount ?? selection.candidateCount ?? candidateMetrics.candidateCount ?? 0),
-      fileCount: Number.isFinite(Number(candidateMetrics.fileCount)) ? Number(candidateMetrics.fileCount) : null,
-      spanCount: Number.isFinite(Number(candidateMetrics.spanCount)) ? Number(candidateMetrics.spanCount) : null,
-      bytes: Number.isFinite(candidateBytes)
+      candidateCount: finiteNumber(selection.readiness?.candidateCount ?? selection.candidateCount ?? candidateMetrics.candidateCount) ?? 0,
+      fileCount: finiteNumber(candidateMetrics.fileCount),
+      spanCount: finiteNumber(candidateMetrics.spanCount),
+      bytes: candidateBytes !== null
         ? measuredNumber(candidateBytes, 'bytes', candidateMetrics.source || 'candidate pack artifact')
         : measuredNumber(null, 'bytes', candidateMetrics.source || 'candidate pack artifact', candidateMetrics.unavailableReason || 'candidate pack bytes were not emitted for this lane'),
-      estimatedTokens: Number.isFinite(candidateEstimatedTokens)
+      estimatedTokens: candidateEstimatedTokens !== null
         ? measuredNumber(candidateEstimatedTokens, 'tokens', candidateMetrics.source || 'candidate pack artifact')
         : measuredNumber(null, 'tokens', candidateMetrics.source || 'candidate pack artifact', candidateMetrics.unavailableReason || 'candidate pack token estimate was not emitted for this lane'),
     },
@@ -217,7 +223,7 @@ for (const selection of laneSelections) {
     setupStatus: readiness.setupStatus || selection.setupStatus || 'unknown',
     indexStatus: readiness.indexStatus || selection.indexStatus || 'unknown',
     toolCallable: Boolean(readiness.toolCallable ?? selection.toolCallable),
-    candidateCount: Number(readiness.candidateCount ?? selection.candidateCount ?? 0),
+    candidateCount: finiteNumber(readiness.candidateCount ?? selection.candidateCount) ?? 0,
     setupIndex: readiness.setupIndex || selection.setupIndex || null,
     nonEmptyPrediction,
     predFiles: predFiles.length,

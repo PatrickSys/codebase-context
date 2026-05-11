@@ -88,7 +88,12 @@ jobs:
           path: ${{ env.EXTERNAL_READINESS_ROOT }}/ripgrep
       - name: Score five ready lane selections
         shell: bash
-        run: node scripts/contextbench-score-five-lane-artifact-selections.mjs
+        run: |
+          set +e
+          node scripts/contextbench-score-five-lane-artifact-selections.mjs > "$ROOT/logs/score-five-lane.log" 2>&1
+          status=$?
+          tail -n 120 "$ROOT/logs/score-five-lane.log"
+          exit "$status"
       - name: Build publishable pilot report
         shell: bash
         run: |
@@ -108,5 +113,22 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: contextbench-five-lane-score
-          path: /tmp/contextbench-five-lane-score
+          path: |
+            /tmp/contextbench-five-lane-score/summary.json
+            /tmp/contextbench-five-lane-score/publishable-summary.json
+            /tmp/contextbench-five-lane-score/publishable-validation.json
+            /tmp/contextbench-five-lane-score/humanized-summary.md
+            /tmp/contextbench-five-lane-score/task-payloads.json
+            /tmp/contextbench-five-lane-score/logs/**
+            /tmp/contextbench-five-lane-score/lane-score/summary.json
+            /tmp/contextbench-five-lane-score/lane-score/gold.json
+            /tmp/contextbench-five-lane-score/lane-score/gold-command.json
+            /tmp/contextbench-five-lane-score/lane-score/selections.json
+            /tmp/contextbench-five-lane-score/lane-score/*/selection.json
+            /tmp/contextbench-five-lane-score/lane-score/*/prediction.json
+            /tmp/contextbench-five-lane-score/lane-score/*/official-score.jsonl
+            /tmp/contextbench-five-lane-score/lane-score/*/evaluator-command.json
+            /tmp/contextbench-five-lane-score/external-readiness/**/*.json
+            /tmp/contextbench-five-lane-score/external-readiness/**/*.jsonl
+            /tmp/contextbench-five-lane-score/external-readiness/**/*.md
           retention-days: 14

@@ -37,7 +37,11 @@ const BUILTIN_HOOKS = new Set([
   'useTransition',
   'useId',
   'useSyncExternalStore',
-  'useInsertionEffect'
+  'useInsertionEffect',
+  'use',
+  'useActionState',
+  'useOptimistic',
+  'useFormStatus'
 ]);
 
 const REACT_LIBRARY_SIGNALS: ReadonlyArray<{
@@ -59,6 +63,9 @@ interface ReactAstSummary {
   usesContext: boolean;
   usesMemoization: boolean;
   usesSuspense: boolean;
+  usesActionState: boolean;
+  usesOptimistic: boolean;
+  usesFormStatus: boolean;
 }
 
 export class ReactAnalyzer implements FrameworkAnalyzer {
@@ -143,6 +150,15 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
       }
       if (summary.usesSuspense) {
         detectedPatterns.push({ category: 'reactivity', name: 'Suspense' });
+      }
+      if (summary.usesActionState) {
+        detectedPatterns.push({ category: 'reactivity', name: 'Actions' });
+      }
+      if (summary.usesOptimistic) {
+        detectedPatterns.push({ category: 'reactivity', name: 'Optimistic UI' });
+      }
+      if (summary.usesFormStatus) {
+        detectedPatterns.push({ category: 'forms', name: 'Form status' });
       }
       if (summary.usesMemoization) {
         detectedPatterns.push({ category: 'reactivity', name: 'Memoization' });
@@ -309,6 +325,9 @@ function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
   let usesContext = false;
   let usesMemoization = false;
   let usesSuspense = false;
+  let usesActionState = false;
+  let usesOptimistic = false;
+  let usesFormStatus = false;
 
   walkAst(program, (node, parent) => {
     if (node.type === 'CallExpression') {
@@ -324,6 +343,18 @@ function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
       }
       if (calleeName === 'lazy') {
         usesSuspense = true;
+      }
+      if (calleeName === 'use') {
+        usesSuspense = true;
+      }
+      if (calleeName === 'useActionState') {
+        usesActionState = true;
+      }
+      if (calleeName === 'useOptimistic') {
+        usesOptimistic = true;
+      }
+      if (calleeName === 'useFormStatus') {
+        usesFormStatus = true;
       }
       if (
         calleeName === 'createContext' &&
@@ -390,7 +421,10 @@ function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
     customHooks: Array.from(customHooks).sort(),
     usesContext,
     usesMemoization,
-    usesSuspense
+    usesSuspense,
+    usesActionState,
+    usesOptimistic,
+    usesFormStatus
   };
 }
 

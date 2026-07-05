@@ -59,6 +59,40 @@ export default function Page() { return <div />; }
     });
   });
 
+  it('classifies current App Router file conventions and proxy files', async () => {
+    const analyzer = new NextJsAnalyzer();
+
+    const loading = await analyzer.analyze(
+      path.join(process.cwd(), 'app', 'dashboard', 'loading.tsx'),
+      'export default function Loading() { return <div />; }'
+    );
+    expect(loading.metadata.nextjs).toMatchObject({
+      router: 'app',
+      kind: 'loading',
+      routePath: '/dashboard'
+    });
+
+    const notFound = await analyzer.analyze(
+      path.join(process.cwd(), 'src', 'app', 'shop', 'not-found.tsx'),
+      'export default function NotFound() { return <div />; }'
+    );
+    expect(notFound.metadata.nextjs).toMatchObject({
+      router: 'app',
+      kind: 'not-found',
+      routePath: '/shop'
+    });
+
+    const proxy = await analyzer.analyze(
+      path.join(process.cwd(), 'src', 'proxy.ts'),
+      'export function proxy() { return null; }'
+    );
+    expect(proxy.metadata.nextjs).toMatchObject({
+      router: 'proxy',
+      kind: 'proxy',
+      routePath: null
+    });
+  });
+
   it('does not treat _app as a pages route and infers metadata variants from disk', async () => {
     const analyzer = new NextJsAnalyzer();
     const appShell = await analyzer.analyze(

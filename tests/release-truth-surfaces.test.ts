@@ -73,6 +73,7 @@ function extractMarkdownLinks(markdown: string): string[] {
 describe('release truth surfaces', () => {
   const packageJson = readJson<PackageJson>('package.json');
   const releaseManifest = readJson<ReleaseManifest>('.release-please-manifest.json');
+  const expectedVersion = packageJson.version;
   const changelog = readText('CHANGELOG.md');
   const readme = readText('README.md');
   const workflow = readText('.github/workflows/publish-npm-on-release.yml');
@@ -80,10 +81,9 @@ describe('release truth surfaces', () => {
   const visualsDoc = readOptionalText('docs/visuals.md');
   const packagedPaths = ['README.md', 'LICENSE', ...(packageJson.files ?? [])];
 
-  it('keeps package metadata, release manifest, and changelog on 2.2.0', () => {
-    expect(packageJson.version).toBe('2.2.0');
-    expect(releaseManifest['.']).toBe('2.2.0');
-    expect(changelog).toContain('## [2.2.0]');
+  it('keeps package metadata, release manifest, and changelog aligned', () => {
+    expect(releaseManifest['.']).toBe(expectedVersion);
+    expect(changelog).toContain(`## [${expectedVersion}]`);
     expect(changelog).not.toContain('## Unreleased');
   });
 
@@ -114,8 +114,8 @@ describe('release truth surfaces', () => {
     expect(visualsDoc).toContain('Historical snapshot');
   });
 
-  it('keeps the manual publish fallback aligned to v2.2.0', () => {
-    expect(workflow).toContain("description: 'Tag to publish (e.g. v2.2.0)'");
-    expect(workflow).toContain("default: 'v2.2.0'");
+  it('keeps the manual publish fallback aligned to the package version', () => {
+    expect(workflow).toContain(`description: 'Tag to publish (e.g. v${expectedVersion})'`);
+    expect(workflow).toContain(`default: 'v${expectedVersion}'`);
   });
 });

@@ -6,6 +6,7 @@ import { CodebaseIndexer } from '../src/core/indexer';
 import { analyzerRegistry } from '../src/core/analyzer-registry';
 import { AngularAnalyzer } from '../src/analyzers/angular/index';
 import { NextJsAnalyzer } from '../src/analyzers/nextjs/index';
+import { NestJsAnalyzer } from '../src/analyzers/nestjs/index';
 import { ReactAnalyzer } from '../src/analyzers/react/index';
 import { GenericAnalyzer } from '../src/analyzers/generic/index';
 
@@ -14,6 +15,9 @@ if (!analyzerRegistry.get('angular')) {
 }
 if (!analyzerRegistry.get('nextjs')) {
     analyzerRegistry.register(new NextJsAnalyzer());
+}
+if (!analyzerRegistry.get('nestjs')) {
+    analyzerRegistry.register(new NestJsAnalyzer());
 }
 if (!analyzerRegistry.get('react')) {
     analyzerRegistry.register(new ReactAnalyzer());
@@ -229,6 +233,30 @@ describe('CodebaseIndexer.detectMetadata', () => {
             expect(metadata.framework?.type).toBe('angular');
             expect(metadata.framework?.indicators).toContain('dep:@angular/core');
             expect(metadata.framework?.indicators).toContain('disk:ng-package-json');
+        });
+
+        it('detects NestJS project metadata from @nestjs dependencies', async () => {
+            await fs.writeFile(
+                path.join(tempDir, 'package.json'),
+                JSON.stringify({
+                    name: 'api',
+                    dependencies: {
+                        '@nestjs/common': '11.1.19',
+                        '@nestjs/core': '11.1.19',
+                        '@nestjs/platform-express': '11.1.19',
+                    },
+                    devDependencies: {
+                        '@nestjs/testing': '11.1.19',
+                    },
+                })
+            );
+
+            const indexer = new CodebaseIndexer({ rootPath: tempDir });
+            const metadata = await indexer.detectMetadata();
+
+            expect(metadata.framework?.type).toBe('nestjs');
+            expect(metadata.framework?.name).toBe('NestJS');
+            expect(metadata.framework?.indicators).toContain('dep:@nestjs/core');
         });
     });
 });

@@ -21,6 +21,7 @@ import type { IndexState } from './tools/types.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
+import { NestJsAnalyzer } from './analyzers/nestjs/index.js';
 import { ReactAnalyzer } from './analyzers/react/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { formatJson } from './cli-formatters.js';
@@ -31,6 +32,7 @@ import { handleMapCli } from './cli-map.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
+analyzerRegistry.register(new NestJsAnalyzer());
 analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 

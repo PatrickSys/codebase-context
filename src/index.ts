@@ -17,6 +17,7 @@ import { CodebaseIndexer } from './core/indexer.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
+import { NestJsAnalyzer } from './analyzers/nestjs/index.js';
 import { ReactAnalyzer } from './analyzers/react/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { IndexCorruptedError } from './errors/index.js';
@@ -62,6 +63,7 @@ import {
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
+analyzerRegistry.register(new NestJsAnalyzer());
 analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 

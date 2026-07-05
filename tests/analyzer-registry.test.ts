@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { analyzerRegistry, AnalyzerRegistry } from '../src/core/analyzer-registry';
 import { AngularAnalyzer } from '../src/analyzers/angular/index';
 import { NextJsAnalyzer } from '../src/analyzers/nextjs/index';
+import { NestJsAnalyzer } from '../src/analyzers/nestjs/index';
 import { ReactAnalyzer } from '../src/analyzers/react/index';
 import { GenericAnalyzer } from '../src/analyzers/generic/index';
 
 // Register default analyzers
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
+analyzerRegistry.register(new NestJsAnalyzer());
 analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
@@ -47,12 +49,13 @@ describe('AnalyzerRegistry', () => {
       }
     });
 
-    it('should include default analyzers (Angular, Next.js, React, Generic)', () => {
+    it('should include default analyzers (Angular, Next.js, NestJS, React, Generic)', () => {
       const analyzers = analyzerRegistry.getAll();
       const names = analyzers.map((a) => a.name);
 
       expect(names).toContain('angular');
       expect(names).toContain('nextjs');
+      expect(names).toContain('nestjs');
       expect(names).toContain('react');
       expect(names).toContain('generic');
     });
@@ -65,8 +68,9 @@ describe('AnalyzerRegistry', () => {
       expect(angular?.name).toBe('angular');
     });
 
-    it('should return nextjs and react analyzers by name', () => {
+    it('should return nextjs, nestjs, and react analyzers by name', () => {
       expect(analyzerRegistry.get('nextjs')?.name).toBe('nextjs');
+      expect(analyzerRegistry.get('nestjs')?.name).toBe('nestjs');
       expect(analyzerRegistry.get('react')?.name).toBe('react');
     });
 
@@ -80,14 +84,18 @@ describe('AnalyzerRegistry', () => {
     it('should have Angular higher priority than Generic', () => {
       const angular = analyzerRegistry.get('angular');
       const nextjs = analyzerRegistry.get('nextjs');
+      const nestjs = analyzerRegistry.get('nestjs');
       const react = analyzerRegistry.get('react');
       const generic = analyzerRegistry.get('generic');
 
       expect(angular).toBeDefined();
       expect(nextjs).toBeDefined();
+      expect(nestjs).toBeDefined();
       expect(react).toBeDefined();
       expect(generic).toBeDefined();
       expect(angular!.priority).toBeGreaterThan(generic!.priority);
+      expect(nextjs!.priority).toBeGreaterThan(nestjs!.priority);
+      expect(nestjs!.priority).toBeGreaterThan(react!.priority);
       expect(nextjs!.priority).toBeGreaterThan(react!.priority);
       expect(react!.priority).toBeGreaterThan(generic!.priority);
     });

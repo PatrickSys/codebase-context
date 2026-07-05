@@ -70,7 +70,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
       const { pipeline } = await import('@huggingface/transformers');
 
       // TS2590: pipeline() resolves AllTasks[T] — a union too complex for TSC to represent.
-      // Cast to a simpler signature; the actual return type IS FeatureExtractionPipelineType.
+      // Cast to a simpler feature-extraction signature for both v3 and v4-compatible types.
       type PipelineFn = (
         task: 'feature-extraction',
         model: string,

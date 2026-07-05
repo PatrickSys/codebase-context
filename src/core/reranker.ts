@@ -21,9 +21,15 @@ const AMBIGUITY_THRESHOLD = 0.08;
 
 interface CrossEncoderTokenizer {
   (
-    query: string,
-    passage: string,
-    options: { padding: boolean; truncation: boolean; max_length: number }
+    text: string,
+    options?: {
+      text_pair?: string | null;
+      padding?: boolean | 'max_length';
+      truncation?: boolean | null;
+      max_length?: number | null;
+      return_tensor?: boolean;
+      return_token_type_ids?: boolean | null;
+    }
   ): unknown;
 }
 
@@ -152,7 +158,8 @@ async function scorePair(query: string, passage: string): Promise<number> {
     throw new Error('[reranker] Model not loaded — call ensureModelLoaded() first');
   }
 
-  const inputs = cachedTokenizer(query, passage, {
+  const inputs = cachedTokenizer(query, {
+    text_pair: passage,
     padding: true,
     truncation: true,
     max_length: 512

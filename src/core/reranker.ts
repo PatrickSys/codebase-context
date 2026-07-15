@@ -9,6 +9,7 @@
  */
 
 import type { SearchResult } from '../types/index.js';
+import type { PreTrainedTokenizer } from '@huggingface/transformers';
 import os from 'os';
 
 const DEFAULT_RERANKER_MODEL = 'Xenova/ms-marco-MiniLM-L-6-v2';
@@ -19,25 +20,11 @@ const RERANK_TOP_K = 10;
 /** Trigger reranking when the score gap between #1 and #3 is below this threshold */
 const AMBIGUITY_THRESHOLD = 0.08;
 
-interface CrossEncoderTokenizer {
-  (
-    text: string,
-    options?: {
-      text_pair?: string | null;
-      padding?: boolean | 'max_length';
-      truncation?: boolean | null;
-      max_length?: number | null;
-      return_tensor?: boolean;
-      return_token_type_ids?: boolean | null;
-    }
-  ): unknown;
-}
-
 interface CrossEncoderModel {
   (inputs: unknown): Promise<{ logits: { data: ArrayLike<number> } }>;
 }
 
-let cachedTokenizer: CrossEncoderTokenizer | null = null;
+let cachedTokenizer: PreTrainedTokenizer | null = null;
 let cachedModel: CrossEncoderModel | null = null;
 let initPromise: Promise<void> | null = null;
 

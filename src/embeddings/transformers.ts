@@ -1,5 +1,5 @@
 import { EmbeddingProvider, DEFAULT_MODEL } from './types.js';
-import type { FeatureExtractionPipelineType } from '@huggingface/transformers';
+import type { FeatureExtractionPipeline } from '@huggingface/transformers';
 import os from 'os';
 
 /**
@@ -43,7 +43,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
   readonly modelName: string;
   readonly dimensions: number;
 
-  private pipeline: FeatureExtractionPipelineType | null = null;
+  private pipeline: FeatureExtractionPipeline | null = null;
   private ready = false;
   private initPromise: Promise<void> | null = null;
 
@@ -75,7 +75,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
         task: 'feature-extraction',
         model: string,
         opts: Record<string, unknown>
-      ) => Promise<FeatureExtractionPipelineType>;
+      ) => Promise<FeatureExtractionPipeline>;
       this.pipeline = await (pipeline as PipelineFn)('feature-extraction', this.modelName, {
         dtype: 'q8',
         // Limit ONNX Runtime to half cores by default — prevents system freeze during indexing.

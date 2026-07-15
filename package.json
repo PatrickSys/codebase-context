@@ -128,8 +128,8 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@inquirer/prompts": "^3.0.0",
-    "@huggingface/transformers": "^3.8.1",
     "@lancedb/lancedb": "^0.4.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@typescript-eslint/typescript-estree": "^7.0.0",
@@ -172,7 +172,7 @@
       "@modelcontextprotocol/sdk>ajv": "8.18.0",
       "@modelcontextprotocol/sdk>@hono/node-server": "1.19.13",
       "@modelcontextprotocol/sdk>express-rate-limit": "8.2.2",
-      "@huggingface/transformers>onnxruntime-node": "1.24.2",
+      "@huggingface/transformers>onnxruntime-node": "1.24.3",
       "path-to-regexp": "8.4.0",
       "brace-expansion": "5.0.5",
       "micromatch>picomatch": "2.3.2",

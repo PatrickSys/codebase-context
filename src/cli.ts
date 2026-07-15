@@ -29,6 +29,7 @@ import { handleMemoryCli } from './cli-memory.js';
 export { handleMemoryCli } from './cli-memory.js';
 import { handleInitCli } from './cli-init.js';
 import { handleMapCli } from './cli-map.js';
+import { loadProjectConfig } from './server/config.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
@@ -105,6 +106,7 @@ function resolveCliRootPath(): string {
 
 async function initToolContext(): Promise<ToolContext> {
   const rootPath = resolveCliRootPath();
+  const projectConfig = await loadProjectConfig(rootPath);
 
   const paths = {
     baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
@@ -136,6 +138,7 @@ async function initToolContext(): Promise<ToolContext> {
       let lastLoggedProgress = { phase: '', percentage: -1 };
       const indexer = new CodebaseIndexer({
         rootPath,
+        ...(projectConfig?.parsing ? { config: { parsing: projectConfig.parsing } } : {}),
         incrementalOnly,
         onProgress: (progress) => {
           const shouldLog =

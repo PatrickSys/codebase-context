@@ -5,6 +5,9 @@ import path from 'node:path';
 export interface ProjectConfig {
   root: string;
   excludePatterns?: string[];
+  parsing?: {
+    maxChunks?: number;
+  };
   analyzerHints?: {
     extensions?: string[];
     analyzer?: string;
@@ -88,6 +91,20 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
         }
 
         if (
+          typeof project.parsing === 'object' &&
+          project.parsing !== null &&
+          !Array.isArray(project.parsing)
+        ) {
+          const parsing = project.parsing as Record<string, unknown>;
+          const maxChunks = parsing.maxChunks;
+          if (typeof maxChunks === 'number' && Number.isInteger(maxChunks) && maxChunks > 0) {
+            parsedProject.parsing = { maxChunks };
+          } else if (maxChunks !== undefined) {
+            console.error(`[config] Ignoring invalid project parsing.maxChunks: ${maxChunks}`);
+          }
+        }
+
+        if (
           typeof project.analyzerHints === 'object' &&
           project.analyzerHints !== null &&
           !Array.isArray(project.analyzerHints)
@@ -136,4 +153,10 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
   }
 
   return result;
+}
+
+export async function loadProjectConfig(rootPath: string): Promise<ProjectConfig | undefined> {
+  const serverConfig = await loadServerConfig();
+  const resolvedRoot = path.resolve(rootPath);
+  return serverConfig?.projects?.find((project) => project.root === resolvedRoot);
 }

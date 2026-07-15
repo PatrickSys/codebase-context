@@ -475,6 +475,7 @@ export interface CodebaseConfig {
   // Parsing options
   parsing: {
     maxFileSize?: number; // bytes
+    maxChunks?: number;
     chunkSize?: number; // lines
     chunkOverlap?: number; // lines
     parseTests?: boolean;

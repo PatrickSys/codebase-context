@@ -176,6 +176,19 @@ If you get `selection_required`, retry with one of the paths from `availableProj
 | `CODEBASE_CONTEXT_PORT`        | `3100`                            | HTTP server port override (same as `--port`; ignored in stdio mode) |
 | `CODEBASE_CONTEXT_CONFIG_PATH` | `~/.codebase-context/config.json` | Override the server config file path                                |
 
+Large projects can override the default 5,000 searchable-chunk safety limit per project:
+
+```json
+{
+  "projects": [
+    {
+      "root": "/path/to/large-project",
+      "parsing": { "maxChunks": 25000 }
+    }
+  ]
+}
+```
+
 ## Performance
 
 - **First indexing**: 2-5 minutes for ~30k files (embedding computation).

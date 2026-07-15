@@ -1251,7 +1251,10 @@ async function performIndexingOnce(
       ...(project.runtimeOverrides.extraExcludePatterns?.length
         ? {
             config: {
-              exclude: [...EXCLUDED_GLOB_PATTERNS, ...project.runtimeOverrides.extraExcludePatterns],
+              exclude: [
+                ...EXCLUDED_GLOB_PATTERNS,
+                ...project.runtimeOverrides.extraExcludePatterns
+              ],
               ...(project.runtimeOverrides.maxChunks
                 ? { parsing: { maxChunks: project.runtimeOverrides.maxChunks } }
                 : {})

@@ -84,7 +84,7 @@ async function removeTempMapProject(rootPath: string): Promise<void> {
 }
 
 function runMapCli(args: string[], rootPath: string) {
-  return spawnSync(process.execPath, ['--import', 'tsx', ENTRYPOINT, 'map', ...args], {
+  return spawnSync(process.execPath, ['--no-deprecation', '--import', 'tsx', ENTRYPOINT, 'map', ...args], {
     cwd: CURRENT_REPO_ROOT,
     env: {
       ...process.env,

@@ -11,9 +11,14 @@ const vitestEntrypoint = fileURLToPath(
   new URL('../node_modules/vitest/vitest.mjs', import.meta.url)
 );
 
+const sensitiveEnvName = /TOKEN|KEY|SECRET|PASSWORD|AUTH|OPENAI|ANTHROPIC|CLAUDE/i;
+const testEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => !sensitiveEnvName.test(name))
+);
+
 const child = spawn(process.execPath, [vitestEntrypoint, 'run', ...vitestArgs], {
   stdio: 'inherit',
-  env: process.env
+  env: testEnv
 });
 
 child.on('exit', (code, signal) => {

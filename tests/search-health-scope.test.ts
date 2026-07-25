@@ -28,6 +28,7 @@ describe('search_codebase health and scoped memories', () => {
   beforeEach(async () => {
     searchMocks.search.mockReset();
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'search-health-scope-'));
+    const currentDate = new Date().toISOString();
 
     const contextDir = path.join(tempRoot, '.codebase-context');
     await fs.mkdir(contextDir, { recursive: true });
@@ -56,7 +57,7 @@ describe('search_codebase health and scoped memories', () => {
             category: 'architecture',
             memory: 'Avoid direct token reads',
             reason: 'They bypass AuthService refresh logic.',
-            date: '2026-04-17T00:00:00.000Z',
+            date: currentDate,
             scope: {
               kind: 'symbol',
               file: 'src/auth/auth.service.ts',
@@ -69,7 +70,7 @@ describe('search_codebase health and scoped memories', () => {
             category: 'architecture',
             memory: 'Use auth interceptors',
             reason: 'They keep HTTP token injection consistent.',
-            date: '2026-04-17T00:00:00.000Z'
+            date: currentDate
           }
         ],
         null,

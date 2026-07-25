@@ -1,5 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -53,6 +60,10 @@ function cleanupSessionRoot(sessionRoot: string): void {
   } catch (error) {
     ignoreWindowsTempCleanupRace(error);
   }
+}
+
+function normalizeFilesystemPath(filePath: string): string {
+  return realpathSync(filePath);
 }
 
 function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
@@ -398,7 +409,9 @@ describe('ContextBench Phase 40 schema gate', () => {
         repoCheckoutPath: repoPath,
         verificationStrict: false
       });
-      expect(readFileSync(cwdCapturePath, 'utf8')).toBe(repoPath);
+      expect(normalizeFilesystemPath(readFileSync(cwdCapturePath, 'utf8'))).toBe(
+        normalizeFilesystemPath(repoPath)
+      );
       const stdin = readFileSync(stdinCapturePath, 'utf8');
       expect(stdin).toContain('Problem statement:');
       expect(stdin).toContain('Fix the failing ContextBench task');
@@ -584,7 +597,9 @@ describe('ContextBench Phase 40 schema gate', () => {
           ],
           { encoding: 'utf8', env }
         );
-        expect(readFileSync(cwdPath, 'utf8')).toBe(repoPath);
+        expect(normalizeFilesystemPath(readFileSync(cwdPath, 'utf8'))).toBe(
+          normalizeFilesystemPath(repoPath)
+        );
       }
       execFileSync(
         'node',
@@ -681,7 +696,9 @@ describe('ContextBench Phase 40 schema gate', () => {
         (candidate) => candidate.scoring && 'baselineArmId' in candidate.scoring
       );
       expect(row).toMatchObject({ status: 'completed' });
-      expect(readFileSync(cwdCapturePath, 'utf8')).toBe(repoPath);
+      expect(normalizeFilesystemPath(readFileSync(cwdCapturePath, 'utf8'))).toBe(
+        normalizeFilesystemPath(repoPath)
+      );
       const stdin = readFileSync(stdinCapturePath, 'utf8');
       expect(stdin).toContain('Problem statement:');
       expect(stdin).toContain('Run the diagnostic arm with materialized task text.');

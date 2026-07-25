@@ -63,7 +63,12 @@ describe('reranker corruption recovery', () => {
     await fs.mkdir(modelCacheDir, { recursive: true });
     await fs.writeFile(path.join(modelCacheDir, 'model.onnx'), 'corrupt');
 
-    const tokenizer = vi.fn((query: string, passage: string) => ({ query, passage }));
+    const tokenizer = vi.fn(
+      (query: string, options?: { text_pair?: string | null }) => ({
+        query,
+        passage: options?.text_pair ?? ''
+      })
+    );
     const model = vi.fn(async (inputs: { passage: string }) => {
       if (inputs.passage.includes('/a.ts')) return { logits: { data: [1] } };
       if (inputs.passage.includes('/b.ts')) return { logits: { data: [3] } };
@@ -89,6 +94,33 @@ describe('reranker corruption recovery', () => {
     const reranked = await rerank('auth token', results);
     expect(transformersMocks.tokenizerFromPretrained).toHaveBeenCalledTimes(2);
     expect(transformersMocks.modelFromPretrained).toHaveBeenCalledTimes(2);
+    expect(tokenizer).toHaveBeenCalledWith(
+      'auth token',
+      expect.objectContaining({
+        text_pair: expect.stringContaining('/a.ts'),
+        padding: true,
+        truncation: true,
+        max_length: 512
+      })
+    );
+    expect(tokenizer).toHaveBeenCalledWith(
+      'auth token',
+      expect.objectContaining({
+        text_pair: expect.stringContaining('/b.ts'),
+        padding: true,
+        truncation: true,
+        max_length: 512
+      })
+    );
+    expect(tokenizer).toHaveBeenCalledWith(
+      'auth token',
+      expect.objectContaining({
+        text_pair: expect.stringContaining('/c.ts'),
+        padding: true,
+        truncation: true,
+        max_length: 512
+      })
+    );
     expect(reranked.map((result) => result.filePath)).toEqual(['/b.ts', '/c.ts', '/a.ts']);
     expect(getRerankerStatus()).toBe('active');
   });

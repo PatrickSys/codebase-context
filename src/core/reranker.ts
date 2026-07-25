@@ -9,6 +9,7 @@
  */
 
 import type { SearchResult } from '../types/index.js';
+import type { PreTrainedTokenizer } from '@huggingface/transformers';
 import os from 'os';
 
 const DEFAULT_RERANKER_MODEL = 'Xenova/ms-marco-MiniLM-L-6-v2';
@@ -19,19 +20,11 @@ const RERANK_TOP_K = 10;
 /** Trigger reranking when the score gap between #1 and #3 is below this threshold */
 const AMBIGUITY_THRESHOLD = 0.08;
 
-interface CrossEncoderTokenizer {
-  (
-    query: string,
-    passage: string,
-    options: { padding: boolean; truncation: boolean; max_length: number }
-  ): unknown;
-}
-
 interface CrossEncoderModel {
   (inputs: unknown): Promise<{ logits: { data: ArrayLike<number> } }>;
 }
 
-let cachedTokenizer: CrossEncoderTokenizer | null = null;
+let cachedTokenizer: PreTrainedTokenizer | null = null;
 let cachedModel: CrossEncoderModel | null = null;
 let initPromise: Promise<void> | null = null;
 
@@ -152,7 +145,8 @@ async function scorePair(query: string, passage: string): Promise<number> {
     throw new Error('[reranker] Model not loaded — call ensureModelLoaded() first');
   }
 
-  const inputs = cachedTokenizer(query, passage, {
+  const inputs = cachedTokenizer(query, {
+    text_pair: passage,
     padding: true,
     truncation: true,
     max_length: 512

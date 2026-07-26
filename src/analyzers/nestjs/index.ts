@@ -93,7 +93,7 @@ export class NestJsAnalyzer implements FrameworkAnalyzer {
   readonly name = 'nestjs';
   readonly version = '1.0.0';
   readonly supportedExtensions = ['.ts', '.js', '.mjs', '.cjs', '.mts', '.cts'];
-  readonly priority = 85;
+  readonly priority = 105;
 
   canAnalyze(filePath: string, content?: string): boolean {
     const extension = path.extname(filePath).toLowerCase();

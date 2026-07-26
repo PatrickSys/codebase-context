@@ -94,10 +94,26 @@ describe('AnalyzerRegistry', () => {
       expect(react).toBeDefined();
       expect(generic).toBeDefined();
       expect(angular!.priority).toBeGreaterThan(generic!.priority);
-      expect(nextjs!.priority).toBeGreaterThan(nestjs!.priority);
+      expect(nestjs!.priority).toBeGreaterThan(angular!.priority);
       expect(nestjs!.priority).toBeGreaterThan(react!.priority);
       expect(nextjs!.priority).toBeGreaterThan(react!.priority);
       expect(react!.priority).toBeGreaterThan(generic!.priority);
+    });
+
+    it('should prefer NestJS when framework decorators overlap with Angular', () => {
+      const content = `
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class PaymentsService {}
+`;
+
+      expect(
+        analyzerRegistry.findAllAnalyzers('/tmp/payments.service.ts', content).map((a) => a.name)
+      ).toEqual(['nestjs', 'angular', 'generic']);
+      expect(analyzerRegistry.findAnalyzer('/tmp/payments.service.ts', content)?.name).toBe(
+        'nestjs'
+      );
     });
   });
 });

@@ -283,7 +283,7 @@ export class CodebaseIndexer {
       analyzers: {
         angular: { enabled: true, priority: 100 },
         nextjs: { enabled: false, priority: 90 },
-        nestjs: { enabled: false, priority: 85 },
+        nestjs: { enabled: false, priority: 105 },
         react: { enabled: false, priority: 90 },
         vue: { enabled: false, priority: 90 },
         generic: { enabled: true, priority: 10 }

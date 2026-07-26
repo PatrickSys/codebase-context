@@ -38,7 +38,6 @@ const BUILTIN_HOOKS = new Set([
   'useId',
   'useSyncExternalStore',
   'useInsertionEffect',
-  'use',
   'useActionState',
   'useOptimistic',
   'useFormStatus'
@@ -108,6 +107,7 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
     const exports: ExportStatement[] = [];
     const dependencyNames = new Set<string>();
     const importSources = new Set<string>();
+    const reactUseBindings = new Set<string>();
     const detectedPatterns: DetectedPattern[] = [];
     let components: CodeComponent[] = [];
 
@@ -124,6 +124,9 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
         if (statement.type === 'ImportDeclaration' && typeof statement.source.value === 'string') {
           const source = statement.source.value;
           importSources.add(getPackageName(source));
+          if (source === 'react') {
+            addReactUseBindings(reactUseBindings, statement.specifiers);
+          }
           imports.push({
             source,
             imports: statement.specifiers.map(getImportSpecifierName),
@@ -142,7 +145,7 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
         appendExports(exports, statement);
       }
 
-      const summary = summarizeReactProgram(program);
+      const summary = summarizeReactProgram(program, reactUseBindings);
       components = summary.components;
 
       if (summary.usesContext) {
@@ -318,7 +321,10 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
   }
 }
 
-function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
+function summarizeReactProgram(
+  program: TSESTree.Program,
+  reactUseBindings: ReadonlySet<string>
+): ReactAstSummary {
   const components: CodeComponent[] = [];
   const builtinHooksUsed = new Set<string>();
   const customHooks = new Set<string>();
@@ -332,7 +338,8 @@ function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
   walkAst(program, (node, parent) => {
     if (node.type === 'CallExpression') {
       const calleeName = getCalleeName(node.callee);
-      if (calleeName && BUILTIN_HOOKS.has(calleeName)) {
+      const usesReactUse = calleeName !== null && reactUseBindings.has(calleeName);
+      if (calleeName && (BUILTIN_HOOKS.has(calleeName) || usesReactUse)) {
         builtinHooksUsed.add(calleeName);
       }
       if (calleeName === 'createContext' || calleeName === 'useContext') {
@@ -344,7 +351,7 @@ function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
       if (calleeName === 'lazy') {
         usesSuspense = true;
       }
-      if (calleeName === 'use') {
+      if (usesReactUse) {
         usesSuspense = true;
       }
       if (calleeName === 'useActionState') {
@@ -426,6 +433,23 @@ function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
     usesOptimistic,
     usesFormStatus
   };
+}
+
+function addReactUseBindings(bindings: Set<string>, specifiers: TSESTree.ImportClause[]): void {
+  for (const specifier of specifiers) {
+    if (
+      specifier.type === 'ImportSpecifier' &&
+      getModuleExportedName(specifier.imported) === 'use'
+    ) {
+      bindings.add(specifier.local.name);
+    }
+    if (
+      specifier.type === 'ImportDefaultSpecifier' ||
+      specifier.type === 'ImportNamespaceSpecifier'
+    ) {
+      bindings.add(`${specifier.local.name}.use`);
+    }
+  }
 }
 
 function appendExports(exports: ExportStatement[], statement: TSESTree.Statement): void {

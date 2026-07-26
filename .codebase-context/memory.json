@@ -569,5 +569,185 @@
     "scope": {
       "kind": "global"
     }
+  },
+  {
+    "id": "cbe8bd1377ba",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(analyzers): Recognize current React and Next patterns",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-07-05T07:33:25.000Z",
+    "source": "git"
+  },
+  {
+    "id": "e3b009c312e8",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(reranker): Score passages with the supported tokenizer pair API",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-07-05T14:43:29.000Z",
+    "source": "git"
+  },
+  {
+    "id": "449b60830c9b",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(eval): deduplicate blocked ContextBench rows",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-30T15:45:12.000Z",
+    "source": "git"
+  },
+  {
+    "id": "9dfaf21a0bc8",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): harden ContextBench schema cleanup",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T19:14:49.000Z",
+    "source": "git"
+  },
+  {
+    "id": "b8776a500ef5",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(eval): preserve ContextBench executor model provenance",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T19:04:04.000Z",
+    "source": "git"
+  },
+  {
+    "id": "a8b0f8664253",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(eval): harden ContextBench manifest checks",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T19:03:51.000Z",
+    "source": "git"
+  },
+  {
+    "id": "f84080651a19",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): relax zombie guard timeout jitter",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T18:24:56.000Z",
+    "source": "git"
+  },
+  {
+    "id": "3d7776af8a23",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): tolerate ContextBench runner cleanup races",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T18:21:18.000Z",
+    "source": "git"
+  },
+  {
+    "id": "6428cb02706e",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): tolerate ContextBench schema cleanup races",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T18:13:07.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c1bd14e88de2",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(eval): align ContextBench harness evidence contracts",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T18:08:08.000Z",
+    "source": "git"
+  },
+  {
+    "id": "2f3db0023789",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): relax slow Windows integration timeouts",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T17:59:20.000Z",
+    "source": "git"
+  },
+  {
+    "id": "da039b1d0ff8",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(eval): harden ContextBench fixture verification",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T17:55:12.000Z",
+    "source": "git"
+  },
+  {
+    "id": "5e3bdcaa984c",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(git): scope local artifact ignores",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T17:50:47.000Z",
+    "source": "git"
+  },
+  {
+    "id": "861eb0bfb69f",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): relax slow Windows search timeouts",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T16:47:38.000Z",
+    "source": "git"
+  },
+  {
+    "id": "3614711e00a4",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): tolerate ContextBench temp cleanup races",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T16:29:24.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c0cfb6599bcc",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): isolate ContextBench baseline Git env",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T16:25:08.000Z",
+    "source": "git"
+  },
+  {
+    "id": "084a0540558c",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(format): format ContextBench harness sources",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T16:06:53.000Z",
+    "source": "git"
+  },
+  {
+    "id": "0153743292c4",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(test): isolate ContextBench git fixtures",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-29T15:56:57.000Z",
+    "source": "git"
+  },
+  {
+    "id": "a5397b2ee20d",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(cli): lazy-load mcp runtime for direct commands",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-17T14:34:22.000Z",
+    "source": "git"
+  },
+  {
+    "id": "377e7c7c37b1",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(ci): unblock functional tests",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-04-17T20:05:19.000Z",
+    "source": "git"
   }
 ]

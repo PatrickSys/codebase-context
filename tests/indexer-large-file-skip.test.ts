@@ -57,4 +57,29 @@ describe('Indexer large file skip regression', () => {
     expect(indexedFiles.has('big.ts')).toBe(false);
     expect(indexedFiles.has('big.generated.ts')).toBe(false);
   });
+
+  it('limits the keyword index to the configured maximum chunk count', async () => {
+    await Promise.all(
+      ['one.ts', 'two.ts', 'three.ts'].map((fileName, index) =>
+        fs.writeFile(path.join(tempDir, fileName), `export const value${index} = ${index};\n`)
+      )
+    );
+
+    const indexer = new CodebaseIndexer({
+      rootPath: tempDir,
+      config: {
+        skipEmbedding: true,
+        parsing: { maxChunks: 2 }
+      }
+    });
+
+    await indexer.index();
+
+    const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as {
+      chunks?: unknown[];
+    };
+
+    expect(indexRaw.chunks).toHaveLength(2);
+  });
 });

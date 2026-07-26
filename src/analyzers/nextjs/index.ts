@@ -21,8 +21,35 @@ import {
 } from '../shared/metadata.js';
 
 type DetectedPattern = { category: string; name: string };
-type NextRouter = 'app' | 'pages' | 'unknown';
-type NextRouteKind = 'page' | 'layout' | 'route' | 'api' | 'unknown';
+type NextRouter = 'app' | 'pages' | 'proxy' | 'unknown';
+type NextRouteKind =
+  | 'page'
+  | 'layout'
+  | 'route'
+  | 'api'
+  | 'loading'
+  | 'error'
+  | 'not-found'
+  | 'template'
+  | 'default'
+  | 'forbidden'
+  | 'unauthorized'
+  | 'proxy'
+  | 'unknown';
+
+const APP_ROUTE_FILE_KINDS: Readonly<Record<string, NextRouteKind>> = {
+  page: 'page',
+  layout: 'layout',
+  route: 'route',
+  loading: 'loading',
+  error: 'error',
+  'global-error': 'error',
+  'not-found': 'not-found',
+  template: 'template',
+  default: 'default',
+  forbidden: 'forbidden',
+  unauthorized: 'unauthorized'
+};
 
 interface NextRoutingInfo {
   router: NextRouter;
@@ -44,7 +71,7 @@ export class NextJsAnalyzer implements FrameworkAnalyzer {
       return false;
     }
 
-    if (isInAppRouter(filePath) || isInPagesRouter(filePath)) {
+    if (isInAppRouter(filePath) || isInPagesRouter(filePath) || isProxyFile(filePath)) {
       return true;
     }
 
@@ -82,6 +109,9 @@ export class NextJsAnalyzer implements FrameworkAnalyzer {
     }
     if (routing.kind === 'api') {
       detectedPatterns.push({ category: 'routing', name: 'API Route' });
+    }
+    if (routing.kind === 'proxy') {
+      detectedPatterns.push({ category: 'routing', name: 'Proxy' });
     }
     if (routing.hasMetadata) {
       detectedPatterns.push({ category: 'metadata', name: 'Next.js metadata' });
@@ -276,21 +306,22 @@ export class NextJsAnalyzer implements FrameworkAnalyzer {
 function analyzeRouting(filePath: string, content: string): NextRoutingInfo {
   const normalizedPath = filePath.replace(/\\/g, '/');
   const baseName = path.basename(normalizedPath, path.extname(normalizedPath));
-  const router: NextRouter = isInAppRouter(filePath)
-    ? 'app'
-    : isInPagesRouter(filePath)
-      ? 'pages'
-      : 'unknown';
+  const router: NextRouter = isProxyFile(filePath)
+    ? 'proxy'
+    : isInAppRouter(filePath)
+      ? 'app'
+      : isInPagesRouter(filePath)
+        ? 'pages'
+        : 'unknown';
 
   let kind: NextRouteKind = 'unknown';
-  if (router === 'app') {
+  if (router === 'proxy') {
+    kind = 'proxy';
+  } else if (router === 'app') {
     const fileName = path.basename(normalizedPath);
-    if (fileName.startsWith('page.')) {
-      kind = 'page';
-    } else if (fileName.startsWith('layout.')) {
-      kind = 'layout';
-    } else if (fileName.startsWith('route.')) {
-      kind = 'route';
+    const appFileKind = getAppRouteFileKind(fileName);
+    if (appFileKind) {
+      kind = appFileKind;
     }
   } else if (router === 'pages') {
     if (normalizedPath.includes('/pages/api/') || normalizedPath.includes('/src/pages/api/')) {
@@ -303,9 +334,11 @@ function analyzeRouting(filePath: string, content: string): NextRoutingInfo {
   return {
     router,
     kind,
-    routePath: router === 'unknown' ? null : computeRoutePath(router, normalizedPath),
+    routePath:
+      router === 'app' || router === 'pages' ? computeRoutePath(router, normalizedPath) : null,
     isClientComponent: hasUseClientDirective(content),
-    hasMetadata: /\bexport\s+(?:const|function)\s+(metadata|generateMetadata)\b/.test(content)
+    hasMetadata:
+      /\bexport\s+(?:const|async\s+function|function)\s+(metadata|generateMetadata)\b/.test(content)
   };
 }
 
@@ -320,7 +353,7 @@ function isInPagesRouter(filePath: string): boolean {
 }
 
 function computeRoutePath(
-  router: Exclude<NextRouter, 'unknown'>,
+  router: Extract<NextRouter, 'app' | 'pages'>,
   normalizedFilePath: string
 ): string | null {
   const pathSegments = normalizedFilePath.split('/').filter(Boolean);
@@ -359,6 +392,16 @@ function hasUseClientDirective(content: string): boolean {
 
 function isPagesSystemFile(baseName: string): boolean {
   return ['_app', '_document', '_error', '_middleware'].includes(baseName);
+}
+
+function getAppRouteFileKind(fileName: string): NextRouteKind | null {
+  const baseName = path.basename(fileName, path.extname(fileName));
+  return APP_ROUTE_FILE_KINDS[baseName] || null;
+}
+
+function isProxyFile(filePath: string): boolean {
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  return /(^|\/)(src\/)?proxy\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/.test(normalizedPath);
 }
 
 async function detectRouterPresence(

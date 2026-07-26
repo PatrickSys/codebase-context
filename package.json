@@ -26,6 +26,10 @@
       "import": "./dist/analyzers/nextjs/index.js",
       "types": "./dist/analyzers/nextjs/index.d.ts"
     },
+    "./analyzers/nestjs": {
+      "import": "./dist/analyzers/nestjs/index.js",
+      "types": "./dist/analyzers/nestjs/index.d.ts"
+    },
     "./analyzers/generic": {
       "import": "./dist/analyzers/generic/index.js",
       "types": "./dist/analyzers/generic/index.d.ts"
@@ -87,6 +91,7 @@
     "windsurf",
     "angular",
     "react",
+    "nestjs",
     "typescript",
     "developer-tools",
     "static-analysis",

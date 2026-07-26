@@ -57,6 +57,7 @@ import { deriveCodebaseHealth } from '../health/derive.js';
 
 const STAGING_DIRNAME = '.staging';
 const PREVIOUS_DIRNAME = '.previous';
+const DEFAULT_MAX_CHUNKS = 5000;
 
 import {
   computeFileHashes,
@@ -282,6 +283,7 @@ export class CodebaseIndexer {
       analyzers: {
         angular: { enabled: true, priority: 100 },
         nextjs: { enabled: false, priority: 90 },
+        nestjs: { enabled: false, priority: 105 },
         react: { enabled: false, priority: 90 },
         vue: { enabled: false, priority: 90 },
         generic: { enabled: true, priority: 10 }
@@ -301,6 +303,7 @@ export class CodebaseIndexer {
       respectGitignore: true,
       parsing: {
         maxFileSize: 1048576,
+        maxChunks: DEFAULT_MAX_CHUNKS,
         chunkSize: 50,
         chunkOverlap: 0,
         parseTests: true,
@@ -748,13 +751,13 @@ export class CodebaseIndexer {
       const chunksForEmbedding = diff ? changedChunks : allChunks;
 
       // Memory safety: limit chunks to prevent embedding memory issues
-      const MAX_CHUNKS = 5000;
+      const maxChunks = this.config.parsing.maxChunks ?? DEFAULT_MAX_CHUNKS;
       let chunksToEmbed = chunksForEmbedding;
-      if (chunksForEmbedding.length > MAX_CHUNKS) {
+      if (chunksForEmbedding.length > maxChunks) {
         console.warn(
-          `WARNING: ${chunksForEmbedding.length} chunks exceed limit. Indexing first ${MAX_CHUNKS} chunks.`
+          `WARNING: ${chunksForEmbedding.length} chunks exceed limit. Indexing first ${maxChunks} chunks.`
         );
-        chunksToEmbed = chunksForEmbedding.slice(0, MAX_CHUNKS);
+        chunksToEmbed = chunksForEmbedding.slice(0, maxChunks);
       }
 
       // Phase 3: Embedding (only changed/added chunks in incremental mode)
@@ -894,7 +897,7 @@ export class CodebaseIndexer {
       const indexPath = path.join(activeContextDir, KEYWORD_INDEX_FILENAME);
       // Memory safety: cap keyword index too
       const keywordChunks =
-        allChunks.length > MAX_CHUNKS ? allChunks.slice(0, MAX_CHUNKS) : allChunks;
+        allChunks.length > maxChunks ? allChunks.slice(0, maxChunks) : allChunks;
       await fs.writeFile(
         indexPath,
         JSON.stringify({

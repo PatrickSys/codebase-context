@@ -21,6 +21,7 @@ import type { IndexState } from './tools/types.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
+import { NestJsAnalyzer } from './analyzers/nestjs/index.js';
 import { ReactAnalyzer } from './analyzers/react/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { formatJson } from './cli-formatters.js';
@@ -28,9 +29,11 @@ import { handleMemoryCli } from './cli-memory.js';
 export { handleMemoryCli } from './cli-memory.js';
 import { handleInitCli } from './cli-init.js';
 import { handleMapCli } from './cli-map.js';
+import { loadProjectConfig } from './server/config.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
+analyzerRegistry.register(new NestJsAnalyzer());
 analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
@@ -103,6 +106,7 @@ function resolveCliRootPath(): string {
 
 async function initToolContext(): Promise<ToolContext> {
   const rootPath = resolveCliRootPath();
+  const projectConfig = await loadProjectConfig(rootPath);
 
   const paths = {
     baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
@@ -134,6 +138,7 @@ async function initToolContext(): Promise<ToolContext> {
       let lastLoggedProgress = { phase: '', percentage: -1 };
       const indexer = new CodebaseIndexer({
         rootPath,
+        ...(projectConfig?.parsing ? { config: { parsing: projectConfig.parsing } } : {}),
         incrementalOnly,
         onProgress: (progress) => {
           const shouldLog =

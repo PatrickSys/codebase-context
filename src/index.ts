@@ -17,6 +17,7 @@ import { CodebaseIndexer } from './core/indexer.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
+import { NestJsAnalyzer } from './analyzers/nestjs/index.js';
 import { ReactAnalyzer } from './analyzers/react/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { IndexCorruptedError } from './errors/index.js';
@@ -62,6 +63,7 @@ import {
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
+analyzerRegistry.register(new NestJsAnalyzer());
 analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
@@ -1249,10 +1251,18 @@ async function performIndexingOnce(
       ...(project.runtimeOverrides.extraExcludePatterns?.length
         ? {
             config: {
-              exclude: [...EXCLUDED_GLOB_PATTERNS, ...project.runtimeOverrides.extraExcludePatterns]
+              exclude: [
+                ...EXCLUDED_GLOB_PATTERNS,
+                ...project.runtimeOverrides.extraExcludePatterns
+              ],
+              ...(project.runtimeOverrides.maxChunks
+                ? { parsing: { maxChunks: project.runtimeOverrides.maxChunks } }
+                : {})
             }
           }
-        : {}),
+        : project.runtimeOverrides.maxChunks
+          ? { config: { parsing: { maxChunks: project.runtimeOverrides.maxChunks } } }
+          : {}),
       ...(project.runtimeOverrides.preferredAnalyzer ||
       project.runtimeOverrides.extraSourceExtensions?.length
         ? {
@@ -1634,6 +1644,10 @@ function buildProjectRuntimeOverrides(projectConfig: ProjectConfig): ProjectRunt
 
   if (projectConfig.excludePatterns?.length) {
     runtimeOverrides.extraExcludePatterns = [...projectConfig.excludePatterns];
+  }
+
+  if (projectConfig.parsing?.maxChunks) {
+    runtimeOverrides.maxChunks = projectConfig.parsing.maxChunks;
   }
 
   if (projectConfig.analyzerHints?.analyzer) {

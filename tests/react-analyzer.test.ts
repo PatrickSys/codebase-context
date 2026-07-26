@@ -80,6 +80,90 @@ export class LegacyWidget extends Component {
     expect(patterns).toContainEqual({ category: 'styling', name: 'tailwind' });
   });
 
+  it('detects React 19 action and optimistic hooks', async () => {
+    const analyzer = new ReactAnalyzer();
+    const filePath = path.join(process.cwd(), 'src', 'components', 'CheckoutForm.tsx');
+
+    const code = `
+import { use, useActionState, useOptimistic } from "react";
+import { useFormStatus } from "react-dom";
+
+export function CheckoutForm({ cartPromise }: { cartPromise: Promise<string[]> }) {
+  const cart = use(cartPromise);
+  const [state, submitAction] = useActionState(async () => ({ ok: true }), { ok: false });
+  const [optimisticCart] = useOptimistic(cart);
+  const status = useFormStatus();
+
+  return <form action={submitAction}>{state.ok && optimisticCart.length && status.pending}</form>;
+}
+`;
+
+    const result = await analyzer.analyze(filePath, code);
+    const patterns = (result.metadata.detectedPatterns || []) as Array<{ category: string; name: string }>;
+
+    expect(patterns).toContainEqual({ category: 'reactHooks', name: 'Built-in hooks' });
+    expect(patterns).toContainEqual({ category: 'reactivity', name: 'Actions' });
+    expect(patterns).toContainEqual({ category: 'reactivity', name: 'Optimistic UI' });
+    expect(patterns).toContainEqual({ category: 'forms', name: 'Form status' });
+    expect(patterns).toContainEqual({ category: 'reactivity', name: 'Suspense' });
+  });
+
+  it('does not treat unrelated functions named use as React hooks or Suspense', async () => {
+    const analyzer = new ReactAnalyzer();
+    const filePath = path.join(process.cwd(), 'src', 'components', 'UtilityWidget.tsx');
+    const samples = [
+      `
+function use(value: string) {
+  return value;
+}
+
+export function UtilityWidget() {
+  return <div>{use("local value")}</div>;
+}
+`,
+      `
+import { use } from "other-library";
+
+export function UtilityWidget() {
+  const value = use("plain value");
+  return <div>{value}</div>;
+}
+`
+    ];
+
+    for (const code of samples) {
+      const result = await analyzer.analyze(filePath, code);
+      const patterns = (result.metadata.detectedPatterns || []) as Array<{
+        category: string;
+        name: string;
+      }>;
+
+      expect(patterns).not.toContainEqual({ category: 'reactHooks', name: 'Built-in hooks' });
+      expect(patterns).not.toContainEqual({ category: 'reactivity', name: 'Suspense' });
+    }
+  });
+
+  it('recognizes aliased use imports from React', async () => {
+    const analyzer = new ReactAnalyzer();
+    const filePath = path.join(process.cwd(), 'src', 'components', 'AliasedUseWidget.tsx');
+    const code = `
+import { use as readPromise } from "react";
+
+export function AliasedUseWidget({ value }: { value: Promise<string> }) {
+  return <div>{readPromise(value)}</div>;
+}
+`;
+
+    const result = await analyzer.analyze(filePath, code);
+    const patterns = (result.metadata.detectedPatterns || []) as Array<{
+      category: string;
+      name: string;
+    }>;
+
+    expect(patterns).toContainEqual({ category: 'reactHooks', name: 'Built-in hooks' });
+    expect(patterns).toContainEqual({ category: 'reactivity', name: 'Suspense' });
+  });
+
   it('does not claim React framework when react dependency is absent', async () => {
     const analyzer = new ReactAnalyzer();
     const tempRoot = path.join(process.cwd(), 'tests', '.tmp', `react-${randomUUID()}`);

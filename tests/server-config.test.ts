@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadServerConfig } from '../src/server/config.js';
+import { loadProjectConfig, loadServerConfig } from '../src/server/config.js';
 
 // Helper: write a temp config file and set CODEBASE_CONTEXT_CONFIG_PATH
 async function withTempConfig(content: string, fn: (filePath: string) => Promise<void>) {
@@ -155,6 +155,56 @@ describe('loadServerConfig', () => {
         analyzer: 'generic',
         extensions: ['sfc', '.astro']
       });
+    });
+  });
+
+  it('parses a positive per-project maxChunks value', async () => {
+    const config = JSON.stringify({
+      projects: [{ root: '~/large-repo', parsing: { maxChunks: 25000 } }]
+    });
+
+    await withTempConfig(config, async (filePath) => {
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = filePath;
+      const result = await loadServerConfig();
+
+      expect(result?.projects?.[0].parsing).toEqual({ maxChunks: 25000 });
+    });
+  });
+
+  it('loads parsing configuration for the requested CLI project root', async () => {
+    const projectRoot = path.join(os.tmpdir(), 'ccc-large-cli-project');
+    const config = JSON.stringify({
+      projects: [
+        { root: path.join(os.tmpdir(), 'ccc-other-project') },
+        { root: projectRoot, parsing: { maxChunks: 25000 } }
+      ]
+    });
+
+    await withTempConfig(config, async (filePath) => {
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = filePath;
+      const projectConfig = await loadProjectConfig(projectRoot);
+
+      expect(projectConfig).toEqual({
+        root: projectRoot,
+        parsing: { maxChunks: 25000 }
+      });
+    });
+  });
+
+  it('ignores an invalid per-project maxChunks value', async () => {
+    const errorSpy = vi.spyOn(console, 'error');
+    const config = JSON.stringify({
+      projects: [{ root: '~/large-repo', parsing: { maxChunks: 0 } }]
+    });
+
+    await withTempConfig(config, async (filePath) => {
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = filePath;
+      const result = await loadServerConfig();
+
+      expect(result?.projects?.[0].parsing).toBeUndefined();
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[config] Ignoring invalid project parsing.maxChunks: 0'
+      );
     });
   });
 

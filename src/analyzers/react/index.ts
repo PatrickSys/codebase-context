@@ -37,7 +37,10 @@ const BUILTIN_HOOKS = new Set([
   'useTransition',
   'useId',
   'useSyncExternalStore',
-  'useInsertionEffect'
+  'useInsertionEffect',
+  'useActionState',
+  'useOptimistic',
+  'useFormStatus'
 ]);
 
 const REACT_LIBRARY_SIGNALS: ReadonlyArray<{
@@ -59,6 +62,9 @@ interface ReactAstSummary {
   usesContext: boolean;
   usesMemoization: boolean;
   usesSuspense: boolean;
+  usesActionState: boolean;
+  usesOptimistic: boolean;
+  usesFormStatus: boolean;
 }
 
 export class ReactAnalyzer implements FrameworkAnalyzer {
@@ -101,6 +107,7 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
     const exports: ExportStatement[] = [];
     const dependencyNames = new Set<string>();
     const importSources = new Set<string>();
+    const reactUseBindings = new Set<string>();
     const detectedPatterns: DetectedPattern[] = [];
     let components: CodeComponent[] = [];
 
@@ -117,6 +124,9 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
         if (statement.type === 'ImportDeclaration' && typeof statement.source.value === 'string') {
           const source = statement.source.value;
           importSources.add(getPackageName(source));
+          if (source === 'react') {
+            addReactUseBindings(reactUseBindings, statement.specifiers);
+          }
           imports.push({
             source,
             imports: statement.specifiers.map(getImportSpecifierName),
@@ -135,7 +145,7 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
         appendExports(exports, statement);
       }
 
-      const summary = summarizeReactProgram(program);
+      const summary = summarizeReactProgram(program, reactUseBindings);
       components = summary.components;
 
       if (summary.usesContext) {
@@ -143,6 +153,15 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
       }
       if (summary.usesSuspense) {
         detectedPatterns.push({ category: 'reactivity', name: 'Suspense' });
+      }
+      if (summary.usesActionState) {
+        detectedPatterns.push({ category: 'reactivity', name: 'Actions' });
+      }
+      if (summary.usesOptimistic) {
+        detectedPatterns.push({ category: 'reactivity', name: 'Optimistic UI' });
+      }
+      if (summary.usesFormStatus) {
+        detectedPatterns.push({ category: 'forms', name: 'Form status' });
       }
       if (summary.usesMemoization) {
         detectedPatterns.push({ category: 'reactivity', name: 'Memoization' });
@@ -302,18 +321,25 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
   }
 }
 
-function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
+function summarizeReactProgram(
+  program: TSESTree.Program,
+  reactUseBindings: ReadonlySet<string>
+): ReactAstSummary {
   const components: CodeComponent[] = [];
   const builtinHooksUsed = new Set<string>();
   const customHooks = new Set<string>();
   let usesContext = false;
   let usesMemoization = false;
   let usesSuspense = false;
+  let usesActionState = false;
+  let usesOptimistic = false;
+  let usesFormStatus = false;
 
   walkAst(program, (node, parent) => {
     if (node.type === 'CallExpression') {
       const calleeName = getCalleeName(node.callee);
-      if (calleeName && BUILTIN_HOOKS.has(calleeName)) {
+      const usesReactUse = calleeName !== null && reactUseBindings.has(calleeName);
+      if (calleeName && (BUILTIN_HOOKS.has(calleeName) || usesReactUse)) {
         builtinHooksUsed.add(calleeName);
       }
       if (calleeName === 'createContext' || calleeName === 'useContext') {
@@ -324,6 +350,18 @@ function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
       }
       if (calleeName === 'lazy') {
         usesSuspense = true;
+      }
+      if (usesReactUse) {
+        usesSuspense = true;
+      }
+      if (calleeName === 'useActionState') {
+        usesActionState = true;
+      }
+      if (calleeName === 'useOptimistic') {
+        usesOptimistic = true;
+      }
+      if (calleeName === 'useFormStatus') {
+        usesFormStatus = true;
       }
       if (
         calleeName === 'createContext' &&
@@ -390,8 +428,28 @@ function summarizeReactProgram(program: TSESTree.Program): ReactAstSummary {
     customHooks: Array.from(customHooks).sort(),
     usesContext,
     usesMemoization,
-    usesSuspense
+    usesSuspense,
+    usesActionState,
+    usesOptimistic,
+    usesFormStatus
   };
+}
+
+function addReactUseBindings(bindings: Set<string>, specifiers: TSESTree.ImportClause[]): void {
+  for (const specifier of specifiers) {
+    if (
+      specifier.type === 'ImportSpecifier' &&
+      getModuleExportedName(specifier.imported) === 'use'
+    ) {
+      bindings.add(specifier.local.name);
+    }
+    if (
+      specifier.type === 'ImportDefaultSpecifier' ||
+      specifier.type === 'ImportNamespaceSpecifier'
+    ) {
+      bindings.add(`${specifier.local.name}.use`);
+    }
+  }
 }
 
 function appendExports(exports: ExportStatement[], statement: TSESTree.Statement): void {

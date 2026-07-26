@@ -305,6 +305,6 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/
 
 - **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
 - **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
-- **Angular, React, and Next.js have dedicated analyzers.** All other languages go through the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
+- **Angular, React, Next.js, and NestJS have dedicated analyzers.** All other languages go through the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
 - **Default embedding model is `bge-small-en-v1.5` (512-token context).** Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

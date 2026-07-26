@@ -113,7 +113,7 @@ export const definition: Tool = {
         properties: {
           framework: {
             type: 'string',
-            description: 'Filter by framework (angular, react, nextjs, vue)'
+            description: 'Filter by framework (angular, react, nextjs, nestjs, vue)'
           },
           language: {
             type: 'string',

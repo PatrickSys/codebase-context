@@ -206,7 +206,7 @@ export interface CodebaseMetadata {
 export interface FrameworkInfo {
   name: string;
   version: string;
-  type: 'angular' | 'react' | 'nextjs' | 'vue' | 'svelte' | 'solid' | 'other';
+  type: 'angular' | 'react' | 'nextjs' | 'nestjs' | 'vue' | 'svelte' | 'solid' | 'other';
   variant?: string; // 'standalone', 'module-based', 'class-components', etc.
   stateManagement?: string[]; // 'ngrx', 'redux', 'zustand', 'pinia', etc.
   uiLibraries?: string[];
@@ -461,6 +461,7 @@ export interface CodebaseConfig {
     angular?: AnalyzerConfig;
     react?: AnalyzerConfig;
     nextjs?: AnalyzerConfig;
+    nestjs?: AnalyzerConfig;
     vue?: AnalyzerConfig;
     generic?: AnalyzerConfig;
     [key: string]: AnalyzerConfig | undefined;
@@ -474,6 +475,7 @@ export interface CodebaseConfig {
   // Parsing options
   parsing: {
     maxFileSize?: number; // bytes
+    maxChunks?: number;
     chunkSize?: number; // lines
     chunkOverlap?: number; // lines
     parseTests?: boolean;

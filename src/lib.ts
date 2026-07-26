@@ -12,6 +12,7 @@
  *   analyzerRegistry,
  *   AngularAnalyzer,
  *   NextJsAnalyzer,
+ *   NestJsAnalyzer,
  *   ReactAnalyzer,
  *   GenericAnalyzer
  * } from 'codebase-context';
@@ -19,6 +20,7 @@
  * // Register analyzers
  * analyzerRegistry.register(new AngularAnalyzer());
  * analyzerRegistry.register(new NextJsAnalyzer());
+ * analyzerRegistry.register(new NestJsAnalyzer());
  * analyzerRegistry.register(new ReactAnalyzer());
  * analyzerRegistry.register(new GenericAnalyzer());
  *
@@ -67,6 +69,8 @@ export { AngularAnalyzer } from './analyzers/angular/index.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 export { NextJsAnalyzer } from './analyzers/nextjs/index.js';
 import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
+export { NestJsAnalyzer } from './analyzers/nestjs/index.js';
+import { NestJsAnalyzer } from './analyzers/nestjs/index.js';
 export { ReactAnalyzer } from './analyzers/react/index.js';
 import { ReactAnalyzer } from './analyzers/react/index.js';
 export { GenericAnalyzer } from './analyzers/generic/index.js';
@@ -163,6 +167,9 @@ export function createIndexer(
   }
   if (!analyzerRegistry.get('nextjs')) {
     analyzerRegistry.register(new NextJsAnalyzer());
+  }
+  if (!analyzerRegistry.get('nestjs')) {
+    analyzerRegistry.register(new NestJsAnalyzer());
   }
   if (!analyzerRegistry.get('react')) {
     analyzerRegistry.register(new ReactAnalyzer());

@@ -161,7 +161,7 @@ If you get `selection_required`, retry with one of the paths from `availableProj
 
 ## Language Support
 
-10 languages with full symbol extraction via Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust. 30+ languages with indexing and retrieval coverage, including PHP, Ruby, Swift, Scala, Shell, and config formats. Angular, React, and Next.js have dedicated analyzers; everything else uses the Generic analyzer with AST-aligned chunking when a grammar is available.
+10 languages with full symbol extraction via Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust. 30+ languages with indexing and retrieval coverage, including PHP, Ruby, Swift, Scala, Shell, and config formats. Angular, React, Next.js, and NestJS have dedicated analyzers; everything else uses the Generic analyzer with AST-aligned chunking when a grammar is available.
 
 ## Configuration
 
@@ -175,6 +175,19 @@ If you get `selection_required`, retry with one of the paths from `availableProj
 | `CODEBASE_CONTEXT_HTTP`        | —                                 | Set to `1` to start in HTTP mode (same as `--http` flag)            |
 | `CODEBASE_CONTEXT_PORT`        | `3100`                            | HTTP server port override (same as `--port`; ignored in stdio mode) |
 | `CODEBASE_CONTEXT_CONFIG_PATH` | `~/.codebase-context/config.json` | Override the server config file path                                |
+
+Large projects can override the default 5,000 searchable-chunk safety limit per project:
+
+```json
+{
+  "projects": [
+    {
+      "root": "/path/to/large-project",
+      "parsing": { "maxChunks": 25000 }
+    }
+  ]
+}
+```
 
 ## Performance
 

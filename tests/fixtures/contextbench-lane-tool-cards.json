@@ -2,6 +2,143 @@
   "name": "v2.4-contextbench-lane-tool-cards",
   "protocolVersion": "contextbench-protocol-v1",
   "frozenDate": "2026-04-27",
+  "vNextTargetCards": [
+    {
+      "laneId": "raw-native",
+      "displayName": "Raw/native agent tools",
+      "headlineTarget": true,
+      "localOrCloudRequirement": "local-native-tools",
+      "privacyMode": "repo_read_by_agent_only",
+      "setupCommand": "none",
+      "indexCommand": "none",
+      "queryCommand": "agent native read/search/shell-readonly tools under the same task prompt",
+      "versionCommand": "capture executor and CLI version before run",
+      "cachePath": "benchmark-runs/contextbench/cache/raw-native/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "requiresUserApprovalForPaidProviders": false,
+      "maxExtraSpendUsd": 0,
+      "readinessArtifacts": [
+        "LANE-READINESS-PAPER-GRADE.json",
+        "LANE-PROXY-CAPTURE-AUDIT.json",
+        "LANE-SET-DECISION.json"
+      ],
+      "cleanupProcedure": "capture process census before and after native executor"
+    },
+    {
+      "laneId": "codebase-context",
+      "displayName": "codebase-context",
+      "headlineTarget": true,
+      "localOrCloudRequirement": "local_by_default_optional_cloud_embeddings",
+      "privacyMode": "code_stays_local_unless_user_approves_cloud_embeddings",
+      "setupCommand": "pnpm run build && node dist/index.js --version",
+      "indexCommand": "npx codebase-context refresh_index <repo>",
+      "queryCommand": "agent uses codebase-context as the only non-native context tool",
+      "versionCommand": "npx codebase-context --version",
+      "cachePath": "benchmark-runs/contextbench/cache/codebase-context/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "requiresUserApprovalForPaidProviders": true,
+      "maxExtraSpendUsd": 5,
+      "readinessArtifacts": [
+        "LANE-READINESS-PAPER-GRADE.json",
+        "LANE-PROXY-CAPTURE-AUDIT.json",
+        "LANE-SET-DECISION.json"
+      ],
+      "cleanupProcedure": "shutdown MCP/server processes and verify cache/process census"
+    },
+    {
+      "laneId": "repowise-selfhosted-mcp",
+      "displayName": "Repowise self-hosted MCP",
+      "headlineTarget": true,
+      "localOrCloudRequirement": "self_hosted_mcp_with_user_approved_provider_or_index_only_mode",
+      "privacyMode": "self_hosted_headline_only_hosted_http_appendix_only",
+      "setupCommand": "uv tool install repowise or pipx install repowise",
+      "indexCommand": "repowise init <repo> with provider/index-only profile recorded",
+      "queryCommand": "repowise mcp <repo> through get_overview/get_answer/get_context/search_codebase as appropriate",
+      "versionCommand": "repowise --version",
+      "cachePath": "benchmark-runs/contextbench/cache/repowise-selfhosted-mcp/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "requiresUserApprovalForPaidProviders": true,
+      "maxExtraSpendUsd": 5,
+      "readinessArtifacts": [
+        "LANE-READINESS-PAPER-GRADE.json",
+        "LANE-PROXY-CAPTURE-AUDIT.json",
+        "LANE-SET-DECISION.json"
+      ],
+      "cleanupProcedure": "stop repowise services, record .repowise disk footprint, and verify no owned process remains"
+    },
+    {
+      "laneId": "jcodemunch-full-mcp",
+      "displayName": "jCodeMunch full MCP",
+      "headlineTarget": true,
+      "localOrCloudRequirement": "local_mcp_server",
+      "privacyMode": "local_mcp_tooling_no_hosted_service_by_default",
+      "setupCommand": "uvx --from git+https://github.com/jgravelle/jcodemunch-mcp.git jcodemunch-mcp or pinned equivalent",
+      "indexCommand": "MCP index_folder against the repo under test with full profile recorded",
+      "queryCommand": "MCP get_ranked_context/search_symbols/search_text/get_context_bundle as allowed by the frozen full-MCP profile",
+      "versionCommand": "jcodemunch-mcp --version or uvx ... jcodemunch-mcp --help",
+      "cachePath": "benchmark-runs/contextbench/cache/jcodemunch-full-mcp/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "requiresUserApprovalForPaidProviders": false,
+      "maxExtraSpendUsd": 0,
+      "readinessArtifacts": [
+        "LANE-READINESS-PAPER-GRADE.json",
+        "LANE-PROXY-CAPTURE-AUDIT.json",
+        "LANE-SET-DECISION.json"
+      ],
+      "cleanupProcedure": "stop MCP process, verify index/cache paths, and record process census"
+    },
+    {
+      "laneId": "context-mode",
+      "displayName": "Context Mode",
+      "headlineTarget": true,
+      "localOrCloudRequirement": "local_context_store_mcp",
+      "privacyMode": "local_mcp_tooling_no_hosted_service_by_default",
+      "setupCommand": "npx --yes context-mode MCP stdio handshake",
+      "indexCommand": "MCP ctx_index {\"path\":\"<repo-file>\",\"source\":\"<relative-path>\"} over selected text files",
+      "queryCommand": "MCP ctx_search {\"queries\":[\"<task-query>\"],\"limit\":6}",
+      "versionCommand": "npm view context-mode version --json",
+      "cachePath": "benchmark-runs/contextbench/cache/context-mode/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "requiresUserApprovalForPaidProviders": false,
+      "maxExtraSpendUsd": 0,
+      "readinessArtifacts": [
+        "LANE-READINESS-PAPER-GRADE.json",
+        "LANE-PROXY-CAPTURE-AUDIT.json",
+        "LANE-SET-DECISION.json"
+      ],
+      "cleanupProcedure": "stop MCP process, verify local context database footprint, and record process census"
+    }
+  ],
   "cards": [
     {
       "laneId": "raw-native",
@@ -16,7 +153,8 @@
         "jcodemunch-repomapper",
         "grepai",
         "codebase-memory-mcp",
-        "codegraphcontext"
+        "codegraphcontext",
+        "context-mode"
       ],
       "setupCommand": "none",
       "indexCommand": "none",
@@ -49,13 +187,131 @@
         "jcodemunch-repomapper",
         "grepai",
         "codebase-memory-mcp",
-        "codegraphcontext"
+        "codegraphcontext",
+        "context-mode"
       ],
       "setupCommand": "pnpm run build && node dist/index.js --version",
       "indexCommand": "npx codebase-context refresh_index <repo>",
       "queryCommand": "claude --print < prompt.json",
       "versionCommand": "npx codebase-context --version",
       "cachePath": "outputs/contextbench/cache/codebase-context/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "repowise-selfhosted-mcp",
+      "displayName": "Repowise self-hosted MCP",
+      "phase38Status": "pending_vnext_adapter",
+      "phase39Status": "pending_vnext_setup",
+      "executableInPhase38": false,
+      "contextTools": ["repowise-selfhosted-mcp"],
+      "allowedTools": ["repowise-selfhosted-mcp"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-full-mcp",
+        "jcodemunch-repomapper",
+        "grepai-semantic",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext",
+        "context-mode",
+        "context-mode-mcp-only",
+        "repowise-hosted-http"
+      ],
+      "setupCommand": "uv tool install repowise or pipx install repowise",
+      "indexCommand": "repowise init <repo> with provider/index-only profile recorded",
+      "queryCommand": "repowise MCP get_overview/get_answer/get_context/search_codebase through the frozen local profile",
+      "versionCommand": "repowise --version",
+      "cachePath": "outputs/contextbench/cache/repowise-selfhosted-mcp/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "jcodemunch-full-mcp",
+      "displayName": "jCodeMunch full MCP",
+      "phase38Status": "pending_vnext_adapter",
+      "phase39Status": "pending_vnext_setup",
+      "executableInPhase38": false,
+      "contextTools": ["jcodemunch-full-mcp"],
+      "allowedTools": ["jcodemunch-full-mcp"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "repowise-selfhosted-mcp",
+        "repowise-hosted-http",
+        "jcodemunch-repomapper",
+        "grepai-semantic",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext",
+        "context-mode",
+        "context-mode-mcp-only"
+      ],
+      "setupCommand": "uvx --from git+https://github.com/jgravelle/jcodemunch-mcp.git jcodemunch-mcp or pinned equivalent",
+      "indexCommand": "MCP index_folder against the repo under test with full profile recorded",
+      "queryCommand": "MCP get_ranked_context/search_symbols/search_text/get_context_bundle under the frozen full-MCP profile",
+      "versionCommand": "jcodemunch-mcp --version or uvx ... jcodemunch-mcp --help",
+      "cachePath": "outputs/contextbench/cache/jcodemunch-full-mcp/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "grepai-semantic",
+      "displayName": "GrepAI semantic",
+      "phase38Status": "pending_vnext_adapter",
+      "phase39Status": "pending_vnext_setup",
+      "executableInPhase38": false,
+      "contextTools": ["grepai-semantic"],
+      "allowedTools": ["grepai-semantic"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "repowise-selfhosted-mcp",
+        "repowise-hosted-http",
+        "jcodemunch-full-mcp",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext",
+        "context-mode",
+        "context-mode-mcp-only"
+      ],
+      "setupCommand": "grepai init --yes --provider ollama --backend gob --model nomic-embed-text",
+      "indexCommand": "grepai watch --background --log-dir <isolated-log-dir>",
+      "queryCommand": "grepai search <task-query> --json --compact --limit 10",
+      "versionCommand": "grepai version",
+      "cachePath": "outputs/contextbench/cache/grepai-semantic/<run_id>",
       "artifactPaths": {
         "setup": "setup-index.json",
         "rawTrace": "raw-trace.json",
@@ -82,7 +338,8 @@
         "codebase-context",
         "grepai",
         "codebase-memory-mcp",
-        "codegraphcontext"
+        "codegraphcontext",
+        "context-mode"
       ],
       "setupCommand": "uvx jcodemunch-mcp",
       "indexCommand": "MCP index_folder {\"path\":\"<repo-under-test>\",\"incremental\":false,\"use_ai_summaries\":false,\"follow_symlinks\":false}",
@@ -115,7 +372,8 @@
         "codebase-context",
         "jcodemunch-repomapper",
         "codebase-memory-mcp",
-        "codegraphcontext"
+        "codegraphcontext",
+        "context-mode"
       ],
       "setupCommand": "grepai init --yes --provider ollama --backend gob --model nomic-embed-text",
       "indexCommand": "grepai watch --no-ui",
@@ -148,7 +406,8 @@
         "codebase-context",
         "jcodemunch-repomapper",
         "grepai",
-        "codegraphcontext"
+        "codegraphcontext",
+        "context-mode"
       ],
       "setupCommand": "download Windows x86_64 release archive under outputs/contextbench/tool-cache/codebase-memory-mcp and run the extracted binary without installer auto-config",
       "indexCommand": "MCP prompt/tool action: Index this project",
@@ -181,13 +440,48 @@
         "codebase-context",
         "jcodemunch-repomapper",
         "grepai",
-        "codebase-memory-mcp"
+        "codebase-memory-mcp",
+        "context-mode"
       ],
       "setupCommand": "python -m pip install --target outputs/contextbench/tool-cache/codegraphcontext codegraphcontext kuzu",
       "indexCommand": "cgc index <repo-under-test>",
       "queryCommand": "cgc analyze callers <symbol-or-task-anchor>",
       "versionCommand": "cgc help",
       "cachePath": "outputs/contextbench/cache/codegraphcontext/<run_id>",
+      "artifactPaths": {
+        "setup": "setup-index.json",
+        "rawTrace": "raw-trace.json",
+        "structuredAnswer": "structured-answer.json",
+        "trajectory": "trajectory.json",
+        "score": "score.json"
+      },
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "claimBearing": false
+    },
+    {
+      "laneId": "context-mode",
+      "displayName": "Context Mode",
+      "phase38Status": "pending_phase39_setup",
+      "phase39Status": "ready_for_phase40",
+      "executableInPhase38": false,
+      "contextTools": ["context-mode"],
+      "allowedTools": ["context-mode"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
+      "setupCommand": "npx --yes context-mode MCP stdio handshake",
+      "indexCommand": "MCP ctx_index {\"path\":\"<repo-file>\",\"source\":\"<relative-path>\"} over selected text files",
+      "queryCommand": "MCP ctx_search {\"queries\":[\"<task-query>\"],\"limit\":6}",
+      "versionCommand": "npm view context-mode version --json",
+      "cachePath": "outputs/contextbench/cache/context-mode/<run_id>",
       "artifactPaths": {
         "setup": "setup-index.json",
         "rawTrace": "raw-trace.json",

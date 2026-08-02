@@ -32,7 +32,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 
 ## Commands
 
-- `map` — conventions map: architecture layers, patterns, golden files
+- `map` — conventions map: architecture layers, patterns, best examples
 - `metadata` — tech stack overview
 - `patterns` — team conventions + adoption/trends
 - `search --query <q>` — ranked results; add `--intent edit` for a preflight card
@@ -51,7 +51,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 npx -y codebase-context map
 ```
 
-The conventions map - run this first on an unfamiliar repo. It shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example.
+The conventions map - run this first on an unfamiliar repo. It shows architecture layers, active patterns with adoption rates and trend direction, and the local files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example.
 
 Example output (truncated):
 
@@ -59,7 +59,7 @@ Example output (truncated):
 ┌─ Codebase Map ── angular-spotify ────────────────────────────────────┐
 │                                                                      │
 │ Architecture: feature-based · 3 layers                               │
-│ 47 files · 6 patterns · 3 golden files                               │
+│ 47 files · 6 patterns · 3 best examples                              │
 │                                                                      │
 │ LAYERS                                                               │
 │   core/      – shared services + DI                                  │
@@ -71,7 +71,7 @@ Example output (truncated):
 │      RxJS reactive patterns          78%                             │
 │   ↓  NgModules                        8%  Declining                  │
 │                                                                      │
-│ GOLDEN FILES                                                         │
+│ BEST EXAMPLES                                                        │
 │   src/features/player/player.component.ts                            │
 │   src/core/auth/auth.service.ts                                      │
 │                                                                      │

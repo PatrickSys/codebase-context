@@ -119,7 +119,7 @@ async function ensureProcessTreeExit(pid, timeoutMs = 1_500) {
   await waitForProcessExit(pid, 5_000);
 }
 
-async function safeClose(client, transport, connected) {
+async function safeClose(client, transport, connected, timeoutMs = 1_500) {
   const closeAttempts = [];
 
   if (connected) {
@@ -127,7 +127,7 @@ async function safeClose(client, transport, connected) {
   }
 
   closeAttempts.push(transport.close?.().catch(() => undefined));
-  await Promise.all(closeAttempts);
+  await Promise.race([Promise.all(closeAttempts), delay(timeoutMs)]);
 }
 
 export async function withManagedStdioClientSession(options, callback) {
@@ -177,8 +177,12 @@ export async function withManagedStdioClientSession(options, callback) {
   } finally {
     settling = true;
     await observeSpawn.catch(() => undefined);
-    const pidToKill = spawnedPid ?? transport.pid;
+    let pidToKill = spawnedPid ?? transport.pid;
+    if (!connected) {
+      await ensureProcessTreeExit(pidToKill, 500);
+    }
     await safeClose(client, transport, connected);
+    pidToKill = pidToKill ?? transport.pid;
     await ensureProcessTreeExit(pidToKill);
     await Promise.race([connectPromise, delay(5_000)]).catch(() => undefined);
   }

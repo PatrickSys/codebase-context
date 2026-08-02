@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 4,
+  "artifactType": "contextbench-engineering-note-summary",
+  "generatedAt": "2026-06-07T19:09:33Z",
+  "source": {
+    "provenance": "Generated from local retrieval scoring artifacts and a local token-metered replay. Raw run artifacts stay local and are intentionally not part of this public summary.",
+    "boundary": "The full run artifacts are local evidence. This checked-in summary is the public artifact for the 500-check practical case study: 400 retrieval/resource checks plus 100 token-metered context-consumption checks. It does not make winner, leaderboard, research-paper benchmark, token-savings, resource-efficiency, or patch-quality claims.",
+    "rawArtifactsTracked": false
+  },
+  "publicationReadiness": {
+    "claimBearingPublicationAllowed": false,
+    "claimScope": "500_check_practical_code_context_case_study",
+    "unresolvedBlockers": [
+      "combined_local_evidence_sets_not_preregistered_repeated_protocol",
+      "retrieval_overlap_and_context_consumption_only_no_patch_quality",
+      "token_metering_is_context_consumption_not_patch_workflow",
+      "provider_dollar_cost_not_calculated_from_model_pricing",
+      "repowise_thirteen_checks_with_no_usable_context",
+      "cold_vs_warm_install_dependency_cache_not_fully_normalized"
+    ],
+    "publicUseLevel": "narrow_code_context_case_study",
+    "status": "engineering_note_ready_with_claim_blocks",
+    "blockedClaimTypes": [
+      "benchmark winner",
+      "best tool",
+      "research-paper benchmark",
+      "resource-efficiency claim",
+      "generalized agent coding quality claim",
+      "agent patch correctness claim",
+      "developer productivity claim",
+      "token-savings claim"
+    ]
+  },
+  "retrievalChecks": {
+    "checksWithNoUsableContext": 13,
+    "observedChecksPerTaskTool": 5,
+    "sourceRuns": [
+      {
+        "name": "corrected-20x1",
+        "checks": 100,
+        "checksScored": 99,
+        "checksWithNoUsableContext": 1
+      },
+      {
+        "name": "repeat-20x3",
+        "checks": 300,
+        "checksScored": 288,
+        "checksWithNoUsableContext": 12
+      },
+      {
+        "name": "metered-context-consumption",
+        "checks": 100,
+        "checksScored": 100,
+        "checksWithNoUsableContext": 0,
+        "tokenCountersCaptured": 100
+      }
+    ],
+    "tools": 5,
+    "checksScored": 387,
+    "retrievalChecks": 400,
+    "appendixOnlyTools": [
+      {
+        "reason": "bounded local indexing readiness failed earlier; not part of this five-tool headline table",
+        "toolId": "GrepAI"
+      }
+    ],
+    "sameDenominatorChecksPresent": true,
+    "tasks": 20,
+    "totalChecks": 500,
+    "tokenMeteredChecks": 100,
+    "checksPerTool": 100,
+    "observedRetrievalChecksPerTaskTool": 4,
+    "observedTokenChecksPerTaskTool": 1
+  },
+  "methodology": {
+    "notMeasured": "patch correctness, developer productivity, token savings in a patch workflow, model-provider bill, research-paper repeat confidence intervals",
+    "scoring": "official ContextBench evaluator on saved retrieval trajectories using per-task gold; scorer gold was not read during retrieval",
+    "tools": [
+      "raw-native",
+      "codebase-context",
+      "jcodemunch-full-mcp",
+      "repowise-selfhosted-mcp",
+      "context-mode"
+    ],
+    "measured": "retrieval overlap, setup/index time, elapsed check time, process memory telemetry, GPU availability probe, failed checks, and context-consumption token usage on a 100-check metered replay",
+    "metricView": "failure-inclusive means; judge_failed/no_context checks count as zero in the public summary",
+    "publicFrame": "we benchmarked these tools on open-source repos",
+    "taskSet": "20 frozen ContextBench-style open-source tasks"
+  },
+  "qualitySnapshot": [
+    {
+      "toolId": "codebase-context",
+      "checks": 80,
+      "checksScored": 80,
+      "status": "completed:80",
+      "fileCoverageMean": 0.26555555555555554,
+      "filePrecisionMean": 0.128125,
+      "symbolCoverageMean": 0.1286239637555427,
+      "spanCoverageMean": 0.07920124590194857,
+      "lineCoverageMean": 0.08428535889402469
+    },
+    {
+      "toolId": "context-mode",
+      "checks": 80,
+      "checksScored": 80,
+      "status": "completed:80",
+      "fileCoverageMean": 0.14020833333333335,
+      "filePrecisionMean": 0.10416666666666666,
+      "symbolCoverageMean": 0.017939439946018893,
+      "spanCoverageMean": 0.011708371581594209,
+      "lineCoverageMean": 0.011038321787243389
+    },
+    {
+      "toolId": "jcodemunch-full-mcp",
+      "checks": 80,
+      "checksScored": 80,
+      "status": "completed:80",
+      "fileCoverageMean": 0.27138888888888885,
+      "filePrecisionMean": 0.11000000000000003,
+      "symbolCoverageMean": 0.1893944388944389,
+      "spanCoverageMean": 0.08305479517347206,
+      "lineCoverageMean": 0.08456230638784133
+    },
+    {
+      "toolId": "raw-native",
+      "checks": 80,
+      "checksScored": 80,
+      "status": "completed:80",
+      "fileCoverageMean": 0.04333333333333334,
+      "filePrecisionMean": 0.04000000000000001,
+      "symbolCoverageMean": 0.007186234817813765,
+      "spanCoverageMean": 0.004614262386191909,
+      "lineCoverageMean": 0.003664930124865624
+    },
+    {
+      "toolId": "repowise-selfhosted-mcp",
+      "checks": 80,
+      "checksScored": 67,
+      "status": "completed:67,failed_or_no_context:13",
+      "fileCoverageMean": 0.17638888888888887,
+      "filePrecisionMean": 0.10500000000000007,
+      "symbolCoverageMean": 0.028416529291142294,
+      "spanCoverageMean": 0.020308858163791448,
+      "lineCoverageMean": 0.015853937017852263
+    }
+  ],
+  "costSnapshot": [
+    {
+      "toolId": "codebase-context",
+      "setupStatuses": "not_required:80",
+      "indexStatuses": "completed:80",
+      "indexExitStatuses": "unknown:80",
+      "indexMedianSeconds": 736.2,
+      "indexSumMinutes": 876.4,
+      "elapsedSumMinutes": 894.2,
+      "peakPrivateGb": 2.9,
+      "modelEvidence": "Xenova/bge-small-en-v1.5"
+    },
+    {
+      "toolId": "context-mode",
+      "setupStatuses": "completed where required",
+      "indexStatuses": "completed where required",
+      "indexExitStatuses": "unknown",
+      "indexMedianSeconds": 14.8,
+      "indexSumMinutes": 43.9,
+      "elapsedSumMinutes": 56.1,
+      "peakPrivateGb": 0.15,
+      "modelEvidence": "unknown"
+    },
+    {
+      "toolId": "jcodemunch-full-mcp",
+      "setupStatuses": "completed where required",
+      "indexStatuses": "completed where required",
+      "indexExitStatuses": "unknown",
+      "indexMedianSeconds": 4.8,
+      "indexSumMinutes": 9.9,
+      "elapsedSumMinutes": 31.5,
+      "peakPrivateGb": 0.33,
+      "modelEvidence": "unknown"
+    },
+    {
+      "toolId": "raw-native",
+      "setupStatuses": "not_required:80",
+      "indexStatuses": "not_required:80",
+      "indexExitStatuses": "unknown:80",
+      "indexMedianSeconds": 0,
+      "indexSumMinutes": 0,
+      "elapsedSumMinutes": 25.4,
+      "peakPrivateGb": 0.06,
+      "modelEvidence": "none"
+    },
+    {
+      "toolId": "repowise-selfhosted-mcp",
+      "setupStatuses": "completed where required",
+      "indexStatuses": "completed where required",
+      "indexExitStatuses": "mixed/unknown",
+      "indexMedianSeconds": 295.6,
+      "indexSumMinutes": 594.3,
+      "elapsedSumMinutes": 750.4,
+      "peakPrivateGb": 4.82,
+      "modelEvidence": "unknown"
+    }
+  ],
+  "perToolRuntimeTokenAccounting": {
+    "status": "captured_in_100_check_metered_context_consumption_replay",
+    "claimImpact": "Per-tool context-consumption token cost is now reported for 20 metered checks per tool. Token-savings and model-provider pricing claims remain blocked because this is not a full patch workflow and pricing was not calculated.",
+    "modelPath": "Codex CLI gpt-5.4-mini with model_reasoning_effort=high",
+    "meteredChecks": 100,
+    "meteredChecksCompleted": 100,
+    "checksMissingTokenCounters": 0,
+    "finalRetrievalRawTracesScanned": 400,
+    "rawTracesWithUsageCounters": 0,
+    "allFinalTracesRetrievalOnly": true,
+    "contextConsumptionMeteredReplay": true,
+    "metaCostIsNotSubstitute": true,
+    "tokenMeteredToolResults": [
+      {
+        "toolId": "raw-native",
+        "meteredChecks": 20,
+        "tokenCountersCaptured": 20,
+        "medianInputTokens": 18916,
+        "medianCachedInputTokens": 16256,
+        "medianOutputTokens": 1017,
+        "medianReasoningOutputTokens": 848,
+        "providerDollarCost": "not_calculated"
+      },
+      {
+        "toolId": "codebase-context",
+        "meteredChecks": 20,
+        "tokenCountersCaptured": 20,
+        "medianInputTokens": 19345,
+        "medianCachedInputTokens": 16256,
+        "medianOutputTokens": 2494,
+        "medianReasoningOutputTokens": 2348,
+        "providerDollarCost": "not_calculated"
+      },
+      {
+        "toolId": "jcodemunch-full-mcp",
+        "meteredChecks": 20,
+        "tokenCountersCaptured": 20,
+        "medianInputTokens": 18162,
+        "medianCachedInputTokens": 16256,
+        "medianOutputTokens": 692,
+        "medianReasoningOutputTokens": 516,
+        "providerDollarCost": "not_calculated"
+      },
+      {
+        "toolId": "repowise-selfhosted-mcp",
+        "meteredChecks": 20,
+        "tokenCountersCaptured": 20,
+        "medianInputTokens": 17921,
+        "medianCachedInputTokens": 16256,
+        "medianOutputTokens": 694,
+        "medianReasoningOutputTokens": 516,
+        "providerDollarCost": "not_calculated"
+      },
+      {
+        "toolId": "context-mode",
+        "meteredChecks": 20,
+        "tokenCountersCaptured": 20,
+        "medianInputTokens": 17916,
+        "medianCachedInputTokens": 16256,
+        "medianOutputTokens": 673,
+        "medianReasoningOutputTokens": 516,
+        "providerDollarCost": "not_calculated"
+      }
+    ],
+    "originalRetrievalTraceScan": [
+      {
+        "toolId": "raw-native",
+        "rawRetrievalTracesScanned": 80,
+        "rawTracesWithUsageCounters": 0
+      },
+      {
+        "toolId": "codebase-context",
+        "rawRetrievalTracesScanned": 80,
+        "rawTracesWithUsageCounters": 0
+      },
+      {
+        "toolId": "jcodemunch-full-mcp",
+        "rawRetrievalTracesScanned": 80,
+        "rawTracesWithUsageCounters": 0
+      },
+      {
+        "toolId": "repowise-selfhosted-mcp",
+        "rawRetrievalTracesScanned": 80,
+        "rawTracesWithUsageCounters": 0
+      },
+      {
+        "toolId": "context-mode",
+        "rawRetrievalTracesScanned": 80,
+        "rawTracesWithUsageCounters": 0
+      }
+    ]
+  },
+  "failedChecks": [
+    {
+      "toolId": "repowise-selfhosted-mcp",
+      "count": 13,
+      "status": "failed_or_no_context",
+      "reason": "12 no_context_extracted checks in the 300-check repeat run plus 1 judge_failed/no_context check in the corrected 100-check run",
+      "publicTreatment": "Retained in the denominator and counted as zero in failure-inclusive public averages"
+    }
+  ],
+  "interpretation": [
+    "jCodeMunch slightly leads the aggregate retrieval metrics and indexed much faster in this adapter run.",
+    "codebase-context is close on file/span/line retrieval but paid a high local Transformers indexing cost.",
+    "context-mode is lightweight and low-cost, with lower expected-file coverage in this run.",
+    "Repowise produced usable checks, but it retained 13 checks with no usable context and had the highest observed memory footprint.",
+    "raw-native is the simple local file-search baseline here; it had low retrieval overlap on these 20 tasks."
+  ],
+  "caveats": {
+    "publicDocs": "passed: README/docs/package-facing benchmark wording is aligned to the practical 500-check case-study framing",
+    "overclaiming": "passed: public wording keeps winner, leaderboard, research-paper benchmark, resource-efficiency, patch-quality, and productivity claims blocked",
+    "patchQuality": "blocked: retrieval-overlap only, no downstream patch/test success measured",
+    "costAccounting": "partial_pass: setup/index/resource telemetry captured; 100 context-consumption token checks captured; model-provider costs and patch-workflow token savings remain unmeasured",
+    "repeatStability": "blocked: 500-check view combines local evidence sets; no research-paper stability or confidence claim",
+    "artifactCompleteness": "passed: 400 checks have retrieval and scoring artifacts in local evidence; 100 metered checks have usage counters; checked-in summary is the public boundary",
+    "failureInclusion": "passed: Repowise checks with no usable context are retained and zero-filled metric view exists",
+    "sameDenominator": "passed: 20 tasks x 5 tools present"
+  },
+  "metaCost": {
+    "note": "Benchmark orchestration cost is authoring/evaluation overhead, not a tool score.",
+    "latestKnownCodexGoalTokens": "local Codex transcript scan found about 3.33B benchmark-related orchestration tokens: about 3.318B input, 3.179B cached input, 11.3M output, and 3.27M reasoning output",
+    "tokenAccounting": {
+      "scope": "Codex orchestration/meta-cost for creating, debugging, running, documenting, and auditing the benchmark. This is separate from the 100-check context-consumption token table and is not a tool score.",
+      "source": "local Codex transcript scan since 2026-05-01",
+      "totalTokensApprox": 3330000000,
+      "inputTokensApprox": 3318000000,
+      "cachedInputTokensApprox": 3179000000,
+      "outputTokensApprox": 11300000,
+      "reasoningOutputTokensApprox": 3270000,
+      "missingPerToolRuntimeTokens": false,
+      "categoryNote": "cached input is part of input. Reasoning output is reported separately when available and should not be read as a separate tool runtime result."
+    },
+    "gate5ScoringPeakPrivateMb": 65.1,
+    "gate5ScoringRuntimeSeconds": 72.4
+  }
+}

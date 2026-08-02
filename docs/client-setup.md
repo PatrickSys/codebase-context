@@ -32,11 +32,17 @@ If multiple projects are available and no active project can be inferred safely,
 
 ## Claude Code
 
+**Stdio:**
+
 ```bash
 claude mcp add codebase-context -- npx -y codebase-context
 ```
 
-Claude Code only supports stdio. HTTP is not available for this client.
+**HTTP** — start the server first (`npx -y codebase-context --http`), then register the local endpoint:
+
+```bash
+claude mcp add --transport http codebase-context http://127.0.0.1:3100/mcp
+```
 
 ## Claude Desktop
 
@@ -103,10 +109,16 @@ Open Settings > MCP and add (stdio only — HTTP is not documented for Windsurf 
 **Stdio:**
 
 ```bash
-codex mcp add codebase-context npx -y codebase-context
+codex mcp add codebase-context -- npx -y codebase-context
 ```
 
-**HTTP** — start the server first (`npx -y codebase-context --http`), then save a config file and pass it:
+**HTTP** — start the server first (`npx -y codebase-context --http`), then register the local endpoint:
+
+```bash
+codex mcp add codebase-context --url http://127.0.0.1:3100/mcp
+```
+
+You can also save an MCP config file and pass it for a one-off session:
 
 ```json
 {
@@ -121,6 +133,22 @@ codex mcp add codebase-context npx -y codebase-context
 
 ```bash
 codex --mcp-config /path/to/mcp-http.json
+```
+
+## Gemini CLI
+
+**Stdio:**
+
+```bash
+gemini mcp add codebase-context npx -y codebase-context
+```
+
+Gemini CLI defaults to project scope and stdio.
+
+**HTTP** — start the server first (`npx -y codebase-context --http`), then register the local endpoint:
+
+```bash
+gemini mcp add --transport http codebase-context http://127.0.0.1:3100/mcp
 ```
 
 ## VS Code (Copilot)
@@ -156,13 +184,42 @@ Add `opencode.json` to your project root:
 ```
 
 OpenCode also supports interactive setup via `opencode mcp add`.
+The OpenCode help output does not document enough non-interactive flags to make
+that command copy-pasteable here, so the JSON config above is the documented
+path. HTTP setup is not documented for OpenCode yet.
+
+## GitHub Copilot CLI
+
+Inside Copilot CLI, run `/mcp add` and choose a local or stdio server.
+
+For command-line setup, use:
+
+```bash
+copilot mcp add codebase-context --type local -- npx -y codebase-context
+```
+
+Or edit `~/.copilot/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "codebase-context": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "codebase-context"],
+      "env": {},
+      "tools": ["*"]
+    }
+  }
+}
+```
 
 ## Single-project fallback
 
 If you only use one repo, append a project path:
 
 ```bash
-codex mcp add codebase-context npx -y codebase-context "/path/to/your/project"
+codex mcp add codebase-context -- npx -y codebase-context "/path/to/your/project"
 ```
 
 Or set an environment variable:

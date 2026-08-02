@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag to publish (e.g. v1.10.0)'
+        description: 'Existing release tag to publish (e.g. v2.3.0)'
         required: true
 
 permissions:
@@ -65,6 +65,24 @@ jobs:
         if: ${{ steps.mode.outputs.should_publish == 'true' }}
         run: pnpm install --frozen-lockfile
 
+      - name: Verify tag matches package version
+        if: ${{ steps.mode.outputs.should_publish == 'true' }}
+        run: |
+          VERSION="$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).version)")"
+          CHECKOUT_REF="${{ steps.mode.outputs.checkout_ref }}"
+          RELEASE_TAG="${{ steps.release.outputs.tag_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="$CHECKOUT_REF"
+          else
+            TAG="$RELEASE_TAG"
+          fi
+          EXPECTED_TAG="v${VERSION}"
+          if [ "$TAG" != "$EXPECTED_TAG" ]; then
+            echo "Release tag ${TAG} does not match package.json version ${VERSION}."
+            echo "Expected ${EXPECTED_TAG}."
+            exit 1
+          fi
+
       - name: Check if version already published
         if: ${{ steps.mode.outputs.should_publish == 'true' }}
         run: |
@@ -84,6 +102,7 @@ jobs:
           pnpm type-check
           pnpm build
           pnpm test
+          npm pack --dry-run --json
 
       - name: Publish to npm with provenance
         if: ${{ steps.mode.outputs.should_publish == 'true' && env.SKIP_PUBLISH != 'true' }}

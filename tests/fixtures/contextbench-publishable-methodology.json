@@ -1,0 +1,490 @@
+{
+  "schemaVersion": 1,
+  "name": "contextbench-publishable-methodology",
+  "protocolExtensionVersion": "contextbench-publishable-v1",
+  "frozenDate": "2026-05-19",
+  "status": "methodology_frozen_before_next_publishable_run",
+  "claimAllowed": false,
+  "baselineEvidence": {
+    "coldBaselineRunId": "p41-r29-claim-matrix-clean-wmi-20260516T180421",
+    "coldBaselineReportHash": "sha256:93eacd45716451f405119dd376a413c100bff759cb4f486b31e533fbca38938f",
+    "coldBaselineRunnerHash": "sha256:8e5d19c0fc717d975526d520b16cba2b389b857129f6f231f116049089b625e3",
+    "status": "sealed_baseline",
+    "qualityRows": 297,
+    "reliabilityRows": 123,
+    "knownClaimLimits": ["resource_telemetry_gap", "repeat_confidence_gap"],
+    "preservationPolicy": "do_not_mutate_fixtures_prompts_traces_predictions_scores_or_claims"
+  },
+  "operatingModelTracks": [
+    {
+      "trackId": "cold-isolated-task",
+      "baseline": "p41-r29",
+      "indexReuseScope": "none",
+      "workspaceReuseScope": "none",
+      "crossSnapshotReuseAllowed": false,
+      "purpose": "measure fresh per-task setup, index, retrieval, reliability, and cost"
+    },
+    {
+      "trackId": "warm-persistent-workspace",
+      "baseline": "new_track_required",
+      "indexReuseScope": "same_repo_workspace_only",
+      "workspaceReuseScope": "same_repo_base_commit_only",
+      "crossSnapshotReuseAllowed": false,
+      "purpose": "measure steady-state use after a valid competitor install/index for the same workspace"
+    }
+  ],
+  "requiredLanes": [
+    "raw-native",
+    "codebase-context",
+    "repowise-selfhosted-mcp",
+    "jcodemunch-full-mcp",
+    "context-mode"
+  ],
+  "claimBearingReadinessLanes": [
+    "raw-native",
+    "codebase-context",
+    "repowise-selfhosted-mcp",
+    "jcodemunch-full-mcp",
+    "context-mode"
+  ],
+  "appendixLanes": [
+    {
+      "laneId": "grepai-semantic",
+      "reason": "official_release_installed_but_moved_to_appendix_after_two_bounded_readiness_failures"
+    },
+    {
+      "laneId": "grepai",
+      "reason": "legacy_alias_for_grepai_semantic_not_headline_claim_bearing"
+    },
+    {
+      "laneId": "codebase-memory-mcp",
+      "reason": "legacy_comparator_diagnostic_unless_user_reopens_scope"
+    },
+    {
+      "laneId": "codegraphcontext",
+      "reason": "legacy_comparator_diagnostic_unless_user_reopens_scope"
+    }
+  ],
+  "vNextUserOwnedDecisions": {
+    "capturedDate": "2026-05-30",
+    "publicationPosture": "engineering_benchmark",
+    "paperGradeClaimAllowed": false,
+    "proofCandidateLabelRequiresAllGates": true,
+    "grepaiFailurePolicy": "appendix_after_owner_approved_retry",
+    "paidApiBudgetUsd": 5,
+    "paidApiRequiresProviderPrivacyAndSpendRecord": true,
+    "repowiseHeadlineMode": "self_hosted_mcp_only",
+    "repowiseHostedMode": "appendix_only",
+    "jcodemunchPrimaryMode": "full_mcp",
+    "jcodemunchFallbackMode": "jcodemunch_repomapper_labeled_fallback",
+    "contextModePrimaryMode": "headline_local_context_store",
+    "taskSourceStrategy": "public_benchmark_mix_plus_stratified_public_repos_when_defensible",
+    "patchQualityScope": "12_tasks_3_repeats_after_budget_and_evaluator_gates",
+    "publicationOrder": [
+      "benchmark_report",
+      "portfolio_after_human_copy_review",
+      "readme_npm_after_claim_audit"
+    ],
+    "stopBehavior": "obey_stop_rules_and_record_blockers_as_results"
+  },
+  "vNextMinimumCredibleRun": {
+    "retrieval": {
+      "tasks": 30,
+      "headlineLanes": [
+        "raw-native",
+        "codebase-context",
+        "repowise-selfhosted-mcp",
+        "jcodemunch-full-mcp",
+        "context-mode"
+      ],
+      "repeatsPerTaskLane": 3,
+      "expectedRows": 450,
+      "coldAndWarmMustStaySeparated": true
+    },
+    "patchQuality": {
+      "tasks": 12,
+      "source": "frozen_retrieval_task_set",
+      "repeatsPerTaskLane": 3,
+      "requiresBudgetGate": true,
+      "requiresEvaluatorReadiness": true
+    }
+  },
+  "vNextLanePolicy": {
+    "headlineLanes": [
+      "raw-native",
+      "codebase-context",
+      "repowise-selfhosted-mcp",
+      "jcodemunch-full-mcp",
+      "context-mode"
+    ],
+    "fallbackLanes": [
+      {
+        "laneId": "jcodemunch-repomapper",
+        "fallbackFor": "jcodemunch-full-mcp",
+        "claimLimit": "not_full_jcodemunch"
+      }
+    ],
+    "appendixLanes": [
+      {
+        "laneId": "grepai-semantic",
+        "reason": "official_release_installed_but_moved_to_appendix_after_two_bounded_readiness_failures"
+      },
+      {
+        "laneId": "repowise-hosted-http",
+        "reason": "hosted_service_not_mergeable_into_local_headline_claims"
+      },
+      {
+        "laneId": "codebase-memory-mcp",
+        "reason": "legacy_comparator_diagnostic_unless_user_reopens_scope"
+      },
+      {
+        "laneId": "codegraphcontext",
+        "reason": "legacy_comparator_diagnostic_unless_user_reopens_scope"
+      }
+    ],
+    "fullMatrixRequiresAllHeadlineLanesReadyBeforeOutputs": true,
+    "notReadyLaneCannotBeScheduledForHeadlineMatrix": true
+  },
+  "proofBundleRequiredArtifacts": [
+    "LANE-READINESS-PAPER-GRADE.json",
+    "LANE-PROXY-CAPTURE-AUDIT.json",
+    "LANE-SET-DECISION.json",
+    "BENCHMARK-ADMISSION-GATES.json",
+    "RUNNER-PROVENANCE.json",
+    "HASHED-INPUTS.json",
+    "ENVIRONMENT-MANIFEST.json",
+    "SOURCE-SNAPSHOT.json",
+    "RUN-MANIFEST.jsonl",
+    "PROCESS-LIFECYCLE-AUDIT.json",
+    "PROCESS-CENSUS-BEFORE.json",
+    "PROCESS-CENSUS-AFTER-READINESS.json",
+    "PROCESS-CENSUS-AFTER-MATRIX.json",
+    "CLEANUP-LEDGER.jsonl",
+    "BUDGET-AND-EXECUTION-PLAN.json",
+    "BUDGET-CONSUMPTION.jsonl",
+    "SETUP-INDEX-COST-LEDGER.json",
+    "ORCHESTRATION-COST-LEDGER.json",
+    "USER-APPROVAL-RECORD.json",
+    "APPROVAL-REQUEST.json",
+    "DECISION-LEDGER.json",
+    "ABORT-DECISION.json",
+    "CLAIM-LEDGER.json",
+    "METHODOLOGY-CARD.json",
+    "RELATED-WORK-LEDGER.json",
+    "RESULTS-PACKAGE.json",
+    "DENOMINATOR-LEDGER.json",
+    "PAIRED-DELTAS.json",
+    "CONFIDENCE-VARIANCE-TABLE.json",
+    "TRACE-INDEX.json",
+    "FAILURE-ANALYSIS.json",
+    "QUALITATIVE-CASES.json",
+    "NON-CLAIMS.json"
+  ],
+  "evidenceGateExtensionsRequired": [
+    "readiness_artifacts",
+    "admission_gate_ledger",
+    "runner_provenance_artifacts",
+    "process_lifecycle_artifacts",
+    "budget_artifacts",
+    "owner_approval_request",
+    "claim_ledger",
+    "methodology_card",
+    "related_work_ledger",
+    "trace_index",
+    "non_claims",
+    "subgroup_denominators",
+    "paired_deltas",
+    "confidence_intervals"
+  ],
+  "relatedWorkRequirements": {
+    "productComparators": [
+      "jcodemunch",
+      "repowise",
+      "grepai",
+      "context-mode",
+      "codegraphcontext",
+      "codebase-memory-mcp"
+    ],
+    "paperBenchmarkFamilies": [
+      "ContextBench",
+      "SWE-bench",
+      "SWE-bench Verified",
+      "RepoBench",
+      "CrossCodeEval",
+      "CodeSearchNet",
+      "SWE-PRBench",
+      "HELM",
+      "BEIR",
+      "TREC",
+      "MLPerf",
+      "Dynabench",
+      "Model Cards",
+      "Datasheets"
+    ],
+    "requiredMethodologyLessons": [
+      "separate_retrieval_from_patch_correctness",
+      "objective_evaluators_before_judges",
+      "repeated_runs_and_confidence_intervals",
+      "raw_artifacts_and_prompts",
+      "visible_failures",
+      "no_broad_claim_from_single_aggregate_score"
+    ]
+  },
+  "claimTaxonomy": {
+    "allowedAfterEvidence": [
+      "retrieval_localization_delta_under_frozen_protocol",
+      "setup_index_runtime_token_resource_cost_profile",
+      "false_ready_delta",
+      "patch_solve_delta_on_patch_quality_track",
+      "warm_amortized_behavior_when_warm_validity_holds"
+    ],
+    "blockedUnlessSeparatelyMeasured": [
+      "developer_productivity",
+      "universal_best_tool",
+      "market_wide_leaderboard",
+      "patch_correctness_from_retrieval_only",
+      "privacy_superiority_when_hosted_or_cloud_embeddings_used",
+      "paper_grade"
+    ],
+    "forbiddenPublicPhrases": [
+      "codebase-context beats competitors",
+      "state of the art",
+      "proves better implementation quality",
+      "proves faster development",
+      "setup_failed means competitor lost",
+      "token savings superiority"
+    ]
+  },
+  "readinessMethodology": {
+    "selectedMode": "assisted-readiness",
+    "modeLabelRequired": true,
+    "fullMatrixRequiresSameMethodology": true,
+    "strictReadiness": {
+      "claimMeaning": "solver_self_selected_lane_tool",
+      "requiredProofs": [
+        "solverCallsLaneToolItself",
+        "capturedCompletedToolCall",
+        "shellNativeBypassRejected",
+        "structuredAnswerAfterToolCall",
+        "officialEvaluatorScoresPilotRow"
+      ],
+      "currentBlocker": "codex_mcp_tool_selection_reliability"
+    },
+    "assistedReadiness": {
+      "claimMeaning": "harness_captures_lane_tool_evidence_solver_uses_evidence",
+      "requiredProofs": [
+        "harnessCallsLaneProxyTool",
+        "capturedCompletedToolCall",
+        "assistedLaneProxyFlagRecorded",
+        "predictionHasNonEmptyFiles",
+        "predictionHasNonEmptySpans",
+        "officialEvaluatorScoresPilotRow"
+      ],
+      "allowedForNextReadinessRun": true
+    },
+    "mixingPolicy": "strict_and_assisted_rows_must_not_be_mixed_without_labels",
+    "qualityPolicy": "assisted_rows_are_scoreable_only_inside_assisted_methodology_reports",
+    "strictBlockerPolicy": "strict_tool_selection_failures_are_reliability_findings_not_quality"
+  },
+  "newCompetitorPolicy": {
+    "allowedAfterLaneCard": true,
+    "requiredEvidence": [
+      "setupCommand",
+      "indexCommand",
+      "queryCommand",
+      "versionCommand",
+      "cachePath",
+      "artifactPaths",
+      "infraRequirements",
+      "cleanupProcedure"
+    ]
+  },
+  "infraPolicy": {
+    "competitorInfraAllowedWhenRequired": true,
+    "codebaseContextProductClaimRemainsZeroInfraDefault": true,
+    "infraMustBeReportedAsCost": true,
+    "requiredFields": [
+      "installCommands",
+      "services",
+      "ports",
+      "environmentVariables",
+      "localOrCloudRequirement",
+      "diskFootprintBytes",
+      "cacheState",
+      "cleanupProof"
+    ]
+  },
+  "preExecutionFreeze": {
+    "requiredBeforeFullMatrix": true,
+    "frozenItems": [
+      "tasks",
+      "repoSnapshots",
+      "repeats",
+      "competitors",
+      "laneVersions",
+      "prompts",
+      "qrelsOrOfficialEvaluator",
+      "metrics",
+      "failureTaxonomy",
+      "exclusionRules",
+      "dropRules",
+      "telemetrySchema",
+      "reportFormat",
+      "antiBiasControls"
+    ],
+    "forbiddenAfterOutputsObserved": [
+      "taskSelection",
+      "qrels",
+      "expectedResults",
+      "thresholds",
+      "primaryMetrics",
+      "dropRules"
+    ]
+  },
+  "laneReadinessGate": {
+    "requiredBeforeFullMatrix": true,
+    "acceptedModes": ["strict", "assisted-readiness"],
+    "modeLabelRequired": true,
+    "fullMatrixRequiresSameMethodology": true,
+    "requiredProofs": [
+      "setupCompletedOrExactBlocker",
+      "indexCompletedOrExactBlocker",
+      "laneToolCallable",
+      "capturedCompletedToolCall",
+      "laneProxyCaptureClassified",
+      "predictionHasNonEmptyFiles",
+      "predictionHasNonEmptySpans",
+      "officialEvaluatorScoresPilotRow",
+      "resourceTelemetryCaptured",
+      "cleanupOwnedProcessesProven",
+      "failureClassificationProven"
+    ],
+    "readyStatus": "ready",
+    "fullMatrixBlockedStatuses": [
+      "blocked",
+      "setup_failed",
+      "index_failed",
+      "tool_error",
+      "judge_failed",
+      "invalid_schema",
+      "not_ready",
+      "excluded",
+      "diagnostic_only"
+    ]
+  },
+  "telemetrySchema": {
+    "resourceTelemetryRequired": true,
+    "recommendedEnvironment": {
+      "CONTEXTBENCH_RESOURCE_TELEMETRY": "1",
+      "CONTEXTBENCH_RESOURCE_SAMPLE_INTERVAL_MS": "1000"
+    },
+    "rowRequiredFields": [
+      "setupDurationMs",
+      "indexDurationMs",
+      "taskWallTimeMs",
+      "warmContextToolMs",
+      "inputTokens",
+      "outputTokens",
+      "peakRssBytes",
+      "cpuTotalMs",
+      "indexDiskBytes",
+      "installDiskBytes",
+      "infraServices",
+      "ports",
+      "cacheState",
+      "retryCount",
+      "cleanupProof"
+    ],
+    "unavailablePolicy": "null_requires_reason_and_blocks_resource_efficiency_claims"
+  },
+  "metricGroups": {
+    "retrievalQuality": {
+      "source": "official_evaluator_completed_rows_only",
+      "metrics": [
+        "fileCoverage",
+        "filePrecision",
+        "spanCoverage",
+        "spanPrecision",
+        "editLocationRecall",
+        "editLocationPrecision"
+      ]
+    },
+    "reliability": {
+      "source": "all_terminal_rows",
+      "metrics": ["setup_failed", "tool_error", "judge_failed", "timeout", "invalid_schema"]
+    },
+    "cost": {
+      "source": "all_rows_with_telemetry",
+      "metrics": [
+        "installTime",
+        "setupTime",
+        "indexTime",
+        "taskWallTime",
+        "toolWallTime",
+        "inputTokens",
+        "outputTokens",
+        "diskFootprintBytes",
+        "peakRssBytes",
+        "cpuTotalMs",
+        "infraServices"
+      ]
+    },
+    "seniorAgentUsefulness": {
+      "source": "structured_answer_and_review_audit",
+      "metrics": [
+        "wrongAnchorRate",
+        "unsupportedClaimRate",
+        "editLocationUsefulness",
+        "reviewBurden",
+        "patchRelevantContextRate"
+      ]
+    }
+  },
+  "repeatConfidence": {
+    "claimBearingRepeatsPerLaneTask": 3,
+    "varianceRequiredForMainClaims": true,
+    "confidenceIntervalRequiredForMainClaims": true,
+    "underRepeatedCellsBlockPaperGradeClaim": true
+  },
+  "warmTrackValidity": {
+    "amortizationClaimRequiresMultiTaskWorkspaces": true,
+    "minimumTasksPerReusableWorkspace": 2,
+    "minimumReusableWorkspacesForWarmClaim": 2,
+    "noAmortizationOpportunityStatus": "diagnostic_only_no_amortization_opportunity"
+  },
+  "antiBiasControls": [
+    "no_fixture_mutation_to_improve_results",
+    "no_cherry_picked_easy_tasks",
+    "no_self_rated_quality_as_evidence",
+    "no_hidden_failed_lanes",
+    "no_blending_reliability_failures_into_quality",
+    "no_warm_vs_cold_comparison_without_labeling",
+    "external_probe_env_flags_must_be_explicit_per_run",
+    "report_wins_and_losses",
+    "dropped_or_frozen_lanes_require_numbers"
+  ],
+  "reportArtifactsRequired": [
+    "rawArtifacts",
+    "runnerHash",
+    "environmentManifest",
+    "laneCards",
+    "readinessReport",
+    "telemetryRows",
+    "orchestrationMetaConsumption",
+    "officialQualityTable",
+    "reliabilityCostTable",
+    "confidenceVarianceTable",
+    "failureAnalysis",
+    "decisionLedger",
+    "humanReadableNarrative"
+  ],
+  "publishableNarrativeQuestion": "You get this quality for this install/setup/index/runtime/token/infra cost, under this operating model.",
+  "stopRules": [
+    "do_not_run_full_matrix_before_readiness",
+    "stop_on_unclassified_required_lane_blocker",
+    "stop_on_unapproved_external_probe_env_flag",
+    "stop_on_fixture_or_qrel_mutation_after_outputs",
+    "stop_on_missing_resource_telemetry_for_resource_efficiency_claim",
+    "stop_on_insufficient_repeat_confidence_for_paper_grade_claim"
+  ]
+}

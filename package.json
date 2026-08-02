@@ -1,7 +1,7 @@
 {
   "name": "codebase-context",
   "version": "2.3.0",
-  "description": "Bounded conventions map and local-pattern discovery for AI coding agents. Local-first MCP server with AST-backed hybrid search.",
+  "description": "Local code context for AI coding agents: semantic search, team conventions, patterns, and memory through MCP.",
   "type": "module",
   "main": "./dist/lib.js",
   "types": "./dist/lib.d.ts",
@@ -76,7 +76,7 @@
     "local-first",
     "privacy-first",
     "embeddings",
-    "golden-files",
+    "best-examples",
     "ai-coding",
     "ai-agents",
     "llm",

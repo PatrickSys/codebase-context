@@ -26,7 +26,7 @@ Copy-pasteable client config templates are shipped in the package:
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients
 - `templates/mcp/http/.mcp.json` — HTTP setup for `.mcp.json`-style clients
 
-Client transport support varies — see [README.md](../README.md) for a per-client matrix covering Claude Code, Cursor, Codex, Windsurf, VS Code, Claude Desktop, and OpenCode.
+Client transport support varies — see [README.md](../README.md) for a per-client matrix covering Claude Code, Claude Desktop, Cursor, Windsurf, Codex, Gemini CLI, VS Code, OpenCode, and GitHub Copilot CLI.
 
 ## CLI Reference
 
@@ -76,7 +76,7 @@ Shared selector inputs:
 | Tool                    | Input                                                                                                   | Output                                                                                                                                                                                                                                                                                                                                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets`, shared `project`/`project_directory` | Compact mode returns a bounded result set with `file`, `summary`, `score`, lightweight structural metadata (`symbol`, `symbolKind`, `scope`, `signaturePreview`), and `searchQuality` (`status`, `confidence`, optional `hint`, `tokenEstimate`, `warning`, `rerankerStatus`). Full mode adds richer relationships plus chunk-level `imports`, `exports`, and `complexity`. When `intent="edit"`, a decision card is returned with `ready`, `patterns`, `bestExample`, `impact`, and `whatWouldHelp`. |
-| `get_team_patterns`     | optional `category`, shared `project`/`project_directory`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                                                                                                                                                                                                                            |
+| `get_team_patterns`     | optional `category`, shared `project`/`project_directory`                                               | Pattern frequencies, trends, best examples, conflicts                                                                                                                                                                                                                                                                                                                                           |
 | `get_symbol_references` | `symbol`, optional `limit`, shared `project`/`project_directory`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`. |
 | `remember`              | `type`, `category`, `memory`, `reason`, shared `project`/`project_directory`                            | Persists to `.codebase-context/memory.json`                                                                                                                                                                                                                                                                                                                                                     |
 | `get_memory`            | optional `category`, `type`, `query`, `limit`, shared `project`/`project_directory`                     | Memories with confidence decay scoring                                                                                                                                                                                                                                                                                                                                                          |
@@ -209,7 +209,7 @@ Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`
     do: string[];             // Top 3 preferred patterns with adoption %
     avoid: string[];          // Top 3 declining patterns
   };
-  bestExample?: string;       // Top 1 golden file (path format)
+  bestExample?: string;       // Top local example (path format)
   impact?: {
     coverage?: string;        // "X/Y callers in results"
     files?: string[];         // Back-compat: top impact candidates (paths only)
@@ -244,7 +244,7 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 
 - Risk level from circular deps, impact breadth, and failure memories
 - Preferred/avoid patterns from team pattern analysis
-- Golden files ranked by pattern density
+- Best examples ranked by pattern density
 - Caller coverage from import graph (X of Y callers appearing in results)
 - Pattern conflicts when two patterns in the same category are both > 20% adoption
 - Confidence decay of related memories
@@ -282,9 +282,11 @@ Notes:
 
 ## Evaluation Harness
 
-Current public proof bundle: [`docs/benchmark.md`](../docs/benchmark.md) and [`docs/comparison-table.md`](../docs/comparison-table.md).
+Current public evidence bundle: [`docs/benchmark.md`](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) and [`docs/comparison-table.md`](https://github.com/PatrickSys/codebase-context/blob/master/docs/comparison-table.md).
 
 Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/reporting code.
+
+These checked-in evaluation references are evidence records, not a winner scoreboard.
 
 - **Command:** `npm run eval -- <codebaseA> [codebaseB] --mode retrieval|discovery [--competitor-results <path>]` (builds first, then runs `scripts/run-eval.mjs`)
 - **Shared implementation:** `src/eval/harness.ts`, `src/eval/discovery-harness.ts`, and `src/eval/types.ts`
@@ -298,8 +300,9 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/
 - **Retrieval metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a gate pass/fail
 - **Discovery metrics:** usefulness score, payload bytes, estimated tokens, first relevant hit, and best-example usefulness
 - **Discovery gate:** discovery mode evaluates the frozen ship gate only when the full public suite and comparator metrics are available; missing comparator evidence is reported as pending, not silently treated as pass/fail
-- **Current checked-in gate truth:** `results/gate-evaluation.json` remains `pending_evidence` with `claimAllowed: false`; the raw-Claude baseline still lacks `averageFirstRelevantHit`, `codebase-memory-mcp` still fails the frozen usefulness comparisons, and the remaining named lanes are still `setup_failed`
-- **Limits:** discovery mode is discovery-only, uses current shipped surfaces only, and does not claim implementation quality; named competitor runs remain a documented hybrid/manual lane rather than a built-in automated benchmark
+- **Current checked-in gate truth:** `results/gate-evaluation.json` remains `pending_evidence` with `claimAllowed: false`; in that older discovery artifact, the raw-Claude baseline still lacks `averageFirstRelevantHit`, `codebase-memory-mcp` still fails the frozen usefulness comparisons, and several named comparators are setup/readiness evidence only. The newer local ContextBench case study is separate and must not be mixed into that discovery gate.
+- **Limits:** discovery mode is discovery-only, uses current shipped surfaces only, and does not claim implementation quality; named competitor runs remain documented hybrid/manual evidence rather than a built-in automated benchmark
+- **Separate ContextBench case study:** a local five-tool run is summarized as a practical case study, not as a checked-in win claim. Current public-safe status is 500 checks across 20 frozen open-source tasks: 400 retrieval/resource checks plus 100 checks with token counters. The retrieval view has 387 checks scored and 13 retained Repowise checks with no usable context, including setup/index time, elapsed check time, process memory telemetry, GPU probe status, and failed checks. The metered view completed 100/100 and reports median input, cached input, output, and reasoning output tokens for reading each tool's returned context. It does not measure patch correctness, developer productivity, token savings in a patch workflow, the model-provider bill, or repeat stability. Separate Codex benchmark orchestration/meta-cost is about 3.33B total tokens, 3.318B input, 3.179B cached input, 11.3M output, and 3.27M reasoning output; that is benchmark-build overhead, not a per-tool runtime score.
 
 ## Limitations
 

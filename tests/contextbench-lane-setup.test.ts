@@ -37,15 +37,20 @@ const lanes = lanesFixture as LanesFixture;
 const laneToolCards = laneToolCardsFixture as LaneToolCardsFixture;
 const setupEvidence = laneSetupEvidenceFixture as ContextBenchLaneSetupEvidenceFixture;
 const packageFixture = packageJson as PackageFixture;
-const blockedStatuses = new Set(['setup_failed', 'index_failed', 'tool_error', 'invasive_setup_blocked']);
+const blockedStatuses = new Set([
+  'setup_failed',
+  'index_failed',
+  'tool_error',
+  'invasive_setup_blocked'
+]);
 
 function byLane<T extends { laneId: string }>(items: T[]): Map<string, T> {
   return new Map(items.map((item) => [item.laneId, item]));
 }
 
 function hasPendingPlaceholder(card: ContextBenchLaneToolCard): boolean {
-  return [card.setupCommand, card.indexCommand, card.queryCommand, card.versionCommand].some((command) =>
-    command.toLowerCase().includes('pending phase 39')
+  return [card.setupCommand, card.indexCommand, card.queryCommand, card.versionCommand].some(
+    (command) => command.toLowerCase().includes('pending phase 39')
   );
 }
 
@@ -53,8 +58,14 @@ function expectTerminalBlockedRecord(record: ContextBenchLaneSetupEvidenceRecord
   expect(blockedStatuses.has(record.readinessStatus)).toBe(true);
   expect(record.logReference).toMatch(/^outputs\/contextbench\/setup\//);
   expect(record.nextHumanAction.length).toBeGreaterThan(20);
-  expect(record.commands.some((command) => command.status === 'blocked' || command.status === 'failed')).toBe(true);
-  expect(record.commands.some((command) => command.stdoutLogPath || command.stderrLogPath || command.outputHash)).toBe(true);
+  expect(
+    record.commands.some((command) => command.status === 'blocked' || command.status === 'failed')
+  ).toBe(true);
+  expect(
+    record.commands.some(
+      (command) => command.stdoutLogPath || command.stderrLogPath || command.outputHash
+    )
+  ).toBe(true);
 }
 
 describe('ContextBench Phase 39 lane setup evidence', () => {
@@ -99,7 +110,9 @@ describe('ContextBench Phase 39 lane setup evidence', () => {
       expect(record.setupStatus).toBeTruthy();
       expect(record.indexStatus).toBeTruthy();
       expect(record).not.toHaveProperty('taskWallTimeMs');
-      expect(record.commands.every((command) => command.durationMs === null || command.durationMs >= 0)).toBe(true);
+      expect(
+        record.commands.every((command) => command.durationMs === null || command.durationMs >= 0)
+      ).toBe(true);
       expect(record.setupDurationMs === null || record.setupDurationMs >= 0).toBe(true);
       expect(record.indexDurationMs === null || record.indexDurationMs >= 0).toBe(true);
     }
@@ -111,7 +124,11 @@ describe('ContextBench Phase 39 lane setup evidence', () => {
     expect(lanes.setupFailureSemantics.includedInPublicationRows).toBe(true);
     expect(lanes.setupFailureSemantics.blocksBroadClaimsForRequiredLane).toBe(true);
 
-    const blockedRecords = setupEvidence.records.filter((record) => blockedStatuses.has(record.readinessStatus));
+    const broadClaimLaneIds = new Set(lanes.broadClaimLaneSet);
+    const blockedRecords = setupEvidence.records.filter(
+      (record) =>
+        broadClaimLaneIds.has(record.laneId) && blockedStatuses.has(record.readinessStatus)
+    );
     expect(blockedRecords.map((record) => record.laneId).sort()).toEqual([
       'codebase-memory-mcp',
       'grepai'
@@ -127,14 +144,22 @@ describe('ContextBench Phase 39 lane setup evidence', () => {
       if (!card || lane.laneId === 'raw-native') continue;
       expect(card.contextTools).toEqual([lane.contextTool]);
       expect(card.allowedTools).toEqual([lane.contextTool]);
-      expect(card.disallowedTools).toEqual(expect.arrayContaining(['native-read', 'native-search', 'native-shell-readonly']));
+      expect(card.disallowedTools).toEqual(
+        expect.arrayContaining(['native-read', 'native-search', 'native-shell-readonly'])
+      );
     }
   });
 
   it('keeps competitor tools out of package runtime dependencies', () => {
     const runtimeDependencies = Object.keys(packageFixture.dependencies ?? {});
     const devDependencies = Object.keys(packageFixture.devDependencies ?? {});
-    const forbiddenPackages = ['jcodemunch-mcp', 'grepai', 'codebase-memory-mcp', 'codegraphcontext', 'kuzu'];
+    const forbiddenPackages = [
+      'jcodemunch-mcp',
+      'grepai',
+      'codebase-memory-mcp',
+      'codegraphcontext',
+      'kuzu'
+    ];
     for (const dependencyName of [...runtimeDependencies, ...devDependencies]) {
       expect(forbiddenPackages).not.toContain(dependencyName.toLowerCase());
     }

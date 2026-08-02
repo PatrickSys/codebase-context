@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+* Align the README, benchmark docs, capabilities reference, demo note, registry checklist, package metadata, and proof-surface tests around the local ContextBench case study as a narrow 20-task, 500-check practical case study: 400 retrieval/resource checks plus 100 token-metered context-consumption checks, 387 retrieval checks scored, 13 retained Repowise checks with no usable context, and no claim that it names a winner.
+* Add a checked-in ContextBench summary so public benchmark docs do not depend on ignored local rollup files, while keeping patch-quality, token-savings, model-provider bill, research-paper benchmark, and winner claims blocked.
+* Add package-preview, tag/version, live npm metadata, live GitHub metadata, and per-client MCP setup guards for the v2.3.0 publication path.
+
 ## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-04-30)
 
 

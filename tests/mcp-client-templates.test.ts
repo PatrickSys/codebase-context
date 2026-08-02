@@ -73,7 +73,7 @@ describe('templates/mcp/http/.mcp.json', () => {
 });
 
 // ---------------------------------------------------------------------------
-// README references templates and all four target clients
+// README references templates and target clients
 // ---------------------------------------------------------------------------
 
 describe('README.md client setup documentation', () => {
@@ -99,8 +99,16 @@ describe('README.md client setup documentation', () => {
     expect(readme).toContain('Codex');
   });
 
+  it('mentions Gemini CLI', () => {
+    expect(readme).toContain('Gemini CLI');
+  });
+
   it('mentions Windsurf', () => {
     expect(readme).toContain('Windsurf');
+  });
+
+  it('mentions GitHub Copilot CLI', () => {
+    expect(readme).toContain('GitHub Copilot CLI');
   });
 
   it('includes the HTTP endpoint URL', () => {
@@ -127,11 +135,13 @@ describe('docs/capabilities.md transport documentation', () => {
     expect(caps).toContain('127.0.0.1:3100/mcp');
   });
 
-  it('covers all four target clients', () => {
+  it('covers the target clients', () => {
     expect(caps).toContain('Claude Code');
     expect(caps).toContain('Cursor');
     expect(caps).toContain('Codex');
+    expect(caps).toContain('Gemini CLI');
     expect(caps).toContain('Windsurf');
+    expect(caps).toContain('GitHub Copilot CLI');
   });
 
   it('states the roots-first routing fallback explicitly', () => {
@@ -155,5 +165,29 @@ describe('docs/client-setup.md multi-project guidance', () => {
   it('keeps the three verification flows aligned with the roots-first contract', () => {
     expect(clientSetup).toContain('Multiple projects on a roots-capable host');
     expect(clientSetup).toContain('Ambiguous or no-roots selection');
+  });
+
+  it('uses current CLI add syntax for command-based MCP servers', () => {
+    expect(clientSetup).toContain('claude mcp add codebase-context -- npx -y codebase-context');
+    expect(clientSetup).toContain(
+      'claude mcp add --transport http codebase-context http://127.0.0.1:3100/mcp'
+    );
+    expect(clientSetup).toContain('codex mcp add codebase-context -- npx -y codebase-context');
+    expect(clientSetup).toContain(
+      'codex mcp add codebase-context --url http://127.0.0.1:3100/mcp'
+    );
+    expect(clientSetup).toContain('gemini mcp add codebase-context npx -y codebase-context');
+    expect(clientSetup).toContain(
+      'gemini mcp add --transport http codebase-context http://127.0.0.1:3100/mcp'
+    );
+    expect(clientSetup).toContain(
+      'copilot mcp add codebase-context --type local -- npx -y codebase-context'
+    );
+  });
+
+  it('does not keep stale unsupported-transport wording', () => {
+    expect(clientSetup).not.toContain('Claude Code only supports stdio');
+    expect(clientSetup).not.toContain('HTTP is not available for this client');
+    expect(clientSetup).toContain('HTTP setup is not documented for OpenCode yet');
   });
 });

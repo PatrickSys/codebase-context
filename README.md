@@ -1,16 +1,16 @@
 # codebase-context
 
-## Map your team's conventions before your AI agent starts searching.
+## Your coding agent doesn't understand your codebase.
 
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](https://github.com/PatrickSys/codebase-context/blob/master/package.json)
 
-You're tired of AI agents writing code that "just works" but still misses how your team actually builds things. They search too broadly, pick generic examples, and spend tokens exploring before they understand the shape of the repo.
+`codebase-context` gives AI coding agents a local understanding of your codebase through semantic code search, team conventions, patterns, and memory, so they start from less blind exploration and more relevant local evidence.
 
-`codebase-context` changes the first step. Start with a bounded conventions map that shows the architecture, dominant patterns, and strongest local examples. Then search for the exact file, symbol, or workflow you need.
+Start with a bounded conventions map that shows the architecture, dominant patterns, and strongest local examples. Then search for the exact file, symbol, or workflow you need.
 
 Here's what codebase-context does:
 
-**Starts with a bounded conventions map** - The first call shows architecture layers, active patterns, golden files, and next calls without dumping vendored repos, fixtures, generated output, or oversized entrypoint lists into the default surface.
+**Starts with a bounded conventions map** - The first call shows architecture layers, active patterns, strongest local examples, and next calls without dumping vendored repos, fixtures, generated output, or oversized entrypoint lists into the default surface.
 
 **Finds the right local example** - Search does not just return code. Each result comes back with pattern signals, file relationships, and quality indicators so the agent can move from the map to the most relevant local example instead of wandering through raw hits.
 
@@ -20,13 +20,34 @@ Here's what codebase-context does:
 
 Map first, search second, local-first throughout. Your code never leaves your machine by default.
 
-See the [current discovery benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) for the checked-in discovery-only proof. The gate is still `pending_evidence`, and `claimAllowed` remains `false`.
+Benchmark status:
+
+The [benchmark evidence page](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md)
+keeps two tracks separate. The older checked-in discovery gate is still
+`pending_evidence` with `claimAllowed: false`. The separate local ContextBench
+case study compares raw-native, codebase-context, jCodeMunch full MCP, Repowise
+self-hosted MCP, and context-mode on 20 frozen open-source tasks.
+
+The current public-safe evidence is 500 checks total: 400 retrieval/resource
+checks plus 100 checks with token counters for reading returned context. It does not
+name a benchmark winner. The practical read is simple: jCodeMunch and
+codebase-context are close on file retrieval, jCodeMunch indexed much faster in
+this setup, codebase-context completed all 80 retrieval checks but was expensive
+to index with local Transformers embeddings, and Repowise kept 13 checks with no
+usable context.
+
+The 100/100 metered checks captured input, cached input, output, and reasoning
+output tokens. The separate ~3.33B Codex orchestration cost is benchmark-build
+overhead, not a per-tool runtime score. Patch quality, developer productivity,
+token savings in a patch workflow, the model-provider bill, repeat stability,
+winner, leaderboard, research-paper benchmark, and resource-efficiency claims
+remain blocked.
 
 ### What it looks like
 
 Real CLI output against `angular-spotify`, the repo used for the launch screenshots.
 
-**Lead signal: pattern drift and golden files**
+**Lead signal: pattern drift and best examples**
 
 ![codebase-context patterns screenshot](https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/patterns.png)
 
@@ -57,13 +78,15 @@ Client support at a glance:
 
 | Client            | stdio | HTTP                                         |
 | ----------------- | ----- | -------------------------------------------- |
-| Claude Code       | Yes   | No (stdio only)                              |
+| Claude Code       | Yes   | Yes — `claude mcp add --transport http`      |
 | Claude Desktop    | Yes   | No                                           |
 | Cursor            | Yes   | Yes — `.cursor/mcp.json` with `type: "http"` |
-| Windsurf          | Yes   | Not yet                                      |
-| Codex             | Yes   | Yes — `--mcp-config` flag                    |
+| Windsurf          | Yes   | No documented HTTP setup                     |
+| Codex             | Yes   | Yes — `codex mcp add --url`                  |
+| Gemini CLI        | Yes   | Yes                                          |
 | VS Code (Copilot) | Yes   | No                                           |
-| OpenCode          | Yes   | Not documented yet                           |
+| OpenCode          | Yes   | No documented HTTP setup                     |
+| GitHub Copilot CLI | Yes  | Yes                                          |
 
 Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](./templates/mcp/stdio/.mcp.json) and [`templates/mcp/http/.mcp.json`](./templates/mcp/http/.mcp.json).
 
@@ -74,7 +97,7 @@ Full per-client setup, HTTP server instructions, and local build testing: [`docs
 Get a conventions map of your codebase before exploring or editing:
 
 ```bash
-# See your codebase conventions — architecture layers, patterns, golden files
+# See your codebase conventions — architecture layers, patterns, best examples
 npx -y codebase-context map
 
 # Then search for what you need
@@ -112,7 +135,7 @@ See [`docs/capabilities.md`](./docs/capabilities.md) for the full field referenc
 
 ### Patterns & Conventions (`get_team_patterns`)
 
-Detects what your team actually does by analyzing the codebase: adoption percentages for DI, state management, testing, and library patterns; trend direction (Rising / Stable / Declining) from git recency; golden files ranked by modern pattern density; conflicts when two approaches both exceed 20%.
+Detects what your team actually does by analyzing the codebase: adoption percentages for DI, state management, testing, and library patterns; trend direction (Rising / Stable / Declining) from git recency; strongest local examples ranked by modern pattern density; conflicts when two approaches both exceed 20%.
 
 ### Team Memory (`remember` + `get_memory`)
 
@@ -125,7 +148,7 @@ Memory types: `convention`, `decision`, `gotcha`, `failure`. Confidence decay: c
 | Tool                           | What it does                                          |
 | ------------------------------ | ----------------------------------------------------- |
 | `search_codebase`              | Hybrid search + decision card when `intent="edit"`    |
-| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection |
+| `get_team_patterns`            | Pattern frequencies, best examples, conflict detection |
 | `get_symbol_references`        | Concrete references to a symbol (count + snippets)    |
 | `remember`                     | Record a convention, decision, gotcha, or failure     |
 | `get_memory`                   | Query team memory with confidence decay scoring       |
@@ -224,7 +247,7 @@ These are the behaviors that make the most difference day-to-day. Copy, trim wha
 
 ## Links
 
-- [Benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) — current discovery suite results and gate truth
+- [Benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) — benchmark evidence, case-study boundaries, and gate truth
 - [Demo](https://github.com/PatrickSys/codebase-context/blob/master/docs/demo.md) — real CLI walkthrough
 - [Client Setup](./docs/client-setup.md) — per-client config, HTTP setup, local build testing
 - [Capabilities Reference](./docs/capabilities.md) — tool API, retrieval pipeline, decision card schema

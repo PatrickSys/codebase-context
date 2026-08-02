@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+* Align the README, benchmark docs, capabilities reference, demo note, registry checklist, and proof-surface tests around the local ContextBench case study as a narrow retrieval-overlap engineering note: 100 rows across 20 frozen open-source tasks, 99 official-evaluator completed rows, 1 retained Repowise `no_context_extracted` row, and no benchmark-win claim.
+* Add a checked-in ContextBench engineering-note summary so public benchmark docs do not depend on ignored local rollup files.
+
 ## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-04-30)
 
 

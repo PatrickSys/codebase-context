@@ -798,14 +798,8 @@ describe('ContextBench Phase 40 schema gate', () => {
         expect.arrayContaining(['base_commit_mismatch', 'problem_statement_hash_mismatch'])
       );
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(missingSessionRoot)))), {
-        recursive: true,
-        force: true
-      });
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(wrongCommitSessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(missingSessionRoot);
+      cleanupSessionRoot(wrongCommitSessionRoot);
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(wrongCommitRepo, { recursive: true, force: true });
     }

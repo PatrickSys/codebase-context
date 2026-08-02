@@ -80,11 +80,11 @@ describe('release truth surfaces', () => {
   const visualsDoc = readOptionalText('docs/visuals.md');
   const packagedPaths = ['README.md', 'LICENSE', ...(packageJson.files ?? [])];
 
-  it('keeps package metadata, release manifest, and changelog on 2.2.0', () => {
-    expect(packageJson.version).toBe('2.2.0');
-    expect(releaseManifest['.']).toBe('2.2.0');
-    expect(changelog).toContain('## [2.2.0]');
-    expect(changelog).not.toContain('## Unreleased');
+  it('keeps package metadata, release manifest, and changelog aligned to 2.3.0', () => {
+    expect(packageJson.version).toBe('2.3.0');
+    expect(releaseManifest['.']).toBe('2.3.0');
+    expect(changelog).toContain('## [2.3.0]');
+    expect(changelog).toContain('## Unreleased');
   });
 
   it('limits packaged README links to shipped files or stable external URLs', () => {
@@ -114,8 +114,8 @@ describe('release truth surfaces', () => {
     expect(visualsDoc).toContain('Historical snapshot');
   });
 
-  it('keeps the manual publish fallback aligned to v2.2.0', () => {
-    expect(workflow).toContain("description: 'Tag to publish (e.g. v2.2.0)'");
-    expect(workflow).toContain("default: 'v2.2.0'");
+  it('keeps the manual publish fallback aligned to v2.3.0', () => {
+    expect(workflow).toContain("description: 'Tag to publish (e.g. v2.3.0)'");
+    expect(workflow).toContain("default: 'v2.3.0'");
   });
 });

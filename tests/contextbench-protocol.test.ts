@@ -436,7 +436,8 @@ describe('ContextBench lane governance invariants', () => {
       'jcodemunch-repomapper',
       'grepai',
       'codebase-memory-mcp',
-      'codegraphcontext'
+      'codegraphcontext',
+      'context-mode'
     ]);
     expect(lanes.broadClaimsRequireAllLanesComplete).toBe(true);
     expect(lanes.setupFailedRequiredLaneBlocksBroadClaims).toBe(true);

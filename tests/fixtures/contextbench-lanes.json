@@ -2,19 +2,47 @@
   "name": "v2.4-contextbench-lanes",
   "protocolVersion": "contextbench-protocol-v1",
   "frozenDate": "2026-04-27",
-  "initialExternalGate": [
-    "raw-native",
-    "codebase-context",
-    "jcodemunch-repomapper"
-  ],
+  "initialExternalGate": ["raw-native", "codebase-context", "jcodemunch-repomapper"],
   "broadClaimLaneSet": [
     "raw-native",
     "codebase-context",
     "jcodemunch-repomapper",
     "grepai",
     "codebase-memory-mcp",
+    "codegraphcontext",
+    "context-mode"
+  ],
+  "vNextHeadlineLaneSet": [
+    "raw-native",
+    "codebase-context",
+    "repowise-selfhosted-mcp",
+    "jcodemunch-full-mcp",
+    "context-mode"
+  ],
+  "vNextFallbackLaneSet": ["jcodemunch-repomapper"],
+  "vNextAppendixLaneSet": [
+    "grepai-semantic",
+    "repowise-hosted-http",
+    "codebase-memory-mcp",
     "codegraphcontext"
   ],
+  "vNextMinimumCredibleRun": {
+    "retrievalTasks": 30,
+    "headlineLanes": 5,
+    "repeatsPerTaskLane": 3,
+    "expectedRetrievalRows": 450,
+    "patchQualityTasks": 12,
+    "patchQualityRepeatsPerTaskLane": 3
+  },
+  "vNextReadinessPolicy": {
+    "headlineClaimsRequireAllHeadlineLanesReadyBeforeFreeze": true,
+    "grepaiSemanticDebuggingRequiredBeforeFallbackDecision": false,
+    "grepaiSemanticFailureRequiresUserDecision": true,
+    "grepaiSemanticMovedToAppendixAfterOwnerApprovedRetry": true,
+    "repowiseHostedHttpMustNotMergeIntoLocalHeadlineClaims": true,
+    "contextModeMustStayHeadlineUnlessOwnerDropsLane": true,
+    "jcodemunchRepoMapperFallbackMustBeExplicitlyLabeled": true
+  },
   "broadClaimsRequireAllLanesComplete": true,
   "setupFailedRequiredLaneBlocksBroadClaims": true,
   "lanes": [
@@ -30,7 +58,8 @@
         "jcodemunch-repomapper",
         "grepai",
         "codebase-memory-mcp",
-        "codegraphcontext"
+        "codegraphcontext",
+        "context-mode"
       ],
       "nativeToolsAllowed": true,
       "setupCostReportedSeparately": true,
@@ -51,7 +80,8 @@
         "jcodemunch-repomapper",
         "grepai",
         "codebase-memory-mcp",
-        "codegraphcontext"
+        "codegraphcontext",
+        "context-mode"
       ],
       "nativeToolsAllowed": false,
       "setupCostReportedSeparately": true,
@@ -72,7 +102,8 @@
         "codebase-context",
         "grepai",
         "codebase-memory-mcp",
-        "codegraphcontext"
+        "codegraphcontext",
+        "context-mode"
       ],
       "nativeToolsAllowed": false,
       "setupCostReportedSeparately": true,
@@ -86,7 +117,16 @@
       "phase36Status": "deferred_to_phase39",
       "contextTool": "grepai",
       "allowedTools": ["grepai"],
-      "disallowedTools": ["native-read", "native-search", "native-shell-readonly", "codebase-context", "jcodemunch-repomapper", "codebase-memory-mcp", "codegraphcontext"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "codebase-memory-mcp",
+        "codegraphcontext",
+        "context-mode"
+      ],
       "nativeToolsAllowed": false,
       "setupCostReportedSeparately": true,
       "indexCostReportedSeparately": true,
@@ -99,7 +139,16 @@
       "phase36Status": "deferred_to_phase39",
       "contextTool": "codebase-memory-mcp",
       "allowedTools": ["codebase-memory-mcp"],
-      "disallowedTools": ["native-read", "native-search", "native-shell-readonly", "codebase-context", "jcodemunch-repomapper", "grepai", "codegraphcontext"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codegraphcontext",
+        "context-mode"
+      ],
       "nativeToolsAllowed": false,
       "setupCostReportedSeparately": true,
       "indexCostReportedSeparately": true,
@@ -112,7 +161,38 @@
       "phase36Status": "deferred_to_phase39",
       "contextTool": "codegraphcontext",
       "allowedTools": ["codegraphcontext"],
-      "disallowedTools": ["native-read", "native-search", "native-shell-readonly", "codebase-context", "jcodemunch-repomapper", "grepai", "codebase-memory-mcp"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp",
+        "context-mode"
+      ],
+      "nativeToolsAllowed": false,
+      "setupCostReportedSeparately": true,
+      "indexCostReportedSeparately": true,
+      "cacheIsolationRequired": true
+    },
+    {
+      "laneId": "context-mode",
+      "displayName": "Context Mode",
+      "claimRole": "required_for_owner_requested_extension",
+      "phase36Status": "deferred_to_phase39",
+      "contextTool": "context-mode",
+      "allowedTools": ["context-mode"],
+      "disallowedTools": [
+        "native-read",
+        "native-search",
+        "native-shell-readonly",
+        "codebase-context",
+        "jcodemunch-repomapper",
+        "grepai",
+        "codebase-memory-mcp",
+        "codegraphcontext"
+      ],
       "nativeToolsAllowed": false,
       "setupCostReportedSeparately": true,
       "indexCostReportedSeparately": true,

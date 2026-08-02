@@ -6,7 +6,7 @@ Run it from the repo root with `CODEBASE_ROOT` pointed at the frozen sample repo
 ## 1. Start With The Conventions Map
 
 ```bash
-$env:CODEBASE_ROOT='C:\Users\bitaz\Repos\codebase-context\repos\angular-spotify'
+$env:CODEBASE_ROOT='/path/to/angular-spotify'
 node dist/index.js map --json
 ```
 
@@ -26,9 +26,7 @@ Captured output excerpt:
     { "name": "Standalone", "adoption": "100%", "trend": "Rising" },
     { "name": "RxJS", "adoption": "98%", "trend": "Rising" }
   ],
-  "bestExamples": [
-    { "file": "src/lib/card.component.ts", "score": 4, "reason": "Angular TestBed" }
-  ]
+  "bestExamples": [{ "file": "src/lib/card.component.ts", "score": 4, "reason": "Angular TestBed" }]
 }
 ```
 
@@ -40,7 +38,7 @@ What this shows:
 ## 2. Search With Edit Intent
 
 ```bash
-$env:CODEBASE_ROOT='C:\Users\bitaz\Repos\codebase-context\repos\angular-spotify'
+$env:CODEBASE_ROOT='/path/to/angular-spotify'
 node dist/index.js search --query "auth headers" --intent edit --limit 3 --json
 ```
 
@@ -52,9 +50,7 @@ Captured output excerpt:
   "searchQuality": { "status": "ok", "confidence": 1 },
   "preflight": {
     "ready": true,
-    "warnings": [
-      "Index is aging (>24h) — results may not reflect recent changes"
-    ],
+    "warnings": ["Index is aging (>24h) — results may not reflect recent changes"],
     "patterns": {
       "do": [
         "Constructor injection — 85% adoption",
@@ -66,7 +62,7 @@ Captured output excerpt:
   },
   "results": [
     {
-      "file": "C:\\Users\\bitaz\\Repos\\codebase-context\\repos\\angular-spotify\\libs\\web\\auth\\util\\src\\lib\\interceptors\\auth.interceptor.ts:10-42",
+      "file": "/path/to/angular-spotify/libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts:10-42",
       "type": "interceptor:core"
     }
   ]
@@ -82,7 +78,7 @@ What this shows:
 ## 3. Check A Team Pattern Directly
 
 ```bash
-$env:CODEBASE_ROOT='C:\Users\bitaz\Repos\codebase-context\repos\angular-spotify'
+$env:CODEBASE_ROOT='/path/to/angular-spotify'
 node dist/index.js patterns --category state --json
 ```
 
@@ -118,3 +114,4 @@ What this shows:
 
 - These excerpts were captured from the current local proof run and will change if the frozen sample repo or index state changes.
 - The discovery benchmark gate is still `pending_evidence`, and `claimAllowed` remains `false`, so this walkthrough demonstrates shipped behavior, not a released performance claim.
+- The separate local ContextBench case study is a 20-task retrieval-overlap engineering note, not a benchmark win. Do not read this demo as evidence that agents write better patches.

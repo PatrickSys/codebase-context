@@ -1,15 +1,16 @@
 # Benchmarks
 
-This page tracks two separate benchmark surfaces:
+This page tracks three separate benchmark surfaces:
 
-- The ContextBench implementation pilot, which uses the official ContextBench evaluator on one frozen task and five scoreable lanes.
+- The ContextBench implementation pilot, which uses the official ContextBench evaluator on one frozen task and five lanes whose outputs it could inspect.
+- The separate local ContextBench case study, which summarizes the corrected 20-task retrieval-overlap run.
 - The older discovery benchmark, which measures local discovery usefulness and payload cost only.
 
-Neither section currently supports a broad benchmark-win claim.
+None of these sections currently supports a broad benchmark-win claim.
 
 ## ContextBench Implementation Pilot
 
-This is the current implementation-quality pilot for ContextBench. It is real scoreable evidence, but it is still a pilot because it covers one frozen task rather than the full frozen 20-task slice.
+This is the current implementation-quality pilot for ContextBench. It has real official-evaluator output, but it is still a pilot because it covers one frozen task rather than the full frozen 20-task slice.
 
 ### Scope
 
@@ -40,7 +41,7 @@ The artifact contains `summary.json`, `publishable-summary.json`, `publishable-v
 
 ### Quality Results
 
-Only rows scored by the official ContextBench evaluator are included here. Setup failures, tool errors, empty predictions, and judge failures are reliability outcomes, not quality rows.
+Only rows scored by the official ContextBench evaluator are included here. Setup failures, tool errors, empty predictions, and judge failures are counted separately from quality rows.
 
 | Lane | File cov | File prec | Span cov | Span prec | Line cov | Line prec |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -65,8 +66,8 @@ The report separates setup, indexing, query, selector, evaluator, and row-wall t
 The generated `publishable-validation.json` must pass these checks before the report is treated as evidence:
 
 - Quality rows come only from the official ContextBench evaluator.
-- Failed or unscoreable rows stay out of the quality table.
-- All required lanes are scoreable.
+- Failed rows, or rows the evaluator could not inspect, stay out of the quality table.
+- All required lanes produced evaluator-readable rows.
 - Setup, index, and query costs are separate from quality.
 - Timing and token fields exist or carry explicit unavailable reasons.
 - The protocol is frozen and `claimAllowed` is `false`.
@@ -76,13 +77,96 @@ The generated `publishable-validation.json` must pass these checks before the re
 
 - It supports saying that the benchmark harness can produce real official ContextBench scores across five lanes.
 - It supports saying that setup/index/query cost and context/token cost are now tracked separately from quality.
-- It supports saying that the one-task pilot found a strong `codebase-context` result on this specific task.
+- It supports saying that the one-task pilot found higher `codebase-context`
+  overlap than the other inspected lanes on this specific task.
 
 ### What This Does Not Support
 
 - It does not support claiming that `codebase-context` beats competitors overall.
 - It does not support claiming patch correctness or productivity improvements.
 - It does not replace the full frozen 20-task, repeated-run benchmark required for claim-bearing results.
+
+## Separate ContextBench Case Study
+
+This page also records a separate local ContextBench case study. It compares
+five ways of giving code context to an agent on frozen open-source tasks:
+`raw-native`, `codebase-context`, `jcodemunch-full-mcp`,
+`repowise-selfhosted-mcp`, and `context-mode`. GrepAI is appendix-only after
+bounded local indexing readiness failures.
+
+Current case-study status, as of 2026-06-04:
+
+- This is a narrow retrieval-overlap case study, not a benchmark-win claim.
+- The corrected run has 20 tasks x 1 repeat x 5 lanes = 100 retrieval rows.
+- The official ContextBench evaluator completed 99 rows. One Repowise row is
+  retained as `judge_failed` because the evaluator reported
+  `no_context_extracted`.
+- The public-safe summary is checked in at
+  `results/contextbench-engineering-note-summary.json`.
+- The full run artifacts are local and ignored by git. The checked-in summary is
+  the shareable evidence boundary.
+
+Why one repeat: this artifact is the first corrected same-denominator pass after
+the tool setup failures were bounded. It is enough to show what each lane
+returned on the same frozen tasks and what that cost locally. It is not enough
+to claim stability, confidence intervals, or a general leaderboard. A stronger
+benchmark needs repeated runs on the same frozen protocol before those claims
+open.
+
+The table below uses the failure-inclusive metric view from the checked-in
+summary. The row-count column is evaluator completion, not a quality grade. The
+quality signal is in the coverage columns: how much expected file, symbol, span,
+and line evidence the returned context overlapped. A row that cannot be
+evaluated is counted as zero for the public mean, so failed evidence is not
+hidden by completed-only averages.
+
+| Lane                      | Evaluator completed | File coverage | Symbol coverage | Span coverage | Line coverage | Median index | Total row wall | Peak private RAM | Caveat                                                                                                                         |
+| ------------------------- | ------------------: | ------------: | --------------: | ------------: | ------------: | -----------: | -------------: | ---------------: | ------------------------------------------------------------------------------------------------------------------------------ |
+| `jcodemunch-full-mcp`     |               20/20 |         27.1% |           19.0% |          8.5% |          8.7% |       11.3 s |       10.9 min |          0.33 GB | Fast in this adapter run; cold install/cache boundary still needs care before cost claims                                      |
+| `codebase-context`        |               20/20 |         25.7% |           14.0% |          8.6% |          8.8% |      750.8 s |      231.5 min |          2.90 GB | Completed all 20 rows locally, but was expensive to index with local Transformers embeddings                                   |
+| `repowise-selfhosted-mcp` |               19/20 |         20.1% |            4.6% |          3.0% |          2.5% |      294.3 s |      200.7 min |          4.82 GB | Highest peak private memory here; every index exited nonzero with a documented benign failure mode, and one row had no extracted context |
+| `context-mode`            |               20/20 |         16.8% |            2.7% |          1.2% |          1.1% |       18.6 s |       16.0 min |          0.15 GB | Lightweight and low-cost, with a lower recall ceiling in this run                                                              |
+| `raw-native`              |               20/20 |          4.3% |            0.7% |          0.5% |          0.4% |          0 s |        6.8 min |          0.06 GB | Deterministic lexical baseline here, not a free-form raw-agent ceiling                                                         |
+
+What this supports:
+
+- a practical engineering note about what each tool returned on the same
+  open-source tasks;
+- a setup/index cost comparison with the exact mode used by each lane;
+- failure accounting that includes the Repowise no-context row instead of
+  dropping it;
+- the plain-language takeaway: codebase-context completed all 20 rows but was
+  expensive to index; jCodeMunch returned slightly higher file coverage and
+  indexed much faster in this adapter run; context-mode had low index/memory
+  cost with lower recall; Repowise used the most memory here, had nonzero index
+  exits, and produced one no-context row.
+
+What remains blocked:
+
+- winner, best-tool, leaderboard, or paper-grade claims;
+- generalized coding-quality or patch-correctness claims;
+- resource-efficiency claims, because install/cache/provider-dollar costs are
+  not fully normalized;
+- confidence/stability claims, because this run has one repeat per lane/task;
+- claims that setup failures or no-context rows are competitor quality losses.
+
+Do not mix the benchmark tracks:
+
+- The ContextBench implementation pilot above is a one-task official-evaluator
+  pilot.
+- The discovery benchmark below is the checked-in product discovery gate.
+- The ContextBench case study above is a separate retrieval-overlap engineering
+  note.
+- `claimAllowed: false` still applies to broad product-win claims.
+
+Audit trail:
+
+- Checked-in engineering-note summary:
+  `results/contextbench-engineering-note-summary.json`
+- The summary records the source hashes, failed-row pointers, and blocked-claim
+  status for audit.
+- Full raw artifacts stay local and ignored by git; the checked-in summary is
+  the public evidence boundary.
 
 ## Discovery Benchmark
 
@@ -128,10 +212,10 @@ From `results/gate-evaluation.json`:
 
 Repo-level outputs from the same rerun:
 
-| Repo | Tasks | Avg usefulness | Avg estimated tokens | Best-example usefulness |
-| --- | ---: | ---: | ---: | ---: |
-| `angular-spotify` | 12 | 0.8333 | 2138.4167 | 0.25 |
-| `excalidraw` | 12 | 0.6667 | 1506.0833 | 0 |
+| Repo              | Tasks | Avg usefulness | Avg estimated tokens | Best-example usefulness |
+| ----------------- | ----: | -------------: | -------------------: | ----------------------: |
+| `angular-spotify` |    12 |         0.8333 |            2138.4167 |                    0.25 |
+| `excalidraw`      |    12 |         0.6667 |            1506.0833 |                       0 |
 
 ## Discovery Gate Truth
 
@@ -139,22 +223,25 @@ The gate is intentionally still blocked.
 
 - The combined suite covers both public repos.
 - `claimAllowed` remains `false` because comparator evidence still does not support a benchmark-win claim.
-- Two comparator artifacts now return `status: "ok"`, but that does not yet close the gate:
+- Two comparator artifacts return `status: "ok"` in this checked-in discovery artifact, but that does not close the gate:
   - `raw Claude Code` still leaves the baseline `pending_evidence` because `averageFirstRelevantHit` is `null`
-  - `codebase-memory-mcp` now has real current metrics, but the gate still marks it `failed` on the frozen tolerance rule
-- Three comparator lanes still fail setup entirely: `GrepAI`, `jCodeMunch`, and `CodeGraphContext`.
+  - `codebase-memory-mcp` has real metrics in this artifact, but the gate still marks it `failed` on the frozen tolerance rule
+- In this older checked-in discovery artifact, three comparator lanes still fail
+  setup entirely: `GrepAI`, `jCodeMunch`, and `CodeGraphContext`. That statement
+  belongs only to the discovery artifact below, not to the separate local
+  ContextBench case study above.
 
 ## Discovery Comparator Reality
 
 The current comparator artifact records incomplete comparator evidence, not benchmark wins.
 
-| Comparator | Status | Current reason |
-| --- | --- | --- |
-| `codebase-memory-mcp` | comparator artifact: `ok`; gate: `failed` | Runs through the repaired graph-backed path and now records real metrics (`averageUsefulness: 0.1875`, `averageFirstRelevantHit: 1.2857`, `bestExampleUsefulnessRate: 0.5`), but the frozen gate still fails it on the required usefulness comparisons |
-| `jCodeMunch` | `setup_failed` | `MCP error -32000: Connection closed` |
-| `GrepAI` | `setup_failed` | Local Go binary and Ollama model path not present |
-| `CodeGraphContext` | `setup_failed` | `MCP error -32000: Connection closed` |
-| `raw Claude Code` | comparator artifact: `ok`; gate: `pending_evidence` | The explicit Haiku CLI runner now returns current metrics (`averageUsefulness: 0.0278`, `averageEstimatedTokens: 32.1667`), but the baseline still lacks `averageFirstRelevantHit`, so the gate keeps this lane as missing evidence |
+| Comparator            | Discovery-artifact status                           | Discovery-artifact reason                                                                                                                                                                                                                                      |
+| --------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codebase-memory-mcp` | comparator artifact: `ok`; gate: `failed`           | Runs through the repaired graph-backed path and records metrics in this artifact (`averageUsefulness: 0.1875`, `averageFirstRelevantHit: 1.2857`, `bestExampleUsefulnessRate: 0.5`), but the frozen gate still fails it on the required usefulness comparisons |
+| `jCodeMunch`          | legacy discovery artifact: `setup_failed`           | `MCP error -32000: Connection closed`; this does not override the separate local ContextBench strict-MCP row described above                                                                                                                                   |
+| `GrepAI`              | legacy discovery artifact: `setup_failed`           | Local Go binary and Ollama model path not present; the newer local ContextBench track keeps GrepAI as appendix-only after bounded readiness failures                                                                                                           |
+| `CodeGraphContext`    | `setup_failed`                                      | `MCP error -32000: Connection closed`                                                                                                                                                                                                                          |
+| `raw Claude Code`     | comparator artifact: `ok`; gate: `pending_evidence` | The explicit Haiku CLI runner returns metrics in this artifact (`averageUsefulness: 0.0278`, `averageEstimatedTokens: 32.1667`), but the baseline still lacks `averageFirstRelevantHit`, so the gate keeps this lane as missing evidence                       |
 
 `CodeGraphContext` remains part of the frozen comparison frame. It is not omitted from the public story just because the lane still fails to start.
 

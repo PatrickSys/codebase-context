@@ -20,7 +20,26 @@ Here's what codebase-context does:
 
 Map first, search second, local-first throughout. Your code never leaves your machine by default.
 
-See the [current discovery benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) for the checked-in discovery-only proof. The gate is still `pending_evidence`, and `claimAllowed` remains `false`.
+Benchmark status:
+
+- The [current discovery benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md)
+  is a checked-in discovery-only proof. Its gate is still `pending_evidence`,
+  and `claimAllowed` remains `false`.
+- A separate local ContextBench case study is documented in the benchmark page.
+  It compares raw-native, codebase-context, jCodeMunch full MCP, Repowise
+  self-hosted MCP, and context-mode on 20 frozen open-source tasks.
+- It is not a benchmark-win claim. The current public-safe evidence is 100
+  retrieval-overlap rows: 99 official-evaluator completed rows and 1 retained
+  Repowise `no_context_extracted` row.
+- The useful finding is practical: retrieval quality, setup/index cost, memory
+  footprint, completed rows, and failed attempts have to be shown together.
+- In the failure-inclusive view, jCodeMunch and codebase-context are close on
+  file/span retrieval. jCodeMunch indexed much faster in this adapter run;
+  codebase-context completed all 20 retrieval rows but was expensive to index
+  with local Transformers embeddings.
+- The case study does not measure patch correctness, developer productivity,
+  provider-dollar spend, or repeat stability. Winner, leaderboard, paper-grade,
+  and resource-efficiency claims stay blocked.
 
 ### What it looks like
 

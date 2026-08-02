@@ -286,6 +286,8 @@ Current public proof bundle: [`docs/benchmark.md`](../docs/benchmark.md) and [`d
 
 Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/reporting code.
 
+Checked-in evaluation references: [`docs/benchmark.md`](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) and [`docs/comparison-table.md`](https://github.com/PatrickSys/codebase-context/blob/master/docs/comparison-table.md). These are evidence records, not a winner scoreboard.
+
 - **Command:** `npm run eval -- <codebaseA> [codebaseB] --mode retrieval|discovery [--competitor-results <path>]` (builds first, then runs `scripts/run-eval.mjs`)
 - **Shared implementation:** `src/eval/harness.ts`, `src/eval/discovery-harness.ts`, and `src/eval/types.ts`
 - **Frozen retrieval fixtures:**
@@ -298,8 +300,9 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/
 - **Retrieval metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a gate pass/fail
 - **Discovery metrics:** usefulness score, payload bytes, estimated tokens, first relevant hit, and best-example usefulness
 - **Discovery gate:** discovery mode evaluates the frozen ship gate only when the full public suite and comparator metrics are available; missing comparator evidence is reported as pending, not silently treated as pass/fail
-- **Current checked-in gate truth:** `results/gate-evaluation.json` remains `pending_evidence` with `claimAllowed: false`; the raw-Claude baseline still lacks `averageFirstRelevantHit`, `codebase-memory-mcp` still fails the frozen usefulness comparisons, and the remaining named lanes are still `setup_failed`
+- **Current checked-in gate truth:** `results/gate-evaluation.json` remains `pending_evidence` with `claimAllowed: false`; in that older discovery artifact, the raw-Claude baseline still lacks `averageFirstRelevantHit`, `codebase-memory-mcp` still fails the frozen usefulness comparisons, and several named lanes are setup/readiness evidence only. The newer local ContextBench case study is separate and must not be mixed into that discovery gate.
 - **Limits:** discovery mode is discovery-only, uses current shipped surfaces only, and does not claim implementation quality; named competitor runs remain a documented hybrid/manual lane rather than a built-in automated benchmark
+- **Separate ContextBench case study:** a local five-lane retrieval-overlap run is summarized as an engineering note, not as a checked-in win claim. Current public-safe status is 100 rows across 20 frozen open-source tasks, with 99 official-evaluator completed rows and 1 retained Repowise `no_context_extracted` row. The case study reports retrieval overlap, setup/index time, row wall time, process memory telemetry, GPU probe status, and failure rows. It does not measure patch correctness, developer productivity, provider-dollar spend, or repeat stability.
 
 ## Limitations
 

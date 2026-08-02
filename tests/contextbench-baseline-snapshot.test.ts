@@ -43,6 +43,24 @@ function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
   );
 }
 
+function ignoreWindowsTempCleanupRace(error: unknown): void {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code ?? '')) throw error;
+}
+
+function cleanupSessionRoot(sessionRoot: string): void {
+  try {
+    rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 200
+    });
+  } catch (error) {
+    ignoreWindowsTempCleanupRace(error);
+  }
+}
+
 function readRows(sessionRoot: string): Array<{ status: string; scoring?: { fallbackReason?: string } }> {
   return readFileSync(path.join(sessionRoot, 'run-manifest.jsonl'), 'utf8')
     .trim()
@@ -93,10 +111,7 @@ describe('ContextBench Phase 40 dirty-worktree snapshot', () => {
       );
       expect(JSON.stringify(session)).not.toContain(process.env.OPENAI_API_KEY ?? 'definitely-not-present');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -121,10 +136,7 @@ describe('ContextBench Phase 40 dirty-worktree snapshot', () => {
       expect(session.phase).toBe(41);
       expect(session.sessionRoot).toContain('/phase41/');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -162,10 +174,7 @@ describe('ContextBench Phase 40 dirty-worktree snapshot', () => {
       expect(secondBlockedRows).toHaveLength(firstBlockedRows.length);
       expect(validateOutput).toContain('baseline session validation passed');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 

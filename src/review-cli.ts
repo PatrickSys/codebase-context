@@ -49,21 +49,24 @@ const MAX_GIT_BUFFER = 16 * 1024 * 1024;
 function printUsage(): void {
   console.log(`codebase-context-review --base <git-ref> [options]
 
-Build a bounded, deterministic review-context packet from a committed git diff.
+Build a bounded review-context packet from a committed git diff.
 It does not call an LLM and it does not post review comments.
 
 Required:
   --base <git-ref>         PR/base ref. Compared with merge-base semantics.
 
 Options:
-  --head <git-ref>         Head ref (default: HEAD)
+  --head <git-ref>         Head ref; must resolve to checked-out HEAD (default: HEAD)
   --root <path>            Repository root (default: CODEBASE_ROOT or cwd)
   --max-queries <n>        Maximum changed-file search queries (default: 8)
   --max-results <n>        Maximum related results per query (default: 3)
   --max-identifiers <n>    Identifier candidates retained per file (default: 10)
-  --no-index               Fail instead of creating an index when one is missing
+  --no-index               Do not create/refresh the index; fail if it is missing
   --json                   Emit the complete JSON packet
   --help                   Show this help
+
+The v1 command requires a clean working tree so repository search and the git diff
+refer to the same committed source state.
 
 Example:
   codebase-context-review --base origin/main --head HEAD --json
@@ -141,7 +144,7 @@ function runGit(rootPath: string, args: string[], maxBuffer = MAX_GIT_BUFFER): s
       input: '',
       stdio: ['pipe', 'pipe', 'pipe'],
       maxBuffer
-    }).trimEnd();
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`git ${args.join(' ')} failed: ${message}`);
@@ -154,6 +157,22 @@ function resolveCommit(rootPath: string, ref: string): string {
     throw new Error(`Could not resolve ${ref} to a commit`);
   }
   return commit;
+}
+
+function assertReviewSourceState(rootPath: string, headCommit: string): void {
+  const checkoutHead = resolveCommit(rootPath, 'HEAD');
+  if (checkoutHead !== headCommit) {
+    throw new Error(
+      `--head must resolve to the checked-out HEAD in review-context-v1 (${checkoutHead.slice(0, 12)} != ${headCommit.slice(0, 12)})`
+    );
+  }
+
+  const dirty = runGit(rootPath, ['status', '--porcelain=v1', '--untracked-files=all']);
+  if (dirty.length > 0) {
+    throw new Error(
+      'review-context-v1 requires a clean working tree so the repository index and diff describe the same committed source state'
+    );
+  }
 }
 
 async function createToolContext(rootPath: string, noIndex: boolean): Promise<ToolContext> {
@@ -181,7 +200,9 @@ async function createToolContext(rootPath: string, noIndex: boolean): Promise<To
 
   const performIndexing = async (incrementalOnly?: boolean, reason?: string): Promise<void> => {
     indexState.status = 'indexing';
-    console.error(`Indexing review target (${incrementalOnly ? 'incremental' : 'full'})${reason ? ` — ${reason}` : ''}`);
+    console.error(
+      `Indexing review target (${incrementalOnly ? 'incremental' : 'full'})${reason ? ` — ${reason}` : ''}`
+    );
 
     try {
       const indexer = new CodebaseIndexer({
@@ -210,6 +231,8 @@ async function createToolContext(rootPath: string, noIndex: boolean): Promise<To
       );
     }
     await performIndexing(false, 'review-context');
+  } else if (!noIndex) {
+    await performIndexing(true, 'review-context-refresh');
   }
 
   return context;
@@ -238,12 +261,16 @@ function parseToolJson<T>(response: ToolResponse, operation: string): T {
 
 function printHuman(packet: Awaited<ReturnType<typeof buildReviewContextPacket>>): void {
   console.log(`Review context: ${packet.refs.base}...${packet.refs.head}`);
-  console.log(`Commits: ${packet.refs.baseCommit.slice(0, 12)} -> ${packet.refs.headCommit.slice(0, 12)}`);
+  console.log(
+    `Commits: ${packet.refs.baseCommit.slice(0, 12)} -> ${packet.refs.headCommit.slice(0, 12)}`
+  );
   console.log(`Diff: sha256:${packet.diffSha256}`);
   console.log(
     `Changed: ${packet.summary.filesChanged} files, +${packet.summary.additions}/-${packet.summary.deletions}`
   );
-  console.log(`Searches: ${packet.summary.queryCount}, related results: ${packet.summary.relatedResultCount}`);
+  console.log(
+    `Searches: ${packet.summary.queryCount}, related results: ${packet.summary.relatedResultCount}`
+  );
   console.log('');
 
   for (const file of packet.changedFiles) {
@@ -285,9 +312,17 @@ export async function runReviewCli(argv: string[]): Promise<number> {
   const rootPath = path.resolve(gitRoot);
   const baseCommit = resolveCommit(rootPath, options.base);
   const headCommit = resolveCommit(rootPath, options.head);
-  const range = `${options.base}...${options.head}`;
+  assertReviewSourceState(rootPath, headCommit);
 
-  const nameStatus = runGit(rootPath, ['diff', '--name-status', '--find-renames', range, '--']);
+  const range = `${baseCommit}...${headCommit}`;
+  const nameStatus = runGit(rootPath, [
+    'diff',
+    '--name-status',
+    '-z',
+    '--find-renames',
+    range,
+    '--'
+  ]);
   const changedFiles = parseNameStatus(nameStatus);
   const rawDiff = runGit(rootPath, [
     'diff',

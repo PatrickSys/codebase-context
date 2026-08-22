@@ -87,74 +87,114 @@ Status: **ACTIVE**
 
 Question:
 
-> What frozen public task set can distinguish useful review context from plausible-looking retrieval noise?
+> Can `review-context-v1` select more review-relevant repository context than simple/generic alternatives **under a fixed output budget**, on a hostile public benchmark frozen before treatment inspection?
 
-This phase freezes evidence **before** retrieval tuning.
+The phase exists to freeze evidence **before** retrieval tuning. Generic context expansion is a baseline, not an assumed improvement.
 
-## Required task set
+## Benchmark-source policy
+
+Prefer externally curated public benchmarks over owner/agent hand-labeling.
+
+Primary source candidate: **SWE-PRBench** because it is multi-repository, multi-language, review-specific, and explicitly studies contextual/latent issues plus context-size effects.
+
+Secondary source candidates may be used only when they add a ground-truth dimension the primary source cannot provide cleanly (for example exact localization). Candidates identified before treatment inspection include Code Review Bench and AACR-Bench.
+
+Pin every upstream source by immutable commit/revision. Do not consume moving `main` or mutable hosted dataset revisions during claim-bearing runs.
+
+## Required frozen slice
 
 Minimum target:
 
-- 20 public tasks
+- at least 20 public PR tasks
 - at least 5 public repositories
 - at least 3 language ecosystems
+- real review-relevant defects/issues
+- mix of local, contextual, and latent issues when source labels permit
 - mix of small and non-trivial changes
-- real bug-fix / review-relevant changes, not only synthetic retrieval queries
-- exact repository + base/head commit identity
+- exact repository + base/head commit identity or reproducible upstream instance identity
 - public reproducibility
 
-Prefer tasks where ground truth can identify:
-
-- changed files
-- causally relevant non-changed files
-- relevant symbols/spans when defensible
-- actual bug/finding when the task supports reviewer evaluation
+Selection must be deterministic from source metadata. No manual selection based on how `codebase-context` performs.
 
 ## Freeze artifacts
 
 Before looking at treatment results, commit:
 
-- [ ] task manifest
+- [ ] upstream source/revision manifest
+- [ ] deterministic task-selection rule
+- [ ] frozen task manifest
 - [ ] repo/commit identities
 - [ ] task inclusion/exclusion rationale
 - [ ] ground-truth format
 - [ ] scorer
-- [ ] retrieval limits
+- [ ] fixed output budgets and limits
 - [ ] setup/index accounting policy
 - [ ] failure-row policy
 - [ ] baseline definitions
 - [ ] report schema
+- [ ] manifest fingerprint
 
 ## Required retrieval baselines
 
 At minimum:
 
-1. changed files/path signals only
-2. repository-native/basic text navigation
-3. current `review-context-v1`
+1. **path-only** — changed file paths + deterministic path signals; no repository search
+2. **basic lexical** — simple repository-native text/symbol search with the same output budget
+3. **generic structured context** — nearest/import/dependency context where reproducible, budget-capped
+4. **treatment** — current `review-context-v1`, budget-capped
 
-If an additional competitor is cheap and reproducible, add it **before** running treatment results.
+Do not let treatment win by receiving more output text.
+
+## Budget policy
+
+Freeze both:
+
+- maximum context characters (canonical comparison budget)
+- approximate token count as a reported secondary metric
+
+If a lane exceeds the character budget, deterministically truncate/rank to the frozen cap. Do not increase the treatment cap after observing misses.
+
+Setup/index time is measured separately and never exchanged for extra context budget.
+
+## Ground-truth policy
+
+The scorer must distinguish what the upstream dataset truly labels from what we infer.
+
+Preferred claim-bearing dimensions:
+
+- relevant issue-bearing file(s)
+- relevant line/span(s), when upstream provides them
+- issue context class/category, when upstream provides it
+
+If an upstream benchmark provides only semantic issue descriptions without localization, it may support later reviewer-impact evaluation but cannot be silently converted into retrieval-file ground truth by an LLM after treatment inspection.
+
+Any derived localization must be frozen independently before treatment output is observed and clearly marked `derived`, not `upstream`.
 
 ## Gate G1 — Eval freeze integrity
 
 PASS only if:
 
 - [ ] all tasks are frozen before treatment inspection
+- [ ] upstream sources are pinned immutably
+- [ ] task-selection procedure is deterministic and treatment-blind
 - [ ] task set meets diversity minimums
 - [ ] scorer does not depend on treatment output
-- [ ] baseline budgets are explicit
+- [ ] baseline budgets are explicit and equalized
 - [ ] failures stay in denominator
+- [ ] provenance distinguishes upstream vs derived ground truth
 - [ ] no private/employer data is used
 - [ ] another engineer could materialize the set from public information
+- [ ] frozen manifest fingerprint is recorded
 
 On PASS:
 
-- tag/fingerprint the frozen manifest
+- merge the freeze artifacts
 - move to Phase 2
+- only then run claim-bearing treatment
 
 On FAIL:
 
-- repair the evaluation design before running any claim-bearing treatment
+- repair the evaluation design before any claim-bearing treatment
 
 ---
 
@@ -164,7 +204,7 @@ Status: **BLOCKED BY G1**
 
 Question:
 
-> Does the review-context retrieval lane find materially more relevant context than simple baselines at acceptable precision and cost?
+> Does the review-context retrieval lane find materially more relevant context than simple/generic baselines at the same output budget and acceptable setup/runtime cost?
 
 No reviewer LLM is needed yet. First isolate retrieval quality.
 
@@ -175,7 +215,8 @@ Record separately:
 - relevant-file recall@k
 - relevant-span recall@k where ground truth permits
 - precision@k
-- characters/tokens returned
+- context characters returned
+- approximate context tokens
 - setup/index time
 - retrieval wall time
 - failures / abstentions
@@ -183,20 +224,21 @@ Record separately:
 
 ## Comparison discipline
 
-- same task set
-- same frozen commits
-- same k/budget where comparable
+- same frozen task set
+- same frozen commits/revisions
+- same output character budget
 - setup/index costs reported, not hidden
 - no best-of-N
 - no per-task hand tuning
+- no post-hoc task removal
 
 ## Gate G2 — Retrieval value
 
 ### PASS
 
-Pass if the evidence shows a useful and reasonably general trade-off versus simple baselines.
+Pass if the evidence shows a useful and reasonably general trade-off versus simple/generic baselines.
 
-A PASS does not require winning every task. It requires a defensible aggregate improvement that is not explained by massively larger context budgets.
+A PASS does not require winning every task. It requires a defensible aggregate improvement that is not explained by larger context budgets or benchmark-specific heuristics.
 
 Then:
 
@@ -210,7 +252,7 @@ One bounded repair cycle is allowed if:
 
 - failure mode is coherent and general
 - fix can be justified without task-specific branching
-- frozen tasks/ground truth remain untouched
+- frozen tasks/ground truth/budgets remain untouched
 
 After that repair, rerun the full frozen set once.
 
@@ -218,7 +260,7 @@ After that repair, rerun the full frozen set once.
 
 Kill or substantially simplify this retrieval lane if, after the bounded repair:
 
-- simple baselines match/beat it at lower complexity/cost
+- simple/generic baselines match or beat it at lower complexity/cost
 - precision is too low
 - gains are isolated to development repos/frameworks
 - setup/index cost overwhelms value
@@ -226,7 +268,7 @@ Kill or substantially simplify this retrieval lane if, after the bounded repair:
 If killed:
 
 - publish the negative result honestly
-- retain the deterministic git/review packet pieces that still have value
+- retain deterministic git/review packet pieces that still have value
 - redesign from the simplest winning baseline, not from sunk cost
 
 ---
@@ -508,10 +550,11 @@ Promotion rule:
 
 **Phase 1 only: freeze the evaluation before tuning anything.**
 
-1. source candidate public review/bug-fix tasks
-2. select at least 20 tasks across at least 5 repos and 3 language ecosystems
-3. define ground truth and inclusion/exclusion rules without treatment output
-4. define the simple baselines and equalized budgets
-5. commit the manifest, scorer, limits, failure policy, and report schema
-6. fingerprint the frozen set
-7. only after G1 PASS may any claim-bearing treatment run begin
+1. pin the upstream benchmark source/revision
+2. define a deterministic treatment-blind 20+ task slice across 5+ repos and 3+ language ecosystems
+3. define provenance-aware ground truth and inclusion/exclusion rules
+4. freeze equalized output budgets
+5. implement/freeze baseline definitions, scorer, failure policy, and report schema
+6. fingerprint the manifest
+7. get G1 freeze artifacts reviewed/green and merge them
+8. only after G1 PASS may any claim-bearing `review-context-v1` run begin

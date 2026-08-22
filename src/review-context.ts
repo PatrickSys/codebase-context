@@ -279,7 +279,11 @@ export function extractChangedIdentifiers(patch: string, limit = 10): string[] {
 function fallbackIdentifiersForPath(filePath: string): string[] {
   const withoutExtension = filePath.replace(/\.[^./]+$/, '');
   const basename = path.basename(withoutExtension);
-  const parentSegments = path.dirname(withoutExtension).split(/[\\/._-]+/).filter(Boolean).reverse();
+  const parentSegments = path
+    .dirname(withoutExtension)
+    .split(/[\\/._-]+/)
+    .filter(Boolean)
+    .reverse();
   const ordered = [basename, ...parentSegments];
   const seen = new Set<string>();
 

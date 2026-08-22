@@ -27,6 +27,18 @@ describe('review context', () => {
     ]);
   });
 
+  it('parses NUL-delimited git output without corrupting unusual paths', () => {
+    expect(parseNameStatus('M\0src/tab\tname.ts\0R100\0old\nname.ts\0new name.ts\0')).toEqual([
+      { path: 'src/tab\tname.ts', status: 'M', rawStatus: 'M' },
+      {
+        path: 'new name.ts',
+        previousPath: 'old\nname.ts',
+        status: 'R',
+        rawStatus: 'R100'
+      }
+    ]);
+  });
+
   it('counts textual changes without treating diff headers as source', () => {
     const patch = [
       'diff --git a/src/auth.ts b/src/auth.ts',
@@ -103,7 +115,11 @@ describe('review context', () => {
     });
   });
 
-  it('builds a deterministic bounded packet and keeps failed searches explicit', async () => {
+  it('fingerprints exact diff bytes, including the final newline', () => {
+    expect(fingerprintDiff('diff body\n')).not.toBe(fingerprintDiff('diff body'));
+  });
+
+  it('builds a bounded packet and keeps failed searches explicit', async () => {
     const rawDiff = [
       'diff --git a/src/auth.ts b/src/auth.ts',
       '--- a/src/auth.ts',

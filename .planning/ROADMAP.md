@@ -25,13 +25,16 @@ New ideas go to **Backlog** unless they materially change the current gate.
 
 ## Phase 0 — Review-context v1 functional contract
 
-Status: **IN PROGRESS**
+Status: **PASS — E1**
 
-Current implementation PR: `#128 feat(review): add bounded review-context packets`
+Merged implementation: PR `#128 feat(review): add bounded review-context packets`  
+Squash commit: `2c56b10ff32d588d9d660a586c0defee5a3d76d1`
 
 Question:
 
 > Can the public project reliably compile a bounded, versioned review-context packet from an exact committed git change without an LLM?
+
+Answer at E1: **yes, functionally**. This does not imply retrieval or reviewer-quality value.
 
 ### Deliverables
 
@@ -50,40 +53,37 @@ Question:
 - [x] executable-wrapper smoke test
 - [x] public review-context documentation
 - [x] autonomous product spec and gated roadmap
-- [ ] CI quality gate green
-- [ ] CI functional test gate green
-- [ ] squash merge to `master`
+- [x] CI quality gate green
+- [x] CI functional test gate green
+- [x] squash merge to `master`
 
 ### Gate G0 — Functional publishability
 
-PASS only if all are true:
+PASS evidence:
 
-- [ ] `pnpm lint` has zero errors
-- [ ] `pnpm format:check` passes
-- [ ] `pnpm type-check` passes
-- [ ] `pnpm build` passes
-- [ ] full test suite passes
-- [ ] executable wrapper smoke passes
-- [ ] PR remains mergeable
-- [ ] docs describe actual behavior and limitations
-- [ ] no performance/reviewer-quality claim has been added
+- [x] `pnpm lint` has zero errors
+- [x] `pnpm format:check` passes
+- [x] `pnpm type-check` passes
+- [x] `pnpm build` passes
+- [x] full test suite passes
+- [x] executable wrapper smoke passes
+- [x] PR was mergeable
+- [x] docs describe actual behavior and limitations
+- [x] no performance/reviewer-quality claim was added
 
-On PASS:
+CI evidence: workflow run `32585647263` — Quality Checks **success**, Functional Tests **success**.
 
-- squash merge PR #128
-- evidence level becomes **E1** for the review-context surface
-- move immediately to Phase 1
+Result:
 
-On FAIL:
-
-- fix only the failing G0 requirement
-- do not add features
+- Gate G0: **PASS**
+- Evidence level: **E1**
+- Phase 1 is now the only active flagship phase
 
 ---
 
 # Phase 1 — Freeze the first honest review-context evaluation
 
-Status: **BLOCKED BY G0**
+Status: **ACTIVE**
 
 Question:
 
@@ -506,14 +506,12 @@ Promotion rule:
 
 # Immediate Next Action
 
-**Do not start Phase 1 yet.**
+**Phase 1 only: freeze the evaluation before tuning anything.**
 
-Finish G0 on PR #128:
-
-1. make `src/review-context.ts` exactly Prettier-compliant
-2. get quality checks green
-3. get full functional tests green, including the executable wrapper smoke
-4. remove any temporary verification-only workflow/artifact before merge
-5. squash merge PR #128
-6. mark G0 PASS
-7. only then freeze the Phase 1 evaluation
+1. source candidate public review/bug-fix tasks
+2. select at least 20 tasks across at least 5 repos and 3 language ecosystems
+3. define ground truth and inclusion/exclusion rules without treatment output
+4. define the simple baselines and equalized budgets
+5. commit the manifest, scorer, limits, failure policy, and report schema
+6. fingerprint the frozen set
+7. only after G1 PASS may any claim-bearing treatment run begin

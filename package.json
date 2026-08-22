@@ -45,7 +45,7 @@
   },
   "bin": {
     "codebase-context": "./dist/index.js",
-    "codebase-context-review": "./dist/review-cli.js"
+    "codebase-context-review": "./dist/review-bin.js"
   },
   "files": [
     "dist",

@@ -1,0 +1,27 @@
+name: Review Context Format Output
+
+on:
+  push:
+    branches: [agent/review-context-v1]
+    paths:
+      - src/review-context.ts
+      - .github/workflows/review-context-format-output.yml
+
+permissions:
+  contents: read
+
+jobs:
+  format-output:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Print canonical file
+        run: pnpm exec prettier src/review-context.ts

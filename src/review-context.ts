@@ -314,9 +314,8 @@ export function buildReviewQueries(files: ChangedFileContext[], maxQueries = 8):
   const seen = new Set<string>();
 
   for (const file of selected) {
-    const identifiers = (file.identifiers.length > 0
-      ? file.identifiers
-      : fallbackIdentifiersForPath(file.path)
+    const identifiers = (
+      file.identifiers.length > 0 ? file.identifiers : fallbackIdentifiersForPath(file.path)
     ).slice(0, 3);
     if (identifiers.length === 0) continue;
 

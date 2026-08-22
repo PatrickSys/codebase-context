@@ -83,7 +83,7 @@ Result:
 
 # Phase 1 — Freeze the first honest review-context evaluation
 
-Status: **ACTIVE**
+Status: **ACTIVE — SOURCE AUDIT**
 
 Question:
 
@@ -95,11 +95,13 @@ The phase exists to freeze evidence **before** retrieval tuning. Generic context
 
 Prefer externally curated public benchmarks over owner/agent hand-labeling.
 
-Primary source candidate: **SWE-PRBench** because it is multi-repository, multi-language, review-specific, and explicitly studies contextual/latent issues plus context-size effects.
+Primary source candidate under audit: **SWE-PRBench** because it is multi-repository, multi-language, review-specific, and explicitly studies contextual/latent issues plus context-size effects.
 
-Secondary source candidates may be used only when they add a ground-truth dimension the primary source cannot provide cleanly (for example exact localization). Candidates identified before treatment inspection include Code Review Bench and AACR-Bench.
+Secondary source candidates identified before treatment inspection: Code Review Bench and AACR-Bench. They may be used only when they add a ground-truth dimension the primary source cannot provide cleanly.
 
-Pin every upstream source by immutable commit/revision. Do not consume moving `main` or mutable hosted dataset revisions during claim-bearing runs.
+No source is accepted until its public schema, immutable revision, licensing/reuse constraints, repository/commit reproducibility, and localization ground truth have been verified.
+
+Pin every accepted upstream source by immutable commit/revision. Do not consume moving `main` or mutable hosted dataset revisions during claim-bearing runs.
 
 ## Required frozen slice
 
@@ -548,13 +550,14 @@ Promotion rule:
 
 # Immediate Next Action
 
-**Phase 1 only: freeze the evaluation before tuning anything.**
+**Phase 1 only: complete the source audit, then freeze.**
 
-1. pin the upstream benchmark source/revision
-2. define a deterministic treatment-blind 20+ task slice across 5+ repos and 3+ language ecosystems
-3. define provenance-aware ground truth and inclusion/exclusion rules
-4. freeze equalized output budgets
-5. implement/freeze baseline definitions, scorer, failure policy, and report schema
-6. fingerprint the manifest
-7. get G1 freeze artifacts reviewed/green and merge them
-8. only after G1 PASS may any claim-bearing `review-context-v1` run begin
+1. verify benchmark schema, licensing, immutable revision, and reproducible repo/commit identity
+2. accept/reject candidate sources before treatment inspection
+3. define deterministic treatment-blind 20+ task slice across 5+ repos and 3+ language ecosystems
+4. define provenance-aware ground truth and inclusion/exclusion rules
+5. freeze equalized output budgets
+6. implement/freeze baseline definitions, scorer, failure policy, and report schema
+7. fingerprint the manifest
+8. get G1 freeze artifacts reviewed/green and merge them
+9. only after G1 PASS may any claim-bearing `review-context-v1` run begin

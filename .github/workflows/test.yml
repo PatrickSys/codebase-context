@@ -20,6 +20,12 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+
+      - name: Print review-context Prettier diff
+        run: |
+          pnpm exec prettier --write src/review-context.ts
+          git diff -- src/review-context.ts
+          git checkout -- src/review-context.ts
       
       - name: Lint & Format
         run: |

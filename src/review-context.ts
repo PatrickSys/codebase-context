@@ -169,9 +169,42 @@ export interface BuildReviewContextOptions {
   loadConventions?: () => Promise<PatternResponse | undefined>;
 }
 
-export function parseNameStatus(output: string): ChangedFileDescriptor[] {
-  const files: ChangedFileDescriptor[] = [];
+function descriptorFromStatus(rawStatus: string, filePath: string): ChangedFileDescriptor {
+  return {
+    path: filePath,
+    status: rawStatus.charAt(0),
+    rawStatus
+  };
+}
 
+export function parseNameStatus(output: string): ChangedFileDescriptor[] {
+  if (output.includes('\0')) {
+    const fields = output.split('\0');
+    const files: ChangedFileDescriptor[] = [];
+    let index = 0;
+
+    while (index < fields.length) {
+      const rawStatus = fields[index++];
+      if (!rawStatus) continue;
+
+      const status = rawStatus.charAt(0);
+      if (status === 'R' || status === 'C') {
+        const previousPath = fields[index++];
+        const currentPath = fields[index++];
+        if (previousPath && currentPath) {
+          files.push({ path: currentPath, previousPath, status, rawStatus });
+        }
+        continue;
+      }
+
+      const filePath = fields[index++];
+      if (filePath) files.push(descriptorFromStatus(rawStatus, filePath));
+    }
+
+    return files;
+  }
+
+  const files: ChangedFileDescriptor[] = [];
   for (const rawLine of output.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
@@ -191,7 +224,7 @@ export function parseNameStatus(output: string): ChangedFileDescriptor[] {
     }
 
     const filePath = parts[1];
-    if (filePath) files.push({ path: filePath, status, rawStatus });
+    if (filePath) files.push(descriptorFromStatus(rawStatus, filePath));
   }
 
   return files;

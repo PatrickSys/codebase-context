@@ -9,9 +9,11 @@ Primary execution plan: `.planning/ROADMAP.md`
 
 Build a public, local-first, vendor-neutral context system that can answer one hard question with evidence:
 
-> Does bounded repository context materially improve an AI reviewer's ability to understand a change and find real issues, at acceptable precision, latency, and context cost?
+> Does **selected, bounded repository context** materially improve an AI reviewer's ability to understand a change and find real issues at a fixed context budget, acceptable precision, latency, and setup cost?
 
 The project is not successful because it has many analyzers, tools, workflows, or agent integrations. It is successful when an external engineer can reproduce the system, inspect its decisions, run the evidence harness, and see honest results.
+
+The working thesis is **not** "more context is better." Generic context expansion is treated as a baseline and may be harmful. The product must earn its complexity by selecting or compressing context better than simpler alternatives under an equalized budget.
 
 ## 2. Product Wedge
 
@@ -89,6 +91,7 @@ Until evidence passes the relevant gates, this project is **not**:
 - a proven AI reviewer
 - a replacement for CodeRabbit, Greptile, Copilot review, or similar products
 - a claim that semantic/vector retrieval improves review quality
+- a claim that larger repository context improves review quality
 - a cloud platform
 - an autonomous pull-request commenter
 - a dashboard product
@@ -139,7 +142,7 @@ Evidence:
 - frozen public task set before algorithm tuning
 - multiple repositories
 - multiple languages/frameworks
-- fixed limits
+- fixed/equalized context budgets
 - baseline and treatment run under identical scoring
 - relevant-file/span retrieval metrics reported with failures
 
@@ -182,17 +185,18 @@ A small deterministic signal extractor can produce useful queries from a diff wi
 
 Kill/fix trigger:
 
-- relevant-file/span coverage is materially worse than simpler path/symbol baselines
+- relevant-file/span coverage is materially worse than simpler path/symbol baselines at the same output budget
 
-### H2 — Bounded repository context can outperform raw diff/repository navigation alone
+### H2 — Selected bounded context can beat generic context expansion
 
-Adding a bounded `review-context-v1` packet improves review outcomes without unacceptable false positives or context cost.
+At a fixed context budget, `review-context-v1` selects context that is more review-relevant than simple changed-file/path/symbol baselines and generic structured-context expansion.
 
 Kill/fix trigger:
 
-- no meaningful improvement across a frozen multi-repo review set
-- improvement is explained only by substantially larger token budgets
+- no meaningful retrieval improvement across the frozen multi-repo set
+- gains require materially larger context budgets
 - gains disappear outside the development repositories
+- generic/simple context matches or beats the system at lower setup/runtime cost
 
 ### H3 — The existing `codebase-context` retrieval stack is good enough to support the wedge
 
@@ -304,12 +308,22 @@ Before changing retrieval/ranking for a claim-bearing evaluation:
 
 Use the cheapest meaningful baselines first:
 
-1. raw diff only
+1. changed files/path signals only
 2. raw diff + repository-native/basic text tools
 3. simple changed-file/path/symbol context
-4. current `codebase-context` retrieval packet
+4. generic structured repository context where reproducible
+5. current `codebase-context` retrieval packet
 
 Do not claim value against an intentionally weak baseline.
+
+### Budget equality
+
+For claim-bearing context comparisons:
+
+- compare under the same maximum output characters/tokens whenever possible
+- report any setup/index cost separately rather than hiding it in a context budget
+- if a baseline cannot exactly match the treatment budget, record the difference and prefer the more conservative comparison
+- never let treatment win merely by returning more repository text
 
 ### Failure accounting
 

@@ -1,11 +1,10 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type {
-  DecisionCard,
   PatternResponse,
   SearchQuality,
-  SearchResultItem,
-  SearchResponse
+  SearchResponse,
+  SearchResultItem
 } from './tools/types.js';
 
 const IDENTIFIER_RE = /[A-Za-z_$][A-Za-z0-9_$]*/g;
@@ -116,7 +115,7 @@ export interface ReviewSearchResult {
   query: string;
   sourceFiles: string[];
   searchQuality?: SearchQuality;
-  preflight?: DecisionCard | SearchResponse['preflight'];
+  preflight?: SearchResponse['preflight'];
   results: ReviewRelatedResult[];
   error?: string;
 }
@@ -192,9 +191,7 @@ export function parseNameStatus(output: string): ChangedFileDescriptor[] {
     }
 
     const filePath = parts[1];
-    if (filePath) {
-      files.push({ path: filePath, status, rawStatus });
-    }
+    if (filePath) files.push({ path: filePath, status, rawStatus });
   }
 
   return files;
@@ -226,8 +223,7 @@ export function extractChangedIdentifiers(patch: string, limit = 10): string[] {
     const isDeletion = line.startsWith('-') && !line.startsWith('---');
     if (!isAddition && !isDeletion) continue;
 
-    const source = line.slice(1);
-    for (const match of source.matchAll(IDENTIFIER_RE)) {
+    for (const match of line.slice(1).matchAll(IDENTIFIER_RE)) {
       const identifier = match[0];
       if (identifier.length < 3) continue;
       if (IDENTIFIER_STOPWORDS.has(identifier.toLowerCase())) continue;
@@ -248,30 +244,31 @@ export function extractChangedIdentifiers(patch: string, limit = 10): string[] {
 }
 
 function fallbackIdentifiersForPath(filePath: string): string[] {
-  const withoutExtension = filePath.replace(/\.[^.\/]+$/, '');
-  const segments = withoutExtension.split(/[\\/._-]+/).filter(Boolean);
+  const withoutExtension = filePath.replace(/\.[^./]+$/, '');
   const basename = path.basename(withoutExtension);
-  const ordered = [basename, ...segments.reverse()];
+  const parentSegments = path.dirname(withoutExtension).split(/[\\/._-]+/).filter(Boolean).reverse();
+  const ordered = [basename, ...parentSegments];
   const seen = new Set<string>();
 
   return ordered.filter((part) => {
     const normalized = part.toLowerCase();
-    if (part.length < 3 || IDENTIFIER_STOPWORDS.has(normalized) || seen.has(normalized)) return false;
+    if (part.length < 3 || IDENTIFIER_STOPWORDS.has(normalized) || seen.has(normalized)) {
+      return false;
+    }
     seen.add(normalized);
     return true;
   });
 }
 
-export function buildReviewQueries(
-  files: ChangedFileContext[],
-  maxQueries = 8
-): ReviewQuery[] {
+export function buildReviewQueries(files: ChangedFileContext[], maxQueries = 8): ReviewQuery[] {
   const selected = [...files]
     .sort((a, b) => {
       const identifierDelta = b.identifiers.length - a.identifiers.length;
       if (identifierDelta !== 0) return identifierDelta;
+
       const changeDelta = b.additions + b.deletions - (a.additions + a.deletions);
       if (changeDelta !== 0) return changeDelta;
+
       return a.path.localeCompare(b.path);
     })
     .slice(0, Math.max(0, maxQueries));
@@ -307,6 +304,8 @@ export function fingerprintDiff(rawDiff: string): string {
 }
 
 function compactSearchResult(result: SearchResultItem): ReviewRelatedResult {
+  const importedByCount = result.relationships?.importedByCount ?? result.importedByCount;
+
   return {
     file: result.file,
     summary: result.summary,
@@ -319,11 +318,7 @@ function compactSearchResult(result: SearchResultItem): ReviewRelatedResult {
     ...(result.scope ? { scope: result.scope } : {}),
     ...(result.signaturePreview ? { signaturePreview: result.signaturePreview } : {}),
     ...(result.snippet ? { snippet: result.snippet.slice(0, 1200) } : {}),
-    ...(result.relationships?.importedByCount != null
-      ? { importedByCount: result.relationships.importedByCount }
-      : result.importedByCount != null
-        ? { importedByCount: result.importedByCount }
-        : {}),
+    ...(importedByCount != null ? { importedByCount } : {}),
     ...(result.relationships?.hasTests != null ? { hasTests: result.relationships.hasTests } : {})
   };
 }
@@ -339,6 +334,7 @@ export async function buildReviewContextPacket(
   const changedFiles = options.changedFiles.map((file) => {
     const patch = options.patchesByPath.get(file.path) ?? '';
     if (!patch) warnings.push(`No textual patch captured for ${file.path}`);
+
     const stats = inspectPatch(patch);
     return {
       ...file,

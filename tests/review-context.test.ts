@@ -97,9 +97,9 @@ describe('review context', () => {
     ]);
 
     expect(buildReviewQueries(files, 2)[1]).toEqual({
-      query: 'request-guard http src',
+      query: 'request-guard guard request',
       sourceFiles: ['src/http/request-guard.ts'],
-      identifiers: ['request-guard', 'http', 'src']
+      identifiers: ['request-guard', 'guard', 'request']
     });
   });
 

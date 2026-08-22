@@ -2,11 +2,11 @@
 
 `codebase-context-review` turns a committed git diff into a bounded review-context packet.
 
-It is deliberately **not** an AI reviewer. It does not call an LLM, decide whether code is correct, or post comments. Its job is narrower and testable: compile the changed surface, stable diff signals, related codebase context, and current conventions into one reproducible input for a reviewer or evaluation harness.
+It is deliberately **not** an AI reviewer. It does not call an LLM, decide whether code is correct, or post comments. Its job is narrower and testable: compile the changed surface, stable diff signals, related codebase context, and current conventions into a versioned input for a reviewer or evaluation harness.
 
 ## Why this exists
 
-A PR reviewer needs more than the patch, but dumping an entire repository into a model is expensive and hard to reproduce. The review-context path creates a deterministic boundary between:
+A PR reviewer needs more than the patch, but dumping an entire repository into a model is expensive and hard to reproduce. The review-context path creates a clean boundary between:
 
 1. **context compilation** — git + local repository analysis
 2. **review reasoning** — any model or human reviewer consuming the packet
@@ -20,7 +20,7 @@ Build and run from the repository:
 
 ```bash
 pnpm build
-node dist/review-cli.js --base origin/main --head HEAD
+node dist/review-bin.js --base origin/main --head HEAD
 ```
 
 After package publication, the package also exposes:
@@ -42,6 +42,8 @@ npx codebase-context-review \
 
 The command uses merge-base diff semantics (`base...head`), which matches the normal pull-request question: what changed on this branch since it diverged from the base branch?
 
+`review-context-v1` requires `--head` to resolve to the checked-out `HEAD` and requires a clean working tree. The diff itself is then generated from the already-resolved commit SHAs rather than mutable symbolic refs.
+
 ## Packet contract
 
 The current schema is `review-context-v1`.
@@ -49,8 +51,9 @@ The current schema is `review-context-v1`.
 The packet contains:
 
 - exact resolved base/head commit SHAs
-- SHA-256 fingerprint of the raw git diff
+- SHA-256 fingerprint of Git's exact raw diff output
 - changed file status, additions/deletions, rename source, and binary flag
+- NUL-safe filename parsing for unusual valid git paths
 - identifiers extracted deterministically from changed lines
 - bounded search queries derived from those diff signals
 - bounded related-context results from the existing `search_codebase` engine
@@ -59,6 +62,8 @@ The packet contains:
 - explicit warnings when context could not be produced
 
 Absolute local repository paths are not part of the packet contract.
+
+The git envelope, identifier extraction, bounds, and query derivation are deterministic. Related-context ranking is only reproducible under the same `codebase-context` version, index contents, embedding/reranking configuration, and runtime dependencies; benchmark manifests should freeze those inputs rather than pretending the entire retrieval stack is environment-independent.
 
 ## Bounds
 
@@ -75,13 +80,15 @@ These are explicit because an unbounded context compiler is not useful evidence.
 
 ## Index behavior
 
-If the repository has no existing codebase-context index, the command indexes it before searching. Pass `--no-index` to fail instead, which is useful in controlled benchmark runs where setup/index cost must be measured separately.
+By default, the command creates an index when one is missing and runs an incremental refresh when one already exists. This keeps normal use aligned with the checked-out clean `HEAD`.
+
+Pass `--no-index` to prohibit both creation and refresh. It fails if no index exists. This is useful in controlled benchmark runs where setup/index work is captured separately; the caller is then responsible for proving that the supplied index matches the frozen source state.
 
 The command is local-first. It invokes git and the existing local index/search pipeline; it does not introduce an LLM or external review API.
 
 ## What this proves
 
-Shipping this command proves only that the project can compile a deterministic review-oriented context packet from a real git range.
+Shipping this command proves only that the project can compile a bounded, versioned review-oriented context packet from an exact committed git range.
 
 It **does not** prove that the packet improves review quality, catches more bugs, reduces false positives, or beats another context strategy. Those are benchmark claims and remain blocked until measured.
 
@@ -102,8 +109,9 @@ The existing ContextBench protocol already follows the same evidence discipline 
 ## Current limitations
 
 - Only committed git refs are supported in v1; working-tree/staged review is intentionally deferred.
+- `--head` must be the checked-out commit and the worktree must be clean.
 - Query generation is lexical and deterministic. It extracts identifiers from changed lines and falls back to path signals; it is not AST-aware yet.
-- The command searches the current repository index. A stale index can therefore produce stale related context; search-quality/preflight output should be preserved by consumers.
+- `--no-index` deliberately skips freshness work, so benchmark callers must attest the index/source match themselves.
 - Large diffs are bounded by the CLI git-buffer limit and fail rather than silently truncating the raw fingerprint input.
 - Binary files are recorded but do not generate identifier-based queries.
 - The packet is context, not a verdict. A consumer should never turn `preflight.ready` into "the change is correct."

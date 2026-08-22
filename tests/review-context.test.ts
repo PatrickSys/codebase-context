@@ -57,7 +57,7 @@ describe('review context', () => {
       '+const SessionService = createSessionService();'
     ].join('\n');
 
-    const identifiers = extractChangedIdentifiers(patch, 5);
+    const identifiers = extractChangedIdentifiers(patch, 8);
 
     expect(identifiers).toContain('sessionService');
     expect(identifiers).toContain('refreshToken');

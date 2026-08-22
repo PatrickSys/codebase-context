@@ -44,7 +44,8 @@
     }
   },
   "bin": {
-    "codebase-context": "./dist/index.js"
+    "codebase-context": "./dist/index.js",
+    "codebase-context-review": "./dist/review-cli.js"
   },
   "files": [
     "dist",
@@ -54,6 +55,7 @@
     "docs/cli.md",
     "docs/capabilities.md",
     "docs/client-setup.md",
+    "docs/review-context.md",
     "templates"
   ],
   "packageManager": "pnpm@10.27.0",

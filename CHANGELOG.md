@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.4.0](https://github.com/PatrickSys/codebase-context/compare/v2.3.0...v2.4.0) (2026-08-22)
+
+
+### Features
+
+* **analyzers:** recognize NestJS projects ([a8e354e](https://github.com/PatrickSys/codebase-context/commit/a8e354e23826df3edbf4ae4dd50d6c494559d7f9))
+* **analyzers:** Recognize NestJS projects ([754130d](https://github.com/PatrickSys/codebase-context/commit/754130dda398b463024de7ea6668c4c849e40d2e))
+* **indexing:** Make chunk limits configurable per project ([1612414](https://github.com/PatrickSys/codebase-context/commit/161241480e08ff6e9794f91da1cff28a541edd3b))
+* **review:** add bounded review-context packets ([2c56b10](https://github.com/PatrickSys/codebase-context/commit/2c56b10ff32d588d9d660a586c0defee5a3d76d1))
+
+
+### Bug Fixes
+
+* **analyzers:** Prefer NestJS provider analysis ([6093099](https://github.com/PatrickSys/codebase-context/commit/6093099e02e39d2babff58d26a4f0fff634e0ce5))
+* **analyzers:** Recognize current React and Next patterns ([9ed8577](https://github.com/PatrickSys/codebase-context/commit/9ed8577cc930255debaba335b989295c38138b87))
+* **analyzers:** Tie React use metadata to imports ([0154f45](https://github.com/PatrickSys/codebase-context/commit/0154f45d0fd5053c6215f6d540b557bc7f2ccefd))
+* **eval:** align ContextBench harness evidence contracts ([4513979](https://github.com/PatrickSys/codebase-context/commit/45139796f4e0cc51854de906b0b40b66beb8b4e3))
+* **eval:** deduplicate blocked ContextBench rows ([99c9753](https://github.com/PatrickSys/codebase-context/commit/99c975359ef1af300ae4dbe4f430b734802bcdb9))
+* **eval:** deduplicate blocked ContextBench rows ([c41e844](https://github.com/PatrickSys/codebase-context/commit/c41e844b6d85318ff9b30b966a84147430e6c7ad))
+* **eval:** harden ContextBench fixture verification ([bed5064](https://github.com/PatrickSys/codebase-context/commit/bed5064c6177f202b24f9564b083bf68068641ba))
+* **eval:** harden ContextBench manifest checks ([04a6cfb](https://github.com/PatrickSys/codebase-context/commit/04a6cfbc2a66953420645173df3e6e5d19cd50bf))
+* **eval:** preserve ContextBench executor model provenance ([867ac70](https://github.com/PatrickSys/codebase-context/commit/867ac700d98ad141ee180f6353784f9dab1f26fc))
+* **format:** format ContextBench harness sources ([b2fa208](https://github.com/PatrickSys/codebase-context/commit/b2fa208a4df0579bfdc41d8ffe2a74b2fae6e93e))
+* **git:** scope local artifact ignores ([ef42e53](https://github.com/PatrickSys/codebase-context/commit/ef42e53b99f1deed3a7e2107d8124b554b890860))
+* **reranker:** Score passages with the supported tokenizer pair API ([55b97b9](https://github.com/PatrickSys/codebase-context/commit/55b97b9c2261278d3c92ee1f3000d0a80920432d))
+* **test:** harden ContextBench schema cleanup ([c5a74af](https://github.com/PatrickSys/codebase-context/commit/c5a74afb64c65b255a363e31974fa7be6d58242d))
+* **test:** isolate ContextBench baseline Git env ([6aed9d1](https://github.com/PatrickSys/codebase-context/commit/6aed9d1a93f540f0d4a17142ab4527769b97cecb))
+* **test:** isolate ContextBench git fixtures ([62d3110](https://github.com/PatrickSys/codebase-context/commit/62d3110503b4eca3e4ff65a8403bd0644861d61f))
+* **test:** relax slow Windows integration timeouts ([5675ebd](https://github.com/PatrickSys/codebase-context/commit/5675ebdd41f2af784d86c1ec3e25c9e756f80d6b))
+* **test:** relax slow Windows search timeouts ([cad646d](https://github.com/PatrickSys/codebase-context/commit/cad646d9d940c00ab96baa0ca806070722cced32))
+* **test:** relax zombie guard timeout jitter ([5a5bf68](https://github.com/PatrickSys/codebase-context/commit/5a5bf68302745f90b1dbdfba3ab06cfff961d4d5))
+* **test:** tolerate ContextBench runner cleanup races ([c027703](https://github.com/PatrickSys/codebase-context/commit/c027703092a81c90b5c19371873858e5a87ec00c))
+* **test:** tolerate ContextBench schema cleanup races ([a155d56](https://github.com/PatrickSys/codebase-context/commit/a155d5646dbb283ffac1e71eef7fb26b8a59fa40))
+* **test:** tolerate ContextBench temp cleanup races ([0360cb9](https://github.com/PatrickSys/codebase-context/commit/0360cb97d99337438e1922bf52a76833b9d20fd6))
+
 ## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-04-30)
 
 

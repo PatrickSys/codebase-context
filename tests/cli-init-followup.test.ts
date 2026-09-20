@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'node:path';
 vi.mock('child_process', () => ({ execFileSync: vi.fn() }));
 vi.mock('node:fs/promises', () => ({ readFile: vi.fn(), writeFile: vi.fn() }));
 import { execFileSync } from 'child_process';
@@ -15,45 +16,50 @@ const execute = vi.mocked(execFileSync),
 beforeEach(() => vi.resetAllMocks());
 describe('returning-user configuration boundaries', () => {
   it('preserves Codex repo A when repo B would overwrite its global registration', () => {
+    const repoA = path.resolve('/repo A');
+    const repoB = path.resolve('/repo B');
     execute.mockReturnValue(
       JSON.stringify([
         {
           name: 'codebase-context',
-          transport: { type: 'stdio', command: 'node', args: ['/server.js', '/repo A'] }
+          enabled: true,
+          transport: { type: 'stdio', command: 'node', args: ['/server.js', repoA] }
         }
       ])
     );
-    const desired = generateMcpConfig('codex', '/repo B', 'stdio', {
+    const desired = generateMcpConfig('codex', repoB, 'stdio', {
       command: 'node',
       args: ['/server.js']
     });
     if (desired.kind !== 'command') throw Error('command expected');
-    expect(_runMcpRegistration(desired)).toBe(false);
+    expect(_runMcpRegistration(desired)).toBe('refused');
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith('codex', ['mcp', 'list', '--json'], { encoding: 'utf8' });
   });
   it('keeps an identical Codex registration without rewriting it', () => {
+    const repoA = path.resolve('/repo A');
     execute.mockReturnValue(
       JSON.stringify([
         {
           name: 'codebase-context',
-          transport: { type: 'stdio', command: 'node', args: ['/server.js', '/repo A'] }
+          enabled: true,
+          transport: { type: 'stdio', command: 'node', args: ['/server.js', repoA] }
         }
       ])
     );
-    const desired = generateMcpConfig('codex', '/repo A', 'stdio', {
+    const desired = generateMcpConfig('codex', repoA, 'stdio', {
       command: 'node',
       args: ['/server.js']
     });
     if (desired.kind !== 'command') throw Error('command expected');
-    expect(_runMcpRegistration(desired)).toBe(true);
+    expect(_runMcpRegistration(desired)).toBe('reused');
     expect(execute).toHaveBeenCalledTimes(1);
   });
   it('adds an absent Codex registration after successful inspection', () => {
     execute.mockReturnValue('[]');
     const desired = generateMcpConfig('codex', '/repo A');
     if (desired.kind !== 'command') throw Error('command expected');
-    expect(_runMcpRegistration(desired)).toBe(true);
+    expect(_runMcpRegistration(desired)).toBe('registered');
     expect(execute).toHaveBeenLastCalledWith('codex', desired.args, { stdio: 'inherit' });
   });
   it('does not write if Codex inspection fails', () => {
@@ -62,7 +68,7 @@ describe('returning-user configuration boundaries', () => {
     });
     const desired = generateMcpConfig('codex', '/repo A');
     if (desired.kind !== 'command') throw Error('command expected');
-    expect(_runMcpRegistration(desired)).toBe(false);
+    expect(_runMcpRegistration(desired)).toBe('failed');
     expect(execute).toHaveBeenCalledTimes(1);
   });
   for (const content of ['{ invalid', '[]', '{"mcpServers":[]}'])

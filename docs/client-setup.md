@@ -38,6 +38,15 @@ intact. Customized or malformed blocks are preserved for manual review; they
 are not silently treated as current. Unreadable instruction/config files and
 malformed JSON configurations are refused rather than replaced.
 
+A refused, failed, or disabled registration is an incomplete setup. The wizard
+preserves the existing connection and does not enable or repoint it. Writing
+agent instructions is a separate choice and does not make that connection
+available. Incomplete setup exits with status 1 and prints the next action
+instead of the normal connection steps. For Codex, use an isolated `CODEX_HOME` for another repository or
+deliberately review your existing registration before trying again. Reopening
+repo A or changing the working directory to repo B does not retarget a
+user-level entry that explicitly names repo A.
+
 The wizard previews shell-quoted commands. Windows previews target PowerShell,
 not cmd.exe. Automatic Windows executable/shim resolution still needs validation
 in the installed desktop client; Linux argument-array execution does not prove it.

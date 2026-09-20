@@ -43,24 +43,25 @@ export type McpConfigResult =
 
 type CommandMcpConfig = Extract<McpConfigResult, { kind: 'command' }>;
 
+export type McpRegistrationStatus = 'registered' | 'reused' | 'disabled' | 'refused' | 'failed';
+type IncompleteSetupStatus = 'disabled' | 'refused' | 'failed' | 'not-applied';
+
 type JsonObject = Record<string, unknown>;
 
-/** Execute a confirmed CLI registration using the client executable. */
-export function _runMcpRegistration(result: CommandMcpConfig): boolean {
+/** Execute a confirmed CLI registration and report the effective state. */
+export function _runMcpRegistration(result: CommandMcpConfig): McpRegistrationStatus {
   try {
     if (result.command === 'codex') {
       // The CLI writes one user-level entry. Never silently repoint another repo.
       const entries: unknown = JSON.parse(
         execFileSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8' })
       );
-      if (!Array.isArray(entries)) throw new Error('Cannot inspect existing Codex registrations.');
+      if (!Array.isArray(entries)) return 'failed';
       const current: unknown = entries.find(
         (entry: unknown) => isJsonObject(entry) && entry.name === 'codebase-context'
       );
       if (current !== undefined) {
-        if (!isJsonObject(current) || !isJsonObject(current.transport)) {
-          throw new Error('Cannot inspect the existing Codex transport.');
-        }
+        if (!isJsonObject(current) || !isJsonObject(current.transport)) return 'failed';
         const urlIndex = result.args.indexOf('--url');
         const commandIndex = result.args.indexOf('--') + 1;
         const identical =
@@ -71,18 +72,59 @@ export function _runMcpRegistration(result: CommandMcpConfig): boolean {
               current.transport.command === result.args[commandIndex] &&
               JSON.stringify(current.transport.args) ===
                 JSON.stringify(result.args.slice(commandIndex + 1));
-        if (identical) return true;
-        console.error(
-          'Existing Codex codebase-context entry differs; preserved it. Use an isolated CODEX_HOME or review trusted project configuration before configuring another repository.'
-        );
-        return false;
+        if (!identical) return 'refused';
+        if (current.enabled === false) return 'disabled';
+        return current.enabled === true ? 'reused' : 'failed';
       }
     }
     execFileSync(result.command, result.args, { stdio: 'inherit' });
-    return true;
+    return 'registered';
   } catch {
-    return false;
+    return 'failed';
   }
+}
+
+function reportIncompleteSetup(
+  client: Client,
+  status: IncompleteSetupStatus,
+  mcpResult: McpConfigResult
+): void {
+  let state: string;
+  let next: string;
+
+  if (client === 'codex' && status === 'disabled') {
+    state =
+      'the matching registration is disabled and was preserved; this repository is not connected.';
+    next =
+      'Enable the existing codebase-context entry intentionally in Codex, then reopen this repository.';
+  } else if (client === 'codex' && status === 'refused') {
+    state = 'the existing registration was preserved; this repository was not registered.';
+    next =
+      'Select a separate CODEX_HOME for this repository, then rerun init; the existing entry remains unchanged.';
+  } else if (status === 'not-applied') {
+    state = 'MCP configuration was not applied, so this setup did not verify a client connection.';
+    next =
+      mcpResult.kind === 'command'
+        ? `Rerun init and approve registration, or review and run ${_formatCommand(mcpResult.command, mcpResult.args)} manually.`
+        : `Rerun init and approve the MCP config, or apply the previewed configuration at ${mcpResult.path}.`;
+  } else if (status === 'failed' && client === 'codex') {
+    state =
+      'Codex registration could not be inspected or applied; this setup did not verify a usable connection.';
+    next = 'Run `codex mcp list`, resolve the Codex CLI/configuration issue, then rerun init.';
+  } else if (status === 'failed' && mcpResult.kind === 'command') {
+    state = `the ${client} registration command did not complete; this setup did not verify a client connection.`;
+    next = `Review and run ${_formatCommand(mcpResult.command, mcpResult.args)} manually, then reopen this repository.`;
+  } else if (mcpResult.kind === 'file') {
+    state = `the MCP configuration file was not written; this setup did not verify a client connection.`;
+    next = `Inspect ${mcpResult.path} for a partial write, then rerun init after resolving the file error.`;
+  } else {
+    state =
+      'the client registration was not confirmed; this setup did not verify a client connection.';
+    next = `Review and run ${_formatCommand(mcpResult.command, mcpResult.args)} manually, then reopen this repository.`;
+  }
+
+  console.error(`\nSetup incomplete: ${state}\nNext action: ${next}\n`);
+  process.exitCode = 1;
 }
 
 /**
@@ -487,29 +529,32 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
 
   // Execute confirmed actions
 
+  let setupStatus: McpRegistrationStatus | 'not-applied' = 'not-applied';
   if (applyMcp) {
     if (mcpResult.kind === 'file') {
-      const dir = path.dirname(mcpResult.path);
-      if (dir && dir !== '.') {
-        await fs.mkdir(dir, { recursive: true });
-      }
-      const mergedConfig =
-        client === 'cursor' || client === 'opencode'
-          ? await _buildMergedMcpContent(mcpResult.path, mcpResult.content, client)
-          : { content: mcpResult.content, mergedFromExisting: false };
-      await fs.writeFile(mcpResult.path, mergedConfig.content, 'utf8');
-      if (mergedConfig.mergedFromExisting) {
-        console.log(`Merged: ${mcpResult.path} (existing entries preserved)`);
-      }
-      console.log(`Written: ${mcpResult.path}`);
-    } else {
-      if (!_runMcpRegistration(mcpResult)) {
-        console.log(
-          mcpResult.command === 'codex'
-            ? 'Codex registration was not changed. Inspect existing user configuration; use isolated CODEX_HOME for this candidate trial. Do not overwrite another repository entry.'
-            : `Could not run '${mcpResult.command}' automatically. Review and run this command in ${process.platform === 'win32' ? 'PowerShell' : 'a POSIX shell'}:\n  ${_formatCommand(mcpResult.command, mcpResult.args)}`
+      try {
+        const dir = path.dirname(mcpResult.path);
+        if (dir && dir !== '.') {
+          await fs.mkdir(dir, { recursive: true });
+        }
+        const mergedConfig =
+          client === 'cursor' || client === 'opencode'
+            ? await _buildMergedMcpContent(mcpResult.path, mcpResult.content, client)
+            : { content: mcpResult.content, mergedFromExisting: false };
+        await fs.writeFile(mcpResult.path, mergedConfig.content, 'utf8');
+        if (mergedConfig.mergedFromExisting) {
+          console.log(`Merged: ${mcpResult.path} (existing entries preserved)`);
+        }
+        console.log(`Written: ${mcpResult.path}`);
+        setupStatus = 'registered';
+      } catch (error) {
+        setupStatus = 'failed';
+        console.error(
+          `Could not apply MCP config at ${mcpResult.path}: ${error instanceof Error ? error.message : String(error)}`
         );
       }
+    } else {
+      setupStatus = _runMcpRegistration(mcpResult);
     }
   }
 
@@ -535,6 +580,11 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
     } else {
       console.log(`Written: ${instructionPath}`);
     }
+  }
+
+  if (setupStatus !== 'registered' && setupStatus !== 'reused') {
+    reportIncompleteSetup(client, setupStatus, mcpResult);
+    return;
   }
 
   const nextSteps = [

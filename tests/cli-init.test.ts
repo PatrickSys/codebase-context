@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'path';
 
+vi.mock('@inquirer/prompts', () => ({
+  confirm: vi.fn(),
+  select: vi.fn()
+}));
+
 // Mock node:fs/promises at the top level so Vitest can hoist it correctly.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -19,10 +24,12 @@ vi.mock('child_process', () => ({
 
 import * as fsMod from 'node:fs/promises';
 import * as childProcess from 'child_process';
+import { confirm, select } from '@inquirer/prompts';
 import {
   generateMcpConfig,
   generateInstructionBlock,
   resolveInstructionFilePath,
+  handleInitCli,
   _appendInstructionBlock,
   _buildMergedMcpContent,
   _runMcpRegistration
@@ -31,7 +38,7 @@ import {
 // --- generateMcpConfig ---
 
 describe('generateMcpConfig', () => {
-  const repoPath = '/test/repo';
+  const repoPath = path.resolve('/test/repo');
 
   it('defaults Claude Code to an absolute-path stdio registration', () => {
     const result = generateMcpConfig('claude-code', repoPath);
@@ -151,18 +158,253 @@ describe('_runMcpRegistration', () => {
     const result = generateMcpConfig('claude-code', '/test/repo');
     if (result.kind !== 'command') throw new Error('expected command config');
 
-    expect(_runMcpRegistration(result)).toBe(true);
+    expect(_runMcpRegistration(result)).toBe('registered');
     expect(execFileSyncMock).toHaveBeenCalledWith('claude', result.args, { stdio: 'inherit' });
   });
 
-  it('returns false when the client executable is unavailable', () => {
+  it('reuses only an identical enabled Codex entry', () => {
+    const rootPath = path.resolve('repo-a');
+    const result = generateMcpConfig('codex', rootPath);
+    if (result.kind !== 'command') throw new Error('expected command config');
+    execFileSyncMock.mockReturnValue(
+      JSON.stringify([
+        {
+          name: 'codebase-context',
+          enabled: true,
+          transport: {
+            type: 'stdio',
+            command: 'npx',
+            args: ['-y', 'codebase-context', rootPath]
+          }
+        }
+      ]) as never
+    );
+
+    expect(_runMcpRegistration(result)).toBe('reused');
+    expect(execFileSyncMock).toHaveBeenCalledOnce();
+    expect(execFileSyncMock).toHaveBeenCalledWith('codex', ['mcp', 'list', '--json'], {
+      encoding: 'utf8'
+    });
+  });
+
+  it('does not reuse a disabled matching Codex entry', () => {
+    const rootPath = path.resolve('repo-a');
+    const result = generateMcpConfig('codex', rootPath);
+    if (result.kind !== 'command') throw new Error('expected command config');
+    execFileSyncMock.mockReturnValue(
+      JSON.stringify([
+        {
+          name: 'codebase-context',
+          enabled: false,
+          transport: {
+            type: 'stdio',
+            command: 'npx',
+            args: ['-y', 'codebase-context', rootPath]
+          }
+        }
+      ]) as never
+    );
+
+    expect(_runMcpRegistration(result)).toBe('disabled');
+    expect(execFileSyncMock).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a different Codex registration and reports refusal', () => {
+    const rootPath = path.resolve('repo-b');
+    const result = generateMcpConfig('codex', rootPath);
+    if (result.kind !== 'command') throw new Error('expected command config');
+    execFileSyncMock.mockReturnValue(
+      JSON.stringify([
+        {
+          name: 'codebase-context',
+          enabled: true,
+          transport: {
+            type: 'stdio',
+            command: 'npx',
+            args: ['-y', 'codebase-context', path.resolve('repo-a')]
+          }
+        }
+      ]) as never
+    );
+
+    expect(_runMcpRegistration(result)).toBe('refused');
+    expect(execFileSyncMock).toHaveBeenCalledOnce();
+  });
+
+  it('registers when no existing Codex entry exists', () => {
+    const result = generateMcpConfig('codex', '/test/repo');
+    if (result.kind !== 'command') throw new Error('expected command config');
+    execFileSyncMock
+      .mockReturnValueOnce('[]' as never)
+      .mockReturnValueOnce(Buffer.alloc(0) as never);
+
+    expect(_runMcpRegistration(result)).toBe('registered');
+    expect(execFileSyncMock).toHaveBeenCalledTimes(2);
+    expect(execFileSyncMock).toHaveBeenLastCalledWith('codex', result.args, { stdio: 'inherit' });
+  });
+
+  it('returns failed when Codex state cannot be inspected or the client is unavailable', () => {
     execFileSyncMock.mockImplementation(() => {
       throw new Error('missing executable');
     });
     const result = generateMcpConfig('codex', '/test/repo');
     if (result.kind !== 'command') throw new Error('expected command config');
 
-    expect(_runMcpRegistration(result)).toBe(false);
+    expect(_runMcpRegistration(result)).toBe('failed');
+  });
+});
+
+describe('handleInitCli Codex refusal', () => {
+  const readFileMock = vi.mocked(fsMod.readFile);
+  const writeFileMock = vi.mocked(fsMod.writeFile);
+  const execFileSyncMock = vi.mocked(childProcess.execFileSync);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    writeFileMock.mockResolvedValue(undefined);
+    process.exitCode = undefined;
+  });
+
+  it('writes separately consented instructions but ends non-ready after registration refusal', async () => {
+    const rootPath = path.resolve(process.cwd());
+    vi.mocked(select)
+      .mockResolvedValueOnce('codex' as never)
+      .mockResolvedValueOnce('stdio' as never);
+    vi.mocked(confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    readFileMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+    execFileSyncMock.mockReturnValue(
+      JSON.stringify([
+        {
+          name: 'codebase-context',
+          enabled: true,
+          transport: {
+            type: 'stdio',
+            command: 'npx',
+            args: ['-y', 'codebase-context', path.resolve(rootPath, 'repo-a')]
+          }
+        }
+      ]) as never
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await handleInitCli([]);
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Setup incomplete: the existing registration was preserved; this repository was not registered.'
+      )
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Next action: Select a separate CODEX_HOME for this repository, then rerun init;'
+      )
+    );
+    expect(writeFileMock).toHaveBeenCalledWith(
+      path.join(rootPath, 'AGENTS.md'),
+      expect.stringContaining('<!-- codebase-context:start -->'),
+      'utf8'
+    );
+    expect(logSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Open the client in this repository')
+    );
+    expect(process.exitCode).toBe(1);
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+    process.exitCode = undefined;
+  });
+});
+
+describe('handleInitCli incomplete state', () => {
+  const readFileMock = vi.mocked(fsMod.readFile);
+  const writeFileMock = vi.mocked(fsMod.writeFile);
+  const execFileSyncMock = vi.mocked(childProcess.execFileSync);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    writeFileMock.mockResolvedValue(undefined);
+    process.exitCode = undefined;
+  });
+
+  it('does not print ready steps when a generic command registration is declined', async () => {
+    vi.mocked(select)
+      .mockResolvedValueOnce('claude-code' as never)
+      .mockResolvedValueOnce('stdio' as never);
+    vi.mocked(confirm).mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await handleInitCli([]);
+
+    expect(execFileSyncMock).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Setup incomplete: MCP configuration was not applied')
+    );
+    expect(logSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Open the client in this repository')
+    );
+    expect(process.exitCode).toBe(1);
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+    process.exitCode = undefined;
+  });
+
+  it('gives a manual command and no ready steps when a generic client command fails', async () => {
+    vi.mocked(select)
+      .mockResolvedValueOnce('claude-code' as never)
+      .mockResolvedValueOnce('stdio' as never);
+    vi.mocked(confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    execFileSyncMock.mockImplementation(() => {
+      throw new Error('missing client');
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await handleInitCli([]);
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Setup incomplete: the claude-code registration command did not complete'
+      )
+    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Next action: Review and run'));
+    expect(logSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Open the client in this repository')
+    );
+    expect(process.exitCode).toBe(1);
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+    process.exitCode = undefined;
+  });
+
+  it('reports config write failure without claiming the client is ready', async () => {
+    vi.mocked(select)
+      .mockResolvedValueOnce('cursor' as never)
+      .mockResolvedValueOnce('stdio' as never);
+    vi.mocked(confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    readFileMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+    writeFileMock.mockRejectedValueOnce(
+      Object.assign(new Error('access denied'), { code: 'EACCES' })
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await handleInitCli([]);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Could not apply MCP config'));
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Setup incomplete: the MCP configuration file was not written')
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Inspect .cursor/mcp.json for a partial write')
+    );
+    expect(logSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Open the client in this repository')
+    );
+    expect(process.exitCode).toBe(1);
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+    process.exitCode = undefined;
   });
 });
 

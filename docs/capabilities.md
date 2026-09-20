@@ -71,6 +71,14 @@ Shared selector inputs:
 
 **Migration:** `get_component_usage` was removed; use `get_symbol_references` for symbol usage evidence.
 
+Open each `get_symbol_references` usage `file` relative to the selected
+`project.rootPath`, using its one-based `line`. Reference locations are derived
+from files in that project, including when an older index stored paths relative
+to a different launch directory. Missing source files are not returned as
+openable references.
+Rebuild an older index with `reindex` if map or health output still contains
+paths from a previous launch directory; those views read persisted metadata.
+
 ### Core Tools
 
 | Tool                    | Input                                                                                                   | Output                                                                                                                                                                                                                                                                                                                                                                                          |

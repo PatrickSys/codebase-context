@@ -4,6 +4,7 @@ import { CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME } from '../constants/c
 import { IndexCorruptedError } from '../errors/index.js';
 import type { UsageLocation } from '../types/index.js';
 import { detectLanguage } from '../utils/language-detection.js';
+import { isPathWithin } from '../utils/project-discovery.js';
 import { findIdentifierOccurrences } from '../utils/tree-sitter.js';
 
 interface IndexedChunk {
@@ -37,20 +38,40 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function getUsageFile(rootPath: string, chunk: IndexedChunk): string {
-  if (typeof chunk.relativePath === 'string' && chunk.relativePath.trim()) {
-    return chunk.relativePath.replace(/\\/g, '/');
+interface ResolvedChunkLocation {
+  relativePath: string;
+  absolutePath: string;
+}
+
+function resolveProjectLocation(
+  rootPath: string,
+  candidatePath: string
+): ResolvedChunkLocation | null {
+  const resolvedRoot = path.resolve(rootPath);
+  const absolutePath = path.isAbsolute(candidatePath)
+    ? path.resolve(candidatePath)
+    : path.resolve(resolvedRoot, candidatePath);
+  const relativePath = path.relative(resolvedRoot, absolutePath);
+
+  if (!relativePath || !isPathWithin(resolvedRoot, absolutePath)) {
+    return null;
   }
 
-  if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
-    const relativePath = path.relative(rootPath, chunk.filePath);
-    if (!relativePath || relativePath.startsWith('..')) {
-      return path.basename(chunk.filePath);
+  return { absolutePath, relativePath: relativePath.replace(/\\/g, '/') };
+}
+
+async function resolveChunkLocation(
+  rootPath: string,
+  chunk: IndexedChunk
+): Promise<ResolvedChunkLocation | null> {
+  for (const candidate of [chunk.filePath, chunk.relativePath]) {
+    if (typeof candidate !== 'string' || !candidate.trim()) continue;
+    const location = resolveProjectLocation(rootPath, candidate.trim());
+    if (location && (await fileExists(location.absolutePath))) {
+      return location;
     }
-    return relativePath.replace(/\\/g, '/');
   }
-
-  return 'unknown';
+  return null;
 }
 
 function buildPreview(content: string, lineOffset: number): string {
@@ -65,31 +86,6 @@ function buildPreviewFromFileLines(lines: string[], line: number): string {
   const start = Math.max(0, line - 2);
   const end = Math.min(lines.length, line + 1);
   return lines.slice(start, end).join('\n').trim();
-}
-
-function resolveAbsoluteChunkPath(rootPath: string, chunk: IndexedChunk): string | null {
-  const resolvedRoot = path.resolve(rootPath);
-  const isWithinRoot = (candidate: string): boolean => {
-    const resolvedCandidate = path.resolve(candidate);
-    const relative = path.relative(resolvedRoot, resolvedCandidate);
-    return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
-  };
-
-  if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
-    const raw = chunk.filePath.trim();
-    if (path.isAbsolute(raw)) {
-      return isWithinRoot(raw) ? raw : null;
-    }
-    const resolved = path.resolve(resolvedRoot, raw);
-    return isWithinRoot(resolved) ? resolved : null;
-  }
-
-  if (typeof chunk.relativePath === 'string' && chunk.relativePath.trim()) {
-    const resolved = path.resolve(resolvedRoot, chunk.relativePath.trim());
-    return isWithinRoot(resolved) ? resolved : null;
-  }
-
-  return null;
 }
 
 async function fileExists(targetPath: string): Promise<boolean> {
@@ -167,8 +163,9 @@ export async function findSymbolReferences(
     if (typeof chunk.content !== 'string') continue;
     if (!prefilter.test(chunk.content)) continue;
 
-    const relPath = getUsageFile(rootPath, chunk);
-    const absPath = resolveAbsoluteChunkPath(rootPath, chunk);
+    const location = await resolveChunkLocation(rootPath, chunk);
+    if (!location) continue;
+    const { relativePath: relPath, absolutePath: absPath } = location;
 
     const entry = chunksByFile.get(relPath);
     if (entry) {
@@ -187,7 +184,7 @@ export async function findSymbolReferences(
     const absPath = entry.absPath;
 
     // Preferred: Tree-sitter identifier walk on the real file content.
-    if (absPath && (await fileExists(absPath))) {
+    if (absPath) {
       try {
         const raw = await fs.readFile(absPath, 'utf-8');
         const content = raw.replace(/\r\n/g, '\n');

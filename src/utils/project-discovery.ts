@@ -60,7 +60,12 @@ export function isPathWithin(basePath: string, candidatePath: string): boolean {
   const resolvedCandidatePath = path.resolve(candidatePath);
   if (resolvedBasePath === resolvedCandidatePath) return true;
   const relative = path.relative(resolvedBasePath, resolvedCandidatePath);
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+  return (
+    relative !== '' &&
+    relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }
 
 async function isWorkspacePackageJson(directoryPath: string): Promise<boolean> {

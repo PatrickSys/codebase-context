@@ -23,6 +23,7 @@ import {
 import { analyzerRegistry } from './analyzer-registry.js';
 import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
 import { getSupportedExtensions, isBinaryFile, isCodeFile } from '../utils/language-detection.js';
+import { isPathWithin } from '../utils/project-discovery.js';
 import {
   getEmbeddingProvider,
   getConfiguredDimensions,
@@ -87,6 +88,17 @@ async function getToolVersion(): Promise<string> {
 
   cachedToolVersion = 'unknown';
   return cachedToolVersion;
+}
+
+function getIndexedProjectRelativePath(rootPath: string, filePath: string): string | undefined {
+  const absoluteFilePath = path.isAbsolute(filePath)
+    ? path.resolve(filePath)
+    : path.resolve(rootPath, filePath);
+  const relativePath = path.relative(rootPath, absoluteFilePath);
+  if (!relativePath || !isPathWithin(rootPath, absoluteFilePath)) {
+    return undefined;
+  }
+  return relativePath.replace(/\\/g, '/');
 }
 
 /**
@@ -601,6 +613,12 @@ export class CodebaseIndexer {
             const isFileChanged = !filesToProcessSet || filesToProcessSet.has(file);
 
             const mergedChunks = mergeSmallChunks(result.chunks, 15);
+            for (const chunk of mergedChunks) {
+              const relativePath = getIndexedProjectRelativePath(this.rootPath, chunk.filePath);
+              if (relativePath) {
+                chunk.relativePath = relativePath;
+              }
+            }
 
             allChunks.push(...mergedChunks);
             if (isFileChanged) {

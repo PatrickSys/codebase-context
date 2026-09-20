@@ -22,7 +22,9 @@ type ToolCallResponse = {
   isError?: boolean;
 };
 
-function getToolCallHandler(server: unknown): (request: ToolCallRequest) => Promise<ToolCallResponse> {
+function getToolCallHandler(
+  server: unknown
+): (request: ToolCallRequest) => Promise<ToolCallResponse> {
   const handlers = (server as { _requestHandlers?: unknown })._requestHandlers;
   if (!(handlers instanceof Map)) {
     throw new Error('Expected server._requestHandlers to be a Map');
@@ -102,6 +104,14 @@ describe('get_symbol_references MCP tool', () => {
         relativePath: 'src/b.ts'
       }
     ];
+
+    await fs.mkdir(path.join(tempRoot, 'src'), { recursive: true });
+    await fs.writeFile(
+      path.join(tempRoot, 'src', 'a.ts'),
+      'export function alpha() {\n  return beta(alpha);\n}',
+      'utf-8'
+    );
+    await fs.writeFile(path.join(tempRoot, 'src', 'b.ts'), 'const beta = alpha + 1;\n', 'utf-8');
 
     await fs.writeFile(
       path.join(contextDir, KEYWORD_INDEX_FILENAME),
@@ -280,6 +290,9 @@ describe('get_symbol_references MCP tool', () => {
       }
     ];
 
+    await fs.mkdir(path.join(tempRoot, 'src'), { recursive: true });
+    await fs.writeFile(path.join(tempRoot, 'src', 'test.ts'), chunks[0]!.content, 'utf-8');
+
     await fs.writeFile(
       path.join(contextDir, KEYWORD_INDEX_FILENAME),
       JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks }),
@@ -350,7 +363,7 @@ describe('get_symbol_references MCP tool', () => {
     );
 
     // Create a chunk with many matches
-    const content = 'foo foo foo foo foo foo foo foo foo foo foo';
+    const content = 'const foo = 0;\nfoo; foo; foo; foo; foo; foo; foo; foo; foo; foo;';
     const chunks = [
       {
         content,
@@ -358,6 +371,9 @@ describe('get_symbol_references MCP tool', () => {
         relativePath: 'src/test.ts'
       }
     ];
+
+    await fs.mkdir(path.join(tempRoot, 'src'), { recursive: true });
+    await fs.writeFile(path.join(tempRoot, 'src', 'test.ts'), content, 'utf-8');
 
     await fs.writeFile(
       path.join(contextDir, KEYWORD_INDEX_FILENAME),

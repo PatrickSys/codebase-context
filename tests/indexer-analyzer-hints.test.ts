@@ -6,6 +6,7 @@ import { CodebaseIndexer } from '../src/core/indexer.js';
 import { analyzerRegistry } from '../src/core/analyzer-registry.js';
 import { AngularAnalyzer } from '../src/analyzers/angular/index.js';
 import { GenericAnalyzer } from '../src/analyzers/generic/index.js';
+import { findSymbolReferences } from '../src/core/symbol-references.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   KEYWORD_INDEX_FILENAME
@@ -13,7 +14,10 @@ import {
 
 type IndexChunk = {
   filePath: string;
+  relativePath?: string;
   componentType?: string;
+  content?: string;
+  startLine?: number;
 };
 
 async function readIndexedChunks(rootPath: string): Promise<IndexChunk[]> {
@@ -71,6 +75,124 @@ describe('Indexer analyzer hints', () => {
 
     expect(stats.indexedFiles).toBe(1);
     expect(chunks.some((chunk) => chunk.filePath.endsWith('widget.sfc'))).toBe(true);
+  });
+
+  it('stores and returns exact project-relative source paths across launch roots and index reuse', async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'indexer-paths-'));
+    const monorepoRoot = path.join(tempDir, 'evidence', 'repo with spaces');
+    const rootPath = path.join(monorepoRoot, 'packages', 'api');
+    const sourcePath = path.join(rootPath, 'src', 'auth', 'auth.service.ts');
+    const siblingPackageSourcePath = path.join(
+      monorepoRoot,
+      'packages',
+      'web',
+      'src',
+      'auth',
+      'auth.service.ts'
+    );
+    const source = [
+      'export function registerToken() {',
+      "  return 'token';",
+      '}',
+      'registerToken();'
+    ].join('\n');
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fs.writeFile(sourcePath, source, 'utf-8');
+    await fs.mkdir(path.dirname(siblingPackageSourcePath), { recursive: true });
+    await fs.writeFile(siblingPackageSourcePath, source, 'utf-8');
+
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(tempDir);
+      await new CodebaseIndexer({
+        rootPath,
+        config: { skipEmbedding: true }
+      }).index();
+
+      const chunks = await readIndexedChunks(rootPath);
+      expect(chunks.length).toBeGreaterThan(0);
+      expect(chunks.every((chunk) => chunk.relativePath === 'src/auth/auth.service.ts')).toBe(true);
+
+      const freshResult = await findSymbolReferences(rootPath, 'registerToken');
+      expect(freshResult.status).toBe('success');
+      if (freshResult.status !== 'success') return;
+      expect(freshResult.usages.map((usage) => usage.file)).toEqual([
+        'src/auth/auth.service.ts',
+        'src/auth/auth.service.ts'
+      ]);
+      expect(freshResult.usages.map((usage) => usage.line).sort((a, b) => a - b)).toEqual([1, 4]);
+
+      const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const indexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as {
+        chunks: IndexChunk[];
+        header: Record<string, unknown>;
+      };
+      for (const chunk of indexRaw.chunks) {
+        chunk.relativePath = path.relative(tempDir, sourcePath).replace(/\\/g, '/');
+      }
+      await fs.writeFile(indexPath, JSON.stringify(indexRaw), 'utf-8');
+
+      process.chdir(os.tmpdir());
+      const reusedResult = await findSymbolReferences(rootPath, 'registerToken');
+      expect(reusedResult.status).toBe('success');
+      if (reusedResult.status !== 'success') return;
+
+      for (const usage of reusedResult.usages) {
+        expect(usage.file).toBe('src/auth/auth.service.ts');
+        const resolvedUsagePath = path.resolve(rootPath, usage.file);
+        expect(path.relative(rootPath, resolvedUsagePath).replace(/\\/g, '/')).toBe(
+          'src/auth/auth.service.ts'
+        );
+        const lines = (await fs.readFile(resolvedUsagePath, 'utf-8')).split('\n');
+        expect(lines[usage.line - 1]).toContain('registerToken');
+      }
+      expect(reusedResult.usages.map((usage) => usage.line).sort((a, b) => a - b)).toEqual([1, 4]);
+    } finally {
+      process.chdir(previousCwd);
+    }
+  });
+
+  it('keeps valid ..-prefixed filenames and omits stale locations outside the project', async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'indexer-path-boundary-'));
+    const rootPath = path.join(tempDir, 'repo');
+    const sourcePath = path.join(rootPath, '..name.ts');
+    const outsidePath = path.join(tempDir, 'outside.ts');
+    const source = 'export const locateToken = 1;';
+    await fs.mkdir(rootPath, { recursive: true });
+    await fs.writeFile(sourcePath, source, 'utf-8');
+    await fs.writeFile(outsidePath, 'export const locateToken = 2;', 'utf-8');
+    await fs.mkdir(path.join(rootPath, CODEBASE_CONTEXT_DIRNAME), { recursive: true });
+    await fs.writeFile(
+      path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
+      JSON.stringify({
+        header: { buildId: 'path-boundary-test' },
+        chunks: [
+          {
+            content: source,
+            startLine: 1,
+            relativePath: '..name.ts',
+            filePath: sourcePath
+          },
+          {
+            content: 'export const locateToken = 2;',
+            startLine: 1,
+            relativePath: '../outside.ts',
+            filePath: outsidePath
+          }
+        ]
+      }),
+      'utf-8'
+    );
+
+    const result = await findSymbolReferences(rootPath, 'locateToken');
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    expect(result.usages).toHaveLength(1);
+    expect(result.usages[0]?.file).toBe('..name.ts');
+    expect(result.usages[0]?.line).toBe(1);
+    const resolvedUsagePath = path.resolve(rootPath, result.usages[0]!.file);
+    expect(path.relative(rootPath, resolvedUsagePath)).toBe('..name.ts');
+    expect((await fs.readFile(resolvedUsagePath, 'utf-8')).split('\n')[0]).toContain('locateToken');
   });
 
   it('honors extra extensions during incremental reindexing', async () => {

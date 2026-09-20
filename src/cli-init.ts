@@ -9,12 +9,33 @@
  */
 
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import * as fs from 'node:fs/promises';
 import { execFileSync } from 'child_process';
 import { select, confirm } from '@inquirer/prompts';
 
 export type Client = 'claude-code' | 'cursor' | 'codex' | 'opencode';
 export type ConnectionMode = 'stdio' | 'http';
+export type ServerLaunch = { command: string; args: string[] };
+
+/** Bind wizard registrations to this installation, including source candidates. */
+export function _currentServerLaunch(): ServerLaunch {
+  return {
+    command: process.execPath,
+    args: [path.join(path.dirname(fileURLToPath(import.meta.url)), 'index.js')]
+  };
+}
+
+/** Display a pasteable command for POSIX shells or PowerShell (not cmd.exe). */
+export function _formatCommand(
+  command: string,
+  args: string[],
+  powershell = process.platform === 'win32'
+): string {
+  const quote = (value: string): string =>
+    powershell ? "'" + value.replace(/'/g, "''") + "'" : "'" + value.replace(/'/g, "'\"'\"'") + "'";
+  return (powershell ? '& ' : '') + [command, ...args].map(quote).join(' ');
+}
 
 export type McpConfigResult =
   | { kind: 'file'; path: string; content: string }
@@ -27,6 +48,36 @@ type JsonObject = Record<string, unknown>;
 /** Execute a confirmed CLI registration using the client executable. */
 export function _runMcpRegistration(result: CommandMcpConfig): boolean {
   try {
+    if (result.command === 'codex') {
+      // The CLI writes one user-level entry. Never silently repoint another repo.
+      const entries: unknown = JSON.parse(
+        execFileSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8' })
+      );
+      if (!Array.isArray(entries)) throw new Error('Cannot inspect existing Codex registrations.');
+      const current: unknown = entries.find(
+        (entry: unknown) => isJsonObject(entry) && entry.name === 'codebase-context'
+      );
+      if (current !== undefined) {
+        if (!isJsonObject(current) || !isJsonObject(current.transport)) {
+          throw new Error('Cannot inspect the existing Codex transport.');
+        }
+        const urlIndex = result.args.indexOf('--url');
+        const commandIndex = result.args.indexOf('--') + 1;
+        const identical =
+          urlIndex !== -1
+            ? current.transport.type === 'streamable_http' &&
+              current.transport.url === result.args[urlIndex + 1]
+            : current.transport.type === 'stdio' &&
+              current.transport.command === result.args[commandIndex] &&
+              JSON.stringify(current.transport.args) ===
+                JSON.stringify(result.args.slice(commandIndex + 1));
+        if (identical) return true;
+        console.error(
+          'Existing Codex codebase-context entry differs; preserved it. Use an isolated CODEX_HOME or review trusted project configuration before configuring another repository.'
+        );
+        return false;
+      }
+    }
     execFileSync(result.command, result.args, { stdio: 'inherit' });
     return true;
   } catch {
@@ -45,7 +96,8 @@ export function _runMcpRegistration(result: CommandMcpConfig): boolean {
 export function generateMcpConfig(
   client: Client,
   cwd = process.cwd(),
-  mode: ConnectionMode = 'stdio'
+  mode: ConnectionMode = 'stdio',
+  launch: ServerLaunch = { command: 'npx', args: ['-y', 'codebase-context'] }
 ): McpConfigResult {
   const rootPath = path.resolve(cwd);
 
@@ -62,9 +114,8 @@ export function generateMcpConfig(
             'stdio',
             'codebase-context',
             '--',
-            'npx',
-            '-y',
-            'codebase-context',
+            launch.command,
+            ...launch.args,
             rootPath
           ]
         };
@@ -76,8 +127,8 @@ export function generateMcpConfig(
             {
               mcpServers: {
                 'codebase-context': {
-                  command: 'npx',
-                  args: ['-y', 'codebase-context', rootPath]
+                  command: launch.command,
+                  args: [...launch.args, rootPath]
                 }
               }
             },
@@ -89,7 +140,7 @@ export function generateMcpConfig(
         return {
           kind: 'command',
           command: 'codex',
-          args: ['mcp', 'add', 'codebase-context', '--', 'npx', '-y', 'codebase-context', rootPath]
+          args: ['mcp', 'add', 'codebase-context', '--', launch.command, ...launch.args, rootPath]
         };
       case 'opencode':
         return {
@@ -101,7 +152,7 @@ export function generateMcpConfig(
               mcp: {
                 'codebase-context': {
                   type: 'local',
-                  command: ['npx', '-y', 'codebase-context', rootPath],
+                  command: [launch.command, ...launch.args, rootPath],
                   enabled: true
                 }
               }
@@ -183,6 +234,24 @@ export function generateInstructionBlock(): string {
 `;
 }
 
+/** The block generated before the context-map-first setup was introduced. */
+function generateLegacyInstructionBlock(): string {
+  return `<!-- codebase-context:start -->
+## Codebase Context (MCP)
+
+**Start of every task:** Call \`get_memory\` to load team conventions before writing any code.
+
+**Before editing existing code:** Call \`search_codebase\` with \`intent: "edit"\`. If the preflight card says \`ready: false\`, read the listed files before touching anything.
+
+**Before writing new code:** Call \`get_team_patterns\` to check how the team handles DI, state, testing, and library wrappers — don't introduce a new pattern if one already exists.
+
+**When asked to "remember" or "record" something:** Call \`remember\` immediately, before doing anything else.
+
+**When adding imports that cross module boundaries:** Call \`detect_circular_dependencies\` with the relevant scope after adding the import.
+<!-- codebase-context:end -->
+`;
+}
+
 export function resolveInstructionFilePath(client: Client, cwd: string): string | null {
   switch (client) {
     case 'claude-code':
@@ -200,22 +269,59 @@ export function resolveInstructionFilePath(client: Client, cwd: string): string 
  * Appends the instruction block to an existing file, or skips if already present.
  * Exported with leading underscore to signal internal/test-only use.
  */
-export async function _appendInstructionBlock(filePath: string): Promise<'written' | 'skipped'> {
+export type InstructionBlockWriteResult = 'written' | 'skipped' | 'upgraded' | 'preserved';
+
+export async function _appendInstructionBlock(
+  filePath: string,
+  options: { confirmUpgrade?: () => Promise<boolean> } = {}
+): Promise<InstructionBlockWriteResult> {
   let existing = '';
   try {
     existing = await fs.readFile(filePath, 'utf8');
-  } catch {
-    // file does not exist — write fresh
-    await fs.writeFile(filePath, generateInstructionBlock(), 'utf8');
-    return 'written';
+  } catch (error: unknown) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      await fs.writeFile(filePath, generateInstructionBlock(), 'utf8');
+      return 'written';
+    }
+    throw error;
   }
 
-  if (existing.includes('<!-- codebase-context:start -->')) {
-    return 'skipped';
+  const startMarker = '<!-- codebase-context:start -->';
+  const endMarker = '<!-- codebase-context:end -->';
+  const startCount = existing.split(startMarker).length - 1;
+  const endCount = existing.split(endMarker).length - 1;
+  if (startCount !== 0 || endCount !== 0) {
+    if (startCount !== 1 || endCount !== 1) return 'preserved';
+    const start = existing.indexOf(startMarker);
+    const end = existing.indexOf(endMarker, start);
+    if (end === -1) return 'preserved';
+    const endExclusive = end + endMarker.length;
+    const currentBlock = existing.slice(start, endExclusive);
+    const normalizedBlock = currentBlock.replace(/\r\n/g, '\n');
+    const currentGenerated = generateInstructionBlock().trimEnd();
+    if (normalizedBlock === currentGenerated) return 'skipped';
+    if (normalizedBlock !== generateLegacyInstructionBlock().trimEnd()) return 'preserved';
+
+    const approved = options.confirmUpgrade ? await options.confirmUpgrade() : false;
+    if (!approved) return 'preserved';
+
+    const replacement = currentBlock.includes('\r\n')
+      ? generateInstructionBlock().trimEnd().replace(/\n/g, '\r\n')
+      : currentGenerated;
+    await fs.writeFile(
+      filePath,
+      existing.slice(0, start) + replacement + existing.slice(endExclusive),
+      'utf8'
+    );
+    return 'upgraded';
   }
 
   await fs.writeFile(filePath, existing + '\n' + generateInstructionBlock(), 'utf8');
   return 'written';
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -234,13 +340,24 @@ export async function _buildMergedMcpContent(
   let existing: unknown;
   try {
     existing = JSON.parse(await fs.readFile(filePath, 'utf8'));
-  } catch {
-    return { content: generatedContent, mergedFromExisting: false };
+  } catch (error: unknown) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      return { content: generatedContent, mergedFromExisting: false };
+    }
+    throw new Error(`Cannot safely read/parse ${filePath}; existing config was not replaced.`, {
+      cause: error
+    });
   }
 
   const generated = JSON.parse(generatedContent) as unknown;
   if (!isJsonObject(existing) || !isJsonObject(generated)) {
-    return { content: generatedContent, mergedFromExisting: false };
+    throw new Error(`Expected a JSON object in ${filePath}; existing config was not replaced.`);
+  }
+  const key = client === 'cursor' ? 'mcpServers' : 'mcp';
+  if (key in existing && !isJsonObject(existing[key])) {
+    throw new Error(
+      `Expected an object at ${key} in ${filePath}; existing config was not replaced.`
+    );
   }
 
   if (client === 'cursor') {
@@ -310,19 +427,30 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
   });
 
   const rootPath = path.resolve(process.cwd());
-  const mcpResult = generateMcpConfig(client, rootPath, mode);
+  const launch = _currentServerLaunch();
+  const mcpResult = generateMcpConfig(client, rootPath, mode, launch);
+  console.log(
+    'This registration uses the running installation shown below. Keep that path available; it does not resolve npm latest.'
+  );
+  if (client === 'codex') {
+    console.log(
+      'Codex mcp add writes user configuration, not project-local config. An existing different entry will be preserved. See docs/client-setup.md for trusted project configuration.'
+    );
+  }
 
   console.log('\n--- MCP Config Preview ---');
   if (mcpResult.kind === 'file') {
     try {
       await fs.access(mcpResult.path);
-      console.log(`Warning: ${mcpResult.path} already exists; existing entries will be preserved.`);
+      console.log(
+        `Warning: ${mcpResult.path} already exists; valid unrelated entries will be preserved; malformed or unreadable config will be refused.`
+      );
     } catch {
       // file does not exist
     }
     console.log(`File: ${mcpResult.path}\n${mcpResult.content}`);
   } else {
-    console.log(`Command to run: ${mcpResult.command} ${mcpResult.args.join(' ')}`);
+    console.log(`Command to run: ${_formatCommand(mcpResult.command, mcpResult.args)}`);
   }
 
   const applyMcp = await confirm({
@@ -343,7 +471,9 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
     }
 
     if (fileExists) {
-      console.log(`\n--- Instruction Block Preview (will append to ${instructionPath}) ---`);
+      console.log(
+        `\n--- Instruction Block Preview (existing content will be checked in ${instructionPath}) ---`
+      );
     } else {
       console.log(`\n--- Instruction Block Preview (will create ${instructionPath}) ---`);
     }
@@ -375,16 +505,33 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
     } else {
       if (!_runMcpRegistration(mcpResult)) {
         console.log(
-          `Could not run '${mcpResult.command}' automatically. Run it yourself:\n  ${mcpResult.command} ${mcpResult.args.join(' ')}`
+          mcpResult.command === 'codex'
+            ? 'Codex registration was not changed. Inspect existing user configuration; use isolated CODEX_HOME for this candidate trial. Do not overwrite another repository entry.'
+            : `Could not run '${mcpResult.command}' automatically. Review and run this command in ${process.platform === 'win32' ? 'PowerShell' : 'a POSIX shell'}:\n  ${_formatCommand(mcpResult.command, mcpResult.args)}`
         );
       }
     }
   }
 
   if (applyInstruction && instructionPath !== null) {
-    const status = await _appendInstructionBlock(instructionPath);
+    const status = await _appendInstructionBlock(instructionPath, {
+      confirmUpgrade: async () => {
+        console.log('\n--- Existing generated instruction block upgrade preview ---');
+        console.log(generateInstructionBlock());
+        return confirm({
+          message: 'Replace the old generated block with this version? [y/N]',
+          default: false
+        });
+      }
+    });
     if (status === 'skipped') {
       console.log(`Instruction block already present in ${instructionPath}, skipping.`);
+    } else if (status === 'preserved') {
+      console.log(
+        `Existing instruction content in ${instructionPath} was preserved; no generated block was replaced.`
+      );
+    } else if (status === 'upgraded') {
+      console.log(`Upgraded generated instruction block in ${instructionPath}.`);
     } else {
       console.log(`Written: ${instructionPath}`);
     }
@@ -392,9 +539,9 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
 
   const nextSteps = [
     '\nNext steps:',
-    '  Read `codebase://context` (or run `npx codebase-context map`) for the conventions map.',
+    '  Read `codebase://context` in the client for the conventions map.',
     mode === 'http'
-      ? `  Start the registered HTTP server separately: npx codebase-context --http "${rootPath}"`
+      ? `  Start this installation separately: ${_formatCommand(launch.command, [...launch.args, '--http', rootPath])}`
       : '  Open the client in this repository; it will start the registered stdio process on demand.'
   ];
   console.log(nextSteps.join('\n') + '\n');

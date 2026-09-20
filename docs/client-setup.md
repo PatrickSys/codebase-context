@@ -13,7 +13,9 @@ pnpm build && node dist/index.js init
 
 Choose **stdio** unless you specifically need several clients to share one
 server. The wizard puts the current repository's absolute path in the stdio
-registration. That makes project attribution deterministic when a client does
+registration. It registers the Node executable and server entrypoint from the
+running installation, not unversioned npm latest. Keep that installation path
+available; rerun setup after moving it. That makes project attribution deterministic when a client does
 not announce MCP workspace roots. The client owns the stdio process and starts
 it when the connection is used.
 
@@ -27,6 +29,18 @@ The setup has five separate steps:
 
 Registration alone does not prove that a server is running, and a successful
 transport handshake does not prove that the intended repository was indexed.
+
+### Returning to an existing setup
+
+An exact older generated memory-first instruction block can be upgraded after
+its replacement preview and your explicit confirmation. Surrounding text stays
+intact. Customized or malformed blocks are preserved for manual review; they
+are not silently treated as current. Unreadable instruction/config files and
+malformed JSON configurations are refused rather than replaced.
+
+The wizard previews shell-quoted commands. Windows previews target PowerShell,
+not cmd.exe. Automatic Windows executable/shim resolution still needs validation
+in the installed desktop client; Linux argument-array execution does not prove it.
 
 ## Transport modes
 
@@ -184,10 +198,43 @@ codex mcp add codebase-context -- npx -y codebase-context "/absolute/path/to/you
 codex mcp add codebase-context --url http://127.0.0.1:3100/mcp
 ```
 
-Codex stores MCP registrations in `~/.codex/config.toml` by default. A
-trusted project can use `.codex/config.toml` for project scope. The
-registration is separate from starting the HTTP process and from indexing the
-repository.
+`codex mcp add` writes user-level configuration in `~/.codex/config.toml`
+(or the selected `CODEX_HOME`). It has no project-scope flag in the checked
+0.155.1 CLI. Reusing the same server name for another repository replaces the
+first registration; reopening the first repository still resolves the second
+root. The wizard now checks existing entries: identical entries are reused,
+differing entries are preserved and automatic registration is refused.
+
+For an isolated candidate trial, set `CODEX_HOME` to a new directory for **both**
+registration and the subsequent Codex session. Register the built candidate:
+
+```bash
+# POSIX shell; use your shell's equivalent environment syntax on Windows.
+export CODEX_HOME="/absolute/path/to/new-isolated-codex-home"
+mkdir -p "$CODEX_HOME"
+codex mcp add codebase-context -- node "/absolute/candidate/dist/index.js" "/absolute/repo"
+codex
+```
+
+This tests your built candidate. The earlier `npx` recipe resolves the published
+package; it does not prove source-candidate behavior. Login/client configuration
+in the isolated home is a separate local step; do not copy credentials into a
+handoff.
+
+Official Codex documentation also supports `.codex/config.toml` in trusted
+projects. A manual project entry has this form (merge it deliberately with an
+existing file):
+
+```toml
+[mcp_servers.codebase-context]
+command = "node"
+args = ["/absolute/candidate/dist/index.js", "/absolute/repo"]
+```
+
+Normal trusted-project session behavior must be checked in the actual client.
+The installed `codex mcp list/get` inspection path did not expose the project
+entry in the isolated check; it is not proof that this project setup works.
+Registration remains separate from HTTP startup and repository indexing.
 
 ## VS Code (Copilot)
 

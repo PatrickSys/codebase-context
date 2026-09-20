@@ -226,7 +226,142 @@ describe('_appendInstructionBlock', () => {
 
     const result = await _appendInstructionBlock('/test/CLAUDE.md');
 
+    expect(result).toBe('preserved');
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('skips the current generated block without prompting or writing', async () => {
+    readFileMock.mockResolvedValue(
+      `prefix\n${generateInstructionBlock().trimEnd()}\nsuffix` as unknown as Buffer
+    );
+
+    const result = await _appendInstructionBlock('/test/AGENTS.md', {
+      confirmUpgrade: async () => {
+        throw new Error('current content must not prompt');
+      }
+    });
+
     expect(result).toBe('skipped');
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves the whole file when instruction markers are duplicated or orphaned', async () => {
+    for (const content of [
+      `a\n<!-- codebase-context:start -->\none\n<!-- codebase-context:end -->\n<!-- codebase-context:start -->\ntwo\n<!-- codebase-context:end -->\nz`,
+      'a\n<!-- codebase-context:end -->\nz'
+    ]) {
+      readFileMock.mockResolvedValue(content as unknown as Buffer);
+      const result = await _appendInstructionBlock('/test/AGENTS.md', {
+        confirmUpgrade: async () => {
+          throw new Error('ambiguous markers must not prompt');
+        }
+      });
+      expect(result).toBe('preserved');
+      expect(writeFileMock).not.toHaveBeenCalled();
+    }
+  });
+
+  it('upgrades an exact old generated block after explicit consent, preserving surrounding text', async () => {
+    const legacy = `<!-- codebase-context:start -->
+## Codebase Context (MCP)
+
+**Start of every task:** Call \`get_memory\` to load team conventions before writing any code.
+
+**Before editing existing code:** Call \`search_codebase\` with \`intent: "edit"\`. If the preflight card says \`ready: false\`, read the listed files before touching anything.
+
+**Before writing new code:** Call \`get_team_patterns\` to check how the team handles DI, state, testing, and library wrappers — don't introduce a new pattern if one already exists.
+
+**When asked to "remember" or "record" something:** Call \`remember\` immediately, before doing anything else.
+
+**When adding imports that cross module boundaries:** Call \`detect_circular_dependencies\` with the relevant scope after adding the import.
+<!-- codebase-context:end -->`;
+    const existing = `# user prefix\n${legacy}\n# user suffix`;
+    readFileMock.mockResolvedValue(existing as unknown as Buffer);
+
+    const result = await _appendInstructionBlock('/test/AGENTS.md', {
+      confirmUpgrade: async () => true
+    });
+
+    expect(result).toBe('upgraded');
+    const content = (writeFileMock.mock.calls[0] as [string, string])[1];
+    expect(content).toContain('# user prefix');
+    expect(content).toContain('# user suffix');
+    expect(content).toContain('Read `codebase://context`');
+    expect(content).not.toContain('Call `get_memory` to load team conventions');
+  });
+
+  it('preserves the exact old block when upgrade consent is declined', async () => {
+    const legacy = `<!-- codebase-context:start -->
+## Codebase Context (MCP)
+
+**Start of every task:** Call \`get_memory\` to load team conventions before writing any code.
+
+**Before editing existing code:** Call \`search_codebase\` with \`intent: "edit"\`. If the preflight card says \`ready: false\`, read the listed files before touching anything.
+
+**Before writing new code:** Call \`get_team_patterns\` to check how the team handles DI, state, testing, and library wrappers — don't introduce a new pattern if one already exists.
+
+**When asked to "remember" or "record" something:** Call \`remember\` immediately, before doing anything else.
+
+**When adding imports that cross module boundaries:** Call \`detect_circular_dependencies\` with the relevant scope after adding the import.
+<!-- codebase-context:end -->`;
+    readFileMock.mockResolvedValue(`prefix\n${legacy}\nsuffix` as unknown as Buffer);
+
+    const result = await _appendInstructionBlock('/test/AGENTS.md', {
+      confirmUpgrade: async () => false
+    });
+
+    expect(result).toBe('preserved');
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('recognizes and upgrades the legacy block with CRLF while retaining CRLF in the replacement', async () => {
+    const legacy = `<!-- codebase-context:start -->
+## Codebase Context (MCP)
+
+**Start of every task:** Call \`get_memory\` to load team conventions before writing any code.
+
+**Before editing existing code:** Call \`search_codebase\` with \`intent: "edit"\`. If the preflight card says \`ready: false\`, read the listed files before touching anything.
+
+**Before writing new code:** Call \`get_team_patterns\` to check how the team handles DI, state, testing, and library wrappers — don't introduce a new pattern if one already exists.
+
+**When asked to "remember" or "record" something:** Call \`remember\` immediately, before doing anything else.
+
+**When adding imports that cross module boundaries:** Call \`detect_circular_dependencies\` with the relevant scope after adding the import.
+<!-- codebase-context:end -->`.replace(/\n/g, '\r\n');
+    readFileMock.mockResolvedValue(`prefix\r\n${legacy}\r\nsuffix` as unknown as Buffer);
+
+    const result = await _appendInstructionBlock('/test/AGENTS.md', {
+      confirmUpgrade: async () => true
+    });
+
+    expect(result).toBe('upgraded');
+    const content = (writeFileMock.mock.calls[0] as [string, string])[1];
+    expect(content).toContain('\r\n');
+    expect(content).not.toMatch(/(^|[^\r])\n/);
+    expect(content.startsWith('prefix\r\n')).toBe(true);
+    expect(content.endsWith('\r\nsuffix')).toBe(true);
+  });
+
+  it('does not replace a customized block', async () => {
+    readFileMock.mockResolvedValue(
+      'prefix\n<!-- codebase-context:start -->\ncustom instructions\n<!-- codebase-context:end -->\nsuffix' as unknown as Buffer
+    );
+
+    const result = await _appendInstructionBlock('/test/AGENTS.md', {
+      confirmUpgrade: async () => {
+        throw new Error('custom content must not prompt');
+      }
+    });
+
+    expect(result).toBe('preserved');
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('does not treat unreadable files as missing files', async () => {
+    const error = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    readFileMock.mockRejectedValue(error);
+
+    await expect(_appendInstructionBlock('/test/AGENTS.md')).rejects.toThrow('permission denied');
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 });

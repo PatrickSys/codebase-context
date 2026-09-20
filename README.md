@@ -53,9 +53,15 @@ Then open Claude Code in that repository. The client starts CBC; registration
 itself does not start or index it. For another client, use the
 [client setup guide](./docs/client-setup.md).
 
-The source setup wizard offers the same stdio route and an advanced HTTP route:
+The source setup wizard offers stdio and an advanced HTTP route:
 `pnpm build` then `node dist/index.js init`. These wizard corrections are not in
 the currently published npm 2.2.0 package. The source package is 2.3.0.
+The wizard registers its running installation by absolute path, so source setup
+does not silently launch the published package. Keep that installation available.
+Existing generated instructions can be upgraded with confirmation; customized
+blocks are preserved. Codex registrations are user-level: the wizard refuses to
+replace a differing entry for another repository. See the client guide for an
+isolated candidate trial and trusted-project configuration.
 
 The server runs in two modes. Use stdio unless you need multiple clients connected at once. Registration only writes the client's connection configuration; the client starts a stdio process on demand. HTTP requires a separately running server:
 

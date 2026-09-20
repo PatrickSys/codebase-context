@@ -2,41 +2,109 @@
 
 Full setup instructions for each AI client. This guide is about transport and wiring, not a different product mode: each client gets the same bounded conventions map first and local-pattern discovery second. For the quick-start summary, see [README.md](../README.md).
 
-## Transport modes
+## Recommended first use
 
-| Mode | How it runs | When to use |
-| ---- | ----------- | ------------ |
-| **stdio** (default) | Process spawned by the client | One AI client, simple setup |
-| **HTTP** | Long-lived server at `http://127.0.0.1:3100/mcp` | Multiple clients sharing one server |
-
-Start the HTTP server:
+For a released package, use the manual client registration below. To exercise
+the setup wizard in this source candidate, build it first:
 
 ```bash
-npx -y codebase-context --http            # default port 3100
-npx -y codebase-context --http --port 4000
+pnpm build && node dist/index.js init
 ```
 
-Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](../templates/mcp/stdio/.mcp.json) and [`templates/mcp/http/.mcp.json`](../templates/mcp/http/.mcp.json).
+Choose **stdio** unless you specifically need several clients to share one
+server. The wizard puts the current repository's absolute path in the stdio
+registration. That makes project attribution deterministic when a client does
+not announce MCP workspace roots. The client owns the stdio process and starts
+it when the connection is used.
+
+The setup has five separate steps:
+
+1. **Obtain** the package with `npx -y codebase-context` (or build it locally).
+2. **Register** the connection in the client using the command or config below.
+3. **Start** the server: stdio is client-owned; HTTP must be started separately.
+4. **Select and index** the repository: an MCP map request can start deferred indexing; the CLI `map` command only reads existing artifacts, so use `reindex` when you need to build the index explicitly.
+5. **Query and reuse** the connection; stop the HTTP process when you are finished.
+
+Registration alone does not prove that a server is running, and a successful
+transport handshake does not prove that the intended repository was indexed.
+
+## Transport modes
+
+| Mode                | How it runs                                            | When to use                         |
+| ------------------- | ------------------------------------------------------ | ----------------------------------- |
+| **stdio** (default) | Process spawned by the client with one repository path | One client, deterministic first use |
+| **HTTP**            | Long-lived server at `http://127.0.0.1:3100/mcp`       | Multiple clients sharing one server |
+
+For the advanced shared-server route, start HTTP first:
+
+```bash
+npx -y codebase-context --http "/absolute/path/to/your/project" # default port 3100
+npx -y codebase-context --http --port 4000 "/absolute/path/to/your/project"
+```
+
+Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](../templates/mcp/stdio/.mcp.json) and [`templates/mcp/http/.mcp.json`](../templates/mcp/http/.mcp.json). Replace `/absolute/path/to/your/project` in the stdio template with the repository path before saving it.
 
 ## Project routing contract
 
-Automatic multi-project routing is evidence-backed only when the MCP host announces workspace roots. Treat that as the primary path.
+The recommended first-use path passes one absolute root explicitly. Check the
+`project.rootPath` in tool responses before relying on a result.
 
-If the host does not send roots, or still cannot tell which project is active, use one of the explicit fallbacks instead:
+For stdio, workspace discovery is also available when the host announces MCP
+roots. If selection is ambiguous, retry with the absolute `project` path. In a
+monorepo, start at its root and select the intended package with `project`.
 
-- start the server with a single bootstrap path
-- set `CODEBASE_ROOT`
-- retry tool calls with `project`
+For HTTP, configure the server's roots using a bootstrap path or
+`~/.codebase-context/config.json`. Do not rely on a client's initial roots
+announcement: that route is not working reliably in the current source.
+Connected clients share server routing state, including the active project;
+pass an explicit `project` with each tool call when sharing multiple projects.
+This is a trusted local shared service, not isolation between clients.
 
-If multiple projects are available and no active project can be inferred safely, the server returns `selection_required` instead of guessing.
+If no project can be inferred, the server returns `selection_required`.
+Use an absolute project path rather than guessing from the client's working
+directory. Registration scope and repository scope are separate.
+
+## Query, return, and stop
+
+After connecting, read `codebase://context`. Use `get_indexing_status` to check
+whether indexing is still running or failed. A first index uses local embeddings
+and may download the model. When ready, query `get_symbol_references` for a known
+symbol, or `search_codebase` for a concept; inspect the returned source and project.
+A connection handshake alone does not establish this flow.
+
+The index lives in the repository's `.codebase-context/` directory. Reconnecting
+can reuse it; each stdio connection still owns a separate process. Concurrent
+first-time indexing by separate processes has not been validated here. For the
+first run, finish indexing in one session before opening another.
+
+Closing the client connection ends its stdio process. For HTTP, disconnecting one
+client leaves the shared server running; stop the terminal's server with Ctrl+C.
+
+On Linux CPU-only installations, an optional ONNX GPU download can fail behind
+restricted networks. The dependency supports `ONNXRUNTIME_NODE_INSTALL=skip` to
+skip unbundled GPU files while retaining its bundled CPU runtime. For example:
+`ONNXRUNTIME_NODE_INSTALL=skip npx -y codebase-context "/absolute/repo"`.
+This does not remove the embedding model download.
 
 ## Claude Code
 
 ```bash
-claude mcp add codebase-context -- npx -y codebase-context
+claude mcp add --transport stdio codebase-context -- npx -y codebase-context "/absolute/path/to/your/project"
 ```
 
-Claude Code only supports stdio. HTTP is not available for this client.
+Claude Code supports both transports. For HTTP, start the server first and
+register the endpoint explicitly:
+
+```bash
+npx -y codebase-context --http "/absolute/path/to/your/project"
+claude mcp add --transport http codebase-context http://127.0.0.1:3100/mcp
+```
+
+`claude mcp add` uses local scope by default: the registration is private to
+the current project. Use `--scope project` to write a shareable `.mcp.json`, or
+`--scope user` to make it available across your projects. Scope controls where
+the registration is stored; it does not start the server or choose which repo
+the server indexes.
 
 ## Claude Desktop
 
@@ -47,13 +115,14 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context"]
+      "args": ["-y", "codebase-context", "/absolute/path/to/your/project"]
     }
   }
 }
 ```
 
-Claude Desktop only supports stdio.
+This guide documents Claude Desktop's stdio configuration. Verify the current
+desktop client documentation before using another transport.
 
 ## Cursor
 
@@ -64,7 +133,7 @@ Claude Desktop only supports stdio.
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context"]
+      "args": ["-y", "codebase-context", "/absolute/path/to/your/project"]
     }
   }
 }
@@ -85,43 +154,40 @@ Claude Desktop only supports stdio.
 
 ## Windsurf
 
-Open Settings > MCP and add (stdio only — HTTP is not documented for Windsurf yet):
+Open Settings > MCP and add (stdio):
 
 ```json
 {
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context"]
+      "args": ["-y", "codebase-context", "/absolute/path/to/your/project"]
     }
   }
 }
 ```
+
+This guide documents Windsurf's stdio configuration. Verify current HTTP
+support in the client before using the shared-server route.
 
 ## Codex
 
 **Stdio:**
 
 ```bash
-codex mcp add codebase-context npx -y codebase-context
+codex mcp add codebase-context -- npx -y codebase-context "/absolute/path/to/your/project"
 ```
 
-**HTTP** — start the server first (`npx -y codebase-context --http`), then save a config file and pass it:
-
-```json
-{
-  "mcpServers": {
-    "codebase-context": {
-      "type": "http",
-      "url": "http://127.0.0.1:3100/mcp"
-    }
-  }
-}
-```
+**HTTP** — start the server first (`npx -y codebase-context --http "/absolute/path/to/your/project"`), then register the URL:
 
 ```bash
-codex --mcp-config /path/to/mcp-http.json
+codex mcp add codebase-context --url http://127.0.0.1:3100/mcp
 ```
+
+Codex stores MCP registrations in `~/.codex/config.toml` by default. A
+trusted project can use `.codex/config.toml` for project scope. The
+registration is separate from starting the HTTP process and from indexing the
+repository.
 
 ## VS Code (Copilot)
 
@@ -132,7 +198,7 @@ Add `.vscode/mcp.json` to your project root. VS Code uses `servers` instead of `
   "servers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context"]
+      "args": ["-y", "codebase-context", "/absolute/path/to/your/project"]
     }
   }
 }
@@ -148,7 +214,7 @@ Add `opencode.json` to your project root:
   "mcp": {
     "codebase-context": {
       "type": "local",
-      "command": ["npx", "-y", "codebase-context"],
+      "command": ["npx", "-y", "codebase-context", "/absolute/path/to/your/project"],
       "enabled": true
     }
   }
@@ -157,13 +223,12 @@ Add `opencode.json` to your project root:
 
 OpenCode also supports interactive setup via `opencode mcp add`.
 
-## Single-project fallback
+## Explicit repository scope
 
-If you only use one repo, append a project path:
-
-```bash
-codex mcp add codebase-context npx -y codebase-context "/path/to/your/project"
-```
+The stdio recipe already passes one absolute repository path. For a manually
+written config, append that path as the final argument to `codebase-context`,
+or set `CODEBASE_ROOT` in the server environment. HTTP uses its configured
+project list and roots or an explicit `project` tool argument for routing.
 
 Or set an environment variable:
 
@@ -186,19 +251,6 @@ Then point your MCP client at the local build:
   "mcpServers": {
     "codebase-context": {
       "command": "node",
-      "args": ["<path-to-local-build>/dist/index.js"]
-    }
-  }
-}
-```
-
-If the default setup is not enough for your client, pass a project path explicitly:
-
-```json
-{
-  "mcpServers": {
-    "codebase-context": {
-      "command": "node",
       "args": ["<path-to-local-build>/dist/index.js", "/path/to/your/project"]
     }
   }
@@ -207,9 +259,9 @@ If the default setup is not enough for your client, pass a project path explicit
 
 Check these three flows:
 
-1. **Single project** — call `search_codebase` or `metadata`. Routing is automatic.
+1. **Single project** — with an explicit server root, call `get_codebase_metadata` then a useful source query. Check the returned project path.
 
-2. **Multiple projects on a roots-capable host** — open two repos or a monorepo. Call `codebase://context`. Expected: workspace overview, then automatic routing once a project is active.
+2. **Multiple projects on a roots-capable stdio host** — open two repos or a monorepo. Call `codebase://context`. Expected: workspace overview, then automatic routing once a project is active.
 
 3. **Ambiguous or no-roots selection** — start without a bootstrap path, call `search_codebase`. Expected: `selection_required`. Retry with `project` set to `apps/dashboard` or `/repos/customer-portal`.
 

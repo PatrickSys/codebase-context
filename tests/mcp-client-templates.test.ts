@@ -42,6 +42,7 @@ describe('templates/mcp/stdio/.mcp.json', () => {
     const entry = config.mcpServers['codebase-context'];
     expect(entry.command).toBe('npx');
     expect(entry.args).toContain('codebase-context');
+    expect(entry.args).toContain('/absolute/path/to/your/project');
   });
 });
 
@@ -89,6 +90,12 @@ describe('README.md client setup documentation', () => {
 
   it('mentions Claude Code', () => {
     expect(readme).toContain('Claude Code');
+  });
+
+  it('recommends the setup wizard and path-scoped stdio', () => {
+    expect(readme).toContain('node dist/index.js init');
+    expect(readme).toContain('absolute path');
+    expect(readme).toContain('claude mcp add --transport http');
   });
 
   it('mentions Cursor', () => {
@@ -145,15 +152,16 @@ describe('docs/client-setup.md multi-project guidance', () => {
 
   it('documents the project routing contract', () => {
     expect(clientSetup).toContain(
-      'Automatic multi-project routing is evidence-backed only when the MCP host announces workspace roots.'
+      'The recommended first-use path passes one absolute root explicitly.'
     );
-    expect(clientSetup).toContain(
-      'the server returns `selection_required` instead of guessing'
-    );
+    expect(clientSetup).toContain('the server returns `selection_required`');
+    expect(clientSetup).toContain("Do not rely on a client's initial roots");
+    expect(clientSetup).toContain('pass an explicit `project` with each tool call');
   });
 
-  it('keeps the three verification flows aligned with the roots-first contract', () => {
-    expect(clientSetup).toContain('Multiple projects on a roots-capable host');
+  it('distinguishes explicit-root, stdio-roots, and ambiguous verification flows', () => {
+    expect(clientSetup).toContain('with an explicit server root');
+    expect(clientSetup).toContain('Multiple projects on a roots-capable stdio host');
     expect(clientSetup).toContain('Ambiguous or no-roots selection');
   });
 });

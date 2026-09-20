@@ -13,59 +13,110 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   };
 });
 
+vi.mock('child_process', () => ({
+  execFileSync: vi.fn()
+}));
+
 import * as fsMod from 'node:fs/promises';
+import * as childProcess from 'child_process';
 import {
   generateMcpConfig,
   generateInstructionBlock,
   resolveInstructionFilePath,
   _appendInstructionBlock,
-  _buildMergedMcpContent
+  _buildMergedMcpContent,
+  _runMcpRegistration
 } from '../src/cli-init.js';
 
 // --- generateMcpConfig ---
 
 describe('generateMcpConfig', () => {
-  it('claude-code returns a command with mcp add --transport http', () => {
-    const result = generateMcpConfig('claude-code');
+  const repoPath = '/test/repo';
+
+  it('defaults Claude Code to an absolute-path stdio registration', () => {
+    const result = generateMcpConfig('claude-code', repoPath);
     expect(result.kind).toBe('command');
     if (result.kind !== 'command') return;
     expect(result.args[0]).toBe('mcp');
     expect(result.args).toContain('--transport');
-    expect(result.args).toContain('http');
+    expect(result.args).toContain('stdio');
     expect(result.args).toContain('codebase-context');
-    expect(result.args).toContain('http://127.0.0.1:3100/mcp');
+    expect(result.args).toContain('--');
+    expect(result.command).toBe('claude');
+    expect(result.args).toEqual([
+      'mcp',
+      'add',
+      '--transport',
+      'stdio',
+      'codebase-context',
+      '--',
+      'npx',
+      '-y',
+      'codebase-context',
+      repoPath
+    ]);
   });
 
-  it('cursor returns a file at .cursor/mcp.json with http type', () => {
-    const result = generateMcpConfig('cursor');
+  it('cursor defaults to a path-scoped stdio config', () => {
+    const result = generateMcpConfig('cursor', repoPath);
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe('.cursor/mcp.json');
     const parsed = JSON.parse(result.content) as {
-      mcpServers: { 'codebase-context': { type: string } };
+      mcpServers: { 'codebase-context': { command: string; args: string[] } };
     };
-    expect(parsed.mcpServers['codebase-context'].type).toBe('http');
+    expect(parsed.mcpServers['codebase-context']).toEqual({
+      command: 'npx',
+      args: ['-y', 'codebase-context', repoPath]
+    });
   });
 
-  it('codex returns a command with mcp add', () => {
-    const result = generateMcpConfig('codex');
+  it('Codex defaults to the current documented stdio syntax', () => {
+    const result = generateMcpConfig('codex', repoPath);
     expect(result.kind).toBe('command');
     if (result.kind !== 'command') return;
-    expect(result.args).toContain('mcp');
-    expect(result.args).toContain('add');
-    expect(result.args).toContain('codebase-context');
-    expect(result.args).toContain('http://127.0.0.1:3100/mcp');
+    expect(result.command).toBe('codex');
+    expect(result.args).toEqual([
+      'mcp',
+      'add',
+      'codebase-context',
+      '--',
+      'npx',
+      '-y',
+      'codebase-context',
+      repoPath
+    ]);
   });
 
-  it('opencode returns a file at opencode.json with remote type', () => {
-    const result = generateMcpConfig('opencode');
+  it('OpenCode defaults to a path-scoped local config', () => {
+    const result = generateMcpConfig('opencode', repoPath);
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe('opencode.json');
     const parsed = JSON.parse(result.content) as {
-      mcp: { 'codebase-context': { type: string } };
+      mcp: { 'codebase-context': { type: string; command: string[]; enabled: boolean } };
     };
-    expect(parsed.mcp['codebase-context'].type).toBe('remote');
+    expect(parsed.mcp['codebase-context']).toEqual({
+      type: 'local',
+      command: ['npx', '-y', 'codebase-context', repoPath],
+      enabled: true
+    });
+  });
+
+  it('keeps HTTP explicit and generates current Claude/Codex registrations', () => {
+    const claude = generateMcpConfig('claude-code', repoPath, 'http');
+    const codex = generateMcpConfig('codex', repoPath, 'http');
+
+    expect(claude).toEqual({
+      kind: 'command',
+      command: 'claude',
+      args: ['mcp', 'add', '--transport', 'http', 'codebase-context', 'http://127.0.0.1:3100/mcp']
+    });
+    expect(codex).toEqual({
+      kind: 'command',
+      command: 'codex',
+      args: ['mcp', 'add', 'codebase-context', '--url', 'http://127.0.0.1:3100/mcp']
+    });
   });
 });
 
@@ -80,11 +131,38 @@ describe('generateInstructionBlock', () => {
 
   it('contains all five tool call rules', () => {
     const block = generateInstructionBlock();
+    expect(block).toContain('codebase://context');
     expect(block).toContain('get_memory');
     expect(block).toContain('search_codebase');
     expect(block).toContain('get_team_patterns');
     expect(block).toContain('remember');
     expect(block).toContain('detect_circular_dependencies');
+  });
+});
+
+describe('_runMcpRegistration', () => {
+  const execFileSyncMock = vi.mocked(childProcess.execFileSync);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('passes the client executable separately from its mcp arguments', () => {
+    const result = generateMcpConfig('claude-code', '/test/repo');
+    if (result.kind !== 'command') throw new Error('expected command config');
+
+    expect(_runMcpRegistration(result)).toBe(true);
+    expect(execFileSyncMock).toHaveBeenCalledWith('claude', result.args, { stdio: 'inherit' });
+  });
+
+  it('returns false when the client executable is unavailable', () => {
+    execFileSyncMock.mockImplementation(() => {
+      throw new Error('missing executable');
+    });
+    const result = generateMcpConfig('codex', '/test/repo');
+    if (result.kind !== 'command') throw new Error('expected command config');
+
+    expect(_runMcpRegistration(result)).toBe(false);
   });
 });
 
@@ -170,10 +248,14 @@ describe('_buildMergedMcpContent', () => {
       }) as unknown as Buffer
     );
 
-    const generated = generateMcpConfig('cursor');
+    const generated = generateMcpConfig('cursor', '/test/repo', 'http');
     if (generated.kind !== 'file') throw new Error('expected file config');
 
-    const merged = await _buildMergedMcpContent('/test/.cursor/mcp.json', generated.content, 'cursor');
+    const merged = await _buildMergedMcpContent(
+      '/test/.cursor/mcp.json',
+      generated.content,
+      'cursor'
+    );
     const parsed = JSON.parse(merged.content) as {
       mcpServers: Record<string, { type: string; url: string }>;
       someOtherKey: boolean;
@@ -203,10 +285,14 @@ describe('_buildMergedMcpContent', () => {
       }) as unknown as Buffer
     );
 
-    const generated = generateMcpConfig('opencode');
+    const generated = generateMcpConfig('opencode', '/test/repo', 'http');
     if (generated.kind !== 'file') throw new Error('expected file config');
 
-    const merged = await _buildMergedMcpContent('/test/opencode.json', generated.content, 'opencode');
+    const merged = await _buildMergedMcpContent(
+      '/test/opencode.json',
+      generated.content,
+      'opencode'
+    );
     const parsed = JSON.parse(merged.content) as {
       mcp: Record<string, { type: string; url: string }>;
       extra: string;

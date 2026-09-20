@@ -42,30 +42,47 @@ More CLI examples in [`docs/cli.md`](./docs/cli.md). Full walkthrough: [demo.md 
 
 ## Quick Start
 
+From the repository you want to use with Claude Code, register one local server.
+Replace the path with that repository's absolute path:
+
 ```bash
-claude mcp add codebase-context -- npx -y codebase-context
+claude mcp add --scope local --transport stdio codebase-context -- npx -y codebase-context "/absolute/path/to/your/repo"
 ```
 
-The server runs in two modes. Use stdio unless you need multiple clients connected at once:
+Then open Claude Code in that repository. The client starts CBC; registration
+itself does not start or index it. For another client, use the
+[client setup guide](./docs/client-setup.md).
+
+The source setup wizard offers the same stdio route and an advanced HTTP route:
+`pnpm build` then `node dist/index.js init`. These wizard corrections are not in
+the currently published npm 2.2.0 package. The source package is 2.3.0.
+
+The server runs in two modes. Use stdio unless you need multiple clients connected at once. Registration only writes the client's connection configuration; the client starts a stdio process on demand. HTTP requires a separately running server:
 
 | Mode                | How it runs                                      | When to use                                |
 | ------------------- | ------------------------------------------------ | ------------------------------------------ |
-| **stdio** (default) | Process spawned by the client                    | One AI client talking to one or more repos |
+| **stdio** (default) | Process spawned by the client for one repo       | One AI client and deterministic repo scope |
 | **HTTP**            | Long-lived server at `http://127.0.0.1:3100/mcp` | Multiple clients sharing one server        |
+
+Start HTTP only for the advanced shared-server route:
+
+```bash
+npx -y codebase-context --http "/absolute/path/to/your/repo"
+```
 
 Client support at a glance:
 
 | Client            | stdio | HTTP                                         |
 | ----------------- | ----- | -------------------------------------------- |
-| Claude Code       | Yes   | No (stdio only)                              |
-| Claude Desktop    | Yes   | No                                           |
+| Claude Code       | Yes   | Yes — `claude mcp add --transport http`      |
+| Claude Desktop    | Yes   | See client documentation                     |
 | Cursor            | Yes   | Yes — `.cursor/mcp.json` with `type: "http"` |
-| Windsurf          | Yes   | Not yet                                      |
-| Codex             | Yes   | Yes — `--mcp-config` flag                    |
-| VS Code (Copilot) | Yes   | No                                           |
-| OpenCode          | Yes   | Not documented yet                           |
+| Windsurf          | Yes   | See client documentation                     |
+| Codex             | Yes   | Yes — `codex mcp add --url <url>`            |
+| VS Code (Copilot) | Yes   | See client documentation                     |
+| OpenCode          | Yes   | Yes — `type: "remote"`                       |
 
-Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](./templates/mcp/stdio/.mcp.json) and [`templates/mcp/http/.mcp.json`](./templates/mcp/http/.mcp.json).
+Copy-pasteable templates: [`templates/mcp/stdio/.mcp.json`](./templates/mcp/stdio/.mcp.json) and [`templates/mcp/http/.mcp.json`](./templates/mcp/http/.mcp.json). Replace the stdio template's absolute-path placeholder with your repository path before saving it.
 
 Full per-client setup, HTTP server instructions, and local build testing: [`docs/client-setup.md`](./docs/client-setup.md).
 
@@ -82,6 +99,10 @@ npx -y codebase-context search --query "auth middleware"
 ```
 
 Your AI agent uses the same map via the `codebase://context` MCP resource on first call.
+
+After the map, call `get_memory` when prior decisions or team history matter. Memory is supporting context; it does not replace the initial map.
+
+The MCP resource can start deferred indexing when its project has no index yet. The CLI `map` command only reads available artifacts; run `npx -y codebase-context reindex` when you need to build the index explicitly.
 
 ## Common First Commands
 
@@ -222,7 +243,9 @@ Paste this into `.cursorrules`, `CLAUDE.md`, `AGENTS.md`, or wherever your AI re
 ```markdown
 ## Codebase Context (MCP)
 
-**Start of every task:** Call `get_memory` to load team conventions before writing any code.
+**Start of every task:** Read `codebase://context` (or run `map`) to load the bounded conventions map before searching or editing.
+
+**Then, when prior decisions or team history matter:** Call `get_memory` before writing code.
 
 **Before editing existing code:** Call `search_codebase` with `intent: "edit"`. If the preflight card says `ready: false`, read the listed files before touching anything.
 

@@ -14,18 +14,110 @@ import { execFileSync } from 'child_process';
 import { select, confirm } from '@inquirer/prompts';
 
 export type Client = 'claude-code' | 'cursor' | 'codex' | 'opencode';
+export type ConnectionMode = 'stdio' | 'http';
 
 export type McpConfigResult =
   | { kind: 'file'; path: string; content: string }
-  | { kind: 'command'; args: string[] };
+  | { kind: 'command'; command: 'claude' | 'codex'; args: string[] };
+
+type CommandMcpConfig = Extract<McpConfigResult, { kind: 'command' }>;
 
 type JsonObject = Record<string, unknown>;
 
-export function generateMcpConfig(client: Client): McpConfigResult {
+/** Execute a confirmed CLI registration using the client executable. */
+export function _runMcpRegistration(result: CommandMcpConfig): boolean {
+  try {
+    execFileSync(result.command, result.args, { stdio: 'inherit' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Generate a client registration for one repository.
+ *
+ * Stdio is the recommended first-use path. The absolute repository argument
+ * makes the server's project attribution deterministic even when the client
+ * does not advertise workspace roots. HTTP is deliberately explicit because
+ * it requires a separately owned long-lived server process.
+ */
+export function generateMcpConfig(
+  client: Client,
+  cwd = process.cwd(),
+  mode: ConnectionMode = 'stdio'
+): McpConfigResult {
+  const rootPath = path.resolve(cwd);
+
+  if (mode === 'stdio') {
+    switch (client) {
+      case 'claude-code':
+        return {
+          kind: 'command',
+          command: 'claude',
+          args: [
+            'mcp',
+            'add',
+            '--transport',
+            'stdio',
+            'codebase-context',
+            '--',
+            'npx',
+            '-y',
+            'codebase-context',
+            rootPath
+          ]
+        };
+      case 'cursor':
+        return {
+          kind: 'file',
+          path: '.cursor/mcp.json',
+          content: JSON.stringify(
+            {
+              mcpServers: {
+                'codebase-context': {
+                  command: 'npx',
+                  args: ['-y', 'codebase-context', rootPath]
+                }
+              }
+            },
+            null,
+            2
+          )
+        };
+      case 'codex':
+        return {
+          kind: 'command',
+          command: 'codex',
+          args: ['mcp', 'add', 'codebase-context', '--', 'npx', '-y', 'codebase-context', rootPath]
+        };
+      case 'opencode':
+        return {
+          kind: 'file',
+          path: 'opencode.json',
+          content: JSON.stringify(
+            {
+              $schema: 'https://opencode.ai/config.json',
+              mcp: {
+                'codebase-context': {
+                  type: 'local',
+                  command: ['npx', '-y', 'codebase-context', rootPath],
+                  enabled: true
+                }
+              }
+            },
+            null,
+            2
+          )
+        };
+    }
+  }
+
   switch (client) {
     case 'claude-code':
       return {
         kind: 'command',
+        command: 'claude',
         args: ['mcp', 'add', '--transport', 'http', 'codebase-context', 'http://127.0.0.1:3100/mcp']
       };
     case 'cursor':
@@ -48,7 +140,8 @@ export function generateMcpConfig(client: Client): McpConfigResult {
     case 'codex':
       return {
         kind: 'command',
-        args: ['mcp', 'add', 'codebase-context', 'http://127.0.0.1:3100/mcp']
+        command: 'codex',
+        args: ['mcp', 'add', 'codebase-context', '--url', 'http://127.0.0.1:3100/mcp']
       };
     case 'opencode':
       return {
@@ -75,7 +168,9 @@ export function generateInstructionBlock(): string {
   return `<!-- codebase-context:start -->
 ## Codebase Context (MCP)
 
-**Start of every task:** Call \`get_memory\` to load team conventions before writing any code.
+**Start of every task:** Read \`codebase://context\` (or run \`map\`) to load the bounded conventions map before searching or editing.
+
+**Then, when prior decisions or team history matter:** Call \`get_memory\` before writing code.
 
 **Before editing existing code:** Call \`search_codebase\` with \`intent: "edit"\`. If the preflight card says \`ready: false\`, read the listed files before touching anything.
 
@@ -200,7 +295,22 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
     ]
   });
 
-  const mcpResult = generateMcpConfig(client);
+  const mode = await select<ConnectionMode>({
+    message: 'Connection mode?',
+    choices: [
+      {
+        name: 'stdio (recommended: client owns one local server for this repo)',
+        value: 'stdio'
+      },
+      {
+        name: 'HTTP (advanced: share a separately started server across clients)',
+        value: 'http'
+      }
+    ]
+  });
+
+  const rootPath = path.resolve(process.cwd());
+  const mcpResult = generateMcpConfig(client, rootPath, mode);
 
   console.log('\n--- MCP Config Preview ---');
   if (mcpResult.kind === 'file') {
@@ -212,7 +322,7 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
     }
     console.log(`File: ${mcpResult.path}\n${mcpResult.content}`);
   } else {
-    console.log(`Command to run: ${mcpResult.args[0]} ${mcpResult.args.slice(1).join(' ')}`);
+    console.log(`Command to run: ${mcpResult.command} ${mcpResult.args.join(' ')}`);
   }
 
   const applyMcp = await confirm({
@@ -263,12 +373,9 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
       }
       console.log(`Written: ${mcpResult.path}`);
     } else {
-      const [cmd, ...rest] = mcpResult.args;
-      try {
-        execFileSync(cmd, rest, { stdio: 'inherit' });
-      } catch {
+      if (!_runMcpRegistration(mcpResult)) {
         console.log(
-          `Could not run '${cmd}' automatically. Run it yourself:\n  ${cmd} ${rest.join(' ')}`
+          `Could not run '${mcpResult.command}' automatically. Run it yourself:\n  ${mcpResult.command} ${mcpResult.args.join(' ')}`
         );
       }
     }
@@ -283,9 +390,12 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
     }
   }
 
-  console.log(
-    '\nNext steps:\n' +
-      '  Run `npx codebase-context map` to see your codebase conventions\n' +
-      '  Start the HTTP server: npx codebase-context --http\n'
-  );
+  const nextSteps = [
+    '\nNext steps:',
+    '  Read `codebase://context` (or run `npx codebase-context map`) for the conventions map.',
+    mode === 'http'
+      ? `  Start the registered HTTP server separately: npx codebase-context --http "${rootPath}"`
+      : '  Open the client in this repository; it will start the registered stdio process on demand.'
+  ];
+  console.log(nextSteps.join('\n') + '\n');
 }

@@ -2,7 +2,7 @@
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context"]
+      "args": ["-y", "codebase-context", "/absolute/path/to/your/project"]
     }
   }
 }

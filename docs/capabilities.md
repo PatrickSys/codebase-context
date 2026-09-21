@@ -78,8 +78,19 @@ to a different launch directory. Missing source files are not returned as
 openable references. When a reference parser is unavailable or cannot scan the
 file, text matches use the current source rather than cached chunks; those
 matches may include comments and strings.
+The symbol prefilter also reads current source, so newly added symbols in an
+already indexed file are not excluded by its older chunks. Newly created files
+still need indexing before they can be searched for references.
 Rebuild an older index with `reindex` if map or health output still contains
 paths from a previous launch directory; those views read persisted metadata.
+
+Search checks indexed source paths against the selected project and validates
+retrieved candidates against the stored file-hash manifest before ranking or
+limiting results. A relocated index, missing manifest, or changed/unreadable
+candidate requires a full rebuild; MCP starts that rebuild and returns an
+`indexing` response asking the caller to retry. It does not serve a stale path or
+silently drop the top match. These checks cover retrieved source candidates,
+not newly added files that have not yet been indexed.
 
 ### Core Tools
 

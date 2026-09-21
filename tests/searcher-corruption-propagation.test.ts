@@ -9,7 +9,8 @@ import {
   INDEX_META_FILENAME,
   INDEX_META_VERSION,
   INTELLIGENCE_FILENAME,
-  KEYWORD_INDEX_FILENAME
+  KEYWORD_INDEX_FILENAME,
+  MANIFEST_FILENAME
 } from '../src/constants/codebase-context.js';
 
 const deps = vi.hoisted(() => ({
@@ -53,6 +54,11 @@ describe('CodebaseSearcher IndexCorruptedError propagation', () => {
     await fs.writeFile(
       path.join(ctxDir, KEYWORD_INDEX_FILENAME),
       JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks: [] }),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(ctxDir, MANIFEST_FILENAME),
+      JSON.stringify({ version: 1, generatedAt, files: {} }),
       'utf-8'
     );
     await fs.writeFile(

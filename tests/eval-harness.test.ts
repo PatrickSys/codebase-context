@@ -12,6 +12,19 @@ import {
 import angularFixture from './fixtures/eval-angular-spotify.json';
 import controlledFixture from './fixtures/eval-controlled.json';
 
+type SearcherFixture = {
+  initialized: boolean;
+  embeddingProvider: unknown;
+  storageProvider: unknown;
+  fuseIndex: unknown;
+  patternIntelligence: unknown;
+  validateCandidateSources: (
+    chunks: Iterable<CodeChunk>,
+    checkedPaths: Set<string>
+  ) => Promise<void>;
+  search: CodebaseSearcher['search'];
+};
+
 function createChunk(
   id: string,
   filePath: string,
@@ -49,10 +62,11 @@ function setupSearcherWithResultsByQuery(
   byQuery: Record<string, SearchResult[]>,
   fallback: SearchResult[] = []
 ): CodebaseSearcher {
-  const searcher = new CodebaseSearcher('C:/repo') as any;
+  const searcher = new CodebaseSearcher('C:/repo') as unknown as SearcherFixture;
   searcher.initialized = true;
   searcher.search = vi.fn(async (query: string) => byQuery[query] ?? fallback);
-  return searcher as CodebaseSearcher;
+  searcher.validateCandidateSources = async () => {};
+  return searcher as unknown as CodebaseSearcher;
 }
 
 function fixtureForSingleQuery(query: EvalQuery): EvalFixture {
@@ -268,7 +282,7 @@ describe('Eval Harness - integration with CodebaseSearcher (mocked)', () => {
       { componentType: 'unknown' }
     );
 
-    const searcher = new CodebaseSearcher('C:/repo') as any;
+    const searcher = new CodebaseSearcher('C:/repo') as unknown as SearcherFixture;
     searcher.initialized = true;
     searcher.embeddingProvider = {
       embed: vi.fn(async () => new Array(384).fill(0.01))
@@ -282,8 +296,9 @@ describe('Eval Harness - integration with CodebaseSearcher (mocked)', () => {
     };
     searcher.fuseIndex = null;
     searcher.patternIntelligence = null;
+    searcher.validateCandidateSources = async () => {};
 
-    const results = await (searcher as CodebaseSearcher).search('AuthService', 5);
+    const results = await searcher.search('AuthService', 5);
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].filePath).toContain('auth.service.ts');
   });

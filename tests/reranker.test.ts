@@ -1,6 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { isAmbiguous } from '../src/core/reranker.js';
-import type { SearchResult } from '../src/types/index.js';
+import type { CodeChunk, SearchResult } from '../src/types/index.js';
+import { CodebaseSearcher } from '../src/core/search.js';
+
+type SearcherFixture = {
+  initialized: boolean;
+  embeddingProvider: unknown;
+  storageProvider: unknown;
+  fuseIndex: unknown;
+  patternIntelligence: unknown;
+  validateCandidateSources: (
+    chunks: Iterable<CodeChunk>,
+    checkedPaths: Set<string>
+  ) => Promise<void>;
+  search: CodebaseSearcher['search'];
+};
 
 function makeResult(score: number, filePath: string): SearchResult {
   return {
@@ -29,23 +43,20 @@ describe('Reranker ambiguity detection', () => {
     const results = [
       makeResult(0.95, '/a.ts'),
       makeResult(0.75, '/b.ts'),
-      makeResult(0.60, '/c.ts')
+      makeResult(0.6, '/c.ts')
     ];
     expect(isAmbiguous(results)).toBe(false);
   });
 
   it('returns false for fewer than 3 results', () => {
-    const results = [
-      makeResult(0.85, '/a.ts'),
-      makeResult(0.84, '/b.ts')
-    ];
+    const results = [makeResult(0.85, '/a.ts'), makeResult(0.84, '/b.ts')];
     expect(isAmbiguous(results)).toBe(false);
   });
 
   it('correctly handles edge case at threshold boundary', () => {
     // Gap of exactly 0.08 is NOT below the < 0.08 threshold
     const results = [
-      makeResult(0.90, '/a.ts'),
+      makeResult(0.9, '/a.ts'),
       makeResult(0.85, '/b.ts'),
       makeResult(0.82, '/c.ts')
     ];
@@ -53,7 +64,7 @@ describe('Reranker ambiguity detection', () => {
 
     // Gap of 0.07 IS below the threshold
     const ambiguous = [
-      makeResult(0.90, '/a.ts'),
+      makeResult(0.9, '/a.ts'),
       makeResult(0.86, '/b.ts'),
       makeResult(0.83, '/c.ts')
     ];
@@ -66,10 +77,9 @@ describe('File-level dedupe in search results', () => {
     // This is tested via the integration in search-ranking.test.ts
     // The dedupe logic is in scoreAndSortResults — tested indirectly by
     // ensuring results contain unique file paths
-    const { CodebaseSearcher } = await import('../src/core/search.js');
     const { vi } = await import('vitest');
 
-    const searcher = new CodebaseSearcher('C:/repo') as any;
+    const searcher = new CodebaseSearcher('C:/repo') as unknown as SearcherFixture;
     searcher.initialized = true;
     searcher.embeddingProvider = {
       embed: vi.fn(async () => [0.1, 0.2])
@@ -134,15 +144,16 @@ describe('File-level dedupe in search results', () => {
             tags: [],
             metadata: {}
           },
-          score: 0.80
+          score: 0.8
         }
       ]),
       count: vi.fn(async () => 3)
     };
     searcher.fuseIndex = null;
     searcher.patternIntelligence = null;
+    searcher.validateCandidateSources = async () => {};
 
-    const results = await (searcher as any).search('Foo class', 5, undefined, {
+    const results = await searcher.search('Foo class', 5, undefined, {
       useSemanticSearch: true,
       useKeywordSearch: false,
       enableReranker: false,
@@ -151,7 +162,7 @@ describe('File-level dedupe in search results', () => {
     });
 
     // Should have 2 unique files, not 3 results (two from foo.ts)
-    const filePaths = results.map((r: any) => r.filePath);
+    const filePaths = results.map((result) => result.filePath);
     expect(filePaths.length).toBe(2);
     expect(filePaths[0]).toContain('foo.ts');
     expect(filePaths[1]).toContain('baz.ts');

@@ -1,6 +1,44 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { CodeChunk } from '../src/types/index.js';
+import type { CodeChunk, SearchFilters } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
+
+type Retrieval = { chunk: CodeChunk; score: number };
+type QueryVariant = { query: string; weight: number };
+type RankedChunk = { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> };
+type RetrievalFixture = {
+  initialized: boolean;
+  embeddingProvider: unknown;
+  storageProvider: unknown;
+  fuseIndex: unknown;
+  patternIntelligence: unknown;
+  validateCandidateSources: (
+    chunks: Iterable<CodeChunk>,
+    checkedPaths: Set<string>
+  ) => Promise<void>;
+  semanticSearch: (query: string, limit: number, filters?: SearchFilters) => Promise<Retrieval[]>;
+  keywordSearch: (query: string, limit: number, filters?: SearchFilters) => Promise<Retrieval[]>;
+  collectHybridMatches: (
+    variants: QueryVariant[],
+    limit: number,
+    filters: SearchFilters | undefined,
+    useSemantic: boolean,
+    useKeyword: boolean,
+    semanticWeight: number,
+    keywordWeight: number
+  ) => Promise<{ semantic: Map<string, RankedChunk>; keyword: Map<string, RankedChunk> }>;
+  search: CodebaseSearcher['search'];
+};
+
+function makeSearcher(): RetrievalFixture {
+  const searcher = new CodebaseSearcher('C:/repo') as unknown as RetrievalFixture;
+  searcher.initialized = true;
+  searcher.embeddingProvider = {};
+  searcher.storageProvider = {};
+  searcher.fuseIndex = null;
+  searcher.patternIntelligence = null;
+  searcher.validateCandidateSources = async () => {};
+  return searcher;
+}
 
 function createChunk(id: string, filePath: string, content: string): CodeChunk {
   return {
@@ -29,14 +67,9 @@ describe('CodebaseSearcher retrieval strategy', () => {
       'src/core/auth-service.ts',
       'export class AuthService {}'
     );
-    const searcher = new CodebaseSearcher('C:/repo') as any;
-
-    searcher.initialized = true;
-    searcher.embeddingProvider = {};
-    searcher.storageProvider = {};
-    searcher.fuseIndex = null;
-    searcher.patternIntelligence = null;
-    searcher.semanticSearch = vi.fn(async () => [{ chunk: implChunk, score: 0.7 }]);
+    const searcher = makeSearcher();
+    const semanticSearch = vi.fn(async () => [{ chunk: implChunk, score: 0.7 }]);
+    searcher.semanticSearch = semanticSearch;
     searcher.keywordSearch = vi.fn(async () => []);
 
     await searcher.search('authentication login', 1, undefined, {
@@ -45,8 +78,8 @@ describe('CodebaseSearcher retrieval strategy', () => {
       candidateFloor: 30
     });
 
-    expect(searcher.semanticSearch).toHaveBeenCalledTimes(1);
-    expect(searcher.semanticSearch.mock.calls[0][1]).toBe(30);
+    expect(semanticSearch).toHaveBeenCalledTimes(1);
+    expect(semanticSearch.mock.calls[0][1]).toBe(30);
   });
 
   it('uses bounded query expansion for intent-heavy queries', async () => {
@@ -55,14 +88,9 @@ describe('CodebaseSearcher retrieval strategy', () => {
       'src/core/router-service.ts',
       'export class RouterService {}'
     );
-    const searcher = new CodebaseSearcher('C:/repo') as any;
-
-    searcher.initialized = true;
-    searcher.embeddingProvider = {};
-    searcher.storageProvider = {};
-    searcher.fuseIndex = null;
-    searcher.patternIntelligence = null;
-    searcher.semanticSearch = vi.fn(async () => [{ chunk: implChunk, score: 0.65 }]);
+    const searcher = makeSearcher();
+    const semanticSearch = vi.fn(async () => [{ chunk: implChunk, score: 0.65 }]);
+    searcher.semanticSearch = semanticSearch;
     searcher.keywordSearch = vi.fn(async () => []);
 
     await searcher.search('authentication login', 3, undefined, {
@@ -70,7 +98,7 @@ describe('CodebaseSearcher retrieval strategy', () => {
       enableLowConfidenceRescue: false
     });
 
-    const semanticQueries = searcher.semanticSearch.mock.calls.map((call: any[]) => call[0]);
+    const semanticQueries = semanticSearch.mock.calls.map((call) => call[0]);
     expect(semanticQueries[0]).toBe('authentication login');
     expect(semanticQueries.length).toBeLessThanOrEqual(2);
   });
@@ -87,13 +115,7 @@ describe('CodebaseSearcher retrieval strategy', () => {
       'export class AuthCallbackComponent {}'
     );
 
-    const searcher = new CodebaseSearcher('C:/repo') as any;
-    searcher.initialized = true;
-    searcher.embeddingProvider = {};
-    searcher.storageProvider = {};
-    searcher.fuseIndex = null;
-    searcher.patternIntelligence = null;
-
+    const searcher = makeSearcher();
     searcher.semanticSearch = vi.fn(async (query: string) => {
       if (query.includes('router') || query.includes('navigation')) {
         return [
@@ -126,12 +148,7 @@ describe('CodebaseSearcher retrieval strategy', () => {
       'export class AuthService { login() {} }'
     );
 
-    const searcher = new CodebaseSearcher('C:/repo') as any;
-    searcher.initialized = true;
-    searcher.embeddingProvider = {};
-    searcher.storageProvider = {};
-    searcher.fuseIndex = null;
-    searcher.patternIntelligence = null;
+    const searcher = makeSearcher();
 
     let capturedSemanticWeight: number | undefined;
     let capturedKeywordWeight: number | undefined;
@@ -139,11 +156,11 @@ describe('CodebaseSearcher retrieval strategy', () => {
     // Intercept collectHybridMatches to capture the weights used
     searcher.collectHybridMatches = vi.fn(
       async (
-        _variants: any,
-        _limit: any,
-        _filters: any,
-        _useSemantic: any,
-        _useKeyword: any,
+        _variants: QueryVariant[],
+        _limit: number,
+        _filters: SearchFilters | undefined,
+        _useSemantic: boolean,
+        _useKeyword: boolean,
         semWeight: number,
         kwWeight: number
       ) => {
@@ -153,9 +170,7 @@ describe('CodebaseSearcher retrieval strategy', () => {
           semantic: new Map([
             ['impl', { chunk: implChunk, ranks: [{ rank: 0, weight: semWeight }] }]
           ]),
-          keyword: new Map([
-            ['impl', { chunk: implChunk, ranks: [{ rank: 0, weight: kwWeight }] }]
-          ])
+          keyword: new Map([['impl', { chunk: implChunk, ranks: [{ rank: 0, weight: kwWeight }] }]])
         };
       }
     );
@@ -179,22 +194,17 @@ describe('CodebaseSearcher retrieval strategy', () => {
     );
     const weakChunk = createChunk('weak', 'src/utils/helpers.ts', 'export function helper() {}');
 
-    const searcher = new CodebaseSearcher('C:/repo') as any;
-    searcher.initialized = true;
-    searcher.embeddingProvider = {};
-    searcher.storageProvider = {};
-    searcher.fuseIndex = null;
-    searcher.patternIntelligence = null;
+    const searcher = makeSearcher();
 
     // Mock collectHybridMatches: strong chunk rank 0 in both channels,
     // weak chunk rank 5 in keyword only
     searcher.collectHybridMatches = vi.fn(
       async (
-        _variants: any,
-        _limit: any,
-        _filters: any,
-        _useSemantic: any,
-        _useKeyword: any,
+        _variants: QueryVariant[],
+        _limit: number,
+        _filters: SearchFilters | undefined,
+        _useSemantic: boolean,
+        _useKeyword: boolean,
         semWeight: number,
         kwWeight: number
       ) => ({

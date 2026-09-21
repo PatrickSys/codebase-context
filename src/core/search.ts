@@ -12,12 +12,15 @@ import { analyzerRegistry } from './analyzer-registry.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import { isTestingRelatedQuery } from '../preflight/query-scope.js';
 import { assessSearchQuality } from './search-quality.js';
-import { rerank, getRerankerStatus } from './reranker.js';
+import { rerank } from './reranker.js';
 import { type IndexMeta, readIndexMeta, validateIndexArtifacts } from './index-meta.js';
+import { hashFileContent, readManifest, type FileManifest } from './manifest.js';
+import { isPathWithin } from '../utils/project-discovery.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
+  MANIFEST_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 
@@ -121,6 +124,7 @@ export class CodebaseSearcher {
   private storageProvider: VectorStorageProvider | null = null;
 
   private initialized = false;
+  private sourceManifest: FileManifest | null = null;
 
   // Pattern intelligence for trend detection
   private patternIntelligence: {
@@ -145,6 +149,7 @@ export class CodebaseSearcher {
       await validateIndexArtifacts(this.rootPath, this.indexMeta);
 
       await this.loadKeywordIndex();
+      await this.loadSourceManifest();
       await this.loadPatternIntelligence();
 
       // Use the embedding config the index was built with, not the current env-var defaults.
@@ -167,6 +172,77 @@ export class CodebaseSearcher {
       }
       console.warn('Partial initialization (keyword search only):', error);
       this.initialized = true;
+    }
+  }
+
+  private getIndexedSourcePath(chunk: CodeChunk): string {
+    if (
+      typeof chunk?.relativePath !== 'string' ||
+      !chunk.relativePath.trim() ||
+      path.isAbsolute(chunk.relativePath) ||
+      typeof chunk.filePath !== 'string' ||
+      !chunk.filePath.trim()
+    ) {
+      throw new IndexCorruptedError('Indexed source location is invalid. Full rebuild required.');
+    }
+
+    const sourcePath = path.resolve(this.rootPath, chunk.relativePath);
+    const indexedPath = path.resolve(this.rootPath, chunk.filePath);
+    if (
+      !isPathWithin(this.rootPath, sourcePath) ||
+      !path.relative(this.rootPath, sourcePath) ||
+      path.relative(sourcePath, indexedPath) !== ''
+    ) {
+      throw new IndexCorruptedError(
+        'Indexed source belongs to a different project location. Full rebuild required.'
+      );
+    }
+    return sourcePath;
+  }
+
+  private async loadSourceManifest(): Promise<void> {
+    const manifest = await readManifest(
+      path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME)
+    );
+    if (!manifest?.files || Array.isArray(manifest.files)) {
+      throw new IndexCorruptedError(
+        'Source manifest is missing or invalid. Full rebuild required.'
+      );
+    }
+
+    // Check already-loaded path metadata before initializing any model. A copied index
+    // also contains old vector locations, so rebasing only its display paths is unsafe.
+    for (const chunk of this.chunks) this.getIndexedSourcePath(chunk);
+    this.sourceManifest = manifest;
+  }
+
+  private async validateCandidateSources(
+    chunks: Iterable<CodeChunk>,
+    checkedPaths: Set<string>
+  ): Promise<void> {
+    if (!this.sourceManifest) {
+      throw new IndexCorruptedError('Source manifest is unavailable. Full rebuild required.');
+    }
+    for (const chunk of chunks) {
+      const sourcePath = this.getIndexedSourcePath(chunk);
+      if (checkedPaths.has(sourcePath)) continue;
+      const relativePath = path.relative(this.rootPath, sourcePath).replace(/\\/g, '/');
+      const expectedHash = this.sourceManifest.files[relativePath];
+      if (typeof expectedHash !== 'string') {
+        throw new IndexCorruptedError(
+          'Indexed source is absent from its manifest. Rebuild required.'
+        );
+      }
+      try {
+        if (!(await fs.stat(sourcePath)).isFile()) throw new Error('Source is not a regular file');
+        const content = await fs.readFile(sourcePath, 'utf-8');
+        if (hashFileContent(content) !== expectedHash) throw new Error('Source content changed');
+      } catch {
+        throw new IndexCorruptedError(
+          `Indexed source is changed or unreadable (${relativePath}). Full rebuild required.`
+        );
+      }
+      checkedPaths.add(sourcePath);
     }
   }
 
@@ -955,6 +1031,17 @@ export class CodebaseSearcher {
       finalKeywordWeight
     );
 
+    // Validate before scoring and limiting: dropping stale top results afterward could
+    // hide valid lower matches. The handler requests a full rebuild and asks for retry.
+    // Read each candidate file only once per search, not the entire repository.
+    const checkedSourcePaths = new Set<string>();
+    await this.validateCandidateSources(
+      [...primaryMatches.semantic.values(), ...primaryMatches.keyword.values()].map(
+        (match) => match.chunk
+      ),
+      checkedSourcePaths
+    );
+
     const primaryTotalWeight =
       primaryVariants.reduce((sum, v) => sum + v.weight, 0) *
       (finalSemanticWeight + finalKeywordWeight);
@@ -985,6 +1072,13 @@ export class CodebaseSearcher {
             Boolean(useKeywordSearch),
             finalSemanticWeight,
             finalKeywordWeight
+          );
+
+          await this.validateCandidateSources(
+            [...rescueMatches.semantic.values(), ...rescueMatches.keyword.values()].map(
+              (match) => match.chunk
+            ),
+            checkedSourcePaths
           );
 
           const rescueVariantWeights = rescueVariants.map((_, i) => (i === 0 ? 1 : 0.8));

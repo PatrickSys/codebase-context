@@ -2,6 +2,18 @@ import { describe, it, expect, vi } from 'vitest';
 import type { CodeChunk } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
 
+type SearcherFixture = {
+  initialized: boolean;
+  embeddingProvider: unknown;
+  storageProvider: unknown;
+  fuseIndex: unknown;
+  patternIntelligence: unknown;
+  validateCandidateSources: (
+    chunks: Iterable<CodeChunk>,
+    checkedPaths: Set<string>
+  ) => Promise<void>;
+};
+
 function createChunk(id: string, filePath: string, content: string): CodeChunk {
   return {
     id,
@@ -25,7 +37,7 @@ function createChunk(id: string, filePath: string, content: string): CodeChunk {
 function setupSemanticOnlySearcher(
   results: { chunk: CodeChunk; score: number }[]
 ): CodebaseSearcher {
-  const searcher = new CodebaseSearcher('C:/repo') as any;
+  const searcher = new CodebaseSearcher('C:/repo') as unknown as SearcherFixture;
   searcher.initialized = true;
   searcher.embeddingProvider = {
     embed: vi.fn(async () => [0.1, 0.2])
@@ -36,7 +48,8 @@ function setupSemanticOnlySearcher(
   };
   searcher.fuseIndex = null;
   searcher.patternIntelligence = null;
-  return searcher as CodebaseSearcher;
+  searcher.validateCandidateSources = async () => {};
+  return searcher as unknown as CodebaseSearcher;
 }
 
 describe('CodebaseSearcher query-aware ranking', () => {

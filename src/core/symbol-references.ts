@@ -8,7 +8,6 @@ import { isPathWithin } from '../utils/project-discovery.js';
 import { findIdentifierOccurrences } from '../utils/tree-sitter.js';
 
 interface IndexedChunk {
-  content?: unknown;
   relativePath?: unknown;
   filePath?: unknown;
 }
@@ -61,14 +60,17 @@ function resolveProjectLocation(
 
 async function resolveChunkLocation(
   rootPath: string,
-  chunk: IndexedChunk
+  chunk: IndexedChunk,
+  fileExistence: Map<string, boolean>
 ): Promise<ResolvedChunkLocation | null> {
   for (const candidate of [chunk.filePath, chunk.relativePath]) {
     if (typeof candidate !== 'string' || !candidate.trim()) continue;
     const location = resolveProjectLocation(rootPath, candidate.trim());
-    if (location && (await fileExists(location.absolutePath))) {
-      return location;
+    if (!location) continue;
+    if (!fileExistence.has(location.absolutePath)) {
+      fileExistence.set(location.absolutePath, await fileExists(location.absolutePath));
     }
+    if (fileExistence.get(location.absolutePath)) return location;
   }
   return null;
 }
@@ -142,16 +144,14 @@ export async function findSymbolReferences(
   const prefilter = new RegExp(`\\b${escapedSymbol}\\b`);
   const matcher = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
 
-  // Prefilter candidate files from the keyword index. We do not trust chunk contents for
-  // current reference locations; chunks only guide which files to scan.
+  // Use the index to nominate files, not to rule out symbols added since indexing.
+  // Both the symbol prefilter and reference locations must use current source.
   const candidateFiles = new Map<string, ResolvedChunkLocation>();
+  const fileExistence = new Map<string, boolean>();
 
   for (const chunkRaw of chunks) {
     const chunk = chunkRaw as IndexedChunk;
-    if (typeof chunk.content !== 'string') continue;
-    if (!prefilter.test(chunk.content)) continue;
-
-    const location = await resolveChunkLocation(rootPath, chunk);
+    const location = await resolveChunkLocation(rootPath, chunk, fileExistence);
     if (!location) continue;
     candidateFiles.set(location.relativePath, location);
   }
@@ -165,6 +165,8 @@ export async function findSymbolReferences(
       // Cached chunks cannot substantiate a current source location.
       continue;
     }
+
+    if (!prefilter.test(content)) continue;
 
     const lines = content.split('\n');
     const occurrences = await findIdentifierOccurrences(

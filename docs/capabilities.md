@@ -75,7 +75,9 @@ Open each `get_symbol_references` usage `file` relative to the selected
 `project.rootPath`, using its one-based `line`. Reference locations are derived
 from files in that project, including when an older index stored paths relative
 to a different launch directory. Missing source files are not returned as
-openable references.
+openable references. When a reference parser is unavailable or cannot scan the
+file, text matches use the current source rather than cached chunks; those
+matches may include comments and strings.
 Rebuild an older index with `reindex` if map or health output still contains
 paths from a previous launch directory; those views read persisted metadata.
 

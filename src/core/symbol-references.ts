@@ -9,7 +9,6 @@ import { findIdentifierOccurrences } from '../utils/tree-sitter.js';
 
 interface IndexedChunk {
   content?: unknown;
-  startLine?: unknown;
   relativePath?: unknown;
   filePath?: unknown;
 }
@@ -72,14 +71,6 @@ async function resolveChunkLocation(
     }
   }
   return null;
-}
-
-function buildPreview(content: string, lineOffset: number): string {
-  const lines = content.split('\n');
-  const start = Math.max(0, lineOffset - 1);
-  const end = Math.min(lines.length, lineOffset + 2);
-  const previewLines = lines.slice(start, end);
-  return previewLines.join('\n').trim();
 }
 
 function buildPreviewFromFileLines(lines: string[], line: number): string {
@@ -152,11 +143,8 @@ export async function findSymbolReferences(
   const matcher = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
 
   // Prefilter candidate files from the keyword index. We do not trust chunk contents for
-  // exact reference counting when Tree-sitter is available; chunks only guide which files to scan.
-  const chunksByFile = new Map<
-    string,
-    { relPath: string; absPath: string | null; chunks: IndexedChunk[] }
-  >();
+  // current reference locations; chunks only guide which files to scan.
+  const candidateFiles = new Map<string, ResolvedChunkLocation>();
 
   for (const chunkRaw of chunks) {
     const chunk = chunkRaw as IndexedChunk;
@@ -165,78 +153,52 @@ export async function findSymbolReferences(
 
     const location = await resolveChunkLocation(rootPath, chunk);
     if (!location) continue;
-    const { relativePath: relPath, absolutePath: absPath } = location;
-
-    const entry = chunksByFile.get(relPath);
-    if (entry) {
-      entry.chunks.push(chunk);
-      // Prefer a real absolute path when available
-      if (!entry.absPath && absPath) {
-        entry.absPath = absPath;
-      }
-    } else {
-      chunksByFile.set(relPath, { relPath, absPath, chunks: [chunk] });
-    }
+    candidateFiles.set(location.relativePath, location);
   }
 
-  for (const entry of chunksByFile.values()) {
-    const relPath = entry.relPath;
-    const absPath = entry.absPath;
-
-    // Preferred: Tree-sitter identifier walk on the real file content.
-    if (absPath) {
-      try {
-        const raw = await fs.readFile(absPath, 'utf-8');
-        const content = raw.replace(/\r\n/g, '\n');
-        const language = detectLanguage(absPath);
-        const occurrences = await findIdentifierOccurrences(content, language, normalizedSymbol);
-
-        if (occurrences) {
-          usageCount += occurrences.length;
-
-          if (usages.length < normalizedLimit && occurrences.length > 0) {
-            const lines = content.split('\n');
-            for (const occ of occurrences) {
-              if (usages.length >= normalizedLimit) break;
-              usages.push({
-                file: relPath,
-                line: occ.line,
-                preview: buildPreviewFromFileLines(lines, occ.line)
-              });
-            }
-          }
-
-          continue;
-        }
-      } catch {
-        // Fall through to chunk-regex fallback (missing grammar, parse failure, etc.)
-      }
+  for (const { relativePath, absolutePath } of candidateFiles.values()) {
+    let content: string;
+    try {
+      content = (await fs.readFile(absolutePath, 'utf-8')).replace(/\r\n/g, '\n');
+    } catch {
+      // A source file may disappear or become unreadable after index lookup.
+      // Cached chunks cannot substantiate a current source location.
+      continue;
     }
 
-    // Fallback: regex scan inside the matched chunks (legacy behavior).
-    for (const chunk of entry.chunks) {
-      if (typeof chunk.content !== 'string') continue;
+    const lines = content.split('\n');
+    const occurrences = await findIdentifierOccurrences(
+      content,
+      detectLanguage(absolutePath),
+      normalizedSymbol
+    ).catch(() => null);
 
-      const chunkContent = chunk.content;
-      const startLine = typeof chunk.startLine === 'number' ? chunk.startLine : 1;
-      matcher.lastIndex = 0;
-
-      let match: RegExpExecArray | null;
-      while ((match = matcher.exec(chunkContent)) !== null) {
-        usageCount += 1;
-
-        if (usages.length >= normalizedLimit) {
-          continue;
-        }
-
-        const prefix = chunkContent.slice(0, match.index);
-        const lineOffset = prefix.split('\n').length - 1;
-
+    if (occurrences) {
+      usageCount += occurrences.length;
+      for (const occurrence of occurrences) {
+        if (usages.length >= normalizedLimit) break;
         usages.push({
-          file: relPath,
-          line: startLine + lineOffset,
-          preview: buildPreview(chunkContent, lineOffset)
+          file: relativePath,
+          line: occurrence.line,
+          preview: buildPreviewFromFileLines(lines, occurrence.line)
         });
+      }
+      continue;
+    }
+
+    // Without a parser, count text matches in the current file, not stale or
+    // overlapping indexed chunks. Line numbers and previews share that source.
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      matcher.lastIndex = 0;
+      while (matcher.exec(lines[lineIndex]) !== null) {
+        usageCount += 1;
+        if (usages.length < normalizedLimit) {
+          usages.push({
+            file: relativePath,
+            line: lineIndex + 1,
+            preview: buildPreviewFromFileLines(lines, lineIndex + 1)
+          });
+        }
       }
     }
   }

@@ -118,7 +118,7 @@
     "sync:grammars": "node scripts/sync-grammars.mjs",
     "prebuild": "pnpm run sync:grammars",
     "build": "tsc",
-    "prepack": "pnpm run sync:grammars",
+    "prepack": "pnpm run build",
     "prepublishOnly": "pnpm run build",
     "pretest": "pnpm run sync:grammars",
     "start": "node dist/index.js",

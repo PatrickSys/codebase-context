@@ -14,6 +14,8 @@ import {
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 import { IndexCorruptedError } from '../errors/index.js';
+import { isPathWithin } from '../utils/project-discovery.js';
+import { FeatureContextIndexSchema } from './feature-context.js';
 
 const ArtifactHeaderSchema = z.object({
   buildId: z.string().min(1),
@@ -38,7 +40,9 @@ const IntelligenceFileSchema = z
 
 const RelationshipsFileSchema = z
   .object({
-    header: ArtifactHeaderSchema
+    header: ArtifactHeaderSchema,
+    // Absent on pre-feature-context indexes; the MCP surface reports refresh-required.
+    featureContexts: FeatureContextIndexSchema.optional()
   })
   .passthrough();
 
@@ -99,6 +103,85 @@ export const IndexMetaSchema = z.object({
 
 export type IndexMeta = z.infer<typeof IndexMetaSchema>;
 
+async function assertSafeArtifactDirectory(
+  pathToDirectory: string,
+  expectedPath: string,
+  parentRealPath: string
+): Promise<string | undefined> {
+  try {
+    const stats = await fs.lstat(pathToDirectory);
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      throw new IndexCorruptedError(
+        `Unsafe linked or non-directory index artifact: ${pathToDirectory}`
+      );
+    }
+    const realPath = await fs.realpath(pathToDirectory);
+    if (
+      !isPathWithin(parentRealPath, realPath) ||
+      path.resolve(realPath) !== path.resolve(expectedPath)
+    ) {
+      throw new IndexCorruptedError(
+        `Index artifact directory resolves outside its expected location: ${pathToDirectory}`
+      );
+    }
+    return realPath;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+async function assertSafeArtifactFile(pathToFile: string, parentRealPath: string): Promise<void> {
+  try {
+    const stats = await fs.lstat(pathToFile);
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      throw new IndexCorruptedError(`Unsafe linked or non-file index artifact: ${pathToFile}`);
+    }
+    const realPath = await fs.realpath(pathToFile);
+    if (!isPathWithin(parentRealPath, realPath)) {
+      throw new IndexCorruptedError(
+        `Index artifact resolves outside its expected directory: ${pathToFile}`
+      );
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+}
+
+/** Reject linked generated-index paths before any artifact content is read or updated. */
+export async function assertSafeFeatureContextArtifacts(rootDir: string): Promise<void> {
+  const repositoryRoot = await fs.realpath(rootDir);
+  const contextPath = path.join(rootDir, CODEBASE_CONTEXT_DIRNAME);
+  const expectedContextPath = path.join(repositoryRoot, CODEBASE_CONTEXT_DIRNAME);
+  const contextRealPath = await assertSafeArtifactDirectory(
+    contextPath,
+    expectedContextPath,
+    repositoryRoot
+  );
+  if (!contextRealPath) return;
+
+  for (const filename of [
+    INDEX_META_FILENAME,
+    KEYWORD_INDEX_FILENAME,
+    INTELLIGENCE_FILENAME,
+    RELATIONSHIPS_FILENAME,
+    HEALTH_FILENAME
+  ]) {
+    await assertSafeArtifactFile(path.join(contextPath, filename), contextRealPath);
+  }
+
+  const vectorPath = path.join(contextPath, VECTOR_DB_DIRNAME);
+  const vectorRealPath = await assertSafeArtifactDirectory(
+    vectorPath,
+    path.join(contextRealPath, VECTOR_DB_DIRNAME),
+    contextRealPath
+  );
+  if (vectorRealPath) {
+    await assertSafeArtifactFile(path.join(vectorPath, 'index-build.json'), vectorRealPath);
+  }
+}
+
 export function checkEmbeddingMismatch(
   meta: IndexMeta,
   currentProvider: string,
@@ -142,6 +225,7 @@ function asIndexCorrupted(message: string, error: unknown): IndexCorruptedError 
 }
 
 export async function readIndexMeta(rootDir: string): Promise<IndexMeta> {
+  await assertSafeFeatureContextArtifacts(rootDir);
   const metaPath = path.join(rootDir, CODEBASE_CONTEXT_DIRNAME, INDEX_META_FILENAME);
 
   let parsed: unknown;
@@ -177,6 +261,7 @@ export async function readIndexMeta(rootDir: string): Promise<IndexMeta> {
 }
 
 export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): Promise<void> {
+  await assertSafeFeatureContextArtifacts(rootDir);
   const contextDir = path.join(rootDir, CODEBASE_CONTEXT_DIRNAME);
 
   const keywordPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);

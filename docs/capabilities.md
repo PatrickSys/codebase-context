@@ -62,7 +62,7 @@ npx codebase-context reindex --incremental
 
 ## Tool Surface
 
-10 MCP tools + active/project-scoped context resources.
+12 MCP tools + active/project-scoped context resources.
 
 Shared selector inputs:
 
@@ -94,13 +94,14 @@ not newly added files that have not yet been indexed.
 
 ### Core Tools
 
-| Tool                    | Input                                                                                                   | Output                                                                                                                                                                                                                                                                                                                                                                                          |
-| ----------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool                    | Input                                                                                                   | Output                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets`, shared `project`/`project_directory` | Compact mode returns a bounded result set with `file`, `summary`, `score`, lightweight structural metadata (`symbol`, `symbolKind`, `scope`, `signaturePreview`), and `searchQuality` (`status`, `confidence`, optional `hint`, `tokenEstimate`, `warning`, `rerankerStatus`). Full mode adds richer relationships plus chunk-level `imports`, `exports`, and `complexity`. When `intent="edit"`, a decision card is returned with `ready`, `patterns`, `bestExample`, `impact`, and `whatWouldHelp`. |
-| `get_team_patterns`     | optional `category`, shared `project`/`project_directory`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                                                                                                                                                                                                                            |
-| `get_symbol_references` | `symbol`, optional `limit`, shared `project`/`project_directory`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`. |
-| `remember`              | `type`, `category`, `memory`, `reason`, shared `project`/`project_directory`                            | Persists to `.codebase-context/memory.json`                                                                                                                                                                                                                                                                                                                                                     |
-| `get_memory`            | optional `category`, `type`, `query`, `limit`, shared `project`/`project_directory`                     | Memories with confidence decay scoring                                                                                                                                                                                                                                                                                                                                                          |
+| `get_team_patterns`     | optional `category`, shared `project`/`project_directory`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `get_symbol_references` | `symbol`, optional `limit`, shared `project`/`project_directory`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`.                                                                                                       |
+| `get_feature_context`   | `path`, optional exact `symbol`, shared `project`/`project_directory`                                   | Directly declared source-linked requirements, applicable code targets, declared tests, recorded runner evidence, current-file freshness checks, and diagnostics. MCP only; no CLI equivalent.                                                                                                                                                                                                                                                                                                         |
+| `remember`              | `type`, `category`, `memory`, `reason`, shared `project`/`project_directory`                            | Persists to `.codebase-context/memory.json`                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `get_memory`            | optional `category`, `type`, `query`, `limit`, shared `project`/`project_directory`                     | Memories with confidence decay scoring                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ### Utility Tools
 
@@ -111,6 +112,99 @@ not newly added files that have not yet been indexed.
 | `detect_circular_dependencies` | Import cycles in the file graph                      |
 | `refresh_index`                | Full or incremental re-index + git memory extraction |
 | `get_indexing_status`          | Index state, progress, last stats                    |
+
+### Source-linked feature context
+
+`get_feature_context` returns context for one repository-relative POSIX `path` and optional exact
+`symbol`. It is available through MCP, not the CLI. For example, call the tool with
+`{"path":"examples/context-demo/src/app/checkout/checkout.component.ts","symbol":"CheckoutComponent"}`
+and select the repository with the shared `project` argument when routing is ambiguous. The JSON
+reply includes `status: "success"`, the resolved `rootPath`, `matches`, exact counts, and
+`diagnostics`. Each matching attachment includes its requirement ID, source path and locator,
+explicit targets, declared tests, and any recorded evidence. Target resolution is reported as
+`resolved`, `missing`, `ambiguous`, or `unsupported`; source, target, and test records also report
+whether their indexed bytes still match. Large replies omit whole matches or diagnostics and include
+exact omission counts and summary diagnostics.
+The same compact JSON is the human-inspection surface; `source.locator`, target status, `fresh`,
+and plain-language diagnostic messages are not duplicated in a second prose rendering.
+
+Add strict JSON files with a basename ending in `.context.json`, such as
+`checkout.context.json`. CBC discovers these files during indexing while honoring project exclude
+patterns and `.gitignore`. They are attachment metadata, not source chunks or embeddings. CBC
+rebuilds the attachment sidecar on every explicit index pass, including when incremental source
+indexing finds no changed vector rows. A missing or older feature-context projection returns
+`index_refresh_required`; malformed sidecar data returns `index_invalid`. The v1 manifest shape is:
+
+```json
+{
+  "schemaVersion": 1,
+  "attachments": [
+    {
+      "requirementId": "CART-01",
+      "source": {
+        "path": "examples/context-demo/context/requirements.yaml",
+        "locator": "claims[CART-01]"
+      },
+      "appliesTo": [
+        {
+          "path": "examples/context-demo/src/app/checkout/checkout.component.ts",
+          "symbol": "CheckoutComponent"
+        },
+        { "path": "examples/context-demo/src/app/checkout/checkout.component.html" }
+      ],
+      "declaredTests": [
+        {
+          "path": "examples/context-demo/e2e/checkout.spec.ts",
+          "name": "CART-01 removes a line and recalculates the checkout total"
+        }
+      ],
+      "evidenceReceipts": ["examples/context-demo/test-results/context-evidence-receipt.json"]
+    }
+  ]
+}
+```
+
+The requirement source may be Markdown, YAML, or another text file, but CBC treats it as opaque:
+it hashes the exact bytes and returns the path plus locator. It does not parse the locator, resolve the
+requirement ID from the source file, or verify that the claim is semantically correct. `appliesTo`
+is the authority for scope. Links are direct only: imports, template references, service injection,
+and other discovered relationships do not propagate a requirement to another file or symbol. A
+file-level target applies to that file; optional `symbol` narrows it to an indexed exact symbol.
+Names with multiple source ranges are reported as ambiguous instead of guessed. Unsupported symbol
+forms remain explicitly unsupported.
+
+`declaredTests` records intended coverage, not an execution result. A receipt is separate JSON
+produced by a runner capture and records the test identity, outcome, Git commit, clean-tree claim,
+requirement-source digest, environment, and report path plus digest. CBC checks receipt, source,
+target, test, and report bytes again when queried. Evidence is current only for a passed receipt tied
+to the same clean Git commit. Missing Git identity, dirty files, another commit, changed or missing
+files, malformed receipts, and failed or skipped results cannot be presented as fresh evidence. A
+receipt records runner output; it does not prove that the test assertion is adequate or the requirement
+is satisfied. Generated reports and receipts should stay in ignored output directories.
+
+Refresh the project index after adding or editing manifests, requirements, targets, tests, or
+receipts:
+
+```bash
+node dist/index.js reindex
+```
+
+For the controlled Angular sample, install its locked dependencies once and run the capture
+producer from the repository root:
+
+```bash
+pnpm run build
+npm --prefix examples/context-demo ci
+node examples/context-demo/scripts/capture-context-evidence.mjs
+node dist/index.js reindex
+```
+
+Run the capture producer from a clean committed checkout. It uses Playwright's JSON report for the
+named E2E test, refuses capture from a dirty worktree or changing `HEAD`, and writes report and
+receipt files under the demo's ignored test-results directory. Then refresh with the repository's
+locally built CLI and query the component path with `get_feature_context`. A successful capture
+records the runner result and hashes; it does not establish that every Angular form resolves or that
+the claim is satisfied.
 
 ## Project Routing
 

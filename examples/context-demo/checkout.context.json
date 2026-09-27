@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "attachments": [
+    {
+      "requirementId": "CART-01",
+      "source": {
+        "path": "examples/context-demo/context/requirements.yaml",
+        "locator": "claims[CART-01]"
+      },
+      "appliesTo": [
+        {
+          "path": "examples/context-demo/src/app/checkout/checkout.component.ts",
+          "symbol": "CheckoutComponent"
+        },
+        {
+          "path": "examples/context-demo/src/app/checkout/checkout.component.html"
+        }
+      ],
+      "declaredTests": [
+        {
+          "path": "examples/context-demo/e2e/checkout.spec.ts",
+          "name": "CART-01 removes a line and recalculates the checkout total"
+        }
+      ],
+      "evidenceReceipts": ["examples/context-demo/test-results/context-evidence-receipt.json"]
+    }
+  ]
+}

@@ -4,10 +4,12 @@
  */
 
 import { randomUUID } from 'crypto';
+import { execFile } from 'node:child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { glob } from 'glob';
 import ignore from 'ignore';
+import { promisify } from 'node:util';
 import {
   CodebaseMetadata,
   CodeChunk,
@@ -59,6 +61,7 @@ import { deriveCodebaseHealth } from '../health/derive.js';
 const STAGING_DIRNAME = '.staging';
 const PREVIOUS_DIRNAME = '.previous';
 const DEFAULT_MAX_CHUNKS = 5000;
+const execFileAsync = promisify(execFile);
 
 import {
   computeFileHashes,
@@ -68,7 +71,19 @@ import {
   type FileManifest,
   type ManifestDiff
 } from './manifest.js';
-import { readIndexMeta, checkEmbeddingMismatch } from './index-meta.js';
+import {
+  readIndexMeta,
+  checkEmbeddingMismatch,
+  assertSafeFeatureContextArtifacts
+} from './index-meta.js';
+import {
+  CapturedRunReceiptSchema,
+  FeatureContextManifestSchema,
+  compileFeatureContexts,
+  readContainedFeatureContextFile,
+  type FeatureContextIndex,
+  type IndexedSymbolRef
+} from './feature-context.js';
 
 let cachedToolVersion: string | null = null;
 
@@ -99,6 +114,97 @@ function getIndexedProjectRelativePath(rootPath: string, filePath: string): stri
     return undefined;
   }
   return relativePath.replace(/\\/g, '/');
+}
+
+function getIndexedSymbols(chunks: readonly CodeChunk[], rootPath: string): IndexedSymbolRef[] {
+  const symbols: IndexedSymbolRef[] = [];
+  for (const chunk of chunks) {
+    const name = chunk.metadata?.symbolName;
+    const relativePath = getIndexedProjectRelativePath(rootPath, chunk.filePath);
+    if (
+      chunk.metadata?.symbolAware !== true ||
+      typeof name !== 'string' ||
+      name.length === 0 ||
+      !relativePath ||
+      !Number.isInteger(chunk.startLine) ||
+      !Number.isInteger(chunk.endLine) ||
+      chunk.startLine < 1 ||
+      chunk.endLine < chunk.startLine
+    ) {
+      continue;
+    }
+
+    symbols.push({
+      path: relativePath,
+      name,
+      startLine: chunk.startLine,
+      endLine: chunk.endLine
+    });
+  }
+  return symbols;
+}
+
+function getIndexedSymbolsFromPersistedChunks(
+  chunks: readonly unknown[],
+  rootPath: string
+): IndexedSymbolRef[] {
+  const symbols: IndexedSymbolRef[] = [];
+  for (const item of chunks) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const chunk = item as Record<string, unknown>;
+    const metadata = chunk.metadata;
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) continue;
+    const metadataRecord = metadata as Record<string, unknown>;
+    const filePath = chunk.filePath;
+    const name = metadataRecord.symbolName;
+    const relativePath =
+      typeof filePath === 'string' ? getIndexedProjectRelativePath(rootPath, filePath) : undefined;
+    const startLine = chunk.startLine;
+    const endLine = chunk.endLine;
+    if (
+      metadataRecord.symbolAware !== true ||
+      typeof name !== 'string' ||
+      name.length === 0 ||
+      !relativePath ||
+      typeof startLine !== 'number' ||
+      !Number.isInteger(startLine) ||
+      typeof endLine !== 'number' ||
+      !Number.isInteger(endLine) ||
+      startLine < 1 ||
+      endLine < startLine
+    ) {
+      continue;
+    }
+    symbols.push({ path: relativePath, name, startLine, endLine });
+  }
+  return symbols;
+}
+
+function getFeatureContextEvidencePaths(
+  manifestFiles: readonly { path: string; text: string }[],
+  receiptFiles: readonly { path: string; text: string }[]
+): Set<string> {
+  const paths = new Set<string>();
+  for (const manifestFile of manifestFiles) {
+    try {
+      const parsed = FeatureContextManifestSchema.safeParse(JSON.parse(manifestFile.text));
+      if (!parsed.success) continue;
+      for (const attachment of parsed.data.attachments) {
+        for (const receiptPath of attachment.evidenceReceipts) paths.add(receiptPath);
+      }
+    } catch {
+      // Invalid manifests remain diagnostics and do not contribute trusted references.
+    }
+  }
+  for (const receiptFile of receiptFiles) {
+    try {
+      const parsed = CapturedRunReceiptSchema.safeParse(JSON.parse(receiptFile.text));
+      if (parsed.success) paths.add(parsed.data.report.path);
+    } catch {
+      // Invalid receipts are still excluded by their manifest-declared path above.
+    }
+  }
+  return paths;
 }
 
 /**
@@ -441,7 +547,16 @@ export class CodebaseIndexer {
 
       // Phase 1: Scanning
       this.updateProgress('scanning', 0);
-      let files = await this.scanFiles();
+      const featureContextManifestFiles = await this.scanFeatureContextManifests();
+      const featureContextReceiptFiles = await this.readReferencedFeatureContextReceipts(
+        featureContextManifestFiles
+      );
+      const featureContextEvidencePaths = getFeatureContextEvidencePaths(
+        featureContextManifestFiles,
+        featureContextReceiptFiles
+      );
+      const scannedFiles = await this.scanFiles(featureContextEvidencePaths);
+      let files = scannedFiles;
 
       // Memory safety: limit total files to prevent heap exhaustion
       const MAX_FILES = 10000;
@@ -462,6 +577,7 @@ export class CodebaseIndexer {
 
       // Phase 1b: Incremental diff (if incremental mode)
       const contextDir = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME);
+      await assertSafeFeatureContextArtifacts(this.rootPath);
       const manifestPath = path.join(contextDir, MANIFEST_FILENAME);
       const indexingStatsPath = path.join(contextDir, INDEXING_STATS_FILENAME);
       let diff: ManifestDiff | null = null;
@@ -510,7 +626,12 @@ export class CodebaseIndexer {
           diff &&
           diff.added.length === 0 &&
           diff.changed.length === 0 &&
-          diff.deleted.length === 0
+          diff.deleted.length === 0 &&
+          (await this.refreshFeatureContextsSidecar(
+            contextDir,
+            featureContextManifestFiles,
+            featureContextReceiptFiles
+          ))
         ) {
           console.error('No files changed - skipping re-index.');
           this.updateProgress('complete', 100);
@@ -995,6 +1116,11 @@ export class CodebaseIndexer {
       const relationships = {
         header: { buildId, formatVersion: INDEX_FORMAT_VERSION },
         generatedAt,
+        featureContexts: await this.compileFeatureContextProjection(
+          featureContextManifestFiles,
+          getIndexedSymbols(allChunks, this.rootPath),
+          featureContextReceiptFiles
+        ),
         graph: {
           imports: graphData.imports || {},
           ...(graphData.importDetails ? { importDetails: graphData.importDetails } : {}),
@@ -1109,20 +1235,17 @@ export class CodebaseIndexer {
     }
   }
 
-  private async scanFiles(): Promise<string[]> {
+  private async scanFiles(
+    excludedFeatureContextEvidencePaths: ReadonlySet<string> = new Set()
+  ): Promise<string[]> {
     const files: string[] = [];
     const seen = new Set<string>();
 
     // Read .gitignore if respecting it
     let ig: ReturnType<typeof ignore.default> | null = null;
     if (this.config.respectGitignore) {
-      try {
-        const gitignorePath = path.join(this.rootPath, '.gitignore');
-        const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
-        ig = ignore.default().add(gitignoreContent);
-      } catch (_error) {
-        // No .gitignore or couldn't read it
-      }
+      const gitignoreContent = await this.readGitIgnoreText();
+      if (gitignoreContent) ig = ignore.default().add(gitignoreContent);
     }
 
     // Scan with glob
@@ -1145,9 +1268,19 @@ export class CodebaseIndexer {
         seen.add(normalizedFile);
 
         const relativePath = path.relative(this.rootPath, file);
+        const normalizedRelativePath = relativePath.replace(/\\/g, '/');
+
+        if (excludedFeatureContextEvidencePaths.has(normalizedRelativePath)) {
+          continue;
+        }
+
+        // Context manifests are index metadata, not source chunks or embeddings.
+        if (normalizedRelativePath.endsWith('.context.json')) {
+          continue;
+        }
 
         // Check gitignore
-        if (ig && ig.ignores(relativePath)) {
+        if (ig && ig.ignores(normalizedRelativePath)) {
           continue;
         }
 
@@ -1172,6 +1305,202 @@ export class CodebaseIndexer {
     }
 
     return files;
+  }
+
+  private async readGitIgnoreText(): Promise<string> {
+    if (!this.config.respectGitignore) return '';
+    try {
+      return await fs.readFile(path.join(this.rootPath, '.gitignore'), 'utf-8');
+    } catch {
+      return '';
+    }
+  }
+
+  private async scanFeatureContextManifests(): Promise<Array<{ path: string; text: string }>> {
+    const gitignoreContent = await this.readGitIgnoreText();
+    const matcher = gitignoreContent ? ignore.default().add(gitignoreContent) : null;
+    const matches = await glob('**/*.context.json', {
+      cwd: this.rootPath,
+      absolute: true,
+      dot: true,
+      ignore: this.config.exclude || [],
+      nodir: true
+    });
+    const manifestFiles: Array<{ path: string; text: string }> = [];
+    for (const file of matches) {
+      const relativePath = path.relative(this.rootPath, file).replace(/\\/g, '/');
+      if (!isPathWithin(this.rootPath, file) || !relativePath || matcher?.ignores(relativePath)) {
+        continue;
+      }
+
+      const manifestFile = await readContainedFeatureContextFile(this.rootPath, relativePath);
+      if (manifestFile.status === 'found') {
+        manifestFiles.push({ path: manifestFile.path, text: manifestFile.text });
+      } else if (manifestFile.status === 'outside-root') {
+        manifestFiles.push({ path: relativePath, text: '' });
+      }
+    }
+    return manifestFiles;
+  }
+
+  private async readReferencedFeatureContextReceipts(
+    manifestFiles: readonly { path: string; text: string }[]
+  ): Promise<Array<{ path: string; text: string }>> {
+    const referencedPaths = new Set<string>();
+    for (const manifestFile of manifestFiles) {
+      try {
+        const parsed = FeatureContextManifestSchema.safeParse(JSON.parse(manifestFile.text));
+        if (!parsed.success) continue;
+        for (const attachment of parsed.data.attachments) {
+          for (const receiptPath of attachment.evidenceReceipts) {
+            referencedPaths.add(receiptPath);
+          }
+        }
+      } catch {
+        // The compiler records malformed manifests as diagnostics.
+      }
+    }
+
+    const receipts: Array<{ path: string; text: string }> = [];
+    for (const relativePath of referencedPaths) {
+      const receiptFile = await readContainedFeatureContextFile(this.rootPath, relativePath);
+      if (receiptFile.status === 'found') {
+        receipts.push({ path: receiptFile.path, text: receiptFile.text });
+      }
+    }
+    return receipts;
+  }
+
+  private async getFeatureContextGitState(): Promise<{
+    codeCommit: string | null;
+    codeIsClean: boolean;
+  }> {
+    try {
+      const results = await Promise.allSettled([
+        execFileAsync('git', ['rev-parse', '--verify', 'HEAD'], {
+          cwd: this.rootPath,
+          encoding: 'utf-8',
+          timeout: 5000,
+          windowsHide: true
+        }),
+        execFileAsync('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
+          cwd: this.rootPath,
+          encoding: 'utf-8',
+          timeout: 5000,
+          windowsHide: true
+        })
+      ]);
+      if (results.some((result) => result.status === 'rejected')) {
+        return { codeCommit: null, codeIsClean: false };
+      }
+      const [commitResult, statusResult] = results.map((result) =>
+        result.status === 'fulfilled' ? result.value : undefined
+      );
+      if (!commitResult || !statusResult) {
+        return { codeCommit: null, codeIsClean: false };
+      }
+      const codeCommit = commitResult.stdout.trim();
+      if (!/^[0-9a-f]{40}$/i.test(codeCommit)) {
+        return { codeCommit: null, codeIsClean: false };
+      }
+      const status = statusResult.stdout;
+      return { codeCommit, codeIsClean: status.length === 0 };
+    } catch {
+      return { codeCommit: null, codeIsClean: false };
+    }
+  }
+
+  private async compileFeatureContextProjection(
+    manifestFiles: readonly { path: string; text: string }[],
+    indexedSymbols: readonly IndexedSymbolRef[],
+    receiptFiles: readonly { path: string; text: string }[]
+  ): Promise<FeatureContextIndex> {
+    const [gitState, gitignoreContent] = await Promise.all([
+      this.getFeatureContextGitState(),
+      this.readGitIgnoreText()
+    ]);
+    const ignoredPaths = [
+      ...(this.config.exclude || []),
+      ...gitignoreContent
+        .split(/\r?\n/)
+        .map((rule) => rule.trim())
+        .filter((rule) => rule.length > 0 && !rule.startsWith('#'))
+    ];
+    return compileFeatureContexts({
+      rootPath: this.rootPath,
+      manifestFiles,
+      receiptFiles,
+      indexedSymbols,
+      ...gitState,
+      ignoredPaths
+    });
+  }
+
+  private async refreshFeatureContextsSidecar(
+    contextDir: string,
+    manifestFiles: readonly { path: string; text: string }[],
+    receiptFiles: readonly { path: string; text: string }[]
+  ): Promise<boolean> {
+    const relationshipsPath = path.join(contextDir, RELATIONSHIPS_FILENAME);
+    const indexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
+    try {
+      await assertSafeFeatureContextArtifacts(this.rootPath);
+      const repositoryRoot = await fs.realpath(this.rootPath);
+      const realContextDir = await fs.realpath(contextDir);
+      const realRelationshipsPath = await fs.realpath(relationshipsPath);
+      const realIndexPath = await fs.realpath(indexPath);
+      if (
+        !isPathWithin(repositoryRoot, realContextDir) ||
+        path.resolve(realContextDir) !== path.resolve(repositoryRoot, CODEBASE_CONTEXT_DIRNAME) ||
+        !isPathWithin(realContextDir, realRelationshipsPath) ||
+        !isPathWithin(realContextDir, realIndexPath)
+      ) {
+        return false;
+      }
+
+      const relationships = JSON.parse(await fs.readFile(realRelationshipsPath, 'utf-8')) as Record<
+        string,
+        unknown
+      >;
+      const header = relationships.header;
+      if (
+        !header ||
+        typeof header !== 'object' ||
+        typeof (header as Record<string, unknown>).buildId !== 'string' ||
+        typeof (header as Record<string, unknown>).formatVersion !== 'number'
+      ) {
+        return false;
+      }
+      const indexValue = JSON.parse(await fs.readFile(realIndexPath, 'utf-8')) as unknown;
+      const index =
+        indexValue && typeof indexValue === 'object' && !Array.isArray(indexValue)
+          ? (indexValue as {
+              header?: { buildId?: unknown; formatVersion?: unknown };
+              chunks?: unknown;
+            })
+          : undefined;
+      const chunks = Array.isArray(indexValue) ? indexValue : index?.chunks;
+      const relationshipHeader = header as Record<string, unknown>;
+      if (
+        !Array.isArray(chunks) ||
+        (index?.header !== undefined &&
+          (index.header.buildId !== relationshipHeader.buildId ||
+            index.header.formatVersion !== relationshipHeader.formatVersion))
+      ) {
+        return false;
+      }
+
+      relationships.featureContexts = await this.compileFeatureContextProjection(
+        manifestFiles,
+        getIndexedSymbolsFromPersistedChunks(chunks, this.rootPath),
+        receiptFiles
+      );
+      await assertSafeFeatureContextArtifacts(this.rootPath);
+      await fs.writeFile(realRelationshipsPath, JSON.stringify(relationships, null, 2));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private updateProgress(phase: IndexingPhase, percentage: number): void {

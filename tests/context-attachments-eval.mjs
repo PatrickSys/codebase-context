@@ -443,7 +443,7 @@ async function runCodebase({ entry, root, codebase, cases, outputDir, indexTimeo
   const onSpawn = (pid) => {
     toolCalls.push({ type: 'server-process', pid });
   };
-  await withManagedStdioClientSession(
+  const readiness = await withManagedStdioClientSession(
     {
       serverCommand: process.execPath,
       serverArgs: [entry, root],
@@ -507,7 +507,8 @@ async function runCodebase({ entry, root, codebase, cases, outputDir, indexTimeo
       }
       return readiness;
     }
-  ).then((readiness) => ({ rows, toolCalls, readiness }));
+  );
+  return { rows, toolCalls, readiness };
 }
 
 async function runAdversarialOverlays({ entry, outputDir, publicRoot, publicCases }) {
@@ -997,6 +998,10 @@ async function main() {
       outputDir: path.dirname(args.output),
       indexTimeoutMs: args.indexTimeoutMs
     });
+    if (!Array.isArray(run?.rows) || !Array.isArray(run?.toolCalls) || !run.readiness)
+      throw new Error(
+        `Invalid direct evaluation result for ${codebase}; refusing incomplete coverage.`
+      );
     codebaseRuns.push({ codebase, root, ...run });
   }
   const adversarialOverlays = await runAdversarialOverlays({

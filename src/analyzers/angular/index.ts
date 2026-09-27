@@ -472,6 +472,12 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       componentType,
       startLine: classNode.loc.start.line,
       endLine: classNode.loc.end.line,
+      sourceSymbol: {
+        name: classNode.id.name,
+        kind: 'class',
+        startLine: classNode.loc.start.line,
+        endLine: classNode.loc.end.line
+      },
       decorators: [
         {
           name: decoratorName,

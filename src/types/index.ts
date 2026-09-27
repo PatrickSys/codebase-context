@@ -61,6 +61,8 @@ export interface CodeComponent {
   componentType?: string; // Framework-specific: 'component', 'service', 'directive', etc.
   startLine: number;
   endLine: number;
+  /** Exact parser-backed source identity, when the analyzer can provide one. */
+  sourceSymbol?: SourceSymbolIdentity;
   layer?: ArchitecturalLayer;
   decorators?: Decorator[];
   properties?: Property[];
@@ -68,6 +70,13 @@ export interface CodeComponent {
   lifecycle?: string[];
   dependencies?: string[];
   metadata: Record<string, unknown>;
+}
+
+export interface SourceSymbolIdentity {
+  name: string;
+  kind: 'class';
+  startLine: number;
+  endLine: number;
 }
 
 export interface ImportStatement {
@@ -142,6 +151,8 @@ export interface ChunkMetadata {
   decoratorType?: string;
   className?: string;
   functionName?: string;
+  /** Exact declaration range, distinct from padded chunk startLine/endLine. */
+  sourceSymbol?: SourceSymbolIdentity;
 
   // Symbol-aware chunking (AST-aligned)
   symbolAware?: boolean;

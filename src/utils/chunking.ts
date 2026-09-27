@@ -112,6 +112,7 @@ function createComponentChunks(
         ...metadata,
         componentName: component.name,
         componentType: component.componentType,
+        ...(component.sourceSymbol ? { sourceSymbol: component.sourceSymbol } : {}),
         complexity,
         importSection, // Keep imports as context in metadata
         lifecycle: component.lifecycle
@@ -272,10 +273,14 @@ export function mergeSmallChunks(chunks: CodeChunk[], minSize: number = 20): Cod
     const nextLines = next.content.split('\n').length;
     const currentIsSymbolAware = current.metadata?.symbolAware === true;
     const nextIsSymbolAware = next.metadata?.symbolAware === true;
+    const currentHasSourceSymbol = current.metadata?.sourceSymbol !== undefined;
+    const nextHasSourceSymbol = next.metadata?.sourceSymbol !== undefined;
 
     if (
       !currentIsSymbolAware &&
       !nextIsSymbolAware &&
+      !currentHasSourceSymbol &&
+      !nextHasSourceSymbol &&
       currentLines < minSize &&
       nextLines < minSize
     ) {

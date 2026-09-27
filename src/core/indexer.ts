@@ -20,7 +20,8 @@ import {
   CodebaseConfig,
   Dependency,
   ArchitecturalLayer,
-  IntelligenceData
+  IntelligenceData,
+  SourceSymbolIdentity
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
@@ -119,17 +120,24 @@ function getIndexedProjectRelativePath(rootPath: string, filePath: string): stri
 function getIndexedSymbols(chunks: readonly CodeChunk[], rootPath: string): IndexedSymbolRef[] {
   const symbols: IndexedSymbolRef[] = [];
   for (const chunk of chunks) {
-    const name = chunk.metadata?.symbolName;
     const relativePath = getIndexedProjectRelativePath(rootPath, chunk.filePath);
+    const sourceSymbol = isSourceSymbolIdentity(chunk.metadata?.sourceSymbol)
+      ? chunk.metadata.sourceSymbol
+      : undefined;
+    const symbolAware = chunk.metadata?.symbolAware === true;
+    const name = sourceSymbol?.name ?? (symbolAware ? chunk.metadata?.symbolName : undefined);
+    const startLine = sourceSymbol?.startLine ?? (symbolAware ? chunk.startLine : undefined);
+    const endLine = sourceSymbol?.endLine ?? (symbolAware ? chunk.endLine : undefined);
     if (
-      chunk.metadata?.symbolAware !== true ||
       typeof name !== 'string' ||
       name.length === 0 ||
       !relativePath ||
-      !Number.isInteger(chunk.startLine) ||
-      !Number.isInteger(chunk.endLine) ||
-      chunk.startLine < 1 ||
-      chunk.endLine < chunk.startLine
+      typeof startLine !== 'number' ||
+      !Number.isInteger(startLine) ||
+      typeof endLine !== 'number' ||
+      !Number.isInteger(endLine) ||
+      startLine < 1 ||
+      endLine < startLine
     ) {
       continue;
     }
@@ -137,11 +145,27 @@ function getIndexedSymbols(chunks: readonly CodeChunk[], rootPath: string): Inde
     symbols.push({
       path: relativePath,
       name,
-      startLine: chunk.startLine,
-      endLine: chunk.endLine
+      startLine,
+      endLine
     });
   }
   return symbols;
+}
+
+function isSourceSymbolIdentity(value: unknown): value is SourceSymbolIdentity {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const sourceSymbol = value as Record<string, unknown>;
+  return (
+    sourceSymbol.kind === 'class' &&
+    typeof sourceSymbol.name === 'string' &&
+    sourceSymbol.name.length > 0 &&
+    typeof sourceSymbol.startLine === 'number' &&
+    Number.isInteger(sourceSymbol.startLine) &&
+    sourceSymbol.startLine >= 1 &&
+    typeof sourceSymbol.endLine === 'number' &&
+    Number.isInteger(sourceSymbol.endLine) &&
+    sourceSymbol.endLine >= sourceSymbol.startLine
+  );
 }
 
 function getIndexedSymbolsFromPersistedChunks(
@@ -156,13 +180,16 @@ function getIndexedSymbolsFromPersistedChunks(
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) continue;
     const metadataRecord = metadata as Record<string, unknown>;
     const filePath = chunk.filePath;
-    const name = metadataRecord.symbolName;
+    const sourceSymbol = isSourceSymbolIdentity(metadataRecord.sourceSymbol)
+      ? metadataRecord.sourceSymbol
+      : undefined;
+    const symbolAware = metadataRecord.symbolAware === true;
+    const name = sourceSymbol?.name ?? (symbolAware ? metadataRecord.symbolName : undefined);
     const relativePath =
       typeof filePath === 'string' ? getIndexedProjectRelativePath(rootPath, filePath) : undefined;
-    const startLine = chunk.startLine;
-    const endLine = chunk.endLine;
+    const startLine = sourceSymbol?.startLine ?? (symbolAware ? chunk.startLine : undefined);
+    const endLine = sourceSymbol?.endLine ?? (symbolAware ? chunk.endLine : undefined);
     if (
-      metadataRecord.symbolAware !== true ||
       typeof name !== 'string' ||
       name.length === 0 ||
       !relativePath ||

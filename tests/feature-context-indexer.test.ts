@@ -10,7 +10,9 @@ import {
   RELATIONSHIPS_FILENAME
 } from '../src/constants/codebase-context.js';
 import { FeatureContextIndexSchema } from '../src/core/feature-context.js';
+import { analyzerRegistry } from '../src/core/analyzer-registry.js';
 import { CodebaseIndexer } from '../src/core/indexer.js';
+import { AngularAnalyzer } from '../src/analyzers/angular/index.js';
 
 interface RelationshipsFixture {
   header: { buildId: string };
@@ -82,6 +84,89 @@ afterEach(async () => {
 });
 
 describe('feature-context index projection', () => {
+  it('resolves Angular AST-backed class identities on full and no-op indexing', async () => {
+    const rootPath = await createProject();
+    const angularSource = [
+      "import { Component, Injectable } from '@angular/core';",
+      '',
+      '@Component({',
+      "  selector: 'app-checkout',",
+      "  template: '<div></div>'",
+      '})',
+      'export class CheckoutComponent {',
+      '  submit(): void {}',
+      '}',
+      '',
+      "@Injectable({ providedIn: 'root' })",
+      'export class CheckoutService {',
+      '  checkout(): void {}',
+      '}'
+    ].join('\n');
+    await fs.writeFile(path.join(rootPath, 'src', 'checkout.ts'), angularSource);
+    const angularManifest = JSON.parse(manifest('checkout-classes')) as {
+      attachments: Array<{
+        appliesTo: Array<{ path: string; symbol: string }>;
+      }>;
+    };
+    angularManifest.attachments[0]!.appliesTo = [
+      { path: 'src/checkout.ts', symbol: 'CheckoutComponent' },
+      { path: 'src/checkout.ts', symbol: 'CheckoutService' }
+    ];
+    await fs.writeFile(
+      path.join(rootPath, 'checkout.context.json'),
+      JSON.stringify(angularManifest)
+    );
+
+    const previousAngularAnalyzer = analyzerRegistry.get('angular');
+    analyzerRegistry.register(new AngularAnalyzer());
+    try {
+      await new CodebaseIndexer({ rootPath, config: { skipEmbedding: true } }).index();
+      const first = await readSidecars(rootPath);
+      const firstProjection = FeatureContextIndexSchema.parse(first.relationships.featureContexts);
+      expect(firstProjection.attachments[0]?.appliesTo).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            target: { path: 'src/checkout.ts', symbol: 'CheckoutComponent' },
+            status: 'resolved',
+            identity: {
+              path: 'src/checkout.ts',
+              name: 'CheckoutComponent',
+              startLine: 7,
+              endLine: 9
+            }
+          }),
+          expect.objectContaining({
+            target: { path: 'src/checkout.ts', symbol: 'CheckoutService' },
+            status: 'resolved',
+            identity: {
+              path: 'src/checkout.ts',
+              name: 'CheckoutService',
+              startLine: 12,
+              endLine: 14
+            }
+          })
+        ])
+      );
+
+      await new CodebaseIndexer({
+        rootPath,
+        incrementalOnly: true,
+        config: { skipEmbedding: true }
+      }).index();
+      const refreshed = await readSidecars(rootPath);
+      const refreshedProjection = FeatureContextIndexSchema.parse(
+        refreshed.relationships.featureContexts
+      );
+      expect(refreshed.relationships.header.buildId).toBe(first.relationships.header.buildId);
+      expect(refreshedProjection.attachments[0]?.appliesTo).toEqual(
+        firstProjection.attachments[0]?.appliesTo
+      );
+    } finally {
+      if (previousAngularAnalyzer) analyzerRegistry.register(previousAngularAnalyzer);
+      else analyzerRegistry.unregister('angular');
+    }
+  });
+
   it('refreshes added, edited, and deleted manifests on an unchanged source index', async () => {
     const rootPath = await createProject();
     const firstManifest = path.join(rootPath, 'checkout.context.json');

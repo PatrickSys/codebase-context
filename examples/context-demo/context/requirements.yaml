@@ -1,0 +1,26 @@
+schema: cbc-context-claims/v1
+claims:
+  - id: CART-01
+    statement: Removing a line from checkout removes that line and updates the order total.
+    rationale: Shoppers need the checkout summary to match the order they have chosen.
+    applies_to:
+      - kind: component
+        path: src/app/checkout/checkout.component.ts
+        symbol: CheckoutComponent
+      - kind: template
+        path: src/app/checkout/checkout.component.html
+        owner: CheckoutComponent
+    implemented_by:
+      - kind: method
+        path: src/app/cart/cart.store.ts
+        symbol: CartStore.removeFromCart
+    test_declarations:
+      - runner: playwright
+        path: e2e/checkout.spec.ts
+        title: CART-01 removes a line and recalculates the checkout total
+
+# CART-01 is scoped to CheckoutComponent and its template. CartStore is an
+# implementation dependency. CatalogComponent also consumes CartStore, but
+# that discovered adjacency does not make CatalogComponent part of this claim.
+# A declaration above records intended test coverage, not an execution result
+# or proof that the behavior is semantically correct.

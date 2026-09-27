@@ -1,0 +1,36 @@
+<section class="panel checkout" aria-labelledby="checkout-heading">
+  <p class="eyebrow">Your order</p>
+  <h2 id="checkout-heading">Checkout</h2>
+
+  @if (lines().length === 0) {
+    <p class="empty-state">Your cart is ready for something lovely.</p>
+  } @else {
+    <ul class="cart-lines">
+      @for (line of lines(); track line.id) {
+        <li>
+          <div>
+            <h3>{{ line.name }}</h3>
+            <p>{{ line.quantity }} × {{ line.price | currency }}</p>
+          </div>
+          <button
+            type="button"
+            class="remove-button"
+            [attr.aria-label]="'Remove ' + line.name + ' from checkout'"
+            (click)="store.removeFromCart(line.id)"
+          >
+            Remove
+          </button>
+        </li>
+      }
+    </ul>
+  }
+
+  <div class="total-row">
+    <span>Order total</span>
+    <strong>{{ total() | currency }}</strong>
+  </div>
+  <button type="button" class="place-order" [disabled]="lines().length === 0">
+    Place order
+  </button>
+  <p class="checkout-note">Shipping is calculated at the next step.</p>
+</section>

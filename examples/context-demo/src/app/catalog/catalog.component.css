@@ -1,0 +1,139 @@
+:host {
+  display: block;
+}
+
+.panel {
+  border: 1px solid #e4e6df;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 36px rgb(38 51 43 / 5%);
+}
+
+.catalog {
+  padding: 24px;
+}
+
+.section-heading,
+.product-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.section-heading {
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #446454;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h2,
+h3 {
+  margin-bottom: 0;
+}
+
+h2 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.65rem;
+  font-weight: 400;
+}
+
+.item-count,
+.product-title > span {
+  color: #58625d;
+  font-size: 0.9rem;
+}
+
+.product-list {
+  display: grid;
+  gap: 14px;
+}
+
+.product-card {
+  display: grid;
+  grid-template-columns: 106px minmax(0, 1fr);
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #eff0eb;
+}
+
+.product-art {
+  display: grid;
+  min-height: 126px;
+  place-items: center;
+  border-radius: 12px;
+  background: #e9eee5;
+  color: #607664;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 3rem;
+}
+
+.product-card:nth-child(2) .product-art {
+  background: #f2eadd;
+  color: #a47c52;
+}
+
+.product-card:nth-child(3) .product-art {
+  background: #e9e7ef;
+  color: #74728a;
+}
+
+.product-copy {
+  align-self: center;
+}
+
+.product-copy p {
+  margin: 8px 0 12px;
+  color: #68716d;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #446454;
+  border-radius: 999px;
+  background: transparent;
+  color: #345240;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.87rem;
+}
+
+button:hover {
+  background: #eef3ec;
+}
+
+button:focus-visible {
+  outline: 3px solid #a9c9a9;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .catalog {
+    padding: 18px;
+  }
+
+  .product-card {
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .product-art {
+    min-height: 102px;
+  }
+}

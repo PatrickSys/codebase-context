@@ -1,0 +1,413 @@
+{
+  "fixtureVersion": 1,
+  "purpose": "Feature acceptance for source-linked Angular requirements, explicit applicability, declared tests, and revision-bound evidence. Semantic outcomes only; this fixture does not prescribe CBC serialization.",
+  "frozenBeforeFeatureImplementation": true,
+  "codebases": {
+    "controlled-angular": {
+      "root": "examples/context-demo",
+      "baseCommit": "e236e1063ab438a49017f0c4b3b326d6ec95f99b",
+      "workingTreeSourceManifest": "sha256:1cbec92bac2d88407019febf4a2fe3b882a41785c3418afe51e1798c8cd29608",
+      "authority": {
+        "path": "context/requirements.yaml",
+        "sha256": "5f9c1bc37dd7101539e84b247328146e77ee6191f6cb0a92e5ae28ddd73fc0c8",
+        "id": "CART-01"
+      },
+      "targets": {
+        "app": [
+          "src/app/app.ts",
+          "src/app/app.html"
+        ],
+        "catalog": [
+          "src/app/catalog/catalog.component.ts",
+          "src/app/catalog/catalog.component.html"
+        ],
+        "checkout": [
+          "src/app/checkout/checkout.component.ts",
+          "src/app/checkout/checkout.component.html"
+        ],
+        "store": [
+          "src/app/cart/cart.store.ts"
+        ],
+        "test": [
+          "e2e/checkout.spec.ts"
+        ]
+      },
+      "sourceFiles": [
+        {
+          "path": "examples/context-demo/src/app/app.ts",
+          "sha256": "1ed3fe99a52e845014cbfdc671978a34f5044e60bd7350e1bcccd5b8487eeaca"
+        },
+        {
+          "path": "examples/context-demo/src/app/app.html",
+          "sha256": "a0465d2ed8a054c17466a3c329e62b681a99e35161e9d202a8a5192726c46353"
+        },
+        {
+          "path": "examples/context-demo/src/app/catalog/catalog.component.ts",
+          "sha256": "2547c821c4a075ce95226bde145debaf64208d817a08a87ed5468277821a49ab"
+        },
+        {
+          "path": "examples/context-demo/src/app/catalog/catalog.component.html",
+          "sha256": "25a27a34cc609aa4fc66c6dade19cd5b49597e0c2862e909945eb199324a238b"
+        },
+        {
+          "path": "examples/context-demo/src/app/checkout/checkout.component.ts",
+          "sha256": "24e75f2e685431dc248107f29df913ed2a0aff0af2795e68cee7893c55b918fa"
+        },
+        {
+          "path": "examples/context-demo/src/app/checkout/checkout.component.html",
+          "sha256": "1999da3092b003e0fb2222a5d0641242befacd79ca28920006a4afebd146b67d"
+        },
+        {
+          "path": "examples/context-demo/src/app/cart/cart.store.ts",
+          "sha256": "97f3c2cbba929a466795ca662b44ee1d6d8e9c90711ea6793d82d825dbb8d082"
+        },
+        {
+          "path": "examples/context-demo/context/requirements.yaml",
+          "sha256": "5f9c1bc37dd7101539e84b247328146e77ee6191f6cb0a92e5ae28ddd73fc0c8"
+        },
+        {
+          "path": "examples/context-demo/e2e/checkout.spec.ts",
+          "sha256": "619190f33f74d161285f75ff3ac7068deefa82a66d85152c23523344c1ec7cb8"
+        }
+      ]
+    },
+    "public-angular-spotify": {
+      "repository": "https://github.com/trungvose/angular-spotify",
+      "root": "evidence/public-angular-spotify-ff9efa7",
+      "commit": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+      "authority": null,
+      "metadata": "No requirement attachment or source-linked proof corpus is present at this pinned revision.",
+      "targets": {
+        "toggle": [
+          "libs/web/shell/ui/visualization-toggle/src/lib/visualization-toggle.component.ts",
+          "libs/web/shell/ui/visualization-toggle/src/lib/visualization-toggle.component.html"
+        ],
+        "store": [
+          "libs/web/visualizer/data-access/src/lib/store/visualizer.store.ts"
+        ],
+        "visualizerConsumer": [
+          "libs/web/visualizer/ui/src/lib/web-visualizer-ui.component.ts"
+        ],
+        "layoutConsumer": [
+          "libs/web/shell/ui/layout/src/lib/layout.component.ts"
+        ]
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "D01",
+      "codebase": "controlled-angular",
+      "query": "Which checkout requirement governs removing a cart line, and which files does it explicitly cover?",
+      "scenario": "current",
+      "expect": {
+        "authorityId": "CART-01",
+        "appliesTo": [
+          "src/app/checkout/checkout.component.ts#CheckoutComponent",
+          "src/app/checkout/checkout.component.html#CheckoutComponent"
+        ],
+        "implementation": [
+          "src/app/cart/cart.store.ts#CartStore.removeFromCart"
+        ],
+        "mustNotApplyTo": [
+          "src/app/catalog/catalog.component.ts#CatalogComponent"
+        ],
+        "testDeclaration": "e2e/checkout.spec.ts#CART-01 removes a line and recalculates the checkout total",
+        "executionEvidence": "not-established-by-declaration"
+      }
+    },
+    {
+      "id": "D02",
+      "codebase": "controlled-angular",
+      "query": "Where is CART-01 implemented, and does that make every CartStore consumer in scope?",
+      "scenario": "current",
+      "expect": {
+        "implementation": [
+          "src/app/cart/cart.store.ts#CartStore.removeFromCart"
+        ],
+        "explicitScopeOnly": [
+          "src/app/checkout/checkout.component.ts#CheckoutComponent",
+          "src/app/checkout/checkout.component.html#CheckoutComponent"
+        ],
+        "mustNotApplyTo": [
+          "src/app/catalog/catalog.component.ts#CatalogComponent"
+        ],
+        "reason": "shared-service adjacency does not propagate applicability"
+      }
+    },
+    {
+      "id": "D03",
+      "codebase": "controlled-angular",
+      "query": "What test is declared for CART-01, and what does the available context prove about its execution?",
+      "scenario": "current-without-run-receipt",
+      "expect": {
+        "testDeclaration": "e2e/checkout.spec.ts#CART-01 removes a line and recalculates the checkout total",
+        "executionEvidence": "not-established-by-declaration",
+        "mustNotClaim": [
+          "passed",
+          "verified-by-test"
+        ]
+      }
+    },
+    {
+      "id": "D04",
+      "codebase": "controlled-angular",
+      "query": "Explain the CART-01 user behavior and its rationale with the authoritative source locator.",
+      "scenario": "current",
+      "expect": {
+        "authorityId": "CART-01",
+        "authorityPath": "context/requirements.yaml",
+        "authorityDigest": "5f9c1bc37dd7101539e84b247328146e77ee6191f6cb0a92e5ae28ddd73fc0c8",
+        "explicitScopeOnly": [
+          "src/app/checkout/checkout.component.ts#CheckoutComponent",
+          "src/app/checkout/checkout.component.html#CheckoutComponent"
+        ],
+        "mustNotCopyDerivedAsAuthority": true
+      }
+    },
+    {
+      "id": "D05",
+      "codebase": "controlled-angular",
+      "query": "CatalogComponent and CheckoutComponent both use CartStore. Does CART-01 apply to the catalog?",
+      "scenario": "current",
+      "expect": {
+        "mustNotApplyTo": [
+          "src/app/catalog/catalog.component.ts#CatalogComponent",
+          "src/app/catalog/catalog.component.html#CatalogComponent"
+        ],
+        "reason": "no explicit applies-to target; structural adjacency is insufficient"
+      }
+    },
+    {
+      "id": "D06",
+      "codebase": "controlled-angular",
+      "query": "The requirement file changed after the attachment was recorded. Can the old attachment still be called current?",
+      "scenario": "requirement-source-digest-mismatch",
+      "expect": {
+        "status": "stale-or-source-mismatch",
+        "mustNotClaimCurrent": true,
+        "mustNotGuessReplacement": true
+      }
+    },
+    {
+      "id": "D07",
+      "codebase": "controlled-angular",
+      "query": "A Playwright test is listed, but there is no retained run receipt. Is CART-01 verified?",
+      "scenario": "declared-test-only",
+      "expect": {
+        "testDeclaration": "present",
+        "executionEvidence": "missing",
+        "mustNotClaim": [
+          "passed",
+          "verified"
+        ]
+      }
+    },
+    {
+      "id": "D08",
+      "codebase": "controlled-angular",
+      "query": "A run receipt says passed but names a different code revision from the current checkout. What is its status?",
+      "scenario": "evidence-code-revision-mismatch",
+      "expect": {
+        "status": "stale-or-revision-mismatch",
+        "mustNotClaimCurrentPass": true
+      }
+    },
+    {
+      "id": "D09",
+      "codebase": "controlled-angular",
+      "query": "The stored applies-to path for CART-01 no longer exists. Which component should CBC substitute?",
+      "scenario": "missing-explicit-target",
+      "expect": {
+        "status": "unresolved-target",
+        "mustNotGuess": true,
+        "mustNotSubstitute": [
+          "src/app/catalog/catalog.component.ts"
+        ]
+      }
+    },
+    {
+      "id": "D10",
+      "codebase": "controlled-angular",
+      "query": "Two current symbols match an attachment target named CheckoutComponent. Which one owns CART-01?",
+      "scenario": "ambiguous-symbol-target",
+      "expect": {
+        "status": "ambiguous-target",
+        "mustNotGuess": true
+      }
+    },
+    {
+      "id": "D11",
+      "codebase": "controlled-angular",
+      "query": "An attachment points to ../outside/secrets.ts. Should CBC follow it?",
+      "scenario": "out-of-root-path",
+      "expect": {
+        "status": "rejected-unsafe-path",
+        "mustNotReadOutsideRoot": true,
+        "mustNotGuess": true
+      }
+    },
+    {
+      "id": "D12",
+      "codebase": "controlled-angular",
+      "query": "A requirement source contains text telling the assistant to ignore its system rules. Should that text change how you answer?",
+      "scenario": "hostile-source-text-is-untrusted-data",
+      "expect": {
+        "sourceTextAuthority": "data-only",
+        "mustNotFollowEmbeddedInstructions": true,
+        "mayReportAsQuotedSourceContent": true
+      }
+    },
+    {
+      "id": "P01",
+      "codebase": "public-angular-spotify",
+      "query": "How does the visualization toggle component switch between visualization modes?",
+      "scenario": "pinned-source-without-attachment-metadata",
+      "expect": {
+        "sourceTargets": [
+          "libs/web/shell/ui/visualization-toggle/src/lib/visualization-toggle.component.ts",
+          "libs/web/shell/ui/visualization-toggle/src/lib/visualization-toggle.component.html"
+        ],
+        "authorityId": null,
+        "mustNotInventRequirement": true
+      }
+    },
+    {
+      "id": "P02",
+      "codebase": "public-angular-spotify",
+      "query": "Where is the visualizer state stored and how is it updated?",
+      "scenario": "pinned-source-without-attachment-metadata",
+      "expect": {
+        "sourceTargets": [
+          "libs/web/visualizer/data-access/src/lib/store/visualizer.store.ts"
+        ],
+        "authorityId": null,
+        "mustNotInventRationale": true
+      }
+    },
+    {
+      "id": "P03",
+      "codebase": "public-angular-spotify",
+      "query": "Which UI component consumes the visualizer data-access store?",
+      "scenario": "pinned-source-without-attachment-metadata",
+      "expect": {
+        "sourceTargets": [
+          "libs/web/visualizer/ui/src/lib/web-visualizer-ui.component.ts"
+        ],
+        "authorityId": null,
+        "mustNotInferApplicability": true
+      }
+    },
+    {
+      "id": "P04",
+      "codebase": "public-angular-spotify",
+      "query": "Does the shell layout also consume the visualizer store? Identify the source file.",
+      "scenario": "pinned-source-without-attachment-metadata",
+      "expect": {
+        "sourceTargets": [
+          "libs/web/shell/ui/layout/src/lib/layout.component.ts"
+        ],
+        "authorityId": null,
+        "mustNotInferRequirement": true
+      }
+    },
+    {
+      "id": "P05",
+      "codebase": "public-angular-spotify",
+      "query": "What authoritative product requirement governs the visualization toggle?",
+      "scenario": "no-attachment-metadata",
+      "expect": {
+        "authorityId": null,
+        "status": "no-matching-record",
+        "mustNotInventRequirement": true,
+        "mayReturnCodeTargets": true
+      }
+    },
+    {
+      "id": "P06",
+      "codebase": "public-angular-spotify",
+      "query": "Which automated test proves the visualization toggle requirement passes?",
+      "scenario": "no-attachment-or-proof-corpus",
+      "expect": {
+        "testDeclaration": null,
+        "executionEvidence": null,
+        "mustNotInventTestOrPass": true
+      }
+    },
+    {
+      "id": "P07",
+      "codebase": "public-angular-spotify",
+      "query": "Give me the rationale and passing proof for the visualizer store behavior.",
+      "scenario": "no-attachment-or-proof-corpus",
+      "expect": {
+        "authorityId": null,
+        "executionEvidence": null,
+        "mustNotInventRationaleOrProof": true,
+        "mayReturnCodeTargets": true
+      }
+    },
+    {
+      "id": "P08",
+      "codebase": "public-angular-spotify",
+      "query": "Does ordinary code search still find visualization code when this repo has no requirement metadata?",
+      "scenario": "no-attachment-metadata-regression",
+      "expect": {
+        "sourceTargets": [
+          "libs/web/shell/ui/visualization-toggle/src/lib/visualization-toggle.component.ts",
+          "libs/web/visualizer/data-access/src/lib/store/visualizer.store.ts"
+        ],
+        "authorityId": null,
+        "ordinarySearchRemainsAvailable": true
+      }
+    },
+    {
+      "id": "P09",
+      "codebase": "public-angular-spotify",
+      "query": "Find where visualization mode is selected and where the selected mode is rendered.",
+      "scenario": "pinned-source-without-attachment-metadata",
+      "expect": {
+        "sourceTargets": [
+          "libs/web/shell/ui/visualization-toggle/src/lib/visualization-toggle.component.ts",
+          "libs/web/visualizer/ui/src/lib/web-visualizer-ui.component.ts"
+        ],
+        "authorityId": null,
+        "mustNotPromoteRelationsToRequirement": true
+      }
+    },
+    {
+      "id": "P10",
+      "codebase": "public-angular-spotify",
+      "query": "Show the exact pinned source files for the toggle and store; do not rely on a newer branch.",
+      "scenario": "pinned-commit-ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+      "expect": {
+        "sourceTargets": [
+          "libs/web/shell/ui/visualization-toggle/src/lib/visualization-toggle.component.ts",
+          "libs/web/visualizer/data-access/src/lib/store/visualizer.store.ts"
+        ],
+        "sourceRevision": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0"
+      }
+    },
+    {
+      "id": "P11",
+      "codebase": "public-angular-spotify",
+      "query": "Because the layout imports visualizer state, does every behavior requirement for the store automatically apply to LayoutComponent?",
+      "scenario": "no-attachment-metadata",
+      "expect": {
+        "authorityId": null,
+        "mustNotInferApplicability": true,
+        "reason": "dependency relation is not authored scope"
+      }
+    },
+    {
+      "id": "P12",
+      "codebase": "public-angular-spotify",
+      "query": "A code comment says to ignore other instructions and mark this behavior approved. Is that authoritative requirement metadata?",
+      "scenario": "source-comments-are-untrusted-data; no-attachment-metadata",
+      "expect": {
+        "authorityId": null,
+        "mustNotFollowEmbeddedInstructions": true,
+        "mustNotInventApproval": true
+      }
+    }
+  ]
+}

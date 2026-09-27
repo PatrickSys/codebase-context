@@ -1,0 +1,29 @@
+<section class="panel catalog" aria-labelledby="catalog-heading">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">The collection</p>
+      <h2 id="catalog-heading">Goods for your day</h2>
+    </div>
+    <span class="item-count">{{ store.products.length }} pieces</span>
+  </div>
+
+  <div class="product-list">
+    @for (product of store.products; track product.id) {
+      <article class="product-card">
+        <div class="product-art" [attr.data-product-id]="product.id" aria-hidden="true">
+          <span>{{ product.name.charAt(0) }}</span>
+        </div>
+        <div class="product-copy">
+          <div class="product-title">
+            <h3>{{ product.name }}</h3>
+            <span>{{ product.price | currency }}</span>
+          </div>
+          <p>{{ product.description }}</p>
+          <button type="button" (click)="store.addToCart(product.id)">
+            Add {{ product.name }} to cart
+          </button>
+        </div>
+      </article>
+    }
+  </div>
+</section>

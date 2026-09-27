@@ -1,0 +1,49 @@
+:host {
+  display: block;
+}
+
+.storefront {
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 52px 0 72px;
+}
+
+header {
+  margin-bottom: 36px;
+}
+
+.eyebrow {
+  color: #446454;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1 {
+  max-width: 640px;
+  margin: 10px 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+header > p:last-child {
+  color: #68716d;
+  font-size: 1.08rem;
+}
+
+.shop-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr);
+  align-items: start;
+  gap: 24px;
+}
+
+@media (max-width: 720px) {
+  .shop-layout {
+    grid-template-columns: 1fr;
+  }
+}

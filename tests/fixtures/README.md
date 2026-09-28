@@ -38,6 +38,37 @@ node scripts/run-eval.mjs /path/to/angular-spotify --mode retrieval --fixture-a 
 node scripts/run-eval.mjs tests/fixtures/codebases/eval-controlled --mode retrieval --fixture-a tests/fixtures/eval-controlled.json
 ```
 
+### Run Source-linked Feature Context Acceptance Evaluation
+
+This frozen 24-case evaluator uses the controlled Angular sample plus `angular-spotify` at
+`ff9efa765c53cfde78c9a172c62d515ae8ef9fe0`. The fixture and source/archive digests are checked by
+`tests/context-attachments-eval.mjs`. Run from a clean CBC checkout; the harness verifies the CBC
+commit, build entry, and runtime modules remain unchanged.
+
+Materialize the public source from that exact commit. Use explicit LF settings for `git archive` to
+make it reproducible across Windows checkout configurations. Keep the archive separate from the extracted
+root:
+
+```bash
+git clone --no-checkout https://github.com/trungk18/angular-spotify /tmp/angular-spotify-git
+git -C /tmp/angular-spotify-git checkout --detach ff9efa765c53cfde78c9a172c62d515ae8ef9fe0
+git -C /tmp/angular-spotify-git -c core.autocrlf=false -c core.eol=lf archive --format=tar --output=/tmp/angular-spotify-ff9efa7.tar ff9efa765c53cfde78c9a172c62d515ae8ef9fe0
+mkdir -p /tmp/angular-spotify-ff9efa7
+tar -xf /tmp/angular-spotify-ff9efa7.tar -C /tmp/angular-spotify-ff9efa7
+
+pnpm install --frozen-lockfile
+pnpm run build
+node tests/context-attachments-eval.mjs \
+  --public-root /tmp/angular-spotify-ff9efa7 \
+  --public-archive /tmp/angular-spotify-ff9efa7.tar \
+  --output /tmp/cbc-feature-context-eval.json
+```
+
+The runner checks the archive SHA-256 and compares the complete extracted public tree with the
+archive before indexing. Choose a new `--output` path for each run; reports must be outside both
+source roots and existing reports are never overwritten. This evaluates direct MCP search and
+feature-context behavior without provider calls; it does not evaluate natural-language agent use.
+
 ### Run Discovery Evaluation
 
 ```bash

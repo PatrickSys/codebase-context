@@ -13,6 +13,7 @@ import { FeatureContextIndexSchema } from '../src/core/feature-context.js';
 import { analyzerRegistry } from '../src/core/analyzer-registry.js';
 import { CodebaseIndexer } from '../src/core/indexer.js';
 import { AngularAnalyzer } from '../src/analyzers/angular/index.js';
+import { MAX_TREE_SITTER_PARSE_BYTES } from '../src/utils/tree-sitter.js';
 
 interface RelationshipsFixture {
   header: { buildId: string };
@@ -161,10 +162,106 @@ describe('feature-context index projection', () => {
       expect(refreshedProjection.attachments[0]?.appliesTo).toEqual(
         firstProjection.attachments[0]?.appliesTo
       );
+
+      await fs.writeFile(
+        path.join(rootPath, 'src', 'checkout.ts'),
+        `${angularSource}\nexport class CheckoutComponent {}\n`
+      );
+      await new CodebaseIndexer({
+        rootPath,
+        incrementalOnly: true,
+        config: { skipEmbedding: true }
+      }).index();
+      const duplicate = await readSidecars(rootPath);
+      const duplicateProjection = FeatureContextIndexSchema.parse(
+        duplicate.relationships.featureContexts
+      );
+      expect(
+        duplicateProjection.attachments[0]?.appliesTo.find(
+          (target) => target.target.symbol === 'CheckoutComponent'
+        )?.status
+      ).toBe('ambiguous');
+      expect(
+        duplicateProjection.attachments[0]?.diagnostics.some(
+          (entry) => entry.code === 'ambiguous-target' && entry.path === 'src/checkout.ts'
+        )
+      ).toBe(true);
     } finally {
       if (previousAngularAnalyzer) analyzerRegistry.register(previousAngularAnalyzer);
       else analyzerRegistry.unregister('angular');
     }
+  });
+
+  it('marks same-line duplicate declarations ambiguous and unsupported binding collisions non-green', async () => {
+    const rootPath = await createProject();
+    await fs.writeFile(
+      path.join(rootPath, 'src', 'duplicates.ts'),
+      'export class DuplicateComponent {} export class DuplicateComponent {}\n'
+    );
+    await fs.writeFile(
+      path.join(rootPath, 'src', 'binding.ts'),
+      'const BoundComponent = 1;\nexport class BoundComponent {}\n'
+    );
+    await fs.writeFile(
+      path.join(rootPath, 'src', 'import-binding.ts'),
+      "import { ImportedComponent } from './other';\nexport class ImportedComponent {}\n"
+    );
+    await fs.writeFile(
+      path.join(rootPath, 'src', 'bare-arrow-binding.ts'),
+      'export class BareArrowComponent {}\nconst use = BareArrowComponent => BareArrowComponent;\n'
+    );
+    await fs.writeFile(
+      path.join(rootPath, 'src', 'large.ts'),
+      `export class LargeComponent {}\n${' '.repeat(MAX_TREE_SITTER_PARSE_BYTES)}`
+    );
+    await fs.writeFile(
+      path.join(rootPath, 'src', 'example.py'),
+      'def render_checkout():\n    return "checkout"\n'
+    );
+    const attachment = (requirementId: string, targetPath: string, symbol?: string) => ({
+      requirementId,
+      source: { path: 'requirements/checkout.md', locator: requirementId },
+      appliesTo: [symbol ? { path: targetPath, symbol } : { path: targetPath }],
+      declaredTests: [],
+      evidenceReceipts: []
+    });
+    await fs.writeFile(
+      path.join(rootPath, 'symbols.context.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        attachments: [
+          attachment('DUPLICATE', 'src/duplicates.ts', 'DuplicateComponent'),
+          attachment('BINDING', 'src/binding.ts', 'BoundComponent'),
+          attachment('IMPORT', 'src/import-binding.ts', 'ImportedComponent'),
+          attachment('BARE_ARROW', 'src/bare-arrow-binding.ts', 'BareArrowComponent'),
+          attachment('LARGE', 'src/large.ts', 'LargeComponent'),
+          attachment('PYTHON_SYMBOL', 'src/example.py', 'render_checkout'),
+          attachment('PYTHON_FILE', 'src/example.py')
+        ]
+      })
+    );
+
+    await new CodebaseIndexer({ rootPath, config: { skipEmbedding: true } }).index();
+    const sidecars = await readSidecars(rootPath);
+    const projection = FeatureContextIndexSchema.parse(sidecars.relationships.featureContexts);
+    const duplicate = projection.attachments.find((item) => item.requirementId === 'DUPLICATE');
+    const binding = projection.attachments.find((item) => item.requirementId === 'BINDING');
+    const imported = projection.attachments.find((item) => item.requirementId === 'IMPORT');
+    const bareArrow = projection.attachments.find((item) => item.requirementId === 'BARE_ARROW');
+    const large = projection.attachments.find((item) => item.requirementId === 'LARGE');
+    const pythonSymbol = projection.attachments.find(
+      (item) => item.requirementId === 'PYTHON_SYMBOL'
+    );
+    const pythonFile = projection.attachments.find((item) => item.requirementId === 'PYTHON_FILE');
+
+    expect(duplicate?.appliesTo[0]?.status).toBe('ambiguous');
+    expect(binding?.appliesTo[0]?.status).toBe('unsupported');
+    expect(binding?.appliesTo[0]?.identity?.name).toBe('BoundComponent');
+    expect(imported?.appliesTo[0]?.status).toBe('unsupported');
+    expect(bareArrow?.appliesTo[0]?.status).toBe('unsupported');
+    expect(large?.appliesTo[0]?.status).toBe('unsupported');
+    expect(pythonSymbol?.appliesTo[0]?.status).toBe('unsupported');
+    expect(pythonFile?.appliesTo[0]?.status).toBe('resolved');
   });
 
   it('refreshes added, edited, and deleted manifests on an unchanged source index', async () => {

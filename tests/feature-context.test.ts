@@ -8,10 +8,12 @@ import {
   FeatureContextManifestSchema,
   parseFeatureContextManifest,
   queryFeatureContext,
+  readContainedFeatureContextFile,
   type CapturedRunReceipt,
   type FeatureContextManifest,
   type IndexedSymbolRef
 } from '../src/core/feature-context.js';
+import { MAX_TREE_SITTER_PARSE_BYTES } from '../src/utils/tree-sitter.js';
 
 const COMMIT = 'a'.repeat(40);
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -324,6 +326,138 @@ describe('feature context core', () => {
     expect(
       ambiguous.attachments[0]?.diagnostics.some((entry) => entry.code === 'ambiguous-target')
     ).toBe(true);
+  });
+
+  it('keeps a known candidate unsupported when the complete symbol set could not be parsed', async () => {
+    const fixture = await createFixture(rootPath);
+    const index = await compileFeatureContexts({
+      rootPath,
+      manifestFiles: [
+        { path: fixture.manifestPath, text: JSON.stringify(manifest([fixture.receiptPath])) }
+      ],
+      receiptFiles: [{ path: fixture.receiptPath, text: JSON.stringify(fixture.receipt) }],
+      indexedSymbols: fixture.indexedSymbols,
+      incompleteSymbolPaths: ['src/cart.ts'],
+      codeCommit: COMMIT,
+      codeIsClean: true,
+      ignoredPaths: ['test-results/**']
+    });
+    const target = index.attachments[0]?.appliesTo.find(
+      (item) => item.target.symbol === 'CartComponent'
+    );
+
+    expect(target?.status).toBe('unsupported');
+    expect(target?.identity).toEqual({
+      path: 'src/cart.ts',
+      name: 'CartComponent',
+      startLine: 1,
+      endLine: 1
+    });
+    expect(
+      index.attachments[0]?.diagnostics.some(
+        (entry) => entry.code === 'unsupported-symbol' && entry.path === 'src/cart.ts'
+      )
+    ).toBe(true);
+  });
+
+  it('does not resolve a stale indexed symbol when its source appears after the AST read failed', async () => {
+    const fixture = await createFixture(rootPath);
+    await fs.rm(path.join(rootPath, 'src', 'cart.ts'));
+    // Model the indexer observing a missing source during its bounded symbol
+    // read, followed by the file appearing before projection compilation.
+    await writeFile(rootPath, 'src/cart.ts', 'export class CartComponent {}\n');
+
+    const index = await compileFeatureContexts({
+      rootPath,
+      manifestFiles: [
+        { path: fixture.manifestPath, text: JSON.stringify(manifest([fixture.receiptPath])) }
+      ],
+      receiptFiles: [{ path: fixture.receiptPath, text: JSON.stringify(fixture.receipt) }],
+      indexedSymbols: fixture.indexedSymbols,
+      incompleteSymbolPaths: ['src/cart.ts'],
+      // No digest means the current bytes cannot be bound to those old ranges.
+      codeCommit: COMMIT,
+      codeIsClean: true,
+      ignoredPaths: ['test-results/**']
+    });
+
+    expect(index.attachments[0]?.appliesTo[0]?.status).toBe('unsupported');
+  });
+
+  it('fails closed when an unresolved same-name binding competes with a supported declaration', async () => {
+    const fixture = await createFixture(rootPath);
+    const index = await compileFeatureContexts({
+      rootPath,
+      manifestFiles: [
+        { path: fixture.manifestPath, text: JSON.stringify(manifest([fixture.receiptPath])) }
+      ],
+      receiptFiles: [{ path: fixture.receiptPath, text: JSON.stringify(fixture.receipt) }],
+      indexedSymbols: fixture.indexedSymbols,
+      unresolvedSymbolBindings: [{ path: 'src/cart.ts', name: 'CartComponent' }],
+      codeCommit: COMMIT,
+      codeIsClean: true,
+      ignoredPaths: ['test-results/**']
+    });
+    const target = index.attachments[0]?.appliesTo.find(
+      (item) => item.target.symbol === 'CartComponent'
+    );
+
+    expect(target?.status).toBe('unsupported');
+    expect(target?.identity?.name).toBe('CartComponent');
+  });
+
+  it('does not mark a symbol target resolved when its parsed source digest changed before projection', async () => {
+    const fixture = await createFixture(rootPath);
+    const index = await compileFeatureContexts({
+      rootPath,
+      manifestFiles: [
+        { path: fixture.manifestPath, text: JSON.stringify(manifest([fixture.receiptPath])) }
+      ],
+      receiptFiles: [{ path: fixture.receiptPath, text: JSON.stringify(fixture.receipt) }],
+      indexedSymbols: fixture.indexedSymbols,
+      symbolSourceDigests: [{ path: 'src/cart.ts', sha256: 'b'.repeat(64) }],
+      codeCommit: COMMIT,
+      codeIsClean: true,
+      ignoredPaths: ['test-results/**']
+    });
+    const target = index.attachments[0]?.appliesTo.find(
+      (item) => item.target.symbol === 'CartComponent'
+    );
+
+    expect(target?.status).toBe('unsupported');
+    expect(target?.sha256).toMatch(SHA256);
+  });
+
+  it('bounds contained reads before returning target source text', async () => {
+    const content = Buffer.alloc(MAX_TREE_SITTER_PARSE_BYTES + 1, 0x20);
+    await writeFile(rootPath, 'src/large.ts', content.toString('utf8'));
+
+    const result = await readContainedFeatureContextFile(
+      rootPath,
+      'src/large.ts',
+      MAX_TREE_SITTER_PARSE_BYTES
+    );
+
+    expect(result).toEqual({ status: 'too-large' });
+  });
+
+  it('bounds query-time target revalidation when a symbol file grows past the parser limit', async () => {
+    const fixture = await createFixture(rootPath);
+    await writeFile(
+      rootPath,
+      'src/cart.ts',
+      `export class CartComponent {}\n${' '.repeat(MAX_TREE_SITTER_PARSE_BYTES)}`
+    );
+
+    const reply = await queryFeatureContext({
+      rootPath,
+      index: fixture.index,
+      target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+      currentGit: { commit: COMMIT, isClean: true }
+    });
+
+    expect(reply.matches[0]?.appliesTo[0]?.current).toBe(false);
+    expect(reply.matches[0]?.diagnostics.some((entry) => entry.code === 'stale-target')).toBe(true);
   });
 
   it('rejects symlink escapes and does not serialize external file contents', async () => {

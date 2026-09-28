@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import ignore from 'ignore';
 import { z } from 'zod';
 import { isPathWithin } from '../utils/project-discovery.js';
+import { MAX_TREE_SITTER_PARSE_BYTES } from '../utils/tree-sitter.js';
 
 const MAX_REPLY_TOKENS = 900;
 const MAX_DIAGNOSTICS_IN_REPLY = 6;
@@ -310,6 +312,14 @@ export interface CompileFeatureContextsInput {
   codeCommit: string | null;
   codeIsClean: boolean;
   ignoredPaths: readonly string[];
+  /** Symbol-target files whose complete declaration set could not be parsed safely. */
+  incompleteSymbolPaths?: readonly string[];
+  /** Names with multiple distinct declaration occurrences, even when their lines match. */
+  ambiguousSymbolKeys?: readonly { path: string; name: string }[];
+  /** Same-name local bindings outside the supported declaration set. */
+  unresolvedSymbolBindings?: readonly { path: string; name: string }[];
+  /** Byte digests of symbol files used to extract the candidate set. */
+  symbolSourceDigests?: readonly { path: string; sha256: string }[];
 }
 
 export interface QueryFeatureContextInput {
@@ -348,11 +358,57 @@ function normalizeContextPath(value: string): string | undefined {
 
 type ContainedFileResolution =
   | { status: 'found'; absolutePath: string; bytes: Buffer }
-  | { status: 'missing' | 'outside-root' };
+  | { status: 'digested'; absolutePath: string; sha256: string }
+  | { status: 'missing' | 'outside-root' | 'too-large' };
+
+async function digestFile(absolutePath: string, maxBytes?: number): Promise<string | undefined> {
+  const hash = createHash('sha256');
+  const stream = createReadStream(absolutePath);
+  let totalBytes = 0;
+  try {
+    for await (const chunk of stream) {
+      const bytes = chunk as Buffer;
+      totalBytes += bytes.byteLength;
+      if (maxBytes !== undefined && totalBytes > maxBytes) {
+        stream.destroy();
+        return undefined;
+      }
+      hash.update(bytes);
+    }
+  } finally {
+    stream.destroy();
+  }
+  return hash.digest('hex');
+}
+
+async function readBoundedFile(absolutePath: string, maxBytes: number): Promise<Buffer | null> {
+  const handle = await fs.open(absolutePath, 'r');
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > maxBytes) return null;
+
+    const chunkSize = Math.min(64 * 1024, maxBytes + 1);
+    const chunk = Buffer.allocUnsafe(chunkSize);
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    while (totalBytes <= maxBytes) {
+      const requested = Math.min(chunkSize, maxBytes + 1 - totalBytes);
+      const { bytesRead } = await handle.read(chunk, 0, requested, totalBytes);
+      if (bytesRead === 0) break;
+      totalBytes += bytesRead;
+      if (totalBytes > maxBytes) return null;
+      chunks.push(Buffer.from(chunk.subarray(0, bytesRead)));
+    }
+    return Buffer.concat(chunks, totalBytes);
+  } finally {
+    await handle.close();
+  }
+}
 
 async function resolveContainedFile(
   rootRealPath: string,
-  relativePath: string
+  relativePath: string,
+  options?: { maxBytes?: number; digestOnly?: boolean }
 ): Promise<ContainedFileResolution> {
   const normalized = normalizeContextPath(relativePath);
   if (!normalized) return { status: 'outside-root' };
@@ -368,6 +424,17 @@ async function resolveContainedFile(
     if (!isWithin(rootRealPath, realPath)) return { status: 'outside-root' };
     const stat = await fs.stat(realPath);
     if (!stat.isFile()) return { status: 'missing' };
+    const maxBytes = options?.maxBytes;
+    if (maxBytes !== undefined && stat.size > maxBytes) return { status: 'too-large' };
+    if (options?.digestOnly) {
+      const digest = await digestFile(realPath, maxBytes);
+      if (!digest) return { status: maxBytes === undefined ? 'missing' : 'too-large' };
+      return { status: 'digested', absolutePath: realPath, sha256: digest };
+    }
+    if (maxBytes !== undefined) {
+      const bytes = await readBoundedFile(realPath, maxBytes);
+      return bytes ? { status: 'found', absolutePath: realPath, bytes } : { status: 'too-large' };
+    }
     return { status: 'found', absolutePath: realPath, bytes: await fs.readFile(realPath) };
   } catch {
     return { status: 'missing' };
@@ -376,11 +443,12 @@ async function resolveContainedFile(
 
 export type FeatureContextFileReadResult =
   | { status: 'found'; path: string; absolutePath: string; text: string; sha256: string }
-  | { status: 'missing' | 'outside-root' };
+  | { status: 'missing' | 'outside-root' | 'too-large' };
 
 export async function readContainedFeatureContextFile(
   rootPath: string,
-  relativePath: string
+  relativePath: string,
+  maxBytes?: number
 ): Promise<FeatureContextFileReadResult> {
   let rootRealPath: string;
   try {
@@ -388,7 +456,8 @@ export async function readContainedFeatureContextFile(
   } catch {
     return { status: 'missing' };
   }
-  const resolved = await resolveContainedFile(rootRealPath, relativePath);
+  const resolved = await resolveContainedFile(rootRealPath, relativePath, { maxBytes });
+  if (resolved.status === 'digested') return { status: 'missing' };
   if (resolved.status !== 'found') return resolved;
   const normalized = normalizeContextPath(relativePath);
   if (!normalized) return { status: 'outside-root' };
@@ -413,7 +482,10 @@ function symbolKey(identity: IndexedSymbolRef): string {
 function resolveDeclaredTarget(
   target: FeatureTarget,
   indexedSymbols: readonly IndexedSymbolRef[],
-  pathExists: boolean
+  pathExists: boolean,
+  candidatesComplete: boolean,
+  hasDuplicateOccurrence: boolean,
+  hasUnresolvedBinding: boolean
 ): z.infer<typeof CompiledTargetSchema> {
   if (!target.symbol) {
     return {
@@ -421,20 +493,23 @@ function resolveDeclaredTarget(
       status: pathExists ? 'resolved' : 'missing'
     };
   }
+  if (!pathExists) return { target, status: 'missing' };
   const matches = indexedSymbols.filter(
     (symbol) => symbol.path === target.path && symbol.name === target.symbol
   );
   const unique = new Map(matches.map((item) => [symbolKey(item), item]));
   const identities = [...unique.values()];
+  if (hasDuplicateOccurrence || (candidatesComplete && identities.length > 1)) {
+    return { target, status: 'ambiguous' };
+  }
   if (identities.length === 1) {
     return {
       target,
-      status: pathExists ? 'resolved' : 'missing',
+      status: candidatesComplete && !hasUnresolvedBinding ? 'resolved' : 'unsupported',
       identity: identities[0]
     };
   }
-  if (identities.length > 1) return { target, status: 'ambiguous' };
-  return { target, status: pathExists ? 'unsupported' : 'missing' };
+  return { target, status: 'unsupported' };
 }
 
 function equalTest(left: DeclaredTest, right: DeclaredTest): boolean {
@@ -486,6 +561,16 @@ export async function compileFeatureContexts(
     deduplicatedSymbols.set(symbolKey(identity), identity);
   }
   const symbols = [...deduplicatedSymbols.values()];
+  const incompleteSymbolPaths = new Set(input.incompleteSymbolPaths ?? []);
+  const ambiguousSymbolKeys = new Set(
+    (input.ambiguousSymbolKeys ?? []).map((item) => `${item.path}\0${item.name}`)
+  );
+  const unresolvedSymbolBindings = new Set(
+    (input.unresolvedSymbolBindings ?? []).map((item) => `${item.path}\0${item.name}`)
+  );
+  const symbolSourceDigests = new Map(
+    (input.symbolSourceDigests ?? []).map((item) => [item.path, item.sha256])
+  );
 
   for (const file of input.manifestFiles) {
     const manifestPath = normalizeContextPath(file.path);
@@ -577,8 +662,14 @@ export async function compileFeatureContexts(
       const sourceHash = sourceFile.status === 'found' ? sha256(sourceFile.bytes) : undefined;
       const appliesTo = [] as FeatureContextIndex['attachments'][number]['appliesTo'];
       for (const target of attachment.appliesTo) {
-        const targetFile = await resolveContainedFile(rootRealPath, target.path);
-        const targetExists = targetFile.status === 'found';
+        const targetFile = await resolveContainedFile(rootRealPath, target.path, {
+          ...(target.symbol ? { maxBytes: MAX_TREE_SITTER_PARSE_BYTES } : {}),
+          digestOnly: true
+        });
+        const targetExists =
+          targetFile.status === 'found' ||
+          targetFile.status === 'digested' ||
+          targetFile.status === 'too-large';
         if (targetFile.status === 'outside-root') {
           attachmentDiagnostics.push(
             diagnostic(
@@ -588,12 +679,24 @@ export async function compileFeatureContexts(
             )
           );
         }
-        const compiled = resolveDeclaredTarget(target, symbols, targetExists);
+        const compiled = resolveDeclaredTarget(
+          target,
+          symbols,
+          targetExists,
+          !incompleteSymbolPaths.has(target.path) &&
+            targetFile.status !== 'too-large' &&
+            (!target.symbol ||
+              !symbolSourceDigests.has(target.path) ||
+              (targetFile.status === 'digested' &&
+                targetFile.sha256 === symbolSourceDigests.get(target.path))),
+          target.symbol ? ambiguousSymbolKeys.has(`${target.path}\0${target.symbol}`) : false,
+          target.symbol ? unresolvedSymbolBindings.has(`${target.path}\0${target.symbol}`) : false
+        );
         if (target.symbol && compiled.status === 'unsupported') {
           attachmentDiagnostics.push(
             diagnostic(
               'unsupported-symbol',
-              `No unique indexed source range exists for ${target.symbol}`,
+              `No unique supported source declaration could be established for ${target.symbol}`,
               target.path
             )
           );
@@ -610,9 +713,15 @@ export async function compileFeatureContexts(
             diagnostic('missing-target', `Target file is missing: ${target.path}`, target.path)
           );
         }
+        const targetDigest =
+          targetFile.status === 'digested'
+            ? targetFile.sha256
+            : targetFile.status === 'found'
+              ? sha256(targetFile.bytes)
+              : undefined;
         appliesTo.push({
           ...compiled,
-          ...(targetExists ? { sha256: sha256(targetFile.bytes) } : {})
+          ...(targetDigest ? { sha256: targetDigest } : {})
         });
       }
       const declaredTests = [] as FeatureContextIndex['attachments'][number]['declaredTests'];
@@ -819,10 +928,14 @@ function targetMatches(declared: FeatureTarget, query: FeatureTarget): boolean {
 
 async function currentFileDigest(
   rootRealPath: string,
-  relativePath: string
+  relativePath: string,
+  maxBytes?: number
 ): Promise<string | undefined> {
-  const file = await resolveContainedFile(rootRealPath, relativePath);
-  return file.status === 'found' ? sha256(file.bytes) : undefined;
+  const file = await resolveContainedFile(rootRealPath, relativePath, {
+    ...(maxBytes !== undefined ? { maxBytes } : {}),
+    digestOnly: true
+  });
+  return file.status === 'digested' ? file.sha256 : undefined;
 }
 
 async function revalidateAttachment(
@@ -857,7 +970,11 @@ async function revalidateAttachment(
   const appliesTo = [] as FeatureContextReply['matches'][number]['appliesTo'];
   for (const target of attachment.appliesTo) {
     const currentDigest = target.sha256
-      ? await currentFileDigest(rootRealPath, target.target.path)
+      ? await currentFileDigest(
+          rootRealPath,
+          target.target.path,
+          target.target.symbol ? MAX_TREE_SITTER_PARSE_BYTES : undefined
+        )
       : undefined;
     const current = Boolean(currentDigest && currentDigest === target.sha256);
     if (!current)

@@ -13,6 +13,12 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ProjectConfig } from './server/config.js';
 import type { Resource } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
+import {
+  createIndexingCoordinator,
+  type IndexingCoordinator,
+  type IndexingMode,
+  type IndexingOutcome
+} from './core/indexing-coordinator.js';
 
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
@@ -1238,10 +1244,10 @@ async function extractGitMemories(rootPath: string, memoryPath: string): Promise
 
 async function performIndexingOnce(
   project: ProjectState,
-  incrementalOnly?: boolean
-): Promise<void> {
-  project.indexState.status = 'indexing';
-  const mode = incrementalOnly ? 'incremental' : 'full';
+  mode: IndexingMode
+): Promise<IndexingOutcome> {
+  const incrementalOnly = mode === 'incremental';
+  delete project.indexState.error;
   console.error(`Indexing (${mode}): ${project.rootPath}`);
 
   try {
@@ -1289,10 +1295,6 @@ async function performIndexingOnce(
     project.indexState.indexer = indexer;
     const stats = await indexer.index();
 
-    project.indexState.status = 'ready';
-    project.indexState.lastIndexed = new Date();
-    project.indexState.stats = stats;
-
     console.error(
       `Complete: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(
         stats.duration / 1000
@@ -1310,28 +1312,48 @@ async function performIndexingOnce(
     } catch {
       // Git memory extraction is optional — never fail indexing over it
     }
+
+    project.indexState.lastIndexed = new Date();
+    project.indexState.stats = stats;
+    return 'ready';
   } catch (error) {
-    project.indexState.status = 'error';
     project.indexState.error = error instanceof Error ? error.message : String(error);
     console.error('Indexing failed:', project.indexState.error);
+    return 'error';
   }
 }
 
-async function performIndexing(project: ProjectState, incrementalOnly?: boolean): Promise<void> {
-  let nextMode = incrementalOnly;
-  for (;;) {
-    await performIndexingOnce(project, nextMode);
+const indexingCoordinators = new WeakMap<ProjectState, IndexingCoordinator>();
 
-    const shouldRunQueuedRefresh = project.autoRefresh.consumeQueuedRefresh(
-      project.indexState.status
-    );
-    if (!shouldRunQueuedRefresh) return;
+function getIndexingCoordinator(project: ProjectState): IndexingCoordinator {
+  let coordinator = indexingCoordinators.get(project);
+  if (!coordinator) {
+    coordinator = createIndexingCoordinator({
+      runPass: (mode) => performIndexingOnce(project, mode),
+      onStarted: () => {
+        project.indexState.status = 'indexing';
+      },
+      onFinished: (outcome) => {
+        project.indexState.status = outcome;
+        if (outcome === 'ready') delete project.indexState.error;
+      },
+      afterPass: (outcome, queue) => {
+        const shouldRunQueuedRefresh = project.autoRefresh.consumeQueuedRefresh(outcome);
+        if (!shouldRunQueuedRefresh) return;
 
-    if (process.env.CODEBASE_CONTEXT_DEBUG) {
-      console.error('[file-watcher] Running queued auto-refresh');
-    }
-    nextMode = true;
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error('[file-watcher] Running queued auto-refresh');
+        }
+        queue('incremental');
+      }
+    });
+    indexingCoordinators.set(project, coordinator);
   }
+  return coordinator;
+}
+
+async function performIndexing(project: ProjectState, incrementalOnly?: boolean): Promise<void> {
+  await getIndexingCoordinator(project).request(incrementalOnly ? 'incremental' : 'full');
 }
 
 async function shouldReindex(paths: ToolPaths): Promise<boolean> {

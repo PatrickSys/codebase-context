@@ -11,6 +11,11 @@ export interface TreeSitterSymbol {
   kind: string;
   startLine: number;
   endLine: number;
+  /** Exact AST declaration range, excluding export/decorator wrapper nodes. */
+  declarationStartLine: number;
+  declarationEndLine: number;
+  declarationStartIndex: number;
+  declarationEndIndex: number;
   startIndex: number;
   endIndex: number;
   content: string;
@@ -20,6 +25,11 @@ export interface TreeSitterSymbol {
 export interface TreeSitterSymbolExtraction {
   grammarFile: string;
   symbols: TreeSitterSymbol[];
+  /** Every supported declaration occurrence, including same-line duplicates. */
+  occurrences: TreeSitterSymbol[];
+  /** Local bindings outside the supported callable/type declaration set. */
+  unresolvedBindings: string[];
+  coverageComplete: boolean;
 }
 
 const require = createRequire(import.meta.url);
@@ -61,7 +71,7 @@ const NAME_NODE_TYPE_HINTS = [
   'name'
 ] as const;
 
-const MAX_TREE_SITTER_PARSE_BYTES = 1024 * 1024;
+export const MAX_TREE_SITTER_PARSE_BYTES = 1024 * 1024;
 const TREE_SITTER_PARSE_TIMEOUT_MICROS = 30_000_000n;
 
 let initPromise: Promise<void> | null = null;
@@ -121,6 +131,10 @@ function isTreeSitterDebugEnabled(): boolean {
 
 export function supportsTreeSitter(language: string): boolean {
   return supportsCuratedTreeSitter(language);
+}
+
+export function supportsSymbolBindingCoverage(language: string): boolean {
+  return ['javascript', 'javascriptreact', 'typescript', 'typescriptreact'].includes(language);
 }
 
 async function ensureParserInitialized(): Promise<void> {
@@ -199,6 +213,10 @@ function normalizeSymbolName(rawName: string): string {
     .replace(/^[:@#]+/, '');
 }
 
+function getNamedChildren(node: Node): Node[] {
+  return node.namedChildren.filter((child): child is Node => child !== null);
+}
+
 function maybeGetNameNode(node: Node): Node | null {
   for (const fieldName of NAME_FIELD_CANDIDATES) {
     const field = node.childForFieldName(fieldName);
@@ -250,6 +268,111 @@ function isFunctionVariableDeclarator(node: Node): boolean {
   return valueNode.type === 'arrow_function' || valueNode.type === 'function_expression';
 }
 
+function addBindingPattern(node: Node | null, bindings: Set<string>): boolean {
+  if (!node) return false;
+
+  if (['identifier', 'type_identifier', 'shorthand_property_identifier_pattern'].includes(node.type)) {
+    const name = normalizeSymbolName(node.text);
+    if (!name) return false;
+    bindings.add(name);
+    return true;
+  }
+
+  if (node.type === 'object_pattern') {
+    let complete = true;
+    for (const child of getNamedChildren(node)) {
+      if (child.type === 'pair_pattern') {
+        const value = child.childForFieldName('value') ?? getNamedChildren(child).at(-1) ?? null;
+        if (!addBindingPattern(value, bindings)) complete = false;
+      } else if (child.type === 'shorthand_property_identifier_pattern') {
+        if (!addBindingPattern(child, bindings)) complete = false;
+      } else if (child.type === 'rest_pattern' || child.type === 'assignment_pattern') {
+        if (!addBindingPattern(child, bindings)) complete = false;
+      } else {
+        complete = false;
+      }
+    }
+    return complete;
+  }
+
+  if (node.type === 'array_pattern') {
+    let complete = true;
+    for (const child of getNamedChildren(node)) {
+      if (!addBindingPattern(child, bindings)) complete = false;
+    }
+    return complete;
+  }
+
+  if (node.type === 'rest_pattern') {
+    return addBindingPattern(getNamedChildren(node)[0] ?? null, bindings);
+  }
+
+  if (node.type === 'assignment_pattern') {
+    return addBindingPattern(node.childForFieldName('left') ?? getNamedChildren(node)[0] ?? null, bindings);
+  }
+
+  if (['required_parameter', 'optional_parameter', 'parameter', 'catch_parameter'].includes(node.type)) {
+    const namedChildren = getNamedChildren(node).filter(
+      (child) => !['type_annotation', 'accessibility_modifier', 'override_modifier'].includes(child.type)
+    );
+    const pattern =
+      node.childForFieldName('pattern') ??
+      node.childForFieldName('name') ??
+      namedChildren[0] ??
+      null;
+    return addBindingPattern(pattern, bindings);
+  }
+
+  return false;
+}
+
+function collectParameterBindings(root: Node, bindings: Set<string>): boolean {
+  let complete = true;
+  for (const parameters of root.descendantsOfType(['formal_parameters', 'parameters'])) {
+    if (!parameters) {
+      complete = false;
+      continue;
+    }
+    for (const parameter of getNamedChildren(parameters)) {
+      if (!addBindingPattern(parameter, bindings)) complete = false;
+    }
+  }
+
+  for (const arrow of root.descendantsOfType(['arrow_function'])) {
+    if (!arrow) {
+      complete = false;
+      continue;
+    }
+    const parameter =
+      arrow.childForFieldName('parameter') ?? arrow.childForFieldName('parameters');
+    if (parameter && ['formal_parameters', 'parameters'].includes(parameter.type)) {
+      continue; // Already visited above.
+    }
+    if (parameter) {
+      if (!addBindingPattern(parameter, bindings)) complete = false;
+      continue;
+    }
+
+    const parameterList = getNamedChildren(arrow).some((child) =>
+      ['formal_parameters', 'parameters'].includes(child.type)
+    );
+    if (!parameterList) complete = false;
+  }
+
+  for (const clause of root.descendantsOfType(['catch_clause'])) {
+    if (!clause) {
+      complete = false;
+      continue;
+    }
+    const parameter =
+      clause.childForFieldName('parameter') ??
+      getNamedChildren(clause).find((child) => child.type !== 'statement_block') ??
+      null;
+    if (parameter && !addBindingPattern(parameter, bindings)) complete = false;
+  }
+  return complete;
+}
+
 function shouldSkipNode(language: string, node: Node): boolean {
   if (node.type === 'variable_declarator') {
     return (
@@ -285,6 +408,10 @@ function buildSymbol(node: Node, content: string): TreeSitterSymbol {
     kind: getNodeKind(node.type),
     startLine: rangeNode.startPosition.row + 1,
     endLine: rangeNode.endPosition.row + 1,
+    declarationStartLine: node.startPosition.row + 1,
+    declarationEndLine: node.endPosition.row + 1,
+    declarationStartIndex: node.startIndex,
+    declarationEndIndex: node.endIndex,
     startIndex: rangeNode.startIndex,
     endIndex: rangeNode.endIndex,
     content: extractNodeContent(rangeNode, content),
@@ -335,9 +462,28 @@ export async function extractTreeSitterSymbols(
       const nodes = tree.rootNode.descendantsOfType([...SYMBOL_CANDIDATE_NODE_TYPES]);
       const seen = new Set<string>();
       const symbols: TreeSitterSymbol[] = [];
+      const occurrences: TreeSitterSymbol[] = [];
+      const unresolvedBindings = new Set<string>();
+      let coverageComplete = true;
 
       for (const node of nodes) {
-        if (!node || !node.isNamed || shouldSkipNode(language, node)) {
+        if (!node || !node.isNamed) continue;
+        if (shouldSkipNode(language, node)) {
+          if (node.type === 'variable_declarator' && !isFunctionVariableDeclarator(node)) {
+            const binding = node.childForFieldName('name');
+            if (binding && ['identifier', 'type_identifier'].includes(binding.type)) {
+              unresolvedBindings.add(normalizeSymbolName(binding.text));
+            } else {
+              coverageComplete = false;
+            }
+          } else if (node.type === 'type_declaration') {
+            const binding = maybeGetNameNode(node);
+            if (binding && ['identifier', 'type_identifier'].includes(binding.type)) {
+              unresolvedBindings.add(normalizeSymbolName(binding.text));
+            } else {
+              coverageComplete = false;
+            }
+          }
           continue;
         }
 
@@ -345,6 +491,7 @@ export async function extractTreeSitterSymbols(
         if (symbol.name === 'anonymous') {
           continue;
         }
+        occurrences.push(symbol);
 
         const key = `${symbol.kind}:${symbol.name}:${symbol.startLine}:${symbol.endLine}`;
         if (seen.has(key)) {
@@ -355,16 +502,73 @@ export async function extractTreeSitterSymbols(
         symbols.push(symbol);
       }
 
+      if (!collectParameterBindings(tree.rootNode, unresolvedBindings)) {
+        coverageComplete = false;
+      }
+
+      const importStatements = tree.rootNode.descendantsOfType(['import_statement']);
+      for (const possibleStatement of importStatements) {
+        if (!possibleStatement) {
+          coverageComplete = false;
+          continue;
+        }
+        const statement = possibleStatement;
+        const statementChildren = getNamedChildren(statement);
+        const clause = statementChildren.find((child) => child.type === 'import_clause');
+        if (!clause) {
+          if (
+            statementChildren.some((child) => !['string', 'string_literal'].includes(child.type))
+          ) {
+            coverageComplete = false;
+          }
+          continue; // Side-effect-only imports introduce no local binding.
+        }
+        let recognized = false;
+        for (const child of getNamedChildren(clause)) {
+          if (child.type === 'identifier' || child.type === 'type_identifier') {
+            unresolvedBindings.add(normalizeSymbolName(child.text));
+            recognized = true;
+          } else if (child.type === 'namespace_import') {
+            const localName = getNamedChildren(child).at(-1);
+            if (localName && ['identifier', 'type_identifier'].includes(localName.type)) {
+              unresolvedBindings.add(normalizeSymbolName(localName.text));
+              recognized = true;
+            } else {
+              coverageComplete = false;
+            }
+          } else if (child.type === 'named_imports') {
+            const specifiers = child
+              .descendantsOfType(['import_specifier'])
+              .filter((specifier): specifier is Node => specifier !== null);
+            for (const specifier of specifiers) {
+              const localName =
+                specifier.childForFieldName('alias') ?? specifier.childForFieldName('name');
+              if (localName && ['identifier', 'type_identifier'].includes(localName.type)) {
+                unresolvedBindings.add(normalizeSymbolName(localName.text));
+              } else {
+                coverageComplete = false;
+              }
+            }
+            recognized = true;
+          }
+        }
+        if (!recognized) coverageComplete = false;
+      }
+
       symbols.sort((a, b) => {
         if (a.startLine !== b.startLine) {
           return a.startLine - b.startLine;
         }
         return a.endLine - b.endLine;
       });
+      occurrences.sort((a, b) => a.declarationStartIndex - b.declarationStartIndex);
 
       return {
         grammarFile: CURATED_LANGUAGE_TO_WASM[language] ?? language,
-        symbols
+        symbols,
+        occurrences,
+        unresolvedBindings: [...unresolvedBindings],
+        coverageComplete
       };
     } finally {
       tree.delete();

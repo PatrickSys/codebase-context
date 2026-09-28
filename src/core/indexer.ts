@@ -25,8 +25,19 @@ import {
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
-import { getSupportedExtensions, isBinaryFile, isCodeFile } from '../utils/language-detection.js';
+import {
+  detectLanguage,
+  getSupportedExtensions,
+  isBinaryFile,
+  isCodeFile
+} from '../utils/language-detection.js';
 import { isPathWithin } from '../utils/project-discovery.js';
+import {
+  extractTreeSitterSymbols,
+  MAX_TREE_SITTER_PARSE_BYTES,
+  supportsSymbolBindingCoverage,
+  supportsTreeSitter
+} from '../utils/tree-sitter.js';
 import {
   getEmbeddingProvider,
   getConfiguredDimensions,
@@ -1442,6 +1453,97 @@ export class CodebaseIndexer {
     indexedSymbols: readonly IndexedSymbolRef[],
     receiptFiles: readonly { path: string; text: string }[]
   ): Promise<FeatureContextIndex> {
+    const symbolTargetPaths = new Set<string>();
+    for (const manifestFile of manifestFiles) {
+      try {
+        const parsed = FeatureContextManifestSchema.safeParse(JSON.parse(manifestFile.text));
+        if (!parsed.success) continue;
+        for (const attachment of parsed.data.attachments) {
+          for (const target of attachment.appliesTo) {
+            if (target.symbol) symbolTargetPaths.add(target.path);
+          }
+        }
+      } catch {
+        // Invalid manifests remain diagnostics and do not contribute parse targets.
+      }
+    }
+
+    const sourceSymbols = new Map<string, IndexedSymbolRef>();
+    const parsedSymbolPaths = new Set<string>();
+    const incompleteSymbolPaths: string[] = [];
+    const ambiguousSymbolKeys: Array<{ path: string; name: string }> = [];
+    const unresolvedSymbolBindings: Array<{ path: string; name: string }> = [];
+    const symbolSourceDigests: Array<{ path: string; sha256: string }> = [];
+    for (const relativePath of symbolTargetPaths) {
+      const sourceFile = await readContainedFeatureContextFile(
+        this.rootPath,
+        relativePath,
+        MAX_TREE_SITTER_PARSE_BYTES
+      );
+      if (sourceFile.status === 'too-large') {
+        incompleteSymbolPaths.push(relativePath);
+        continue;
+      }
+      if (sourceFile.status !== 'found') {
+        // The indexed chunk set is only a fallback when no authoritative AST
+        // could be produced. Preserve the failed read so a file that appears
+        // before projection cannot make those old ranges look current.
+        incompleteSymbolPaths.push(relativePath);
+        continue;
+      }
+      const language = detectLanguage(sourceFile.path);
+      if (!supportsTreeSitter(language) || !supportsSymbolBindingCoverage(language)) {
+        incompleteSymbolPaths.push(sourceFile.path);
+        continue;
+      }
+      const extracted = await extractTreeSitterSymbols(sourceFile.text, language);
+      if (!extracted) {
+        incompleteSymbolPaths.push(sourceFile.path);
+        continue;
+      }
+      parsedSymbolPaths.add(sourceFile.path);
+      symbolSourceDigests.push({ path: sourceFile.path, sha256: sourceFile.sha256 });
+      if (!extracted.coverageComplete) incompleteSymbolPaths.push(sourceFile.path);
+      for (const name of extracted.unresolvedBindings) {
+        if (name) unresolvedSymbolBindings.push({ path: sourceFile.path, name });
+      }
+      const occurrenceCount = new Map<string, number>();
+      for (const symbol of extracted.occurrences) {
+        if (!symbol.name) continue;
+        const occurrenceKey = `${symbol.name}`;
+        occurrenceCount.set(occurrenceKey, (occurrenceCount.get(occurrenceKey) ?? 0) + 1);
+        const identity: IndexedSymbolRef = {
+          path: sourceFile.path,
+          name: symbol.name,
+          startLine: symbol.declarationStartLine,
+          endLine: symbol.declarationEndLine
+        };
+        sourceSymbols.set(
+          `${identity.path}\0${identity.name}\0${identity.startLine}\0${identity.endLine}`,
+          identity
+        );
+      }
+      for (const [name, count] of occurrenceCount) {
+        if (count > 1) ambiguousSymbolKeys.push({ path: sourceFile.path, name });
+      }
+    }
+
+    const allSymbols = new Map<string, IndexedSymbolRef>();
+    for (const identity of indexedSymbols) {
+      // A successful current parse is authoritative for exact declaration ranges.
+      // Stored chunk ranges may include export wrappers or merged chunk boundaries.
+      if (parsedSymbolPaths.has(identity.path)) continue;
+      allSymbols.set(
+        `${identity.path}\0${identity.name}\0${identity.startLine}\0${identity.endLine}`,
+        identity
+      );
+    }
+    for (const identity of sourceSymbols.values()) {
+      allSymbols.set(
+        `${identity.path}\0${identity.name}\0${identity.startLine}\0${identity.endLine}`,
+        identity
+      );
+    }
     const [gitState, gitignoreContent] = await Promise.all([
       this.getFeatureContextGitState(),
       this.readGitIgnoreText()
@@ -1457,7 +1559,11 @@ export class CodebaseIndexer {
       rootPath: this.rootPath,
       manifestFiles,
       receiptFiles,
-      indexedSymbols,
+      indexedSymbols: [...allSymbols.values()],
+      incompleteSymbolPaths,
+      ambiguousSymbolKeys,
+      unresolvedSymbolBindings,
+      symbolSourceDigests,
       ...gitState,
       ignoredPaths
     });

@@ -22,17 +22,19 @@ const RESPONSE_TOKEN_LIMIT = 900;
 export const definition: Tool = {
   name: 'get_feature_context',
   description:
-    'Retrieve explicitly linked requirements, rationale, code targets, declared tests, and revision-checked run evidence for one repository path and optional symbol. Missing or stale index data is reported; it is never treated as no attachments.',
+    'Retrieve explicitly linked requirements, rationale, code targets, declared tests, and revision-checked run evidence for one authored target path and optional supported JavaScript/TypeScript declaration. Source files, templates, imports, and shared dependencies are not implicitly matched. Duplicate declarations are ambiguous; unsupported declarations or same-name unresolved bindings are reported unsupported. Missing or stale index data is reported; it is never treated as no attachments.',
   inputSchema: {
     type: 'object',
     properties: {
       path: {
         type: 'string',
-        description: 'Repository-relative POSIX path to the code file (for example src/app/cart.ts)'
+        description:
+          'Repository-relative POSIX path to an authored code or template target. Requirement-source paths and shared dependencies are not automatically target matches.'
       },
       symbol: {
         type: 'string',
-        description: 'Optional exact symbol name within the path'
+        description:
+          'Optional exact name of a supported JavaScript/TypeScript callable or type declaration; value-only variables and imports are not attachment symbols'
       }
     },
     required: ['path']

@@ -115,8 +115,13 @@ not newly added files that have not yet been indexed.
 
 ### Source-linked feature context
 
-`get_feature_context` returns context for one repository-relative POSIX `path` and optional exact
-`symbol`. It is available through MCP, not the CLI. For example, call the tool with
+`get_feature_context` returns context for one authored repository-relative POSIX target `path` and
+optional exact `symbol`. Requirement sources and shared dependencies are not automatically target
+matches. File-level targets are language-neutral. Symbol lookup currently supports named callable
+and type declarations in JavaScript and TypeScript files emitted by CBC's source parser. Other
+language symbol targets, value-only variables, and imports are not attachment symbols. If parsing
+cannot account for the complete candidate set, or a same-name local binding outside that declaration
+set could compete, CBC reports `unsupported`. It is available through MCP, not the CLI. For example, call the tool with
 `{"path":"examples/context-demo/src/app/checkout/checkout.component.ts","symbol":"CheckoutComponent"}`
 and select the repository with the shared `project` argument when routing is ambiguous. The JSON
 reply includes `status: "success"`, the resolved `rootPath`, `matches`, exact counts, and
@@ -170,8 +175,10 @@ requirement ID from the source file, or verify that the claim is semantically co
 is the authority for scope. Links are direct only: imports, template references, service injection,
 and other discovered relationships do not propagate a requirement to another file or symbol. A
 file-level target applies to that file; optional `symbol` narrows it to an indexed exact symbol.
-Names with multiple source ranges are reported as ambiguous instead of guessed. Unsupported symbol
-forms remain explicitly unsupported.
+Names with multiple declaration occurrences are reported as ambiguous instead of guessed, including
+duplicates on the same line. Unsupported symbol forms and same-name unresolved bindings remain
+explicitly unsupported; a successful syntax parse alone does not imply that every language binding
+is a supported attachment symbol.
 
 `declaredTests` records intended coverage, not an execution result. A receipt is separate JSON
 produced by a runner capture and records the test identity, outcome, Git commit, clean-tree claim,

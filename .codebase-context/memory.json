@@ -749,5 +749,113 @@
     "reason": "Auto-extracted from git commit history",
     "date": "2026-04-17T20:05:19.000Z",
     "source": "git"
+  },
+  {
+    "id": "64918736106f",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: serialize indexing and resolve context targets safely",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-28T00:52:11.000Z",
+    "source": "git"
+  },
+  {
+    "id": "28d8964fbb69",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: preserve Angular AST symbol identity in context projections",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-27T22:53:03.000Z",
+    "source": "git"
+  },
+  {
+    "id": "a8d1b44aaf70",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: return completed feature evaluation session results",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-27T22:30:11.000Z",
+    "source": "git"
+  },
+  {
+    "id": "f6fdc9534b99",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: rebuild stale search sources before returning locations",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-21T01:27:53.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c88f5776c376",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: rebuild runtime before packing local candidates",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-21T00:12:18.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c6e75a74bfcf",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: read current source for reference fallback",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-21T00:12:18.000Z",
+    "source": "git"
+  },
+  {
+    "id": "b995d324e65d",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: report incomplete client setup without ready instructions",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-20T23:07:25.000Z",
+    "source": "git"
+  },
+  {
+    "id": "c50c81a3cc17",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: resolve source references within the selected project",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-20T23:07:09.000Z",
+    "source": "git"
+  },
+  {
+    "id": "0751525ecc24",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: preserve returning-user setup and bind registration to installed server",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-20T19:12:56.000Z",
+    "source": "git"
+  },
+  {
+    "id": "fb68aef9b427",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: align first-use setup with scoped stdio and explicit HTTP registration",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-09-20T18:06:58.000Z",
+    "source": "git"
+  },
+  {
+    "id": "07396a4f9ffe",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(analyzers): Tie React use metadata to imports",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-07-26T06:01:28.000Z",
+    "source": "git"
+  },
+  {
+    "id": "05fd19575ac9",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(analyzers): Prefer NestJS provider analysis",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-07-26T05:59:52.000Z",
+    "source": "git"
   }
 ]

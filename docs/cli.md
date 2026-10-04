@@ -22,6 +22,67 @@ CODEBASE_ROOT=/path/to/repo npx -y codebase-context status
 npx -y codebase-context patterns --json
 ```
 
+### Local model-free candidate
+
+These options belong to the modified local candidate, not the published npm package.
+Use the executable from the candidate installation; do not replace it with an unpinned
+`npx` command during evaluation. From the project to be indexed:
+
+```bash
+codebase-context reindex --no-embeddings --json
+codebase-context search --query "your exact symbol" --json
+# Edit, delete, add, or move source files, then update:
+codebase-context reindex --incremental --json
+codebase-context search --query "your exact symbol" --json
+```
+
+`--no-embeddings` disables both embedding inference and the cross-encoder reranker.
+The successful build records this choice in the existing index metadata. Later full
+or incremental rebuilds, automatic refreshes, and new CLI/MCP processes retain that
+choice when no mode flag is given. Search never enables models just because a query
+is ambiguous. The optional model packages remain installed for semantic opt-in; this
+mode does not remove dependencies or delete pre-existing model caches.
+
+For a fresh MCP project, launch the installed executable with a project root and an
+explicit startup choice:
+
+```bash
+codebase-context --no-embeddings "/absolute/path/to/project"
+```
+
+MCP `refresh_index` accepts `{ "skipEmbedding": true }` to choose model-free mode,
+`{ "skipEmbedding": false }` to choose semantic mode, or no field to retain the last
+successful choice. The launch flag selects the initial build mode; subsequent
+explicit refreshes can change it. An already-running build must finish before another
+manual mode change is accepted. A mode transition always requires a full rebuild,
+even when incremental mode was requested and the source files did not change.
+
+To opt back into models with the CLI, use `codebase-context reindex --embeddings`.
+A fresh project without a choice and supported older metadata without the new mode
+field retain the existing semantic default. Both mode flags together, boolean values
+attached to them, and mode flags on search are rejected rather than silently ignored.
+
+Source locations are checked against the current files. Stale or foreign-root data
+must not be served: the caller receives a rebuild/retry response instead. When the
+metadata needed to recover the mode is missing or corrupt, automatic rebuilding
+cannot safely choose a model policy. The response is explicitly `rebuild-required`;
+recover with `reindex --no-embeddings` or `reindex --embeddings` (or the corresponding
+MCP field). Structurally valid older metadata can still migrate automatically.
+
+The MCP launch flag is reapplied on every process start to each project that process
+initializes. A saved `--no-embeddings` launch command therefore deliberately switches
+back to model-free mode after a semantic refresh in a previous session. Without a
+launch flag, the last successful metadata controls the mode. Deleting **all** index
+artifacts removes that remembered choice: the project is fresh again. Keep the
+`--no-embeddings` flag in the saved launch command when model-free operation must
+also survive complete index deletion.
+
+Use one index writer per project. In-process overlapping refreshes are rejected as
+`busy`, but this candidate does not add a cross-process lock. Stop the MCP watcher
+before changing modes with a separate CLI process; otherwise existing last-writer
+filesystem behavior can race. Do not treat concurrent writers as a supported mode
+transition workflow.
+
 ### ASCII fallback
 
 If your terminal doesn’t render Unicode box-drawing cleanly:

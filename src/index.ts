@@ -22,7 +22,7 @@ import { ReactAnalyzer } from './analyzers/react/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { IndexCorruptedError } from './errors/index.js';
 import { appendMemoryFile } from './memory/store.js';
-import { handleCliCommand } from './cli.js';
+import { handleCliCommand, parseEmbeddingModeFlags } from './cli.js';
 import { startFileWatcher } from './core/file-watcher.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
@@ -45,7 +45,7 @@ import {
   findNearestProjectBoundary,
   isPathWithin
 } from './utils/project-discovery.js';
-import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
+import { readIndexMeta, validateIndexArtifacts, resolveSkipEmbedding } from './core/index-meta.js';
 import { TOOLS, dispatchTool, type ToolContext, type ToolResponse } from './tools/index.js';
 import { finalizeSearchPayloadText } from './tools/search-payload-budget.js';
 import type { ProjectDescriptor, ToolPaths } from './tools/types.js';
@@ -81,7 +81,7 @@ let mcpRuntimeReady = false;
 let mcpRuntimePromise: Promise<void> | undefined;
 
 // Flags that are NOT project paths — skip them when resolving the bootstrap root.
-const KNOWN_FLAGS = new Set(['--http', '--port', '--help']);
+const KNOWN_FLAGS = new Set(['--http', '--port', '--help', '--no-embeddings', '--embeddings']);
 const CLI_SUBCOMMANDS = [
   'memory',
   'search',
@@ -105,6 +105,13 @@ const isDirectCliSubcommand =
   isDirectRun &&
   typeof directSubcommand === 'string' &&
   (CLI_SUBCOMMANDS.includes(directSubcommand) || directSubcommand === '--help');
+
+// This is a bootstrap choice, not a second mode store. Later refreshes resolve the
+// last successful metadata, and explicit refresh_index choices may change it.
+const initialSkipEmbedding =
+  isDirectRun && !isDirectCliSubcommand
+    ? parseEmbeddingModeFlags(process.argv.slice(2))
+    : undefined;
 
 // Resolve optional bootstrap root with validation handled later in main().
 function resolveRootPath(): string | undefined {
@@ -618,7 +625,8 @@ function createToolContext(project: ProjectState): ToolContext {
     paths: project.paths,
     rootPath: project.rootPath,
     project: buildProjectDescriptor(project.rootPath),
-    performIndexing: (incrementalOnly?: boolean) => performIndexing(project, incrementalOnly),
+    performIndexing: (incrementalOnly, _reason, skipEmbedding) =>
+      performIndexing(project, incrementalOnly, skipEmbedding),
     listProjects: () => listProjectDescriptors(),
     getActiveProject: () => getActiveProjectDescriptor()
   };
@@ -693,6 +701,16 @@ async function ensureValidIndexOrAutoHeal(project: ProjectState): Promise<IndexS
     if (error instanceof IndexCorruptedError) {
       const reason = error.message;
       console.error(`[Index] ${reason}`);
+      try {
+        await resolveSkipEmbedding(project.rootPath);
+      } catch (modeError) {
+        return {
+          status: 'rebuild-required',
+          confidence: 'low',
+          action: 'served',
+          reason: modeError instanceof Error ? modeError.message : String(modeError)
+        };
+      }
       console.error('[Auto-Heal] Triggering background re-index...');
 
       // Fire-and-forget: don't block the tool call
@@ -1061,6 +1079,21 @@ export function registerHandlers(target: Server): void {
             };
           }
           indexSignal = await ensureValidIndexOrAutoHeal(project);
+          if (indexSignal.status === 'rebuild-required') {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'rebuild-required',
+                    message: indexSignal.reason,
+                    index: indexSignal
+                  })
+                }
+              ]
+            };
+          }
           if (indexSignal.action === 'rebuild-started') {
             return {
               content: [
@@ -1238,9 +1271,11 @@ async function extractGitMemories(rootPath: string, memoryPath: string): Promise
 
 async function performIndexingOnce(
   project: ProjectState,
-  incrementalOnly?: boolean
+  incrementalOnly?: boolean,
+  skipEmbedding?: boolean
 ): Promise<void> {
   project.indexState.status = 'indexing';
+  delete project.indexState.error;
   const mode = incrementalOnly ? 'incremental' : 'full';
   console.error(`Indexing (${mode}): ${project.rootPath}`);
 
@@ -1248,21 +1283,17 @@ async function performIndexingOnce(
     let lastLoggedProgress = { phase: '', percentage: -1 };
     const indexer = new CodebaseIndexer({
       rootPath: project.rootPath,
-      ...(project.runtimeOverrides.extraExcludePatterns?.length
-        ? {
-            config: {
-              exclude: [
-                ...EXCLUDED_GLOB_PATTERNS,
-                ...project.runtimeOverrides.extraExcludePatterns
-              ],
-              ...(project.runtimeOverrides.maxChunks
-                ? { parsing: { maxChunks: project.runtimeOverrides.maxChunks } }
-                : {})
+      config: {
+        ...(project.runtimeOverrides.extraExcludePatterns?.length
+          ? {
+              exclude: [...EXCLUDED_GLOB_PATTERNS, ...project.runtimeOverrides.extraExcludePatterns]
             }
-          }
-        : project.runtimeOverrides.maxChunks
-          ? { config: { parsing: { maxChunks: project.runtimeOverrides.maxChunks } } }
           : {}),
+        ...(project.runtimeOverrides.maxChunks
+          ? { parsing: { maxChunks: project.runtimeOverrides.maxChunks } }
+          : {}),
+        ...(skipEmbedding !== undefined ? { skipEmbedding } : {})
+      },
       ...(project.runtimeOverrides.preferredAnalyzer ||
       project.runtimeOverrides.extraSourceExtensions?.length
         ? {
@@ -1317,10 +1348,18 @@ async function performIndexingOnce(
   }
 }
 
-async function performIndexing(project: ProjectState, incrementalOnly?: boolean): Promise<void> {
+async function performIndexing(
+  project: ProjectState,
+  incrementalOnly?: boolean,
+  skipEmbedding?: boolean
+): Promise<void> {
+  // Concurrent auto-heal probes may finish their metadata reads together. The
+  // existing state prevents them from starting overlapping writers in this process.
+  if (project.indexState.status === 'indexing') return;
   let nextMode = incrementalOnly;
+  let nextSkipEmbedding = skipEmbedding;
   for (;;) {
-    await performIndexingOnce(project, nextMode);
+    await performIndexingOnce(project, nextMode, nextSkipEmbedding);
 
     const shouldRunQueuedRefresh = project.autoRefresh.consumeQueuedRefresh(
       project.indexState.status
@@ -1331,6 +1370,7 @@ async function performIndexing(project: ProjectState, incrementalOnly?: boolean)
       console.error('[file-watcher] Running queued auto-refresh');
     }
     nextMode = true;
+    nextSkipEmbedding = undefined;
   }
 }
 
@@ -1535,12 +1575,22 @@ async function ensureProjectInitialized(project: ProjectState): Promise<void> {
     }
 
     // Check if indexing is needed
-    const needsIndex = await shouldReindex(project.paths);
+    let needsIndex = await shouldReindex(project.paths);
+    if (initialSkipEmbedding !== undefined) {
+      try {
+        const meta = await readIndexMeta(project.rootPath);
+        needsIndex ||=
+          (meta.artifacts.vectorDb.embeddingEnabled === false) !== initialSkipEmbedding;
+      } catch {
+        // An explicit bootstrap choice also repairs missing/corrupt mode metadata.
+        needsIndex = true;
+      }
+    }
     if (needsIndex) {
       if (process.env.CODEBASE_CONTEXT_DEBUG) {
         console.error(`[DEBUG] Starting indexing: ${project.rootPath}`);
       }
-      void performIndexing(project);
+      void performIndexing(project, undefined, initialSkipEmbedding);
     } else {
       if (process.env.CODEBASE_CONTEXT_DEBUG) {
         console.error(`[DEBUG] Index found. Ready: ${project.rootPath}`);

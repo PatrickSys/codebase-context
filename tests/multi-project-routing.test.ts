@@ -50,7 +50,8 @@ const searchMocks = vi.hoisted(() => ({
 }));
 
 const indexerMocks = vi.hoisted(() => ({
-  index: vi.fn()
+  index: vi.fn(),
+  construct: vi.fn()
 }));
 
 const watcherMocks = vi.hoisted(() => ({
@@ -71,7 +72,9 @@ vi.mock('../src/core/search.js', async () => {
 
 vi.mock('../src/core/indexer.js', () => {
   class CodebaseIndexer {
-    constructor(_options: unknown) {}
+    constructor(options: unknown) {
+      indexerMocks.construct(options);
+    }
 
     getProgress() {
       return { phase: 'complete', percentage: 100 };
@@ -180,6 +183,7 @@ describe('multi-project routing', () => {
     vi.resetModules();
     searchMocks.search.mockReset();
     indexerMocks.index.mockReset();
+    indexerMocks.construct.mockReset();
     watcherMocks.start.mockReset();
 
     originalArgv = [...process.argv];
@@ -367,7 +371,7 @@ describe('multi-project routing', () => {
     }
   });
 
-  it('triggers a background rebuild for a corrupted explicit project without falling back to cwd', async () => {
+  it('requires explicit mode recovery for an explicit project with lost metadata without falling back to cwd', async () => {
     delete process.env.CODEBASE_ROOT;
     delete process.argv[2];
 
@@ -397,10 +401,28 @@ describe('multi-project routing', () => {
         index?: { action?: string; reason?: string };
       };
 
-      expect(payload.status).toBe('indexing');
-      expect(payload.message).toContain('retry shortly');
-      expect(payload.index?.action).toBe('rebuild-started');
-      expect(String(payload.index?.reason || '')).toContain('Index meta');
+      expect(payload.status).toBe('rebuild-required');
+      expect(payload.message).toContain('Cannot recover embedding mode');
+      expect(payload.message).toContain(secondaryRoot);
+      expect(payload.index?.action).toBe('served');
+      expect(indexerMocks.index).not.toHaveBeenCalled();
+      expect(searchMocks.search).not.toHaveBeenCalled();
+
+      const primaryMetaPath = path.join(primaryRoot, CODEBASE_CONTEXT_DIRNAME, INDEX_META_FILENAME);
+      const primaryMetaBefore = await fs.readFile(primaryMetaPath, 'utf8');
+      const refresh = await callTool(handler, 22, 'refresh_index', {
+        project: secondaryRoot,
+        skipEmbedding: true
+      });
+      expect((parsePayload(refresh) as { status: string }).status).toBe('started');
+      await vi.waitFor(() => expect(indexerMocks.index).toHaveBeenCalledTimes(1));
+      expect(indexerMocks.construct).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rootPath: secondaryRoot,
+          config: expect.objectContaining({ skipEmbedding: true })
+        })
+      );
+      expect(await fs.readFile(primaryMetaPath, 'utf8')).toBe(primaryMetaBefore);
     } finally {
       typedServer.listRoots = originalListRoots;
     }
@@ -591,7 +613,9 @@ describe('multi-project routing', () => {
   it('lists bounded and full context resources for active and project-scoped flows', async () => {
     const { server } = await import('../src/index.js');
     const toolHandler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
-    const resourcesHandler = (server as unknown as TestServer)._requestHandlers.get('resources/list');
+    const resourcesHandler = (server as unknown as TestServer)._requestHandlers.get(
+      'resources/list'
+    );
 
     if (!toolHandler || !resourcesHandler) {
       throw new Error('required handlers not registered');

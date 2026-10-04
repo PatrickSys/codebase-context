@@ -220,7 +220,7 @@ describe('index versioning migration (MIGR-01)', () => {
     }
   });
 
-  it('refuses legacy indexes without index-meta.json and triggers background rebuild', async () => {
+  it('requires an explicit rebuild choice when metadata cannot establish the prior model mode', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
@@ -245,11 +245,24 @@ describe('index versioning migration (MIGR-01)', () => {
     });
 
     const payload = JSON.parse(response.content[0].text);
-    expect(payload.status).toBe('indexing');
-    expect(payload.message).toContain('retry');
+    expect(payload.status).toBe('rebuild-required');
+    expect(payload.message).toContain('Select --no-embeddings or --embeddings explicitly');
+    expect(response.isError).toBe(true);
     expect(payload.index).toBeTruthy();
-    expect(payload.index.action).toBe('rebuild-started');
-    expect(String(payload.index.reason || '')).toContain('Index meta');
+    expect(payload.index.status).toBe('rebuild-required');
+    expect(indexerMocks.index).not.toHaveBeenCalled();
+    expect(searchMocks.search).not.toHaveBeenCalled();
+
+    // The old headerless format remains recoverable, but must not silently opt a
+    // possibly model-free installation into models after metadata has been lost.
+    const refresh = await handler({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'refresh_index', arguments: { skipEmbedding: true } }
+    });
+    expect(JSON.parse(refresh.content[0].text).status).toBe('started');
+    await vi.waitFor(() => expect(indexerMocks.index).toHaveBeenCalledTimes(1));
   });
 
   it('detects keyword index header mismatch and triggers background rebuild', async () => {

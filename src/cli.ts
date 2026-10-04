@@ -83,6 +83,8 @@ function printUsage(): void {
   console.log('  metadata                           Project structure, frameworks, deps');
   console.log('  status                             Index state and progress');
   console.log('  reindex [--incremental] [--reason <r>]  Re-index the codebase');
+  console.log('          [--no-embeddings | --embeddings]  Persist model-free or semantic mode');
+  console.log('          Model-free mode disables embedding and reranker models.');
   console.log('  style-guide [--query <q>] [--category <c>]  Style guide rules');
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
@@ -129,8 +131,13 @@ async function initToolContext(): Promise<ToolContext> {
     status: indexExists ? 'ready' : 'idle'
   };
 
-  const performIndexing = async (incrementalOnly?: boolean, reason?: string): Promise<void> => {
+  const performIndexing = async (
+    incrementalOnly?: boolean,
+    reason?: string,
+    skipEmbedding?: boolean
+  ): Promise<void> => {
     indexState.status = 'indexing';
+    delete indexState.error;
     const mode = incrementalOnly ? 'incremental' : 'full';
     console.error(`Indexing (${mode})${reason ? ` — ${reason}` : ''}: ${rootPath}`);
 
@@ -138,7 +145,10 @@ async function initToolContext(): Promise<ToolContext> {
       let lastLoggedProgress = { phase: '', percentage: -1 };
       const indexer = new CodebaseIndexer({
         rootPath,
-        ...(projectConfig?.parsing ? { config: { parsing: projectConfig.parsing } } : {}),
+        config: {
+          ...(projectConfig?.parsing ? { parsing: projectConfig.parsing } : {}),
+          ...(skipEmbedding !== undefined ? { skipEmbedding } : {})
+        },
         incrementalOnly,
         onProgress: (progress) => {
           const shouldLog =
@@ -253,6 +263,19 @@ function booleanFlag(flags: Flags, key: string, usage: string): boolean {
   exitWithError(`Error: --${key} must be a boolean (true/false)\nUsage: ${usage}`);
 }
 
+/** Shared presence-only CLI/MCP bootstrap flags; undefined preserves the stored mode. */
+export function parseEmbeddingModeFlags(argv: readonly string[]): boolean | undefined {
+  const choices = argv.filter((arg) => /^--(?:no-)?embeddings(?:=|$)/.test(arg));
+  if (choices.some((arg) => arg !== '--no-embeddings' && arg !== '--embeddings')) {
+    throw new Error('Use --no-embeddings or --embeddings without a value');
+  }
+  const disabled = choices.includes('--no-embeddings');
+  const enabled = choices.includes('--embeddings');
+  if (disabled && enabled)
+    throw new Error('--no-embeddings and --embeddings are mutually exclusive');
+  return disabled ? true : enabled ? false : undefined;
+}
+
 export async function handleCliCommand(argv: string[]): Promise<void> {
   const rawCommand = argv[0];
 
@@ -269,6 +292,12 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
   }
 
   const command: CliCommand = rawCommand;
+  const skipEmbedding = parseEmbeddingModeFlags(argv);
+  if (skipEmbedding !== undefined && command !== 'reindex') {
+    throw new Error(
+      'Select embedding mode with reindex; search uses the last successful build mode'
+    );
+  }
 
   if (command === 'memory') {
     return handleMemoryCli(argv.slice(1));
@@ -285,6 +314,11 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
   const useJson = argv.includes('--json');
 
   const flags = parseFlags(argv);
+  for (const modeFlag of ['embeddings', 'no-embeddings']) {
+    if (flags[modeFlag] !== undefined && flags[modeFlag] !== true) {
+      throw new Error('Use --no-embeddings or --embeddings without a value');
+    }
+  }
 
   const ctx = await initToolContext();
 
@@ -359,10 +393,14 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
       break;
     }
     case 'reindex': {
-      const usage = 'codebase-context reindex [--incremental] [--reason <r>]';
+      const usage =
+        'codebase-context reindex [--incremental] [--reason <r>] [--no-embeddings | --embeddings]';
       const reason = optionalStringFlag(flags, 'reason', usage);
       const incremental = booleanFlag(flags, 'incremental', usage);
-      await ctx.performIndexing(incremental, reason);
+      await ctx.performIndexing(incremental, reason, skipEmbedding);
+      if (ctx.indexState.status === 'error') {
+        throw new Error(ctx.indexState.error ?? 'Indexing failed');
+      }
       const statusResult = await dispatchTool('get_indexing_status', {}, ctx);
       formatJson(extractText(statusResult), useJson, 'status', ctx.rootPath);
       return;

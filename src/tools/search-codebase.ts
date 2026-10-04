@@ -3,12 +3,12 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { ToolContext, ToolResponse, DecisionCard } from './types.js';
 import { CodebaseSearcher } from '../core/search.js';
+import { resolveSkipEmbedding } from '../core/index-meta.js';
 import type { SearchIntentProfile } from '../core/search.js';
 import type {
   SearchResult,
   IntelligenceData,
   PatternsData,
-  IntelligenceGoldenFile,
   ChunkMetadata
 } from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
@@ -224,6 +224,22 @@ export async function handle(
     });
   } catch (error) {
     if (error instanceof IndexCorruptedError) {
+      try {
+        await resolveSkipEmbedding(ctx.rootPath);
+      } catch (modeError) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                status: 'rebuild-required',
+                message: modeError instanceof Error ? modeError.message : String(modeError)
+              })
+            }
+          ]
+        };
+      }
       console.error('[Auto-Heal] Index corrupted. Triggering background re-index...');
       void ctx.performIndexing();
       return {
@@ -928,14 +944,6 @@ export async function handle(
           riskLevel = 'medium';
         }
 
-        // --- Golden files (exemplar code) ---
-        const goldenFiles = (intelligence.goldenFiles ?? [])
-          .slice(0, 3)
-          .map((g: IntelligenceGoldenFile) => ({
-            file: g.file,
-            score: g.score
-          }));
-
         // --- Confidence (index freshness) ---
         // TODO: Review this confidence calculation
         //const confidence = computeIndexConfidence();
@@ -1166,22 +1174,6 @@ export async function handle(
       }),
     // Surface reranker health so agents know if they're getting degraded results
     ...(rerankerStatus === 'unavailable' && { rerankerStatus: 'unavailable' })
-  };
-
-  type SearchResponsePayload = {
-    status: 'success';
-    searchQuality: typeof searchQualityBlock & {
-      tokenEstimate?: number;
-      warning?: string;
-    };
-    budget: { mode: 'compact' | 'full'; resultCount: number };
-    preflight?: typeof preflightPayload;
-    patternSummary?: string;
-    bestExample?: string;
-    nextHops?: Array<{ tool: string; why: string; args?: Record<string, string> }>;
-    results: Array<Record<string, unknown>>;
-    totalResults?: number;
-    relatedMemories?: string[];
   };
 
   // Compact mode (default): bounded response with light graph context

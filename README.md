@@ -1,5 +1,11 @@
 # codebase-context
 
+> **Local experimental modification, 2026-10-04:** this checkout adds an explicit,
+> persistent model-free indexing/search mode to the source-validity candidate.
+> It is not a published release or an adoption claim. See
+> [the model-free CLI/MCP instructions](docs/cli.md#local-model-free-candidate).
+> Existing license and attribution notices are unchanged.
+
 ## Map your team's conventions before your AI agent starts searching.
 
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](https://github.com/PatrickSys/codebase-context/blob/master/package.json)

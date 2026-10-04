@@ -220,14 +220,18 @@ export class CodebaseSearcher {
 
   private async validateCandidateSources(
     chunks: Iterable<CodeChunk>,
-    checkedPaths: Set<string>
+    checkedSources: Map<string, string>
   ): Promise<void> {
     if (!this.sourceManifest) {
       throw new IndexCorruptedError('Source manifest is unavailable. Full rebuild required.');
     }
+    let realRootPath: string | undefined;
     for (const chunk of chunks) {
       const sourcePath = this.getIndexedSourcePath(chunk);
-      if (checkedPaths.has(sourcePath)) continue;
+      // The already-validated indexed spelling is also the returned result spelling.
+      // Using that same key avoids case-sensitive Map mismatches on Windows.
+      const sourceKey = path.resolve(this.rootPath, chunk.filePath);
+      if (checkedSources.has(sourceKey)) continue;
       const relativePath = path.relative(this.rootPath, sourcePath).replace(/\\/g, '/');
       const expectedHash = this.sourceManifest.files[relativePath];
       if (typeof expectedHash !== 'string') {
@@ -236,15 +240,21 @@ export class CodebaseSearcher {
         );
       }
       try {
-        if (!(await fs.stat(sourcePath)).isFile()) throw new Error('Source is not a regular file');
-        const content = await fs.readFile(sourcePath, 'utf-8');
+        realRootPath ??= await fs.realpath(this.rootPath);
+        const realSourcePath = await fs.realpath(sourcePath);
+        if (!isPathWithin(realRootPath, realSourcePath)) {
+          throw new Error('Source resolves outside the selected project');
+        }
+        if (!(await fs.stat(realSourcePath)).isFile())
+          throw new Error('Source is not a regular file');
+        const content = await fs.readFile(realSourcePath, 'utf-8');
         if (hashFileContent(content) !== expectedHash) throw new Error('Source content changed');
+        checkedSources.set(sourceKey, content);
       } catch {
         throw new IndexCorruptedError(
           `Indexed source is changed or unreadable (${relativePath}). Full rebuild required.`
         );
       }
-      checkedPaths.add(sourcePath);
     }
   }
 
@@ -1042,12 +1052,12 @@ export class CodebaseSearcher {
     // Validate before scoring and limiting: dropping stale top results afterward could
     // hide valid lower matches. The handler requests a full rebuild and asks for retry.
     // Read each candidate file only once per search, not the entire repository.
-    const checkedSourcePaths = new Set<string>();
+    const checkedSources = new Map<string, string>();
     await this.validateCandidateSources(
       [...primaryMatches.semantic.values(), ...primaryMatches.keyword.values()].map(
         (match) => match.chunk
       ),
-      checkedSourcePaths
+      checkedSources
     );
 
     const primaryTotalWeight =
@@ -1086,7 +1096,7 @@ export class CodebaseSearcher {
             [...rescueMatches.semantic.values(), ...rescueMatches.keyword.values()].map(
               (match) => match.chunk
             ),
-            checkedSourcePaths
+            checkedSources
           );
 
           const rescueVariantWeights = rescueVariants.map((_, i) => (i === 0 ? 1 : 0.8));
@@ -1117,7 +1127,32 @@ export class CodebaseSearcher {
       }
     }
 
-    return bestResults;
+    // Indexed chunks may contain generated signature/context headers. Keep that
+    // ranking input unchanged, but do not present it as text at a source location.
+    // Reuse the bytes already read and hash-validated in this search (no extra I/O,
+    // persistent cache, parser, ranking change, or relaxed freshness check).
+    return bestResults.map((result) => {
+      const source = checkedSources.get(path.resolve(this.rootPath, result.filePath));
+      if (source === undefined) {
+        throw new IndexCorruptedError('Result source was not validated. Full rebuild required.');
+      }
+      const lines = source.replace(/\r\n/g, '\n').split('\n');
+      if (
+        !Number.isInteger(result.startLine) ||
+        !Number.isInteger(result.endLine) ||
+        result.startLine < 1 ||
+        result.endLine < result.startLine ||
+        result.endLine > lines.length
+      ) {
+        throw new IndexCorruptedError(
+          'Indexed source line range is invalid. Full rebuild required.'
+        );
+      }
+      return {
+        ...result,
+        snippet: this.generateSnippet(lines.slice(result.startLine - 1, result.endLine).join('\n'))
+      };
+    });
   }
 
   private generateSummary(chunk: CodeChunk): string {

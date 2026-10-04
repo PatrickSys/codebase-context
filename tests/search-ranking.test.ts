@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { CodeChunk } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
+import { mockCandidateSources } from './mock-candidate-sources.js';
 
 type SearcherFixture = {
   initialized: boolean;
@@ -10,7 +11,7 @@ type SearcherFixture = {
   patternIntelligence: unknown;
   validateCandidateSources: (
     chunks: Iterable<CodeChunk>,
-    checkedPaths: Set<string>
+    checkedSources: Map<string, string>
   ) => Promise<void>;
 };
 
@@ -48,7 +49,7 @@ function setupSemanticOnlySearcher(
   };
   searcher.fuseIndex = null;
   searcher.patternIntelligence = null;
-  searcher.validateCandidateSources = async () => {};
+  searcher.validateCandidateSources = mockCandidateSources('C:/repo');
   return searcher as unknown as CodebaseSearcher;
 }
 
@@ -73,6 +74,7 @@ describe('CodebaseSearcher query-aware ranking', () => {
     const results = await searcher.search('Refactor session management flow', 2);
     expect(results[0].filePath).toContain('session-manager.ts');
     expect(results[0].filePath).not.toContain('.spec.ts');
+    expect(results[0].snippet).toContain(implChunk.content);
   });
 
   it('keeps spec files prioritized for testing queries', async () => {

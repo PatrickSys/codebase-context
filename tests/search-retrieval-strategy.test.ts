@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { CodeChunk, SearchFilters } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
+import { mockCandidateSources } from './mock-candidate-sources.js';
 
 type Retrieval = { chunk: CodeChunk; score: number };
 type QueryVariant = { query: string; weight: number };
@@ -13,7 +14,7 @@ type RetrievalFixture = {
   patternIntelligence: unknown;
   validateCandidateSources: (
     chunks: Iterable<CodeChunk>,
-    checkedPaths: Set<string>
+    checkedSources: Map<string, string>
   ) => Promise<void>;
   semanticSearch: (query: string, limit: number, filters?: SearchFilters) => Promise<Retrieval[]>;
   keywordSearch: (query: string, limit: number, filters?: SearchFilters) => Promise<Retrieval[]>;
@@ -36,7 +37,7 @@ function makeSearcher(): RetrievalFixture {
   searcher.storageProvider = {};
   searcher.fuseIndex = null;
   searcher.patternIntelligence = null;
-  searcher.validateCandidateSources = async () => {};
+  searcher.validateCandidateSources = mockCandidateSources('C:/repo');
   return searcher;
 }
 

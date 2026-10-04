@@ -74,6 +74,7 @@ async function expectSearchResultsOpenInsideRoot(
     const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
     const indexedRange = sourceLines.slice(result.startLine - 1, result.endLine).join('\n');
     expect(indexedRange).toContain('quartzBeacon');
+    expect(indexedRange).toContain(result.snippet.replace(/\n\n\.\.\. \[\d+ more lines\]$/, ''));
     expect(result.startLine).toBeGreaterThan(0);
     expect(result.endLine).toBeGreaterThanOrEqual(result.startLine);
   }
@@ -142,6 +143,141 @@ describe('search source-path validity', () => {
     await expectSearchResultsOpenInsideRoot(copiedRoot, rebuiltResults, 'src/quartzBeacon.ts');
     expect(rebuiltResults.some((result) => result.startLine >= 3)).toBe(true);
   });
+
+  it('renders only current cited source lines, not indexing-only context headers', async () => {
+    const rootPath = path.join(tempRoot, 'annotated chunks');
+    await createSourceFile(
+      rootPath,
+      'src/quartzBeacon.ts',
+      'export function quartzBeacon(): string {\r\n  return "current source";\r\n}\r\nquartzBeacon();\r\n'
+    );
+    await indexProject(rootPath);
+    const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const index = JSON.parse(await fs.readFile(indexPath, 'utf8')) as {
+      chunks: Array<{ content: string }>;
+    };
+    for (const chunk of index.chunks)
+      chunk.content = '// indexing-only signature header\n' + chunk.content;
+    const indexedBytes = JSON.stringify(index);
+    await fs.writeFile(indexPath, indexedBytes, 'utf8');
+
+    const results = await new CodebaseSearcher(rootPath).search(
+      'quartzBeacon',
+      5,
+      undefined,
+      KEYWORD_ONLY_OPTIONS
+    );
+
+    await expectSearchResultsOpenInsideRoot(rootPath, results, 'src/quartzBeacon.ts');
+    expect(
+      results.every((result) => !result.snippet.includes('indexing-only signature header'))
+    ).toBe(true);
+    expect(await fs.readFile(indexPath, 'utf8')).toBe(indexedBytes);
+  });
+
+  it('preserves source projection when Windows opens the same root with different casing', async () => {
+    const rootPath = path.join(tempRoot, 'mixed-case-project');
+    await createSourceFile(
+      rootPath,
+      'src/quartzBeacon.ts',
+      'export function quartzBeacon() { return 1; }\n'
+    );
+    await indexProject(rootPath);
+    const differentlyCasedRoot = path.join(tempRoot, 'MIXED-CASE-PROJECT');
+    const search = new CodebaseSearcher(differentlyCasedRoot).search(
+      'quartzBeacon',
+      5,
+      undefined,
+      KEYWORD_ONLY_OPTIONS
+    );
+    const caseVariantExists = await fs.access(differentlyCasedRoot).then(
+      () => true,
+      () => false
+    );
+    if (caseVariantExists) {
+      await expectSearchResultsOpenInsideRoot(
+        differentlyCasedRoot,
+        await search,
+        'src/quartzBeacon.ts'
+      );
+    } else {
+      // Filesystem behavior, not the OS name, decides whether this is the same project.
+      await expect(search).rejects.toBeInstanceOf(IndexCorruptedError);
+    }
+  });
+
+  it('rejects an indexed directory redirected outside the root even when source bytes match', async () => {
+    const rootPath = path.join(tempRoot, 'junction-project');
+    const outsidePath = path.join(tempRoot, 'external-source');
+    await createSourceFile(
+      rootPath,
+      'src/quartzBeacon.ts',
+      'export function quartzBeacon() { return 1; }\n'
+    );
+    await indexProject(rootPath);
+    // Only this test's owned directory is moved; the index retains the original path/hash.
+    await fs.rename(path.join(rootPath, 'src'), outsidePath);
+    await fs.symlink(
+      outsidePath,
+      path.join(rootPath, 'src'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
+    await expect(
+      new CodebaseSearcher(rootPath).search('quartzBeacon', 5, undefined, KEYWORD_ONLY_OPTIONS)
+    ).rejects.toBeInstanceOf(IndexCorruptedError);
+    expect(await fs.readFile(path.join(outsidePath, 'quartzBeacon.ts'), 'utf8')).toContain(
+      'quartzBeacon'
+    );
+  });
+
+  it('permits an indexed directory linked to a source location still inside its own root', async () => {
+    const rootPath = path.join(tempRoot, 'real-project');
+    await createSourceFile(
+      rootPath,
+      'src/quartzBeacon.ts',
+      'export function quartzBeacon() { return 1; }\n'
+    );
+    await indexProject(rootPath);
+    const internalSourcePath = path.join(rootPath, 'internal-source');
+    await fs.rename(path.join(rootPath, 'src'), internalSourcePath);
+    await fs.symlink(
+      internalSourcePath,
+      path.join(rootPath, 'src'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
+    const results = await new CodebaseSearcher(rootPath).search(
+      'quartzBeacon',
+      5,
+      undefined,
+      KEYWORD_ONLY_OPTIONS
+    );
+    await expectSearchResultsOpenInsideRoot(rootPath, results, 'src/quartzBeacon.ts');
+  });
+
+  it.each([-1, 1.5, 99999])(
+    'rejects invalid returned source bounds (%s) without fabricating a snippet',
+    async (endLine) => {
+      const rootPath = path.join(tempRoot, 'invalid range');
+      await createSourceFile(
+        rootPath,
+        'src/quartzBeacon.ts',
+        'export function quartzBeacon() { return 1; }\n'
+      );
+      await indexProject(rootPath);
+      const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const index = JSON.parse(await fs.readFile(indexPath, 'utf8')) as {
+        chunks: Array<{ startLine: number; endLine: number }>;
+      };
+      for (const chunk of index.chunks) {
+        chunk.startLine = 1;
+        chunk.endLine = endLine;
+      }
+      await fs.writeFile(indexPath, JSON.stringify(index), 'utf8');
+      await expect(
+        new CodebaseSearcher(rootPath).search('quartzBeacon', 5, undefined, KEYWORD_ONLY_OPTIONS)
+      ).rejects.toThrow(/source line range is invalid.*rebuild required/i);
+    }
+  );
 
   it('rejects stale ranges after a same-root prestart source shift, then searches rebuilt current ranges', async () => {
     const rootPath = path.join(tempRoot, 'shifted source repo with spaces');

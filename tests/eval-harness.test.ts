@@ -11,6 +11,7 @@ import {
 } from '../src/eval/harness.js';
 import angularFixture from './fixtures/eval-angular-spotify.json';
 import controlledFixture from './fixtures/eval-controlled.json';
+import { mockCandidateSources } from './mock-candidate-sources.js';
 
 type SearcherFixture = {
   initialized: boolean;
@@ -20,7 +21,7 @@ type SearcherFixture = {
   patternIntelligence: unknown;
   validateCandidateSources: (
     chunks: Iterable<CodeChunk>,
-    checkedPaths: Set<string>
+    checkedSources: Map<string, string>
   ) => Promise<void>;
   search: CodebaseSearcher['search'];
 };
@@ -65,7 +66,7 @@ function setupSearcherWithResultsByQuery(
   const searcher = new CodebaseSearcher('C:/repo') as unknown as SearcherFixture;
   searcher.initialized = true;
   searcher.search = vi.fn(async (query: string) => byQuery[query] ?? fallback);
-  searcher.validateCandidateSources = async () => {};
+  searcher.validateCandidateSources = mockCandidateSources('C:/repo');
   return searcher as unknown as CodebaseSearcher;
 }
 
@@ -296,10 +297,11 @@ describe('Eval Harness - integration with CodebaseSearcher (mocked)', () => {
     };
     searcher.fuseIndex = null;
     searcher.patternIntelligence = null;
-    searcher.validateCandidateSources = async () => {};
+    searcher.validateCandidateSources = mockCandidateSources('C:/repo');
 
     const results = await searcher.search('AuthService', 5);
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].filePath).toContain('auth.service.ts');
+    expect(results[0].snippet).toContain(authServiceChunk.content);
   });
 });

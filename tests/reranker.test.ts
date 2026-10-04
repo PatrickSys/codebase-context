@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isAmbiguous } from '../src/core/reranker.js';
 import type { CodeChunk, SearchResult } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
+import { mockCandidateSources } from './mock-candidate-sources.js';
 
 type SearcherFixture = {
   initialized: boolean;
@@ -11,7 +12,7 @@ type SearcherFixture = {
   patternIntelligence: unknown;
   validateCandidateSources: (
     chunks: Iterable<CodeChunk>,
-    checkedPaths: Set<string>
+    checkedSources: Map<string, string>
   ) => Promise<void>;
   search: CodebaseSearcher['search'];
 };
@@ -151,7 +152,7 @@ describe('File-level dedupe in search results', () => {
     };
     searcher.fuseIndex = null;
     searcher.patternIntelligence = null;
-    searcher.validateCandidateSources = async () => {};
+    searcher.validateCandidateSources = mockCandidateSources('C:/repo');
 
     const results = await searcher.search('Foo class', 5, undefined, {
       useSemanticSearch: true,
@@ -166,5 +167,7 @@ describe('File-level dedupe in search results', () => {
     expect(filePaths.length).toBe(2);
     expect(filePaths[0]).toContain('foo.ts');
     expect(filePaths[1]).toContain('baz.ts');
+    expect(results[0].snippet).toContain('class Foo {}');
+    expect(results[1].snippet).toContain('class Baz {}');
   });
 });

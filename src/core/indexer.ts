@@ -68,7 +68,7 @@ import {
   type FileManifest,
   type ManifestDiff
 } from './manifest.js';
-import { readIndexMeta, checkEmbeddingMismatch } from './index-meta.js';
+import { readIndexMeta, checkEmbeddingMismatch, resolveSkipEmbedding } from './index-meta.js';
 
 let cachedToolVersion: string | null = null;
 
@@ -252,10 +252,12 @@ export class CodebaseIndexer {
   private progress: IndexingProgress;
   private onProgressCallback?: (progress: IndexingProgress) => void;
   private incrementalOnly: boolean;
+  private readonly explicitSkipEmbedding?: boolean;
 
   constructor(options: IndexerOptions) {
     this.rootPath = path.resolve(options.rootPath);
     this.config = this.mergeConfig(options.config);
+    this.explicitSkipEmbedding = options.config?.skipEmbedding;
     this.projectOptions = {
       preferredAnalyzer: options.projectOptions?.preferredAnalyzer,
       extraFileExtensions: options.projectOptions?.extraFileExtensions
@@ -426,6 +428,10 @@ export class CodebaseIndexer {
     let stagingDir: string | null = null;
 
     try {
+      this.config.skipEmbedding = await resolveSkipEmbedding(
+        this.rootPath,
+        this.explicitSkipEmbedding
+      );
       // Ensure there is at least a generic fallback analyzer registered when the indexer
       // is used directly (e.g. in tests or standalone scripts).
       if (analyzerRegistry.getAll().length === 0) {
@@ -488,21 +494,30 @@ export class CodebaseIndexer {
           unchanged: diff.unchanged.length
         };
 
-        // Check for embedding provider/model mismatch — forces full rebuild to avoid
-        // silent vector dimension mismatch when switching providers or models.
+        // Check for embedding configuration mismatch — forces full rebuild to avoid
+        // stale vectors when changing providers, models, or embedding mode.
         try {
           const existingMeta = await readIndexMeta(this.rootPath);
           const currentProvider = this.config.embedding?.provider ?? 'transformers';
           const currentModel = this.config.embedding?.model ?? DEFAULT_MODEL;
-          if (checkEmbeddingMismatch(existingMeta, currentProvider, currentModel)) {
+          if (
+            checkEmbeddingMismatch(
+              existingMeta,
+              currentProvider,
+              currentModel,
+              !this.config.skipEmbedding
+            )
+          ) {
             const stored = existingMeta.artifacts.vectorDb;
             console.error(
-              `Embedding provider/model changed (stored: ${stored.embeddingProvider}:${stored.embeddingModel}, current: ${currentProvider}:${currentModel}) — forcing full rebuild`
+              `Embedding configuration changed (stored: ${stored.embeddingEnabled === false ? 'disabled' : `${stored.embeddingProvider ?? 'unknown'}:${stored.embeddingModel ?? 'unknown'}`}, current: ${this.config.skipEmbedding ? 'disabled' : `${currentProvider}:${currentModel}`}) — forcing full rebuild`
             );
             diff = null;
           }
         } catch {
-          // No meta yet or legacy index without embedding fields — proceed with incremental
+          // An explicitly selected recovery must actually rebuild missing/corrupt metadata,
+          // even when the file manifest says that no source files changed.
+          diff = null;
         }
 
         // Short-circuit: nothing changed
@@ -1054,7 +1069,8 @@ export class CodebaseIndexer {
                 path: VECTOR_DB_DIRNAME,
                 provider: 'lancedb',
                 embeddingProvider: this.config.embedding?.provider ?? 'transformers',
-                embeddingModel: this.config.embedding?.model ?? DEFAULT_MODEL
+                embeddingModel: this.config.embedding?.model ?? DEFAULT_MODEL,
+                embeddingEnabled: !this.config.skipEmbedding
               },
               intelligence: { path: INTELLIGENCE_FILENAME },
               manifest: { path: MANIFEST_FILENAME },

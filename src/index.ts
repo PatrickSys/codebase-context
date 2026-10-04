@@ -2033,7 +2033,9 @@ if (isDirectRun) {
   if (CLI_SUBCOMMANDS.includes(subcommand) || subcommand === '--help') {
     handleCliCommand(process.argv.slice(2)).catch((error) => {
       console.error('Error:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
+      // Let parser/native handles finish closing; a forced exit can abort libuv on
+      // Windows after an otherwise correctly handled indexing failure.
+      process.exitCode = 1;
     });
   } else {
     // Detect HTTP mode from flags or env vars

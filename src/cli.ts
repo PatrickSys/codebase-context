@@ -474,11 +474,12 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
     const result = await dispatchTool(dispatch.toolName, dispatch.toolArgs, ctx);
     if (result.isError) {
       console.error(extractText(result));
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     formatJson(extractText(result), useJson, command, ctx.rootPath, formatQuery, formatIntent);
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    process.exitCode = 1;
   }
 }

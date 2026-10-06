@@ -10,31 +10,31 @@ Codebase Context gives an agent a local view of that information through code se
 
 ## Set up your AI client
 
-Choose your coding tool and run its command once. Use Node.js 22 or newer. These commands use published npm `2.2.0` and do not require a project folder in your configuration:
+Choose your coding tool and run its command once. Use Node.js 22 or newer. These commands use published npm `2.4.0` and do not require a project folder in your configuration:
 
 ```bash
 # Claude Code
-claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.2.0
+claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0
 
 # Codex CLI
-codex mcp add codebase-context -- npx -y codebase-context@2.2.0
+codex mcp add codebase-context -- npx -y codebase-context@2.4.0
 
 # OpenCode 1.x (keep the quoted separator on Windows)
-opencode mcp add codebase-context '--' npx -y codebase-context@2.2.0
+opencode mcp add codebase-context '--' npx -y codebase-context@2.4.0
 ```
 
 Start a new agent session in your project, then ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project when checking get_indexing_status and searching. Wait for indexing if needed, read codebase://context, then search_codebase and open a returned source file. Show me the relevant files.
 
-Replace `[feature]` with something you want to find. The agent supplies the repository path in its tool calls, so the registration can serve different projects. Initial indexing may need a local model download. The October 6 isolated checks proved these client registrations and published-package project selection/search; they did not establish a full native agent investigation.
+Replace `[feature]` with something you want to find. The agent supplies the repository path in its tool calls, so the registration can serve different projects. Initial indexing may need a local model download. The October 6 isolated checks exercised published `2.2.0` client registrations and project selection/search. They did not verify `2.4.0` or establish a full native agent investigation.
 
 For Codex Desktop, create or merge `.codex/config.toml` in the project you want to search:
 
 ```toml
 [mcp_servers.codebase-context]
 command = "npx"
-args = ["-y", "codebase-context@2.2.0"]
+args = ["-y", "codebase-context@2.4.0"]
 startup_timeout_sec = 120
 ```
 
@@ -44,13 +44,13 @@ Other clients use their own setup commands:
 
 | Client                      | Shortest current setup                                                       |
 | --------------------------- | ---------------------------------------------------------------------------- |
-| Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context@2.2.0` |
+| Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context@2.4.0` |
 | Cursor                      | Add `.cursor/mcp.json`                                                       |
 | VS Code with GitHub Copilot | Add `.vscode/mcp.json`                                                       |
-| GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context@2.2.0` |
+| GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context@2.4.0` |
 | Windsurf                    | Add `~/.codeium/windsurf/mcp_config.json`                                    |
 
-Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration, verification limits and the unreleased installer. Published `2.2.0`'s interactive `init` has registration bugs; use the commands above.
+Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration, the `2.4.0` project installer and its verification limits. The registration bugs found in `2.2.0` are historical.
 
 The [client setup guide](./docs/client-setup.md) has the exact commands and config for every client, plus what was checked locally and what still relies on official instructions.
 
@@ -64,11 +64,15 @@ The default connection is `stdio` (standard input/output): your client starts th
 
 ### Team patterns and examples
 
-`get_team_patterns` shows the approaches used in the repository and points to representative files. Published `2.2.0` includes dedicated analyzers for Angular, React and Next.js, with a generic analyzer for other stacks. NestJS support belongs to the newer source candidate.
+`get_team_patterns` shows the approaches used in the repository and points to representative files. Published `2.4.0` includes dedicated analyzers for Angular, React, Next.js and NestJS, with a generic analyzer for other stacks.
 
 ### Project memory
 
 `remember` stores a convention, decision, gotcha, or past failure for the project. `get_memory` retrieves relevant entries in later sessions, including when the agent or editor changes.
+
+### Review context
+
+The `codebase-context-review` CLI creates a bounded context packet from a committed Git diff. It gives a reviewer context; it does not review code or prove review quality. See the [review-context guide](./docs/review-context.md).
 
 ## How it works
 
@@ -80,16 +84,16 @@ The same information is available from the terminal. Run these commands from you
 
 ```bash
 # Build or refresh the local index
-npx -y codebase-context@2.2.0 reindex
+npx -y codebase-context@2.4.0 reindex
 
 # Repository structure, patterns, and representative files
-npx -y codebase-context@2.2.0 map
+npx -y codebase-context@2.4.0 map
 
 # Ranked code search
-npx -y codebase-context@2.2.0 search --query "auth middleware"
+npx -y codebase-context@2.4.0 search --query "auth middleware"
 
 # Current team patterns
-npx -y codebase-context@2.2.0 patterns
+npx -y codebase-context@2.4.0 patterns
 ```
 
 One stdio server can route across several repositories. Supply `project` in tool calls to select the intended repository; a successful selection becomes the default for later calls in that process. Some clients also announce workspace roots: one root can auto-select, while an ambiguous selection asks for a project instead of guessing. MCP deprecated Roots in its July 2026 revision, so explicit project selection is the documented default rather than a dependency on client discovery.
@@ -145,8 +149,8 @@ The method and failures are documented so the measurements can be inspected with
 - Retrieval measurements describe expected-file coverage, file precision, and reported `peakPrivateGb`, not patch correctness or end-to-end coding quality.
 - The paired token observation covers two frozen investigation tasks and records observed agent behavior; it is not a universal token or time guarantee.
 - Setup checks differ by client. The detailed guide distinguishes a written config, a config recognized by the client, a local connection, and instructions checked only against official docs.
-- Published `2.2.0` has dedicated Angular, React and Next.js analyzers; NestJS support is in the newer source candidate. Other projects use the generic analyzer and the language parsers available for that stack.
-- The default searchable-chunk limit is 5,000 per project. Larger repositories can raise it in `.codebase-context/config.json`.
+- Published `2.4.0` has dedicated Angular, React, Next.js and NestJS analyzers. Other projects use the generic analyzer and the language parsers available for that stack.
+- The default searchable-chunk limit is 5,000 per project. In `~/.codebase-context/config.json`, set `projects[].parsing.maxChunks` for a project that needs a higher limit.
 - The agent must identify its repository in tool calls when no default or unambiguous client root is available. Concurrent HTTP client isolation is not established by the stdio routing checks.
 
 ## Reference

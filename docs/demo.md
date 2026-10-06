@@ -2,14 +2,14 @@
 
 This walkthrough shows real CLI output captured from the open-source `angular-spotify` repository during a local proof run. That sample checkout is not bundled here.
 
-To try the same CLI flow, use Node.js 22 or newer and open a terminal in the repository you want to inspect. These commands use published `codebase-context@2.2.0`; the CLI uses the current directory as the project root. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
+To try the same CLI flow, use Node.js 22 or newer and open a terminal in the repository you want to inspect. These commands target published `codebase-context@2.4.0`; the CLI uses the current directory as the project root. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
 
-The saved output below is from an earlier CLI run, not the published-package commands shown here. The machine-specific repository root is omitted from the returned file path. This capture does not verify the current package or an MCP connection.
+The saved output below is from an earlier CLI run, not from published `2.4.0` or the commands shown here. The machine-specific repository root is omitted from the returned file path. This capture does not verify the current package or an MCP connection.
 
 ## 0. Build The Local Index
 
 ```bash
-npx -y codebase-context@2.2.0 reindex
+npx -y codebase-context@2.4.0 reindex
 ```
 
 Run this before the first map or search in a repository. Later runs can use `reindex --incremental` after the code changes.
@@ -17,7 +17,7 @@ Run this before the first map or search in a repository. Later runs can use `rei
 ## 1. Start With The Conventions Map
 
 ```bash
-npx -y codebase-context@2.2.0 map --json
+npx -y codebase-context@2.4.0 map --json
 ```
 
 Captured output excerpt:
@@ -50,7 +50,7 @@ What this shows:
 ## 2. Search With Edit Intent
 
 ```bash
-npx -y codebase-context@2.2.0 search --query "auth headers" --intent edit --limit 3 --json
+npx -y codebase-context@2.4.0 search --query "auth headers" --intent edit --limit 3 --json
 ```
 
 Captured output excerpt:
@@ -91,7 +91,7 @@ What this shows:
 ## 3. Check A Team Pattern Directly
 
 ```bash
-npx -y codebase-context@2.2.0 patterns --category state --json
+npx -y codebase-context@2.4.0 patterns --category state --json
 ```
 
 Captured output excerpt:

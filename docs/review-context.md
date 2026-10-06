@@ -26,13 +26,13 @@ node dist/review-bin.js --base origin/main --head HEAD
 After package publication, the package also exposes:
 
 ```bash
-npx codebase-context-review --base origin/main --head HEAD
+npm exec --yes --package=codebase-context@2.4.0 -- codebase-context-review --base origin/main --head HEAD
 ```
 
 Use `--json` for the complete machine-readable packet:
 
 ```bash
-npx codebase-context-review \
+npm exec --yes --package=codebase-context@2.4.0 -- codebase-context-review \
   --base origin/main \
   --head HEAD \
   --max-queries 8 \

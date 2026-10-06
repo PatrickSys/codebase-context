@@ -49,6 +49,7 @@ const gateArtifact = readJson<GateArtifact>('results/gate-evaluation.json');
 const comparatorEvidence = readJson<ComparatorEvidence>('results/comparator-evidence.json');
 
 const benchmarkDoc = readText('docs/benchmark.md');
+const discoveryDoc = readText('docs/benchmark-prior-public-report.md');
 const comparisonDoc = readText('docs/comparison-table.md');
 const registryChecklist = readText('docs/registry-sync-checklist.md');
 const readme = readText('README.md');
@@ -72,17 +73,19 @@ describe('proof truth surfaces', () => {
     expect(comparatorEvidence['codebase-memory-mcp']).toBeDefined();
   });
 
-  it('keeps the proof docs aligned to the current gate artifact', () => {
-    expectContains(benchmarkDoc, [
+  it('keeps archived discovery proof aligned to its retained gate artifact', () => {
+    expectContains(discoveryDoc, [
       'discovery benchmark',
       `\`${gateArtifact.gate.status}\``,
       '`claimAllowed`'
     ]);
-    expectContains(comparisonDoc, [
-      'Comparator Summary',
-      `\`${gateArtifact.gate.status}\``,
-      `claimAllowed\` stays \`${String(gateArtifact.gate.claimAllowed)}\``
-    ]);
+    expect(discoveryDoc).toContain(
+      `\`claimAllowed\` remains \`${String(gateArtifact.gate.claimAllowed)}\``
+    );
+    for (const currentDoc of [benchmarkDoc, comparisonDoc]) {
+      expect(currentDoc).toContain('./benchmark-prior-public-report.md');
+      expect(currentDoc).toContain('separate 24-task discovery report');
+    }
     expectContains(registryChecklist, [
       `claimAllowed: ${String(gateArtifact.gate.claimAllowed)}`,
       gateArtifact.gate.status
@@ -96,8 +99,8 @@ describe('proof truth surfaces', () => {
     if (rawClaude.averageFirstRelevantHit === null) {
       expect(rawClaudeGate.status).toBe('pending_evidence');
       expect(rawClaudeGate.missingMetrics ?? []).toContain('averageFirstRelevantHit');
-      expect(benchmarkDoc).toMatch(/raw Claude Code[\s\S]*averageFirstRelevantHit[\s\S]*null/i);
-      expect(comparisonDoc).toMatch(/raw Claude Code[\s\S]*pending_evidence/i);
+      expect(discoveryDoc).toMatch(/raw Claude Code[\s\S]*averageFirstRelevantHit[\s\S]*null/i);
+      expect(discoveryDoc).toMatch(/raw Claude Code[\s\S]*pending_evidence/i);
       expect(registryChecklist).toContain('averageFirstRelevantHit: null');
     }
   });
@@ -108,8 +111,7 @@ describe('proof truth surfaces', () => {
     );
 
     if (codebaseMemoryGate?.status === 'failed') {
-      expect(benchmarkDoc).toMatch(/codebase-memory-mcp[\s\S]*gate: `failed`/i);
-      expect(comparisonDoc).toMatch(/codebase-memory-mcp[\s\S]*gate: `failed`/i);
+      expect(discoveryDoc).toMatch(/codebase-memory-mcp[\s\S]*gate: `failed`/i);
       expect(registryChecklist).toContain('comparator artifact `ok` but gate `failed`');
     }
 
@@ -118,19 +120,35 @@ describe('proof truth surfaces', () => {
       .map(([name]) => name);
 
     for (const comparatorName of setupFailedComparators) {
-      expect(benchmarkDoc).toContain(`\`${comparatorName}\``);
-      expect(comparisonDoc).toContain(`\`${comparatorName}\``);
+      expect(discoveryDoc).toContain(`\`${comparatorName}\``);
     }
   });
 
-  it('keeps package-facing proof mentions secondary and discovery-only', () => {
-    expectContains(readme, ['discovery-only proof', gateArtifact.gate.status, 'claimAllowed']);
-    expectContains(capabilities, [
-      'discovery-only',
-      gateArtifact.gate.status,
-      `claimAllowed: ${String(gateArtifact.gate.claimAllowed)}`
+  it('keeps package-facing evidence scoped to retrieval and historical CLI observations', () => {
+    expectContains(readme, [
+      '/docs/benchmark.md',
+      '/docs/benchmark-prior-public-report.md',
+      'retrieval observations, not a winner or a coding-quality claim',
+      'does not establish patch correctness or end-to-end coding quality'
     ]);
-    expectContains(demo, [gateArtifact.gate.status, 'claimAllowed']);
+    expectContains(capabilities, [
+      'docs/benchmark.md',
+      'does not measure patch correctness or end-to-end task completion',
+      'missing or failed setup and comparator runs remain visible'
+    ]);
+    expectContains(demo, [
+      'does not verify the current package or an MCP connection',
+      'machine-specific repository root is omitted',
+      'not a universal performance or coding result'
+    ]);
+    expectContains(benchmarkDoc, [
+      'does not measure patch correctness',
+      'does not combine the four evidence families into a pooled score'
+    ]);
+    expectContains(comparisonDoc, [
+      'do not establish patch correctness',
+      'failed attempt is counted as zero'
+    ]);
   });
 
   it('keeps shared planning summaries aligned to the same proof posture', () => {

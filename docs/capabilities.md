@@ -104,12 +104,12 @@ Behavior matrix:
 
 Rules:
 
-- If the client provides workspace context, that becomes the trusted workspace boundary for the session. In practice this usually comes from MCP roots.
-- Treat seamless multi-project routing as evidence-backed only for roots-capable hosts. Without roots, explicit fallback is still required.
-- If the server still cannot tell which project to use, a bootstrap path or explicit absolute `project` path remains the fallback.
-- `project` is the canonical explicit selector when routing is ambiguous.
+- The portable default is explicit selection: pass the repository's absolute path as `project`. A successful selection becomes the active project for that server process.
+- Client-announced workspace roots remain a compatibility aid and constrain explicit selectors to that workspace. One valid root can auto-select; ambiguous roots require selection. Roots are not required for the documented setup.
+- Without a configured folder, known root or active selection, the server returns `selection_required` instead of guessing a project.
 - `project` may point at a project path, file path, `file://` URI, or relative subproject path.
 - Later tool calls may omit `project`; the server falls back to the active project when one has already been established.
+- Select again after a server restart or when changing repositories. Published-package A/B/A stdio routing was verified; it does not establish native agent continuation or concurrent HTTP isolation. See the [client setup guide](./client-setup.md#project-routing-contract) for the checks and their limits.
 - The server does not rely on `cwd` walk-up in MCP mode.
 - `codebase://context` serves the active project. Before selection in an unresolved multi-project session, it returns a workspace overview with candidate projects, readiness state, and project-scoped resource URIs.
 - `codebase://context/project/<encoded-project-path>` serves a specific project directly and also makes that project active for later tool calls.

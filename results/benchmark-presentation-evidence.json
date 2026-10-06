@@ -10,7 +10,7 @@
       "schemaVersion": 2,
       "gitRef": "18e0a43a90fe67e9df0d728b2134e9d430469883",
       "gitBlobSha256": "a26599e1302ebdbb34e259530c8d775a9325bd42714e5b03398c545ad1abaf6c",
-      "checkoutByteDifference": "CRLF versus LF only"
+      "checkoutByteDifference": "Source copy uses mixed CRLF/LF; normalizing line endings yields the Git blob byte-for-byte (LF)."
     },
     "history": {
       "file": "contextbench-engineering-note-summary.json",

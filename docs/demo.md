@@ -1,13 +1,23 @@
 # Demo Script
 
-This walkthrough uses real CLI output captured against `repos/angular-spotify` during the Phase 10 proof rerun.
-Run it from the repo root with `CODEBASE_ROOT` pointed at the frozen sample repo. The public flow is simple: start with the conventions map, then search for the local example you need.
+This walkthrough shows real CLI output captured from the open-source `angular-spotify` repository during a local proof run. That sample checkout is not bundled here.
+
+To try the same CLI flow, use Node.js 22 or newer and open a terminal in the repository you want to inspect. These commands use published `codebase-context@2.2.0`; the CLI uses the current directory as the project root. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
+
+The saved output below is from an earlier CLI run. It does not verify the current package or an MCP connection.
+
+## 0. Build The Local Index
+
+```bash
+npx -y codebase-context@2.2.0 reindex
+```
+
+Run this before the first map or search in a repository. Later runs can use `reindex --incremental` after the code changes.
 
 ## 1. Start With The Conventions Map
 
 ```bash
-$env:CODEBASE_ROOT='C:\Users\bitaz\Repos\codebase-context\repos\angular-spotify'
-node dist/index.js map --json
+npx -y codebase-context@2.2.0 map --json
 ```
 
 Captured output excerpt:
@@ -40,8 +50,7 @@ What this shows:
 ## 2. Search With Edit Intent
 
 ```bash
-$env:CODEBASE_ROOT='C:\Users\bitaz\Repos\codebase-context\repos\angular-spotify'
-node dist/index.js search --query "auth headers" --intent edit --limit 3 --json
+npx -y codebase-context@2.2.0 search --query "auth headers" --intent edit --limit 3 --json
 ```
 
 Captured output excerpt:
@@ -66,7 +75,7 @@ Captured output excerpt:
   },
   "results": [
     {
-      "file": "C:\\Users\\bitaz\\Repos\\codebase-context\\repos\\angular-spotify\\libs\\web\\auth\\util\\src\\lib\\interceptors\\auth.interceptor.ts:10-42",
+      "file": "repos/angular-spotify/libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts:10-42",
       "type": "interceptor:core"
     }
   ]
@@ -82,8 +91,7 @@ What this shows:
 ## 3. Check A Team Pattern Directly
 
 ```bash
-$env:CODEBASE_ROOT='C:\Users\bitaz\Repos\codebase-context\repos\angular-spotify'
-node dist/index.js patterns --category state --json
+npx -y codebase-context@2.2.0 patterns --category state --json
 ```
 
 Captured output excerpt:
@@ -117,4 +125,5 @@ What this shows:
 ## Caveats
 
 - These excerpts were captured from the current local proof run and will change if the frozen sample repo or index state changes.
-- The discovery benchmark gate is still `pending_evidence`, and `claimAllowed` remains `false`, so this walkthrough demonstrates shipped behavior, not a released performance claim.
+- File paths in the excerpts belong to that capture; your output will use the repository you run the command from.
+- The benchmark documents observed local evidence and its limitations; this walkthrough demonstrates shipped behavior, not a universal performance or coding result.

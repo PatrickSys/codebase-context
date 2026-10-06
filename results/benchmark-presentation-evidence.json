@@ -1,0 +1,1251 @@
+{
+  "schemaVersion": 1,
+  "artifactType": "benchmark-presentation-source-extract",
+  "description": "Allowlisted fields extracted from retained reports. This is not a new benchmark run or independent validation of those reports. Full source byte hashes identify the inputs; private filesystem paths and orchestration costs are omitted.",
+  "provenance": {
+    "corrected": {
+      "file": "contextbench-engineering-note-summary.json",
+      "sha256": "ad8cac1ad86747463212b1665c3458e8f9560fbcde728d3dc2d74d1d6fe3e17f",
+      "generatedAt": "2026-06-04T08:28:24Z",
+      "schemaVersion": 2,
+      "gitRef": "18e0a43a90fe67e9df0d728b2134e9d430469883",
+      "gitBlobSha256": "a26599e1302ebdbb34e259530c8d775a9325bd42714e5b03398c545ad1abaf6c",
+      "checkoutByteDifference": "CRLF versus LF only"
+    },
+    "history": {
+      "file": "contextbench-engineering-note-summary.json",
+      "sha256": "29c1a03bff051d9bc90284c5585e4f2cc1e94f9cc9da5d01d1b36e73dac4e87e",
+      "generatedAt": "2026-06-07T19:09:33Z",
+      "schemaVersion": 4,
+      "gitRef": "67b7ae2d1541eef3f591a9a58daf5d09ead8dcf1",
+      "gitBlobSha256": "29c1a03bff051d9bc90284c5585e4f2cc1e94f9cc9da5d01d1b36e73dac4e87e",
+      "checkoutByteDifference": "CRLF versus LF only"
+    },
+    "pilot": {
+      "file": "REPORT.claim-session.json",
+      "sha256": "1c3368185c01a5e52bb7ba55466f9e5a053a26afe896a60b16b80c0743a5bd69",
+      "generatedAt": "2026-06-12T02:23:14.817Z",
+      "schemaVersion": 1,
+      "sessionId": "claim-bearing-2task-5lane-repeat3-claimclean2e21-20260612T002612Z"
+    }
+  },
+  "correctedRetrieval": {
+    "sourceFields": [
+      "rows",
+      "qualitySnapshot",
+      "costSnapshot"
+    ],
+    "publicationReadiness": {
+      "claimBearingPublicationAllowed": false,
+      "claimScope": "20x1_retrieval_overlap_only",
+      "unresolvedBlockers": [
+        "single_repeat_no_stability_claim",
+        "retrieval_overlap_only_no_patch_quality",
+        "provider_dollar_cost_not_measured_because_no_paid_provider_use",
+        "repowise_one_no_context_evaluator_failure",
+        "cold_vs_warm_install_dependency_cache_not_fully_normalized"
+      ],
+      "publicUseLevel": "narrow_retrieval_overlap_case_study",
+      "status": "engineering_note_ready_with_claim_blocks",
+      "blockedClaimTypes": [
+        "benchmark winner",
+        "best tool",
+        "paper-grade benchmark",
+        "resource-efficiency claim",
+        "generalized agent coding quality claim",
+        "agent patch correctness claim",
+        "developer productivity claim"
+      ]
+    },
+    "rows": {
+      "evaluatorFailedRows": 1,
+      "repeatsPerTaskLane": 1,
+      "lanes": 5,
+      "evaluatorCompletedRows": 99,
+      "retrievalOverlapRows": 100,
+      "appendixOnlyLanes": [
+        {
+          "reason": "bounded local indexing readiness failed earlier; not part of this corrected 20x1 headline table",
+          "laneId": "GrepAI"
+        }
+      ],
+      "sameDenominatorRowsPresent": true,
+      "tasks": 20
+    },
+    "qualitySnapshot": [
+      {
+        "laneId": "codebase-context",
+        "rows": 20,
+        "evaluatorCompletedRows": 20,
+        "status": "completed:20",
+        "fileCoverageMean": 0.25722222222222224,
+        "filePrecisionMean": 0.11499999999999999,
+        "symbolCoverageMean": 0.1396239637555427,
+        "spanCoverageMean": 0.08573378715275093,
+        "lineCoverageMean": 0.0878787249873908
+      },
+      {
+        "laneId": "context-mode",
+        "rows": 20,
+        "evaluatorCompletedRows": 20,
+        "status": "completed:20",
+        "fileCoverageMean": 0.16833333333333333,
+        "filePrecisionMean": 0.11666666666666665,
+        "symbolCoverageMean": 0.02731443994601889,
+        "spanCoverageMean": 0.011708371581594209,
+        "lineCoverageMean": 0.01103832178724339
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "rows": 20,
+        "evaluatorCompletedRows": 20,
+        "status": "completed:20",
+        "fileCoverageMean": 0.2713888888888889,
+        "filePrecisionMean": 0.11000000000000001,
+        "symbolCoverageMean": 0.19046586746586747,
+        "spanCoverageMean": 0.08523281976808295,
+        "lineCoverageMean": 0.08706990517203586
+      },
+      {
+        "laneId": "raw-native",
+        "rows": 20,
+        "evaluatorCompletedRows": 20,
+        "status": "completed:20",
+        "fileCoverageMean": 0.043333333333333335,
+        "filePrecisionMean": 0.04,
+        "symbolCoverageMean": 0.007186234817813765,
+        "spanCoverageMean": 0.00461426238619191,
+        "lineCoverageMean": 0.003664930124865624
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "rows": 20,
+        "evaluatorCompletedRows": 19,
+        "status": "completed:19,judge_failed:1",
+        "fileCoverageMean": 0.2013888888888889,
+        "filePrecisionMean": 0.12,
+        "symbolCoverageMean": 0.046063588114671705,
+        "spanCoverageMean": 0.03033601885780799,
+        "lineCoverageMean": 0.024685983349898594
+      }
+    ],
+    "costSnapshot": [
+      {
+        "laneId": "codebase-context",
+        "setupStatuses": "not_required:20",
+        "indexStatuses": "completed:20",
+        "indexExitStatuses": "unknown:20",
+        "indexMedianSeconds": 750.8,
+        "indexSumMinutes": 226.6,
+        "rowWallSumMinutes": 231.5,
+        "peakPrivateGb": 2.9,
+        "modelEvidence": "Xenova/bge-small-en-v1.5:20"
+      },
+      {
+        "laneId": "context-mode",
+        "setupStatuses": "completed:20",
+        "indexStatuses": "completed:20",
+        "indexExitStatuses": "unknown:20",
+        "indexMedianSeconds": 18.6,
+        "indexSumMinutes": 12.5,
+        "rowWallSumMinutes": 16,
+        "peakPrivateGb": 0.15,
+        "modelEvidence": "unknown:20"
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "setupStatuses": "completed:20",
+        "indexStatuses": "completed:20",
+        "indexExitStatuses": "unknown:20",
+        "indexMedianSeconds": 11.3,
+        "indexSumMinutes": 4.9,
+        "rowWallSumMinutes": 10.9,
+        "peakPrivateGb": 0.33,
+        "modelEvidence": "unknown:20"
+      },
+      {
+        "laneId": "raw-native",
+        "setupStatuses": "not_required:20",
+        "indexStatuses": "not_required:20",
+        "indexExitStatuses": "unknown:20",
+        "indexMedianSeconds": 0,
+        "indexSumMinutes": 0,
+        "rowWallSumMinutes": 6.8,
+        "peakPrivateGb": 0.06,
+        "modelEvidence": "unknown:20"
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "setupStatuses": "completed:20",
+        "indexStatuses": "completed:20",
+        "indexExitStatuses": "1:20",
+        "indexMedianSeconds": 294.3,
+        "indexSumMinutes": 154.2,
+        "rowWallSumMinutes": 200.7,
+        "peakPrivateGb": 4.82,
+        "modelEvidence": "unknown:20"
+      }
+    ],
+    "failedRows": [
+      {
+        "taskId": "Multi-SWE-Bench__typescript__maintenance__bugfix__8d2ac221",
+        "laneId": "repowise-selfhosted-mcp",
+        "status": "judge_failed",
+        "reason": "official_result_error:no_context_extracted"
+      }
+    ]
+  },
+  "repeatedRetrievalAndReplayHistory": {
+    "sourceFields": [
+      "retrievalChecks.sourceRuns",
+      "publicationReadiness"
+    ],
+    "sourceRuns": [
+      {
+        "name": "corrected-20x1",
+        "checks": 100,
+        "checksScored": 99,
+        "checksWithNoUsableContext": 1
+      },
+      {
+        "name": "repeat-20x3",
+        "checks": 300,
+        "checksScored": 288,
+        "checksWithNoUsableContext": 12
+      },
+      {
+        "name": "metered-context-consumption",
+        "checks": 100,
+        "checksScored": 100,
+        "checksWithNoUsableContext": 0,
+        "tokenCountersCaptured": 100
+      }
+    ],
+    "publicationReadiness": {
+      "claimBearingPublicationAllowed": false,
+      "claimScope": "500_check_practical_code_context_case_study",
+      "unresolvedBlockers": [
+        "combined_local_evidence_sets_not_preregistered_repeated_protocol",
+        "retrieval_overlap_and_context_consumption_only_no_patch_quality",
+        "token_metering_is_context_consumption_not_patch_workflow",
+        "provider_dollar_cost_not_calculated_from_model_pricing",
+        "repowise_thirteen_checks_with_no_usable_context",
+        "cold_vs_warm_install_dependency_cache_not_fully_normalized"
+      ],
+      "publicUseLevel": "narrow_code_context_case_study",
+      "status": "engineering_note_ready_with_claim_blocks",
+      "blockedClaimTypes": [
+        "benchmark winner",
+        "best tool",
+        "research-paper benchmark",
+        "resource-efficiency claim",
+        "generalized agent coding quality claim",
+        "agent patch correctness claim",
+        "developer productivity claim",
+        "token-savings claim"
+      ]
+    },
+    "replayCaution": "The historical schema4 summary records completed metering; the later presentation describes no-tool-use replay exclusion. This extract does not reconcile the validity of that replay. No replay token results are presented."
+  },
+  "twoTaskAgentPilot": {
+    "publicationReadiness": {
+      "construction": "Publication readiness is a claim gate derived from existing report evidence. It is not owner approval and not a new benchmark score.",
+      "status": "not_publication_ready",
+      "publicUseLevel": "engineering_note_or_internal_audit_only",
+      "claimBearingPublicationAllowed": false,
+      "claimScope": "pilot_only",
+      "qualityRowCount": 30,
+      "qualityTaskCount": 2,
+      "scoreableQualityLaneCount": 5,
+      "missingQualityLaneCount": 0,
+      "missingQualityLaneIds": [],
+      "reliabilityRowCount": 0,
+      "repeatConfidenceStatus": "repeat_ready",
+      "resourceTelemetryGapRows": [],
+      "unresolvedBlockers": [
+        "pilot_task_count"
+      ],
+      "blockerActions": [
+        {
+          "blocker": "pilot_task_count",
+          "action": "Add scoreable quality rows across the required task count before broad benchmark claims."
+        }
+      ],
+      "allowedNonClaimUses": [
+        "Describe scoreable quality rows only within their narrow denominator."
+      ],
+      "blockedClaimTypes": [
+        "benchmark winner",
+        "paper-grade benchmark",
+        "four-lane quality comparison",
+        "resource-efficiency claim",
+        "generalized agent coding quality claim"
+      ]
+    },
+    "summary": {
+      "totalRows": 30,
+      "taskCount": 2,
+      "qualityTaskCount": 2,
+      "laneCount": 5,
+      "qualityRowCount": 30,
+      "reliabilityRowCount": 0,
+      "statusCounts": {
+        "completed": 30
+      },
+      "taskIds": [
+        "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27"
+      ],
+      "qualityTaskIds": [
+        "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27"
+      ],
+      "laneIds": [
+        "codebase-context",
+        "context-mode",
+        "jcodemunch-full-mcp",
+        "raw-native",
+        "repowise-selfhosted-mcp"
+      ]
+    },
+    "sourceFields": [
+      "qualityRows",
+      "costRows"
+    ],
+    "qualityRows": [
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.475,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.5,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.3619047619047619,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.4,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.475,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.5,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0.02857142857142857,
+          "symbolPrecision": 0.16666666666666666,
+          "spanCoverage": 0.00467177045029839,
+          "spanPrecision": 0.5272108843537415,
+          "lineCoverage": 0.002026342451874367,
+          "linePrecision": 0.4,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.2591240875912409,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.2,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.2591240875912409,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.2,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.3333333333333333,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.2923076923076923,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.3333333333333333,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.475,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.5,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0.10526315789473684,
+          "symbolPrecision": 0.4,
+          "spanCoverage": 0.006640106241699867,
+          "spanPrecision": 0.5272727272727272,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.4,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.3287037037037037,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.25,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.3287037037037037,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.25,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.3287037037037037,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.25,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 1,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 1,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 1,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.6666666666666666,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.6909090909090909,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.6666666666666666,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0.05263157894736842,
+          "symbolPrecision": 0.25,
+          "spanCoverage": 0.006731693913999175,
+          "spanPrecision": 0.5856573705179283,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.4,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.2591240875912409,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.2,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.2591240875912409,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.2,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.2591240875912409,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.2,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.475,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.5,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.6666666666666666,
+          "symbolCoverage": 0.10526315789473684,
+          "symbolPrecision": 0.6666666666666666,
+          "spanCoverage": 0.004258826761917846,
+          "spanPrecision": 0.7560975609756098,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.6666666666666666,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.6666666666666666,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.7169811320754716,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.6666666666666666,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.3333333333333333,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.21385542168674698,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.16666666666666666,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.3287037037037037,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.25,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.2591240875912409,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.2,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.6666666666666666,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.6909090909090909,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.6666666666666666,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.5,
+          "filePrecision": 0.5,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0017401657736868617,
+          "spanPrecision": 0.475,
+          "lineCoverage": 0.002398081534772182,
+          "linePrecision": 0.5,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.25,
+          "filePrecision": 0.3333333333333333,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0009158767229930851,
+          "spanPrecision": 0.31746031746031744,
+          "lineCoverage": 0.001199040767386091,
+          "linePrecision": 0.3333333333333333,
+          "editlocRecall": 1,
+          "editlocPrecision": 1
+        }
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.6666666666666666,
+          "symbolCoverage": 0.02857142857142857,
+          "symbolPrecision": 0.2,
+          "spanCoverage": 0.0028633431792151427,
+          "spanPrecision": 0.6643356643356644,
+          "lineCoverage": 0.002026342451874367,
+          "linePrecision": 0.6666666666666666,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0.02857142857142857,
+          "symbolPrecision": 0.14285714285714285,
+          "spanCoverage": 0.0028633431792151427,
+          "spanPrecision": 0.521978021978022,
+          "lineCoverage": 0.002026342451874367,
+          "linePrecision": 0.4,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "rowStatus": "completed",
+        "metrics": {
+          "fileCoverage": 0.6666666666666666,
+          "filePrecision": 0.4,
+          "symbolCoverage": 0,
+          "symbolPrecision": 1,
+          "spanCoverage": 0.0021399722707818435,
+          "spanPrecision": 0.2591240875912409,
+          "lineCoverage": 0.0010131712259371835,
+          "linePrecision": 0.2,
+          "editlocRecall": 0.5714285714285714,
+          "editlocPrecision": 0.5714285714285714
+        }
+      }
+    ],
+    "costRows": [
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 651991,
+        "cachedInputTokens": 562688,
+        "outputTokens": 8569,
+        "reasoningOutputTokens": 5477,
+        "taskWallTimeMs": 158527,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 682131,
+        "cachedInputTokens": 642048,
+        "outputTokens": 10057,
+        "reasoningOutputTokens": 5312,
+        "taskWallTimeMs": 224679,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 400544,
+        "cachedInputTokens": 317952,
+        "outputTokens": 6954,
+        "reasoningOutputTokens": 4131,
+        "taskWallTimeMs": 131028,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 347800,
+        "cachedInputTokens": 314368,
+        "outputTokens": 13393,
+        "reasoningOutputTokens": 9227,
+        "taskWallTimeMs": 213283,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 273980,
+        "cachedInputTokens": 244224,
+        "outputTokens": 7323,
+        "reasoningOutputTokens": 4019,
+        "taskWallTimeMs": 140876,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "jcodemunch-full-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 241423,
+        "cachedInputTokens": 206848,
+        "outputTokens": 5932,
+        "reasoningOutputTokens": 3550,
+        "taskWallTimeMs": 119511,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 428418,
+        "cachedInputTokens": 398336,
+        "outputTokens": 7056,
+        "reasoningOutputTokens": 2584,
+        "taskWallTimeMs": 150948,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 230103,
+        "cachedInputTokens": 200192,
+        "outputTokens": 5962,
+        "reasoningOutputTokens": 3079,
+        "taskWallTimeMs": 153087,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 725790,
+        "cachedInputTokens": 665088,
+        "outputTokens": 9735,
+        "reasoningOutputTokens": 6607,
+        "taskWallTimeMs": 197729,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 324871,
+        "cachedInputTokens": 296448,
+        "outputTokens": 9513,
+        "reasoningOutputTokens": 5744,
+        "taskWallTimeMs": 170065,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 224215,
+        "cachedInputTokens": 177664,
+        "outputTokens": 4517,
+        "reasoningOutputTokens": 1669,
+        "taskWallTimeMs": 115595,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "repowise-selfhosted-mcp",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 263549,
+        "cachedInputTokens": 243200,
+        "outputTokens": 10605,
+        "reasoningOutputTokens": 7467,
+        "taskWallTimeMs": 170770,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 223558,
+        "cachedInputTokens": 190976,
+        "outputTokens": 4990,
+        "reasoningOutputTokens": 2899,
+        "taskWallTimeMs": 110708,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 269851,
+        "cachedInputTokens": 234496,
+        "outputTokens": 6028,
+        "reasoningOutputTokens": 3024,
+        "taskWallTimeMs": 121854,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 205432,
+        "cachedInputTokens": 130048,
+        "outputTokens": 5564,
+        "reasoningOutputTokens": 3530,
+        "taskWallTimeMs": 114664,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 215407,
+        "cachedInputTokens": 167424,
+        "outputTokens": 7930,
+        "reasoningOutputTokens": 4784,
+        "taskWallTimeMs": 143643,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 247868,
+        "cachedInputTokens": 206848,
+        "outputTokens": 5463,
+        "reasoningOutputTokens": 3246,
+        "taskWallTimeMs": 106404,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "codebase-context",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 534029,
+        "cachedInputTokens": 498688,
+        "outputTokens": 13790,
+        "reasoningOutputTokens": 10169,
+        "taskWallTimeMs": 238528,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 541233,
+        "cachedInputTokens": 497152,
+        "outputTokens": 9011,
+        "reasoningOutputTokens": 4494,
+        "taskWallTimeMs": 185061,
+        "contextToolCallCount": null,
+        "contextToolCompletedCallCount": null
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 856202,
+        "cachedInputTokens": 798720,
+        "outputTokens": 12581,
+        "reasoningOutputTokens": 7297,
+        "taskWallTimeMs": 257215,
+        "contextToolCallCount": null,
+        "contextToolCompletedCallCount": null
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 653348,
+        "cachedInputTokens": 610304,
+        "outputTokens": 6730,
+        "reasoningOutputTokens": 3640,
+        "taskWallTimeMs": 179577,
+        "contextToolCallCount": null,
+        "contextToolCompletedCallCount": null
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 826946,
+        "cachedInputTokens": 740864,
+        "outputTokens": 17144,
+        "reasoningOutputTokens": 12215,
+        "taskWallTimeMs": 294443,
+        "contextToolCallCount": null,
+        "contextToolCompletedCallCount": null
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 251601,
+        "cachedInputTokens": 220672,
+        "outputTokens": 7386,
+        "reasoningOutputTokens": 3991,
+        "taskWallTimeMs": 141981,
+        "contextToolCallCount": null,
+        "contextToolCompletedCallCount": null
+      },
+      {
+        "laneId": "raw-native",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 290186,
+        "cachedInputTokens": 272384,
+        "outputTokens": 7567,
+        "reasoningOutputTokens": 4024,
+        "taskWallTimeMs": 142002,
+        "contextToolCallCount": null,
+        "contextToolCompletedCallCount": null
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 304532,
+        "cachedInputTokens": 271872,
+        "outputTokens": 7060,
+        "reasoningOutputTokens": 4975,
+        "taskWallTimeMs": 146469,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 610092,
+        "cachedInputTokens": 546304,
+        "outputTokens": 8915,
+        "reasoningOutputTokens": 5830,
+        "taskWallTimeMs": 236889,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__c__maintenance__bugfix__5e659108",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 541331,
+        "cachedInputTokens": 480256,
+        "outputTokens": 10847,
+        "reasoningOutputTokens": 5649,
+        "taskWallTimeMs": 204901,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 1,
+        "status": "completed",
+        "inputTokens": 182974,
+        "cachedInputTokens": 167424,
+        "outputTokens": 9561,
+        "reasoningOutputTokens": 7486,
+        "taskWallTimeMs": 146629,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 2,
+        "status": "completed",
+        "inputTokens": 333030,
+        "cachedInputTokens": 292352,
+        "outputTokens": 12256,
+        "reasoningOutputTokens": 8613,
+        "taskWallTimeMs": 198105,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      },
+      {
+        "laneId": "context-mode",
+        "taskId": "Multi-SWE-Bench__cpp__maintenance__bugfix__3e497d27",
+        "repeatIndex": 3,
+        "status": "completed",
+        "inputTokens": 518028,
+        "cachedInputTokens": 475136,
+        "outputTokens": 10446,
+        "reasoningOutputTokens": 6931,
+        "taskWallTimeMs": 200453,
+        "contextToolCallCount": 1,
+        "contextToolCompletedCallCount": 1
+      }
+    ],
+    "aggregation": "Per-task, per-lane median of three costRows values for each counter independently. Cached input is a subset of input; component medians need not sum."
+  }
+}

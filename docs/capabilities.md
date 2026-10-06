@@ -6,10 +6,10 @@ Technical reference for what `codebase-context` ships today. The public product 
 
 The server supports two transport modes:
 
-| Mode                | Command                                     | MCP endpoint                 |
-| ------------------- | ------------------------------------------- | ---------------------------- |
-| **stdio** (default) | `npx -y codebase-context`                   | Spawned process stdin/stdout |
-| **HTTP**            | `npx -y codebase-context --http [--port N]` | `http://127.0.0.1:3100/mcp`  |
+| Mode                | Command                                           | MCP endpoint                 |
+| ------------------- | ------------------------------------------------- | ---------------------------- |
+| **stdio** (default) | `npx -y codebase-context@2.2.0`                   | Spawned process stdin/stdout |
+| **HTTP**            | `npx -y codebase-context@2.2.0 --http [--port N]` | `http://127.0.0.1:3100/mcp`  |
 
 HTTP defaults to `127.0.0.1:3100`. Override with `--port`, `CODEBASE_CONTEXT_PORT`, or `server.port` in `~/.codebase-context/config.json`.
 
@@ -26,7 +26,7 @@ Copy-pasteable client config templates are shipped in the package:
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients
 - `templates/mcp/http/.mcp.json` — HTTP setup for `.mcp.json`-style clients
 
-Client transport support varies — see [README.md](../README.md) for a per-client matrix covering Claude Code, Cursor, Codex, Windsurf, VS Code, Claude Desktop, and OpenCode.
+Use Node.js 22 or newer with the published 2.2.0 commands shown here. For client registration recipes and their verification limits, see the [client setup guide](./client-setup.md).
 
 ## CLI Reference
 
@@ -49,15 +49,15 @@ For a command gallery with examples, see `docs/cli.md`.
 | `memory add`           | `--type`, `--category`, `--memory`, `--reason`                                                             | `remember`                             |
 | `memory remove <id>`   | —                                                                                                          | —                                      |
 
-All commands accept `--json` for raw JSON output. Errors go to stderr with exit code 1.
+Commands that list `--json` above support raw JSON output. For MCP client registration, follow the [published client setup recipes](./client-setup.md); do not use the broken `init` setup command in published 2.2.0. Errors go to stderr with exit code 1.
 
 ```bash
 # Quick examples
-npx codebase-context status
-npx codebase-context search --query "auth middleware" --intent edit
-npx codebase-context refs --symbol "UserService" --limit 10
-npx codebase-context cycles --scope src/features
-npx codebase-context reindex --incremental
+npx -y codebase-context@2.2.0 status
+npx -y codebase-context@2.2.0 search --query "auth middleware" --intent edit
+npx -y codebase-context@2.2.0 refs --symbol "UserService" --limit 10
+npx -y codebase-context@2.2.0 cycles --scope src/features
+npx -y codebase-context@2.2.0 reindex --incremental
 ```
 
 ## Tool Surface
@@ -282,29 +282,25 @@ Notes:
 
 ## Evaluation Harness
 
-Current public proof bundle: [`docs/benchmark.md`](../docs/benchmark.md) and [`docs/comparison-table.md`](../docs/comparison-table.md).
+Current public evidence: [`docs/benchmark.md`](../docs/benchmark.md) and [`docs/comparison-table.md`](../docs/comparison-table.md).
 
-Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/reporting code.
+Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring and reporting code.
 
-- **Command:** `npm run eval -- <codebaseA> [codebaseB] --mode retrieval|discovery [--competitor-results <path>]` (builds first, then runs `scripts/run-eval.mjs`)
+- **Command:** `pnpm run eval -- <codebaseA> [codebaseB] --mode retrieval|discovery [--competitor-results <path>]` (builds first, then runs `scripts/run-eval.mjs`)
+- **Contributor requirement:** this repository command uses the pinned `pnpm@10.27.0`; end users do not need pnpm for the `npx` CLI.
 - **Shared implementation:** `src/eval/harness.ts`, `src/eval/discovery-harness.ts`, and `src/eval/types.ts`
-- **Frozen retrieval fixtures:**
-  - `tests/fixtures/eval-angular-spotify.json`
-  - `tests/fixtures/eval-controlled.json` + `tests/fixtures/codebases/eval-controlled/`
-- **Frozen discovery fixtures:**
-  - `tests/fixtures/discovery-angular-spotify.json`
-  - `tests/fixtures/discovery-excalidraw.json`
-  - `tests/fixtures/discovery-benchmark-protocol.json`
-- **Retrieval metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a gate pass/fail
+- **Retrieval fixtures:** `tests/fixtures/eval-angular-spotify.json` and `tests/fixtures/eval-controlled.json` with `tests/fixtures/codebases/eval-controlled/`
+- **Discovery fixtures:** `tests/fixtures/discovery-angular-spotify.json`, `tests/fixtures/discovery-excalidraw.json`, and `tests/fixtures/discovery-benchmark-protocol.json`
+- **Retrieval metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a pass/fail result for the configured retrieval check
 - **Discovery metrics:** usefulness score, payload bytes, estimated tokens, first relevant hit, and best-example usefulness
-- **Discovery gate:** discovery mode evaluates the frozen ship gate only when the full public suite and comparator metrics are available; missing comparator evidence is reported as pending, not silently treated as pass/fail
-- **Current checked-in gate truth:** `results/gate-evaluation.json` remains `pending_evidence` with `claimAllowed: false`; the raw-Claude baseline still lacks `averageFirstRelevantHit`, `codebase-memory-mcp` still fails the frozen usefulness comparisons, and the remaining named lanes are still `setup_failed`
-- **Limits:** discovery mode is discovery-only, uses current shipped surfaces only, and does not claim implementation quality; named competitor runs remain a documented hybrid/manual lane rather than a built-in automated benchmark
+- **Public benchmark families:** the current documentation keeps 100 corrected retrieval attempts, 300 repeated retrieval attempts, 30 full-agent pilot attempts, and 100 invalid-token replays separate across five local code-context tools
+- **Discovery limits:** discovery mode describes the shipped discovery surface and does not measure patch correctness or end-to-end task completion; named competitor runs remain a documented hybrid/manual lane rather than a built-in automated benchmark
+- **Evidence limits:** missing or failed setup and comparator runs remain visible in their source artifacts and are not treated as a pass
 
 ## Limitations
 
 - **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
 - **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
-- **Angular, React, Next.js, and NestJS have dedicated analyzers.** All other languages go through the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
+- **Published 2.2.0 has dedicated Angular, React, and Next.js analyzers.** NestJS support is in a newer source candidate and is not part of published 2.2.0. Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
 - **Default embedding model is `bge-small-en-v1.5` (512-token context).** Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

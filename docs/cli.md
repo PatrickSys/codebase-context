@@ -10,18 +10,18 @@
 
 > Output depends on the repo you run it against. The examples below are illustrative (paths, counts, and detected frameworks will vary).
 >
-> These examples show an earlier CLI run; they do not verify the current package or an MCP connection.
+> These output examples come from an earlier CLI run; they were not captured from published `2.4.0` and do not verify an MCP connection.
 >
-> The commands below use published `codebase-context@2.2.0` and require Node.js 22 or newer. The CLI is intentionally single-project per invocation and targets one root via `CODEBASE_ROOT` or the current working directory. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
+> The commands below use published `codebase-context@2.4.0` and require Node.js 22 or newer. The CLI is intentionally single-project per invocation and targets one root via `CODEBASE_ROOT` or the current working directory. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
 
 ## How to run
 
 ```bash
 # CLI only: run from a repo root, or set CODEBASE_ROOT explicitly:
-CODEBASE_ROOT=/path/to/repo npx -y codebase-context@2.2.0 status
+CODEBASE_ROOT=/path/to/repo npx -y codebase-context@2.4.0 status
 
 # Commands that show --json in their help support machine output. Human mode is default.
-npx -y codebase-context@2.2.0 patterns --json
+npx -y codebase-context@2.4.0 patterns --json
 ```
 
 ### ASCII fallback
@@ -29,7 +29,7 @@ npx -y codebase-context@2.2.0 patterns --json
 If your terminal doesn’t render Unicode box-drawing cleanly:
 
 ```bash
-CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context@2.2.0 patterns
+CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context@2.4.0 patterns
 ```
 
 ## Commands
@@ -44,7 +44,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context@2.2.0 patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
-- MCP client registration — use the published 2.2.0 commands in the [client setup guide](./client-setup.md); published `init` is not a reliable setup route
+- MCP client registration — use the published 2.4.0 recipes in the [client setup guide](./client-setup.md); the setup failures documented for `init` apply to 2.2.0
 
 ---
 
@@ -53,9 +53,9 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context@2.2.0 patterns
 Run these CLI commands from the project root. Build or refresh the local index first; the first index may take a while while the project is scanned and local embeddings are created. Then inspect the conventions map and search for the code you need:
 
 ```bash
-npx -y codebase-context@2.2.0 reindex
-npx -y codebase-context@2.2.0 map
-npx -y codebase-context@2.2.0 search --query "auth middleware"
+npx -y codebase-context@2.4.0 reindex
+npx -y codebase-context@2.4.0 map
+npx -y codebase-context@2.4.0 search --query "auth middleware"
 ```
 
 This is the CLI preparation flow. It is separate from MCP client registration and does not by itself show that an MCP client connected successfully.
@@ -63,8 +63,8 @@ This is the CLI preparation flow. It is separate from MCP client registration an
 ## `map`
 
 ```bash
-npx -y codebase-context@2.2.0 reindex
-npx -y codebase-context@2.2.0 map
+npx -y codebase-context@2.4.0 reindex
+npx -y codebase-context@2.4.0 map
 ```
 
 The conventions map - run this first on an unfamiliar repo. It shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example.
@@ -99,7 +99,7 @@ Example output (truncated):
 ## `metadata`
 
 ```bash
-npx -y codebase-context@2.2.0 metadata
+npx -y codebase-context@2.4.0 metadata
 ```
 
 Example output:
@@ -120,7 +120,7 @@ Example output:
 ## `patterns`
 
 ```bash
-npx -y codebase-context@2.2.0 patterns
+npx -y codebase-context@2.4.0 patterns
 ```
 
 Example output (truncated):
@@ -142,8 +142,8 @@ Example output (truncated):
 ## `search`
 
 ```bash
-npx -y codebase-context@2.2.0 reindex
-npx -y codebase-context@2.2.0 search --query "file watcher" --intent edit --limit 3
+npx -y codebase-context@2.4.0 reindex
+npx -y codebase-context@2.4.0 search --query "file watcher" --intent edit --limit 3
 ```
 
 Example output (truncated):
@@ -164,7 +164,7 @@ Example output (truncated):
 ## `refs`
 
 ```bash
-npx -y codebase-context@2.2.0 refs --symbol "startFileWatcher" --limit 10
+npx -y codebase-context@2.4.0 refs --symbol "startFileWatcher" --limit 10
 ```
 
 Example output (truncated):
@@ -183,7 +183,7 @@ Example output (truncated):
 ## `cycles`
 
 ```bash
-npx -y codebase-context@2.2.0 cycles --scope src
+npx -y codebase-context@2.4.0 cycles --scope src
 ```
 
 Example output:
@@ -199,7 +199,7 @@ Example output:
 ## `status`
 
 ```bash
-npx -y codebase-context@2.2.0 status
+npx -y codebase-context@2.4.0 status
 ```
 
 Example output:
@@ -218,8 +218,8 @@ Example output:
 ## `reindex`
 
 ```bash
-npx -y codebase-context@2.2.0 reindex
-npx -y codebase-context@2.2.0 reindex --incremental --reason "changed watcher logic"
+npx -y codebase-context@2.4.0 reindex
+npx -y codebase-context@2.4.0 reindex --incremental --reason "changed watcher logic"
 ```
 
 > **MCP server mode**: if you're running codebase-context as an MCP server (long-running process), the index auto-refreshes via a file watcher — you don't need to call `reindex` between edits. Use `reindex` for one-shot CLI runs or to force a full rebuild.
@@ -227,7 +227,7 @@ npx -y codebase-context@2.2.0 reindex --incremental --reason "changed watcher lo
 ## `style-guide`
 
 ```bash
-npx -y codebase-context@2.2.0 style-guide --query "naming"
+npx -y codebase-context@2.4.0 style-guide --query "naming"
 ```
 
 Example output:
@@ -240,14 +240,14 @@ No style guides found.
 ## `memory`
 
 ```bash
-npx -y codebase-context@2.2.0 memory list
-npx -y codebase-context@2.2.0 memory list --query "watcher"
+npx -y codebase-context@2.4.0 memory list
+npx -y codebase-context@2.4.0 memory list --query "watcher"
 
-npx -y codebase-context@2.2.0 memory add \
+npx -y codebase-context@2.4.0 memory add \
   --type gotcha \
   --category tooling \
   --memory "Use pnpm, not npm" \
   --reason "Workspace support and speed"
 
-npx -y codebase-context@2.2.0 memory remove <id>
+npx -y codebase-context@2.4.0 memory remove <id>
 ```

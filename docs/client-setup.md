@@ -1,6 +1,6 @@
 # Client Setup
 
-Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter. These examples use published npm `2.2.0`.
+Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter. These recipes target published npm `2.4.0`.
 
 Use Node.js 22 or newer for these recipes. The package declares Node 18+, but native dependency requirements are narrower than that broad declaration; these checks do not establish Node 18.0 compatibility.
 
@@ -25,7 +25,7 @@ After registration, start a new agent session in your project and ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project when checking get_indexing_status and searching. Wait for indexing if needed, read codebase://context, then search_codebase and open a returned source file. Show me the relevant files.
 
-The first index may take a while and download a local model. You can prepare it separately with `npx -y codebase-context@2.2.0 reindex` from the project folder. Index readiness, client connection and useful agent behavior are separate checks.
+The first index may take a while and download a local model. You can prepare it separately with `npx -y codebase-context@2.4.0 reindex` from the project folder. Index readiness, client connection and useful agent behavior are separate checks.
 
 ## Claude Code
 
@@ -38,13 +38,13 @@ The first index may take a while and download a local model. You can prepare it 
 User setup:
 
 ```bash
-claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.2.0
+claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0
 ```
 
 Optional shared project setup:
 
 ```bash
-claude mcp add --scope project --transport stdio codebase-context -- npx -y codebase-context@2.2.0
+claude mcp add --scope project --transport stdio codebase-context -- npx -y codebase-context@2.4.0
 ```
 
 `--scope project` writes shared `.mcp.json` and requires project-server approval. `--scope local` instead stores a private association for the current project in `~/.claude.json`; it does not write `.mcp.json`.
@@ -64,7 +64,7 @@ claude mcp add --scope project --transport stdio codebase-context -- npx -y code
 **Scope:** The command writes user config. A trusted project can use a project `.codex/config.toml` instead.
 
 ```bash
-codex mcp add codebase-context -- npx -y codebase-context@2.2.0
+codex mcp add codebase-context -- npx -y codebase-context@2.4.0
 ```
 
 Equivalent project config:
@@ -72,7 +72,7 @@ Equivalent project config:
 ```toml
 [mcp_servers.codebase-context]
 command = "npx"
-args = ["-y", "codebase-context@2.2.0"]
+args = ["-y", "codebase-context@2.4.0"]
 startup_timeout_sec = 120
 ```
 
@@ -82,28 +82,28 @@ startup_timeout_sec = 120
 
 **Official docs:** [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli). The supported `startup_timeout_sec` option defaults to ten seconds; the project example allows 120 seconds for initial `npx` package preparation. This does not prove Desktop startup or guarantee completion of a cold download.
 
-## Codex Desktop: published 2.2.0
+## Codex Desktop: 2.4.0 recipe
 
 Create or merge `.codex/config.toml` in the project you want to search. Preserve any existing settings:
 
 ```toml
 [mcp_servers.codebase-context]
 command = "npx"
-args = ["-y", "codebase-context@2.2.0"]
+args = ["-y", "codebase-context@2.4.0"]
 startup_timeout_sec = 120
 ```
 
 Trust the project if asked, restart Codex and start a new task there. Use the first-use prompt above so the agent selects the current repository. The CLI command in the preceding section writes user-level config; this recipe uses a trusted project's config instead.
 
-**Verification boundary:** isolated Windows CLI and SDK/MCP checks on October 5 indexed a six-file fixture with published `2.2.0`, selected its project, retrieved context and found a source that the host could open. The exact `npx -y codebase-context@2.2.0 <project>` entrypoint also passed using a warmed isolated npm cache and prepared index. This does not establish a fully cold download or a fresh Codex Desktop agent session. The September Desktop session below used a packed candidate; keep it separate from published-package acceptance.
+**Verification boundary:** isolated Windows CLI and SDK/MCP checks on October 5 exercised published `2.2.0` on a six-file fixture; the exact `npx -y codebase-context@2.2.0 <project>` entrypoint passed with a warmed isolated npm cache and prepared index. This is historical evidence for `2.2.0`, not verification of `2.4.0`, a fully cold download or a fresh Codex Desktop agent session. The September Desktop session below used a packed candidate; keep it separate from published-package acceptance.
 
-On October 6 the exact published `npx` entrypoint was also tested without a folder, environment root or MCP roots, launched from an unrelated directory. Its first tool call returned `selection_required`; an explicit `project` call selected the prepared fixture, search found the expected symbol, context returned its map, and the runner host opened the returned source. A later call without `project` retained that selection. This is SDK/protocol and runner-host evidence with warmed caches and a pre-indexed fixture, not a native Desktop task.
+On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a folder, environment root or MCP roots, launched from an unrelated directory. That check does not verify the `2.4.0` package. Its first tool call returned `selection_required`; an explicit `project` call selected the prepared fixture, search found the expected symbol, context returned its map, and the runner host opened the returned source. A later call without `project` retained that selection. This is SDK/protocol and runner-host evidence with warmed caches and a pre-indexed fixture, not a native Desktop task.
 
-## Unreleased installer candidate
+## Project-scoped installer in 2.4.0
 
-The next release is expected to support one project-only command from the target project:
+Published `2.4.0` includes a project-only setup command that you can run from the target project:
 
-The `init --client codex --yes` flow is an unreleased source candidate. Published npm `2.2.0` does not include these flags. Use the published configuration above rather than an `@latest` installer command; candidate verification uses an exact built or installed candidate.
+The `init --client codex --yes` flow was checked before release from an exact built or packed candidate. Those checks document that candidate; they do not verify the published `2.4.0` package. Use the version-pinned recipes above rather than an `@latest` installer command.
 
 A successful `init --client codex --yes` writes the project-scoped `.codex/config.toml` and prepares the index for that root. If config writing or index preparation fails, setup is incomplete and Codex is not ready to use.
 
@@ -119,21 +119,21 @@ node C:\path\to\codebase-context\dist\index.js init --client codex --yes
 
 Use `--root C:\path\to\project` when the command is run from elsewhere. Here, `root` means the project folder to configure and index. The candidate writes the project-scoped `<project>/.codex/config.toml`, preserves unrelated Codex settings, prepares the index for that folder, and does not write `AGENTS.md` or global client configuration. After a successful result, trust the project in Codex Desktop if prompted, restart or reopen Codex, start a new task in that project, and ask a small project question. A written config and ready index do not prove that Codex loaded or queried the server.
 
-Before release, the generated `npx` server command still resolves the published package unless the candidate is installed in the target project's `node_modules`. Our packaged test installs the candidate in a disposable project and checks its file hash. Running the built setup command alone does not prove that Codex will launch that same candidate.
+At candidate-check time, the generated `npx` server command resolved the published package unless the candidate was installed in the target project's `node_modules`. The packaged test installed the candidate in a disposable project and checked its file hash. Running the built setup command alone did not prove that Codex would launch that same candidate or that the published `2.4.0` package behaves identically.
 
-**Checked on 2026-09-15:** the packed candidate installed and indexed an isolated Windows project. A fresh Codex Desktop task then called the actual `search_codebase` MCP tool and located the requested chart component with its source file and lines. The normal Desktop task flow established project trust; no trust-file edits or replacement CLI/SDK search were used for that answer. This covers the small prepared project with shared caches, not a cold-machine install or the published npm package.
+**Checked on 2026-09-15:** the packed candidate installed and indexed an isolated Windows project. A fresh Codex Desktop task then called the actual `search_codebase` MCP tool and located the requested chart component with its source file and lines. The normal Desktop task flow established project trust; no trust-file edits or replacement CLI/SDK search were used for that answer. This covers the small prepared project with shared caches, not a cold-machine install or the published npm `2.4.0` package.
 
 ## Optional fixed-folder setup and CLI preparation
 
-To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context@2.2.0", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
+To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context@2.4.0", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
 
 To prepare the index separately, run from the project folder:
 
 ```powershell
-npx -y codebase-context@2.2.0 reindex
+npx -y codebase-context@2.4.0 reindex
 ```
 
-Do not use published `2.2.0`'s interactive `init` as the setup route. October 6 isolated checks found that it ignores `--help`, `--client` and `--yes`; its Claude/Codex registration executes `mcp` instead of the client executable, and its HTTP recipes require a separately started server. It can exit zero after registration fails. The unreleased installer above is a separate implementation.
+The setup failures below are specific to published `2.2.0`'s interactive `init`: October 6 isolated checks found that it ignores `--help`, `--client` and `--yes`; its Claude/Codex registration executes `mcp` instead of the client executable, and its HTTP recipes require a separately started server. It can exit zero after registration fails. These findings do not describe the `2.4.0` installer documented above.
 
 ## Gemini CLI
 
@@ -146,13 +146,13 @@ Do not use published `2.2.0`'s interactive `init` as the setup route. October 6 
 User setup:
 
 ```bash
-gemini mcp add --scope user codebase-context npx -y codebase-context@2.2.0
+gemini mcp add --scope user codebase-context npx -y codebase-context@2.4.0
 ```
 
 Project setup:
 
 ```bash
-gemini mcp add --scope project codebase-context npx -y codebase-context@2.2.0
+gemini mcp add --scope project codebase-context npx -y codebase-context@2.4.0
 ```
 
 Gemini writes an `mcpServers` entry in its settings. Claude, Codex, and Copilot CLI use `--`; Gemini does not.
@@ -178,7 +178,7 @@ Create `.cursor/mcp.json`:
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context@2.2.0"]
+      "args": ["-y", "codebase-context@2.4.0"]
     }
   }
 }
@@ -203,7 +203,7 @@ Checked config shape: `.cursor/mcp.json with mcpServers.codebase-context command
 Official user command:
 
 ```powershell
-code --add-mcp '{"name":"codebase-context","command":"npx","args":["-y","codebase-context@2.2.0"]}'
+code --add-mcp '{"name":"codebase-context","command":"npx","args":["-y","codebase-context@2.4.0"]}'
 ```
 
 Deterministic workspace config at `.vscode/mcp.json`:
@@ -213,7 +213,7 @@ Deterministic workspace config at `.vscode/mcp.json`:
   "servers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context@2.2.0"]
+      "args": ["-y", "codebase-context@2.4.0"]
     }
   }
 }
@@ -234,7 +234,7 @@ Deterministic workspace config at `.vscode/mcp.json`:
 **Scope:** User config.
 
 ```bash
-copilot mcp add codebase-context -- npx -y codebase-context@2.2.0
+copilot mcp add codebase-context -- npx -y codebase-context@2.4.0
 ```
 
 **What was checked:** The command ran with an isolated `--config-dir` and wrote the expected `mcp-config.json` command, arguments, and tool filter.
@@ -254,7 +254,7 @@ copilot mcp add codebase-context -- npx -y codebase-context@2.2.0
 Run once:
 
 ```bash
-opencode mcp add codebase-context '--' npx -y codebase-context@2.2.0
+opencode mcp add codebase-context '--' npx -y codebase-context@2.4.0
 ```
 
 Keep the quoted `'--'`: the installed Windows PowerShell npm shim consumes an unquoted separator. The quoted form also works in POSIX shells.
@@ -267,7 +267,7 @@ For a project-local alternative, merge this into `opencode.json`:
   "mcp": {
     "codebase-context": {
       "type": "local",
-      "command": ["npx", "-y", "codebase-context@2.2.0"],
+      "command": ["npx", "-y", "codebase-context@2.4.0"],
       "enabled": true,
       "timeout": 120000
     }
@@ -300,7 +300,7 @@ Create `~/.codeium/windsurf/mcp_config.json`:
   "mcpServers": {
     "codebase-context": {
       "command": "npx",
-      "args": ["-y", "codebase-context@2.2.0"]
+      "args": ["-y", "codebase-context@2.4.0"]
     }
   }
 }
@@ -319,8 +319,8 @@ Checked config shape: `~/.codeium/windsurf/mcp_config.json with mcpServers.codeb
 Use `stdio` for the simplest setup. HTTP can let several clients share one long-running local process, but support depends on the client and this path is not part of the default setup proof:
 
 ```bash
-npx -y codebase-context@2.2.0 --http
-npx -y codebase-context@2.2.0 --http --port 4000
+npx -y codebase-context@2.4.0 --http
+npx -y codebase-context@2.4.0 --http --port 4000
 ```
 
 The documented default endpoint is `http://127.0.0.1:3100/mcp`. Config-shape templates are available in [`templates/mcp/stdio/.mcp.json`](../templates/mcp/stdio/.mcp.json) and [`templates/mcp/http/.mcp.json`](../templates/mcp/http/.mcp.json); pin the published package as in the recipes above. HTTP does not discover a client's project folder; the agent still has to select its repository.
@@ -339,7 +339,7 @@ Some clients also announce workspace roots. One valid root can auto-select; seve
 
 [MCP deprecated Roots on July 28, 2026](https://modelcontextprotocol.io/specification/2026-07-28/client/roots), recommending explicit directories/files in tool parameters, resource URIs or server configuration. CBC's older Roots support remains a compatibility aid rather than a required setup step.
 
-October 6 verification: 18 focused current-source routing tests passed, including ambiguous roots, explicit selection, subsequent calls and root changes. The exact published server also switched between two isolated prepared repositories A to B to A in one no-roots stdio process: search paths, context map and subsequent status calls followed each selection. The runner host opened the expected distinct sources. A native agent session across real repositories remains a validation step; stdio process-local selection does not establish concurrent HTTP isolation.
+October 6 verification: 18 focused current-source routing tests passed, including ambiguous roots, explicit selection, subsequent calls and root changes. The exact published `2.2.0` server also switched between two isolated prepared repositories A to B to A in one no-roots stdio process; search paths, context map and subsequent status calls followed each selection, and the runner host opened the expected distinct sources. This historical package check does not verify published `2.4.0` or establish concurrent HTTP isolation. A native agent session across real repositories remains a validation step.
 
 A follow-up recorded raw `search_codebase` calls containing only `query` and `mode`, with no `project`: they returned A, B and A after those explicit selections. The caller does not automatically add the full path; CBC routes omitted-project calls using its selected project. This state lasts for that stdio process. Select again after a server restart or when changing repositories.
 

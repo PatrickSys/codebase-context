@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 2,
+  "artifactType": "contextbench-engineering-note-summary",
+  "generatedAt": "2026-06-04T08:28:24Z",
+  "source": {
+    "scorerScriptSha256": "sha256:13e859f6485735d76b1591a45a7211338f9fed9ff5566776ac8455db6e820e79",
+    "localSummary": "gate5-official-retrieval-scoring-current-script-20260604T1027/GATE5-SCORING-SUMMARY.json",
+    "localSummarySha256": "sha256:e5ecd3ee45b9577ae32d409de960edc1a7c2761159280cb7f8e7b7a85555387b",
+    "boundary": "The full run artifacts are local evidence. This checked-in summary is the public engineering-note artifact and does not make winner, leaderboard, paper-grade, resource-efficiency, or patch-quality claims.",
+    "localRunRoot": "benchmark-runs/contextbench/phase41/corrected-20x1-20260603T103632",
+    "localRunRootTracked": false
+  },
+  "publicationReadiness": {
+    "claimBearingPublicationAllowed": false,
+    "claimScope": "20x1_retrieval_overlap_only",
+    "unresolvedBlockers": [
+      "single_repeat_no_stability_claim",
+      "retrieval_overlap_only_no_patch_quality",
+      "provider_dollar_cost_not_measured_because_no_paid_provider_use",
+      "repowise_one_no_context_evaluator_failure",
+      "cold_vs_warm_install_dependency_cache_not_fully_normalized"
+    ],
+    "publicUseLevel": "narrow_retrieval_overlap_case_study",
+    "status": "engineering_note_ready_with_claim_blocks",
+    "blockedClaimTypes": [
+      "benchmark winner",
+      "best tool",
+      "paper-grade benchmark",
+      "resource-efficiency claim",
+      "generalized agent coding quality claim",
+      "agent patch correctness claim",
+      "developer productivity claim"
+    ]
+  },
+  "rows": {
+    "evaluatorFailedRows": 1,
+    "repeatsPerTaskLane": 1,
+    "lanes": 5,
+    "evaluatorCompletedRows": 99,
+    "retrievalOverlapRows": 100,
+    "appendixOnlyLanes": [
+      {
+        "reason": "bounded local indexing readiness failed earlier; not part of this corrected 20x1 headline table",
+        "laneId": "GrepAI"
+      }
+    ],
+    "sameDenominatorRowsPresent": true,
+    "tasks": 20
+  },
+  "methodology": {
+    "notMeasured": "patch correctness, developer productivity, provider-dollar spend, multi-repeat confidence intervals",
+    "scoring": "official ContextBench evaluator on saved retrieval trajectories using per-task gold; scorer gold was not read during retrieval",
+    "lanes": [
+      "raw-native",
+      "codebase-context",
+      "jcodemunch-full-mcp",
+      "repowise-selfhosted-mcp",
+      "context-mode"
+    ],
+    "measured": "retrieval overlap, setup/index time, row wall time, process memory telemetry, GPU availability probe, failure rows",
+    "metricView": "failure-inclusive means; judge_failed/no_context rows count as zero in the public summary",
+    "publicFrame": "we benchmarked these tools on open-source repos",
+    "taskSet": "20 frozen ContextBench-style open-source tasks"
+  },
+  "qualitySnapshot": [
+    {
+      "laneId": "codebase-context",
+      "rows": 20,
+      "evaluatorCompletedRows": 20,
+      "status": "completed:20",
+      "fileCoverageMean": 0.25722222222222224,
+      "filePrecisionMean": 0.11499999999999999,
+      "symbolCoverageMean": 0.1396239637555427,
+      "spanCoverageMean": 0.08573378715275093,
+      "lineCoverageMean": 0.0878787249873908
+    },
+    {
+      "laneId": "context-mode",
+      "rows": 20,
+      "evaluatorCompletedRows": 20,
+      "status": "completed:20",
+      "fileCoverageMean": 0.16833333333333333,
+      "filePrecisionMean": 0.11666666666666665,
+      "symbolCoverageMean": 0.02731443994601889,
+      "spanCoverageMean": 0.011708371581594209,
+      "lineCoverageMean": 0.01103832178724339
+    },
+    {
+      "laneId": "jcodemunch-full-mcp",
+      "rows": 20,
+      "evaluatorCompletedRows": 20,
+      "status": "completed:20",
+      "fileCoverageMean": 0.2713888888888889,
+      "filePrecisionMean": 0.11000000000000001,
+      "symbolCoverageMean": 0.19046586746586747,
+      "spanCoverageMean": 0.08523281976808295,
+      "lineCoverageMean": 0.08706990517203586
+    },
+    {
+      "laneId": "raw-native",
+      "rows": 20,
+      "evaluatorCompletedRows": 20,
+      "status": "completed:20",
+      "fileCoverageMean": 0.043333333333333335,
+      "filePrecisionMean": 0.04,
+      "symbolCoverageMean": 0.007186234817813765,
+      "spanCoverageMean": 0.00461426238619191,
+      "lineCoverageMean": 0.003664930124865624
+    },
+    {
+      "laneId": "repowise-selfhosted-mcp",
+      "rows": 20,
+      "evaluatorCompletedRows": 19,
+      "status": "completed:19,judge_failed:1",
+      "fileCoverageMean": 0.2013888888888889,
+      "filePrecisionMean": 0.12,
+      "symbolCoverageMean": 0.046063588114671705,
+      "spanCoverageMean": 0.03033601885780799,
+      "lineCoverageMean": 0.024685983349898594
+    }
+  ],
+  "costSnapshot": [
+    {
+      "laneId": "codebase-context",
+      "setupStatuses": "not_required:20",
+      "indexStatuses": "completed:20",
+      "indexExitStatuses": "unknown:20",
+      "indexMedianSeconds": 750.8,
+      "indexSumMinutes": 226.6,
+      "rowWallSumMinutes": 231.5,
+      "peakPrivateGb": 2.9,
+      "modelEvidence": "Xenova/bge-small-en-v1.5:20"
+    },
+    {
+      "laneId": "context-mode",
+      "setupStatuses": "completed:20",
+      "indexStatuses": "completed:20",
+      "indexExitStatuses": "unknown:20",
+      "indexMedianSeconds": 18.6,
+      "indexSumMinutes": 12.5,
+      "rowWallSumMinutes": 16.0,
+      "peakPrivateGb": 0.15,
+      "modelEvidence": "unknown:20"
+    },
+    {
+      "laneId": "jcodemunch-full-mcp",
+      "setupStatuses": "completed:20",
+      "indexStatuses": "completed:20",
+      "indexExitStatuses": "unknown:20",
+      "indexMedianSeconds": 11.3,
+      "indexSumMinutes": 4.9,
+      "rowWallSumMinutes": 10.9,
+      "peakPrivateGb": 0.33,
+      "modelEvidence": "unknown:20"
+    },
+    {
+      "laneId": "raw-native",
+      "setupStatuses": "not_required:20",
+      "indexStatuses": "not_required:20",
+      "indexExitStatuses": "unknown:20",
+      "indexMedianSeconds": 0.0,
+      "indexSumMinutes": 0.0,
+      "rowWallSumMinutes": 6.8,
+      "peakPrivateGb": 0.06,
+      "modelEvidence": "unknown:20"
+    },
+    {
+      "laneId": "repowise-selfhosted-mcp",
+      "setupStatuses": "completed:20",
+      "indexStatuses": "completed:20",
+      "indexExitStatuses": "1:20",
+      "indexMedianSeconds": 294.3,
+      "indexSumMinutes": 154.2,
+      "rowWallSumMinutes": 200.7,
+      "peakPrivateGb": 4.82,
+      "modelEvidence": "unknown:20"
+    }
+  ],
+  "failedRows": [
+    {
+      "taskId": "Multi-SWE-Bench__typescript__maintenance__bugfix__8d2ac221",
+      "laneId": "repowise-selfhosted-mcp",
+      "status": "judge_failed",
+      "reason": "official_result_error:no_context_extracted",
+      "officialResults": "benchmark-runs/contextbench/phase41/corrected-20x1-20260603T103632/gate5-official-retrieval-scoring/rows/064-Multi-SWE-Bench__typescript__maintenance__bugfix__8d2ac221/repowise-selfhosted-mcp/official-results.jsonl",
+      "trajectory": "benchmark-runs/contextbench/phase41/corrected-20x1-20260603T103632/gate4-corrected-20x1/13-Multi-SWE-Bench-typescript-maintenance-bugfix-8d2ac221/repowise-selfhosted-mcp/runs/repowise-selfhosted-mcp-Multi-SWE-Bench__typescript__maintenance__bugfix__8d2ac221-1-retrieval/trajectory.json"
+    }
+  ],
+  "interpretation": [
+    "jCodeMunch and codebase-context are close on file/span retrieval in this fixed adapter run; jCodeMunch has stronger symbol coverage but lower file precision.",
+    "codebase-context completed all 20 retrieval rows in this run but was expensive to index with local Transformers embeddings.",
+    "jCodeMunch is much cheaper to index in this adapter run, but its exact cold/warm install/cache boundary still needs care before cost claims.",
+    "context-mode is lightweight and low-cost, with lower recall ceiling in this run.",
+    "Repowise indexed and returned rows, but used the highest peak private memory, every index exited nonzero with a documented benign failure mode, and one row produced no extracted context.",
+    "raw-native is a deterministic lexical baseline here, not a free-form raw agent ceiling; it had low retrieval-overlap on these 20 tasks."
+  ],
+  "caveats": {
+    "publicDocs": "passed: README/docs/package-facing benchmark wording is aligned to the narrow 100-row retrieval-overlap engineering-note framing",
+    "overclaiming": "passed: public wording keeps winner, leaderboard, paper-grade, resource-efficiency, patch-quality, and productivity claims blocked",
+    "patchQuality": "blocked: retrieval-overlap only, no downstream patch/test success measured",
+    "costAccounting": "partial_pass: setup/index/resource telemetry captured; provider-dollar costs remain none/unknown because no paid provider use was approved",
+    "repeatStability": "blocked: 1 repeat per lane/task, no paper-grade stability or confidence claim",
+    "artifactCompleteness": "passed: 100 rows have summary, trajectory, raw trace, setup, telemetry, and gold",
+    "failureInclusion": "passed: Repowise judge_failed/no_context row is retained and zero-filled metric view exists",
+    "sameDenominator": "passed: 20 tasks x 5 lanes present"
+  },
+  "metaCost": {
+    "note": "Benchmark orchestration cost is authoring/evaluation overhead, not a lane score.",
+    "latestKnownCodexGoalTokens": "owner-reported 2.29B input and 7.48M output tokens before this corrected scoring pass; exact all-run total not independently audited here",
+    "gate5ScoringPeakPrivateMb": 65.1,
+    "gate5ScoringRuntimeSeconds": 72.4
+  }
+}

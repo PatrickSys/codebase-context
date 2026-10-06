@@ -1,174 +1,80 @@
-# Benchmarks
+# What our local code-context experiments show
 
-This page tracks two separate benchmark surfaces:
+This report describes local evidence from five ways of giving an AI coding agent context: Raw-native, Codebase Context, jCodeMunch, Repowise, and context-mode. The evidence is split into separate families because retrieval, repeated runs, full-agent observations, and a metered replay do not answer the same question. The families are not pooled into one score.
 
-- The ContextBench implementation pilot, which uses the official ContextBench evaluator on one frozen task and five scoreable lanes.
-- The older discovery benchmark, which measures local discovery usefulness and payload cost only.
+The clearest current finding is narrow: in this fixed retrieval setup, Codebase Context recovered 25.7% of expected gold files at 11.5% file precision, while fresh indexing had material local cost. These measurements do not show better completed coding tasks.
 
-Neither section currently supports a broad benchmark-win claim.
+## Evidence families
 
-## ContextBench Implementation Pilot
+| Evidence family | Attempts | Completed | Failed or otherwise excluded | What it answers |
+| --- | ---: | ---: | ---: | --- |
+| Corrected retrieval | 100 | 99 of 100 | 1 failed | Expected-file coverage, file precision, and reported `peakPrivateGb` |
+| Repeated retrieval | 300 | 288 of 300 | 12 failed | Repeatability, setup, and runtime history |
+| Full-agent pilot | 30 | 30 of 30 | 0 | Observed token and task-time results across two frozen tasks |
+| Metered replay (excluded) | 100 | 100 counter records in historical summary | Tool-use validity unresolved | Why those replay records are not scored |
 
-This is the current implementation-quality pilot for ContextBench. It is real scoreable evidence, but it is still a pilot because it covers one frozen task rather than the full frozen 20-task slice.
+The first two families contain 400 retrieval attempts. The full-agent pilot and the metered replay remain separate from those retrieval measurements.
 
-### Scope
+## Retrieval results
 
-- Protocol: `tests/fixtures/contextbench-benchmark-protocol.json`
-- Task manifest: `tests/fixtures/contextbench-task-manifest.json`
-- Selection file: `scripts/contextbench-five-lane-selections.json`
-- Workflow: `.github/workflows/contextbench-five-lane-score.yml`
-- Required lanes: `raw-native`, `codebase-context`, `codebase-memory-mcp`, `grepai`, `ripgrep-lexical`
-- Model used for selection: `gpt-5.4-mini-high`
-- Target task: `SWE-Bench-Pro__go__maintenance__bugfix__4df06349`
-- Repository under test: `navidrome/navidrome`
-- Base commit: `537e2fc033b71a4a69190b74f755ebc352bb4196`
+Expected-file coverage means expected gold files recovered divided by expected gold files, averaged within the corrected retrieval-only family. File precision means expected gold files recovered divided by all files returned. The table reports both alongside completion status and the reported `peakPrivateGb` telemetry field. The underlying unit of that field was not independently verified, so these values are not labelled as GiB or treated as install size.
 
-`CodeGraphContext` is not counted in this five-lane pilot because its supported CLI path indexed successfully but returned zero task-relevant candidates during readiness. That remains a readiness blocker, not a quality result.
+| Tool | Completed | Failed | Expected-file coverage | File precision | Reported `peakPrivateGb` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Raw search | 20/20 | 0 | 4.3% | 4.0% | 0.06 |
+| Codebase Context | 20/20 | 0 | 25.7% | 11.5% | 2.90 |
+| jCodeMunch | 20/20 | 0 | 27.1% | 11.0% | 0.33 |
+| Repowise | 19/20 | 1 | 20.1% (failed run = 0) | 12.0% | 4.82 |
+| context-mode | 20/20 | 0 | 16.8% | 11.7% | 0.15 |
 
-### Current Audited Run
+The corrected retrieval family therefore includes 99 completed attempts and 1 failed attempt. Repowise is the only tool with a failed attempt in this table. Its 20.1% is failure-inclusive: the failed attempt is counted as zero. Raw search is a deterministic lexical adapter in this protocol, not a full normal coding-agent baseline. These values describe file retrieval and returned-file precision, not a coding score. The [sanitized evidence extract](../results/benchmark-presentation-evidence.json) records the exact values and source hashes.
 
-- Run: `25663469903`
-- Job: `75329796667`
-- Commit: `bbd3a8348aaec15809fd09dd8fc729e64df6d878`
-- Artifact: `6915576867`
-- Artifact digest: `sha256:718fd32049a2d98ed62fb0c15189d7dc9f1b027c202f286923de91d9f8985def`
-- Artifact size: `88.9 KB`
-- Uploaded files: `42`
-- Status: `success`
+## Paired token and time observation
 
-The artifact contains `summary.json`, `publishable-summary.json`, `publishable-validation.json`, `humanized-summary.md`, logs, lane selections, lane predictions, and official evaluator score files. It intentionally excludes full cloned repos and evaluator caches so the evidence package is small enough to inspect.
+The full-agent pilot used `gpt-5.4-mini-high`, with three runs per tool and task. It covers one frozen investigation task for each of two open-source codebases. The two tasks are PonyC and fmt. The paired tables compare the raw-native agent lane with Codebase Context; all five lanes remain available in the evidence extract.
 
-### Quality Results
+### PonyC
 
-Only rows scored by the official ContextBench evaluator are included here. Setup failures, tool errors, empty predictions, and judge failures are reliability outcomes, not quality rows.
+| Tool | Input tokens | Cached input tokens | Output tokens | Reasoning output tokens | Task time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Raw search | 653,348 | 610,304 | 9,011 | 4,494 | 185,061 ms |
+| Codebase Context | 223,558 | 190,976 | 5,564 | 3,024 | 114,664 ms |
 
-| Lane | File cov | File prec | Span cov | Span prec | Line cov | Line prec |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `raw-native` | 0.222 | 0.667 | 0.370 | 0.391 | 0.365 | 0.365 |
-| `codebase-context` | 0.889 | 1.000 | 0.899 | 0.356 | 0.887 | 0.323 |
-| `codebase-memory-mcp` | 0.222 | 0.667 | 0.346 | 0.380 | 0.315 | 0.337 |
-| `grepai` | 0.333 | 0.500 | 0.048 | 0.042 | 0.059 | 0.061 |
-| `ripgrep-lexical` | 0.222 | 0.667 | 0.401 | 0.341 | 0.419 | 0.302 |
+### fmt
 
-### Cost And Telemetry
+| Tool | Input tokens | Cached input tokens | Output tokens | Reasoning output tokens | Task time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Raw search | 290,186 | 272,384 | 7,567 | 4,024 | 142,002 ms |
+| Codebase Context | 247,868 | 206,848 | 7,930 | 4,784 | 143,643 ms |
 
-The report separates setup, indexing, query, selector, evaluator, and row-wall timing from quality. It also reports candidate counts, candidate token estimates when available, prediction token estimates, and selector token telemetry fields.
+All values above are medians across three `gpt-5.4-mini-high` runs for the named task and tool. Cached input is included in input and must not be added to input again. Each column is aggregated independently. Codebase Context used fewer input tokens in both examples, but its median task time was slightly longer on fmt. This does not establish better answers or patches.
 
-`n/a` means the measurement was explicitly unavailable, not zero and not a hidden failure. Current gaps are:
+The prompt requested at most 12 shell or tool calls. The CLI did not hard-enforce that request. The result describes observed agent behavior, not universal or hard-call-controlled savings.
 
-- Selector wall-clock and provider token telemetry were not captured in this proof artifact.
-- `raw-native`, `codebase-context`, and `codebase-memory-mcp` emitted candidate counts but not candidate-pack bytes.
-- `codebase-context` readiness did not emit index/query duration in the source artifact.
+## What can be reproduced from the public repository
 
-### Bias Controls
-
-The generated `publishable-validation.json` must pass these checks before the report is treated as evidence:
-
-- Quality rows come only from the official ContextBench evaluator.
-- Failed or unscoreable rows stay out of the quality table.
-- All required lanes are scoreable.
-- Setup, index, and query costs are separate from quality.
-- Timing and token fields exist or carry explicit unavailable reasons.
-- The protocol is frozen and `claimAllowed` is `false`.
-- The task manifest attests that lane outputs were not observed during task selection.
-
-### What This Supports
-
-- It supports saying that the benchmark harness can produce real official ContextBench scores across five lanes.
-- It supports saying that setup/index/query cost and context/token cost are now tracked separately from quality.
-- It supports saying that the one-task pilot found a strong `codebase-context` result on this specific task.
-
-### What This Does Not Support
-
-- It does not support claiming that `codebase-context` beats competitors overall.
-- It does not support claiming patch correctness or productivity improvements.
-- It does not replace the full frozen 20-task, repeated-run benchmark required for claim-bearing results.
-
-## Discovery Benchmark
-
-This section documents the current public discovery proof from the checked-in result artifacts on `master`.
-It is a discovery benchmark, not an implementation-quality benchmark.
-
-## Discovery Scope
-
-- Frozen fixtures:
-  - `tests/fixtures/discovery-angular-spotify.json`
-  - `tests/fixtures/discovery-excalidraw.json`
-  - `tests/fixtures/discovery-benchmark-protocol.json`
-- Frozen repos used in the current proof run:
-  - `repos/angular-spotify`
-  - `repos/excalidraw`
-- Current gate artifact:
-  - `results/gate-evaluation.json`
-- Comparator evidence:
-  - `results/comparator-evidence.json`
-
-## Discovery Reproduction
-
-Run the repo-local proof artifacts from the current `master` checkout:
+The public repository snapshot at commit `cc54fb5` contains the [benchmark script](https://github.com/PatrickSys/codebase-context/blob/cc54fb5aee50ec177402e459b23be0fe8da7836e/scripts/contextbench-runner.mjs), [benchmark rules](https://github.com/PatrickSys/codebase-context/blob/cc54fb5aee50ec177402e459b23be0fe8da7836e/tests/fixtures/contextbench-benchmark-protocol.json), and [20-task manifest](https://github.com/PatrickSys/codebase-context/blob/cc54fb5aee50ec177402e459b23be0fe8da7836e/tests/fixtures/contextbench-task-manifest.json). Those links were reachable on October 5, 2026; earlier local-commit links were not. You can validate the checked-in fixtures with:
 
 ```bash
-node scripts/run-eval.mjs repos/angular-spotify --mode=discovery --fixture-a=tests/fixtures/discovery-angular-spotify.json --skip-reindex --output=results/codebase-context-angular-spotify.json
-node scripts/run-eval.mjs repos/excalidraw --mode=discovery --fixture-a=tests/fixtures/discovery-excalidraw.json --skip-reindex --output=results/codebase-context-excalidraw.json
-node scripts/benchmark-comparators.mjs --repos repos/angular-spotify,repos/excalidraw --output results/comparator-evidence.json
-node scripts/run-eval.mjs repos/angular-spotify repos/excalidraw --mode=discovery --fixture-a=tests/fixtures/discovery-angular-spotify.json --fixture-b=tests/fixtures/discovery-excalidraw.json --competitor-results=results/comparator-evidence.json --skip-reindex --output=results/gate-evaluation.json
+node scripts/contextbench-runner.mjs --validate-fixtures
 ```
 
-## Discovery Current Result
+They show the test structure and task format. They are not a byte-for-byte copy of every file used by the measured sessions; all three file hashes differ from the later 30-session pilot. The manifest names tasks and base commits but does not contain their full problem statements or gold-context values. The exact machine-specific raw run directories behind the 100-attempt retrieval table, the 300-attempt repeatability history, and the 30-session agent pilot are not checked into the public repository, so this checkout cannot regenerate the reported tables with one command. The [original schema-2 retrieval summary](../results/contextbench-engineering-note-summary.json) is preserved from local commit `18e0a43a90fe67e9df0d728b2134e9d430469883`; the [sanitized evidence extract](../results/benchmark-presentation-evidence.json) preserves the exact values and hashes used for this presentation. Fixture validation checks fixture consistency, not the reported measurements.
 
-From `results/gate-evaluation.json`:
+Local session artifacts retained outside this public checkout record Windows x64 with 16 logical CPUs, about 24 GiB of RAM, Node.js 24.14.1, Claude Code 2.1.173, and `gpt-5.4-mini-high` for the later agent pilot. Readers cannot independently inspect those environment files from this checkout. Exact version pins for all five tools in the retrieval families were not captured consistently enough to publish a trustworthy version matrix.
 
-- `status`: `pending_evidence`
-- `suiteStatus`: `complete`
-- `claimAllowed`: `false`
-- `totalTasks`: `24`
-- `averageUsefulness`: `0.75`
-- `averageEstimatedTokens`: `1827.0833`
-- `bestExampleUsefulnessRate`: `0.125`
+This makes the public evidence partially reproducible: the method and current fixtures are inspectable, while the exact reported runs are not independently replayable from this checkout alone. The tables should be read as a transparent engineering report, not a paper-grade reproduction package.
 
-Repo-level outputs from the same rerun:
+## Method and limits
 
-| Repo | Tasks | Avg usefulness | Avg estimated tokens | Best-example usefulness |
-| --- | ---: | ---: | ---: | ---: |
-| `angular-spotify` | 12 | 0.8333 | 2138.4167 | 0.25 |
-| `excalidraw` | 12 | 0.6667 | 1506.0833 | 0 |
+The retrieval percentages, precision values, and reported `peakPrivateGb` fields come from the corrected retrieval-only family. The repeated retrieval family is reported as completion and repeatability history rather than merged into that table. The full-agent pilot reports input, cached input, output, reasoning output, and task time for two frozen investigation tasks. The metered replay is retained as history only and excluded from effectiveness or token-saving claims while tool-use validity is unresolved.
 
-## Discovery Gate Truth
+A historical fresh isolated Codebase Context indexing observation with embeddings enabled used the Transformers provider and `Xenova/bge-small-en-v1.5`. Its median was about 12 minutes 31 seconds. This is a historical observation in methodology and limits, not a normal-use estimate or a cross-tool speed ranking.
 
-The gate is intentionally still blocked.
+That index observation does not describe normal warm use, incremental indexing, query latency, install time, or cross-tool index-speed ranking. Shared model-cache state, actual GPU use, the exact scan, analysis, embedding, and storage stage durations, and equivalent cold work across competitors were not established by that observation.
 
-- The combined suite covers both public repos.
-- `claimAllowed` remains `false` because comparator evidence still does not support a benchmark-win claim.
-- Two comparator artifacts now return `status: "ok"`, but that does not yet close the gate:
-  - `raw Claude Code` still leaves the baseline `pending_evidence` because `averageFirstRelevantHit` is `null`
-  - `codebase-memory-mcp` now has real current metrics, but the gate still marks it `failed` on the frozen tolerance rule
-- Three comparator lanes still fail setup entirely: `GrepAI`, `jCodeMunch`, and `CodeGraphContext`.
+The benchmark does not measure patch correctness, end-to-end task completion, or a universal token or time result. It also does not combine the four evidence families into a pooled score. Setup and run failures remain part of the record so that incomplete attempts are visible.
 
-## Discovery Comparator Reality
+Historical note: the [earlier public report archive](./benchmark-prior-public-report.md) contains a one-task official pilot and a separate 24-task discovery report. Those records and their comparator statuses remain separate, are not folded into this current four-family summary, and retain their claim gates.
 
-The current comparator artifact records incomplete comparator evidence, not benchmark wins.
-
-| Comparator | Status | Current reason |
-| --- | --- | --- |
-| `codebase-memory-mcp` | comparator artifact: `ok`; gate: `failed` | Runs through the repaired graph-backed path and now records real metrics (`averageUsefulness: 0.1875`, `averageFirstRelevantHit: 1.2857`, `bestExampleUsefulnessRate: 0.5`), but the frozen gate still fails it on the required usefulness comparisons |
-| `jCodeMunch` | `setup_failed` | `MCP error -32000: Connection closed` |
-| `GrepAI` | `setup_failed` | Local Go binary and Ollama model path not present |
-| `CodeGraphContext` | `setup_failed` | `MCP error -32000: Connection closed` |
-| `raw Claude Code` | comparator artifact: `ok`; gate: `pending_evidence` | The explicit Haiku CLI runner now returns current metrics (`averageUsefulness: 0.0278`, `averageEstimatedTokens: 32.1667`), but the baseline still lacks `averageFirstRelevantHit`, so the gate keeps this lane as missing evidence |
-
-`CodeGraphContext` remains part of the frozen comparison frame. It is not omitted from the public story just because the lane still fails to start.
-
-## Discovery Important Limitations
-
-- This benchmark measures discovery usefulness and payload cost only.
-- It does not measure implementation correctness, patch quality, or end-to-end task completion.
-- Comparator setup remains environment-sensitive, and the checked-in comparator outputs still do not satisfy the frozen claim gate.
-- The reranker cache is currently corrupted on this machine. During the proof rerun, search fell back to original ordering after `Protobuf parsing failed` while still completing the harness.
-- `averageFirstRelevantHit` remains `null` in the current gate output, which is enough to keep the raw-Claude baseline in `pending_evidence`.
-
-## Discovery Claims Supported
-
-- It can support claims about the shipped discovery surfaces and their current measured outputs on the frozen public tasks.
-- It can support claims that the proof gate is still blocked by comparator evidence.
-- It cannot support claims that `codebase-context` beats the named comparators today.
-- It cannot support claims about edit success, code quality, or implementation speed.
+See the [comparison table](./comparison-table.md) for the retrieval family in a compact form. The repository walkthrough is in the [demo](./demo.md).

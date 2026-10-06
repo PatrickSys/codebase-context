@@ -73,18 +73,21 @@ describe('templates/mcp/http/.mcp.json', () => {
 });
 
 // ---------------------------------------------------------------------------
-// README references templates and all four target clients
+// README links the shipped guide for advanced templates and covers target clients
 // ---------------------------------------------------------------------------
 
 describe('README.md client setup documentation', () => {
   const readme = readText('README.md');
+  const clientSetup = readText('docs/client-setup.md');
 
   it('references the stdio template path', () => {
-    expect(readme).toContain('templates/mcp/stdio/.mcp.json');
+    expect(readme).toContain('./docs/client-setup.md');
+    expect(clientSetup).toContain('templates/mcp/stdio/.mcp.json');
   });
 
   it('references the HTTP template path', () => {
-    expect(readme).toContain('templates/mcp/http/.mcp.json');
+    expect(readme).toContain('./docs/client-setup.md');
+    expect(clientSetup).toContain('templates/mcp/http/.mcp.json');
   });
 
   it('mentions Claude Code', () => {
@@ -103,8 +106,11 @@ describe('README.md client setup documentation', () => {
     expect(readme).toContain('Windsurf');
   });
 
-  it('includes the HTTP endpoint URL', () => {
-    expect(readme).toContain('127.0.0.1:3100/mcp');
+  it('links the advanced HTTP endpoint without making it the default setup', () => {
+    expect(readme).toContain('./docs/client-setup.md');
+    expect(readme).toContain('stdio');
+    expect(clientSetup).toContain('127.0.0.1:3100/mcp');
+    expect(clientSetup).toContain('not part of the default setup proof');
   });
 });
 
@@ -128,15 +134,21 @@ describe('docs/capabilities.md transport documentation', () => {
   });
 
   it('covers all four target clients', () => {
-    expect(caps).toContain('Claude Code');
-    expect(caps).toContain('Cursor');
-    expect(caps).toContain('Codex');
-    expect(caps).toContain('Windsurf');
+    expect(caps).toContain('./client-setup.md');
+    const clientSetup = readText('docs/client-setup.md');
+    for (const client of ['Claude Code', 'Cursor', 'Codex', 'Windsurf']) {
+      expect(clientSetup).toContain(client);
+    }
   });
 
-  it('states the roots-first routing fallback explicitly', () => {
-    expect(caps).toContain('roots-capable hosts');
-    expect(caps).toContain('explicit fallback is still required');
+  it('states explicit selection as the portable default and scopes compatibility behavior', () => {
+    expect(caps).toContain('portable default is explicit selection');
+    expect(caps).toContain('absolute path as `project`');
+    expect(caps).toContain('server returns `selection_required` instead of guessing');
+    expect(caps).toContain('Roots are not required for the documented setup');
+    expect(caps).toContain(
+      'does not establish native agent continuation or concurrent HTTP isolation'
+    );
   });
 });
 
@@ -144,16 +156,27 @@ describe('docs/client-setup.md multi-project guidance', () => {
   const clientSetup = readText('docs/client-setup.md');
 
   it('documents the project routing contract', () => {
+    expect(clientSetup).toContain("current repository's absolute path as `project`");
     expect(clientSetup).toContain(
-      'Automatic multi-project routing is evidence-backed only when the MCP host announces workspace roots.'
+      'Without a configured folder, known root or explicit selection, tools return `selection_required`'
     );
+    expect(clientSetup).toContain("They do not guess or index the user's home directory");
+    expect(clientSetup).toContain('One valid root can auto-select');
     expect(clientSetup).toContain(
-      'the server returns `selection_required` instead of guessing'
+      'several roots with no active selection return `selection_required`'
     );
+    expect(clientSetup).toContain('Explicit selectors must stay within announced roots');
   });
 
-  it('keeps the three verification flows aligned with the roots-first contract', () => {
-    expect(clientSetup).toContain('Multiple projects on a roots-capable host');
-    expect(clientSetup).toContain('Ambiguous or no-roots selection');
+  it('separates process-local routing proof from native and HTTP acceptance', () => {
+    expect(clientSetup).toContain('A to B to A in one no-roots stdio process');
+    expect(clientSetup).toContain('CBC routes omitted-project calls using its selected project');
+    expect(clientSetup).toContain(
+      'Select again after a server restart or when changing repositories'
+    );
+    expect(clientSetup).toContain('native retrieval and continuation did not pass');
+    expect(clientSetup).toContain(
+      'stdio process-local selection does not establish concurrent HTTP isolation'
+    );
   });
 });

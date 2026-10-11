@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import Fuse from 'fuse.js';
 import type { CodeChunk, SearchFilters } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
+import { IndexCorruptedError } from '../src/errors/index.js';
+import { assessSearchQuality } from '../src/core/search-quality.js';
+import { GenericAnalyzer } from '../src/analyzers/generic/index.js';
+import { InternalFileGraph } from '../src/utils/usage-tracker.js';
+import {
+  InternalSourceResolver,
+  loadTsconfigCompilerOptions
+} from '../src/utils/internal-source-resolver.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  INTELLIGENCE_FILENAME
+} from '../src/constants/codebase-context.js';
 import { asSearcherTestHarness, materializeSourceSnapshot } from './helpers/source-snapshot.js';
 
 function chunk(filePath: string, content: string, symbolName?: string): CodeChunk {
@@ -23,12 +38,13 @@ function chunk(filePath: string, content: string, symbolName?: string): CodeChun
   };
 }
 
-async function searchFixture(chunks: CodeChunk[]) {
+async function searchFixture(chunks: CodeChunk[], withImportGraph = false) {
   const snapshot = await materializeSourceSnapshot(chunks, 'cbc-model-free-query-');
   const searcher = new CodebaseSearcher(snapshot.rootPath);
-  const harness = asSearcherTestHarness(searcher) as ReturnType<
-    typeof asSearcherTestHarness
-  > & { chunks: CodeChunk[] };
+  const harness = asSearcherTestHarness(searcher) as ReturnType<typeof asSearcherTestHarness> & {
+    chunks: CodeChunk[];
+    loadPatternIntelligence: () => Promise<void>;
+  };
   harness.initialized = true;
   harness.sourceManifest = snapshot.manifest;
   harness.chunks = chunks;
@@ -49,6 +65,43 @@ async function searchFixture(chunks: CodeChunk[]) {
     useExtendedSearch: true,
     ignoreLocation: true
   });
+  // Use the same analyzer, resolver and graph serializer as indexing. Text in
+  // comments/strings and unproven chunk.imports must not become graph edges.
+  const graph = new InternalFileGraph(snapshot.rootPath);
+  const reloadGraph = async (data: ReturnType<InternalFileGraph['toJSON']>) => {
+    await fs.writeFile(
+      path.join(snapshot.rootPath, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
+      JSON.stringify({ internalFileGraph: data })
+    );
+    await harness.loadPatternIntelligence();
+  };
+  if (withImportGraph) {
+    const files = [...new Set(chunks.map((item) => item.filePath))];
+    const resolver = await InternalSourceResolver.create(snapshot.rootPath, files, {
+      compilerOptions: {
+        ...loadTsconfigCompilerOptions(snapshot.rootPath),
+        resolveJsonModule: true
+      }
+    });
+    const analyzer = new GenericAnalyzer();
+    for (const file of files.filter((file) => file.endsWith('.ts'))) {
+      const content = await fs.readFile(file, 'utf8');
+      const analysis = await analyzer.analyze(file, content);
+      for (const imported of analysis.imports) {
+        const target = await resolver.resolve(file, imported.source);
+        if (target.status !== 'resolved' || !target.path) continue;
+        graph.trackImport(file, target.path, imported.line, imported.imports, {
+          kind: 'import',
+          specifier: imported.source,
+          sourceFingerprint: createHash('sha256').update(content).digest('hex'),
+          targetFingerprint: createHash('sha256')
+            .update(await fs.readFile(target.path))
+            .digest('hex')
+        });
+      }
+    }
+    await reloadGraph(graph.toJSON());
+  }
   const search = (query: string, filters?: SearchFilters) =>
     searcher.search(query, 5, filters, {
       useSemanticSearch: false,
@@ -56,19 +109,22 @@ async function searchFixture(chunks: CodeChunk[]) {
       enableLowConfidenceRescue: false,
       enableReranker: false
     });
-  return { search, cleanup: snapshot.cleanup };
+  return { search, graph: graph.toJSON(), reloadGraph, cleanup: snapshot.cleanup };
 }
 
 describe('model-free query fallback', () => {
   it('recovers separate source and policy files without requiring a manually written OR query', async () => {
-    const fixture = await searchFixture([
-      chunk(
-        'src/target.ts',
-        'import { REQUIRED_POLICY } from "./policy.js";\nexport function resolvePilotPolicy(kind: string) { return kind + REQUIRED_POLICY; }',
-        'resolvePilotPolicy'
-      ),
-      chunk('src/policy.ts', 'export const REQUIRED_POLICY = "review-before-deploy";')
-    ]);
+    const fixture = await searchFixture(
+      [
+        chunk(
+          'src/target.ts',
+          'import { REQUIRED_POLICY } from "./policy.js";\nexport function resolvePilotPolicy(kind: string) { return kind + REQUIRED_POLICY; }',
+          'resolvePilotPolicy'
+        ),
+        chunk('src/policy.ts', 'export const REQUIRED_POLICY = "review-before-deploy";')
+      ],
+      true
+    );
     try {
       const results = await fixture.search('resolvePilotPolicy review-before-deploy');
       expect(results.map((result) => result.filePath.split(/[\\/]/).pop())).toEqual(
@@ -91,13 +147,22 @@ describe('model-free query fallback', () => {
         'findClosestMatches'
       ),
       chunk('packages/nx/src/utils/worker-limit.ts', 'export const workerLimit = 100;'),
-      chunk('packages/nx/src/utils/catalog-helper.ts', 'export function formatSuggestions() { return "suggestions"; }')
+      chunk(
+        'packages/nx/src/utils/catalog-helper.ts',
+        'export function formatSuggestions() { return "suggestions"; }'
+      )
     ]);
     try {
       const results = await fixture.search(
         'Why do negative limits still yield multiple Nx typo suggestions?'
       );
       expect(results[0]?.filePath).toContain('string-similarity.ts');
+      expect(
+        assessSearchQuality(
+          'Why do negative limits still yield multiple Nx typo suggestions?',
+          results
+        ).status
+      ).toBe('low_confidence');
     } finally {
       await fixture.cleanup();
     }
@@ -105,7 +170,11 @@ describe('model-free query fallback', () => {
 
   it('does not manufacture matches from irrelevant text or weaken exact symbol search', async () => {
     const fixture = await searchFixture([
-      chunk('src/session.ts', 'export function authenticateUser() { return "token"; }', 'authenticateUser'),
+      chunk(
+        'src/session.ts',
+        'export function authenticateUser() { return "token"; }',
+        'authenticateUser'
+      ),
       chunk('src/policy.ts', 'export const SESSION_POLICY = "login-required";')
     ]);
     try {
@@ -124,9 +193,7 @@ describe('model-free query fallback', () => {
     ]);
     try {
       expect(await fixture.search('hydroponics transcendence')).toEqual([]);
-      expect(await fixture.search('hydroponics transcendence', { language: 'python' })).toEqual(
-        []
-      );
+      expect(await fixture.search('hydroponics transcendence', { language: 'python' })).toEqual([]);
     } finally {
       await fixture.cleanup();
     }
@@ -163,12 +230,16 @@ describe('model-free query fallback', () => {
 
   it('rejects an exact symbol when all the other substantive query terms are unsupported', async () => {
     const fixture = await searchFixture([
-      chunk('src/auth.ts', 'export function authenticateUser() { return true; }', 'authenticateUser')
+      chunk(
+        'src/auth.ts',
+        'export function authenticateUser() { return true; }',
+        'authenticateUser'
+      )
     ]);
     try {
-      expect(
-        await fixture.search('authenticateUser holographic pineapple zebra quantum')
-      ).toEqual([]);
+      expect(await fixture.search('authenticateUser holographic pineapple zebra quantum')).toEqual(
+        []
+      );
       expect((await fixture.search('authenticateUser'))[0]?.filePath).toContain('auth.ts');
     } finally {
       await fixture.cleanup();
@@ -177,18 +248,168 @@ describe('model-free query fallback', () => {
 
   it('does not corroborate an exact symbol using evidence from an unrelated file', async () => {
     const fixture = await searchFixture([
-      chunk('src/auth.ts', 'export function authenticateUser() { return true; }', 'authenticateUser'),
+      chunk(
+        'src/auth.ts',
+        'export function authenticateUser() { return true; }',
+        'authenticateUser'
+      ),
       chunk('src/billing.ts', 'export const billing = { invoice: "paid", refund: "pending" };')
     ]);
     try {
       const matches = await fixture.search('authenticateUser billing invoice refund');
-      expect(matches.map((result) => result.filePath.split(/[\\/]/).pop())).toEqual([
-        'billing.ts'
-      ]);
+      expect(matches.map((result) => result.filePath.split(/[\\/]/).pop())).toEqual(['billing.ts']);
     } finally {
       await fixture.cleanup();
     }
   });
+
+  it.each([
+    '// import "./billing.js";',
+    '/* import "./billing.js"; */',
+    'const example = \'import "./billing.js";\';',
+    'const example = `import "./billing.js";`;',
+    'const example = \'import("./billing.js")\';',
+    'const example = \'require("./billing.js")\';',
+    'const example = \'from "./billing.js"\';'
+  ])('does not use fake import text as cross-file evidence: %s', async (fakeImport) => {
+    const auth = chunk(
+      'src/auth.ts',
+      `${fakeImport}\nexport function authenticateUser() { return true; }`,
+      'authenticateUser'
+    );
+    auth.imports = ['./billing.js']; // Raw chunk metadata has no source proof either.
+    const fixture = await searchFixture(
+      [
+        auth,
+        chunk('src/billing.ts', 'export const billing = { invoice: "paid", refund: "pending" };')
+      ],
+      true
+    );
+    try {
+      expect(fixture.graph.imports['src/auth.ts'] ?? []).toEqual([]);
+      const matches = await fixture.search('authenticateUser billing invoice refund');
+      expect(matches.map((result) => path.basename(result.filePath))).toEqual(['billing.ts']);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it('fails closed when a genuine import has no indexed graph proof', async () => {
+    const fixture = await searchFixture([
+      chunk(
+        'src/auth.ts',
+        'import "./billing.js";\nexport function authenticateUser() { return true; }',
+        'authenticateUser'
+      ),
+      chunk('src/billing.ts', 'export const billing = { invoice: "paid", refund: "pending" };')
+    ]);
+    try {
+      const matches = await fixture.search('authenticateUser billing invoice refund');
+      expect(matches.map((result) => path.basename(result.filePath))).toEqual(['billing.ts']);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it.each(['legacy', 'sourceFingerprint', 'targetFingerprint'] as const)(
+    'fails closed for %s graph proof',
+    async (invalidProof) => {
+      const fixture = await searchFixture(
+        [
+          chunk(
+            'src/auth.ts',
+            'import "./billing.js";\nexport function authenticateUser() { return true; }',
+            'authenticateUser'
+          ),
+          chunk('src/billing.ts', 'export const billing = { invoice: "paid", refund: "pending" };')
+        ],
+        true
+      );
+      try {
+        const detail = fixture.graph.importDetails!['src/auth.ts']['src/billing.ts'];
+        expect(detail.sources).toHaveLength(1);
+        if (invalidProof === 'legacy') delete detail.sources;
+        else detail.sources![0][invalidProof] = '0'.repeat(64);
+        await fixture.reloadGraph(fixture.graph);
+        const matches = await fixture.search('authenticateUser billing invoice refund');
+        expect(matches.map((result) => path.basename(result.filePath))).toEqual(['billing.ts']);
+      } finally {
+        await fixture.cleanup();
+      }
+    }
+  );
+
+  it('does not conflate a resolved JSON import with a same-stem TypeScript file', async () => {
+    const json = chunk('src/billing.json', '{}');
+    json.language = 'json';
+    const fixture = await searchFixture(
+      [
+        chunk(
+          'src/auth.ts',
+          'import "./billing.json";\nexport function authenticateUser() { return true; }',
+          'authenticateUser'
+        ),
+        json,
+        chunk('src/billing.ts', 'export const billing = { invoice: "paid", refund: "pending" };')
+      ],
+      true
+    );
+    try {
+      expect(fixture.graph.imports['src/auth.ts']).toEqual(['src/billing.json']);
+      const matches = await fixture.search('authenticateUser billing invoice refund', {
+        language: 'typescript'
+      });
+      expect(matches.map((result) => path.basename(result.filePath))).toEqual(['billing.ts']);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it('rejects a graph witness whose current source no longer matches its indexed snapshot', async () => {
+    const auth = chunk(
+      'src/auth.ts',
+      'import "./billing.js";\nexport function authenticateUser() { return true; }',
+      'authenticateUser'
+    );
+    const billing = chunk(
+      'src/billing.ts',
+      'export const billing = { invoice: "paid", refund: "pending" };'
+    );
+    const fixture = await searchFixture([auth, billing], true);
+    try {
+      await fs.writeFile(billing.filePath, 'export const unrelated = true;');
+      await expect(fixture.search('authenticateUser billing invoice refund')).rejects.toBeInstanceOf(
+        IndexCorruptedError
+      );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it.skipIf(process.platform !== 'linux')(
+    'keeps case-distinct indexed import targets separate',
+    async () => {
+      const fixture = await searchFixture(
+        [
+          chunk(
+            'src/auth.ts',
+            'import "./Billing.js";\nexport function authenticateUser() { return true; }',
+            'authenticateUser'
+          ),
+          chunk('src/Billing.ts', 'export const unrelated = true;'),
+          chunk('src/billing.ts', 'export const billing = { invoice: "paid", refund: "pending" };')
+        ],
+        true
+      );
+      try {
+        expect(fixture.graph.imports['src/auth.ts']).toEqual(['src/Billing.ts']);
+        const matches = await fixture.search('authenticateUser billing invoice refund');
+        expect(matches.map((result) => path.basename(result.filePath))).toEqual(['billing.ts']);
+      } finally {
+        await fixture.cleanup();
+      }
+    }
+  );
 
   it('does not turn generic TypeScript syntax words into a confident match', async () => {
     const fixture = await searchFixture([
@@ -202,7 +423,7 @@ describe('model-free query fallback', () => {
   });
 
   it('applies a language filter before the bounded rescue-candidate cutoff', async () => {
-    const decoys = Array.from({ length: 1050 }, (_, index) => {
+    const decoys = Array.from({ length: 1051 }, (_, index) => {
       const item = chunk(`src/noise-${index}.py`, 'system error algorithm');
       item.language = 'python';
       return item;

@@ -16,6 +16,7 @@ import { rerank } from './reranker.js';
 import { type IndexMeta, readIndexMeta, validateIndexArtifacts } from './index-meta.js';
 import { hashFileContent, readManifest, type FileManifest } from './manifest.js';
 import { isPathWithin } from '../utils/project-discovery.js';
+import type { ImportEdgeDetail } from '../utils/usage-tracker.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -173,6 +174,7 @@ export class CodebaseSearcher {
   } | null = null;
 
   private importCentrality: Map<string, number> | null = null;
+  private indexedImports = new Map<string, Set<string>>();
 
   constructor(rootPath: string) {
     this.rootPath = rootPath;
@@ -343,6 +345,7 @@ export class CodebaseSearcher {
    * Load pattern intelligence for trend detection and warnings
    */
   private async loadPatternIntelligence(): Promise<void> {
+    this.indexedImports.clear();
     try {
       const intelligencePath = path.join(
         this.rootPath,
@@ -393,12 +396,38 @@ export class CodebaseSearcher {
         // Count how many files import each file (in-degree centrality)
         const importCounts = new Map<string, number>();
 
-        for (const [_importingFile, importedFiles] of Object.entries(
+        const details = intelligence.internalFileGraph.importDetails as
+          | Record<string, Record<string, ImportEdgeDetail>>
+          | undefined;
+        for (const [importingFile, importedFiles] of Object.entries(
           intelligence.internalFileGraph.imports
         )) {
           const imports = importedFiles as string[];
           for (const imported of imports) {
             importCounts.set(imported, (importCounts.get(imported) || 0) + 1);
+            const sources = details?.[importingFile]?.[imported]?.sources;
+            // Only resolved imports bound to this indexed source snapshot can
+            // corroborate another file. Legacy adjacency alone is not proof.
+            const sourceHash = this.sourceManifest?.files[importingFile];
+            const targetHash = this.sourceManifest?.files[imported];
+            if (!sourceHash || !targetHash || !Array.isArray(sources)) continue;
+            if (
+              !sources.some(
+                (source) =>
+                  source.kind === 'import' &&
+                  source.line > 0 &&
+                  !!source.specifier &&
+                  /^[a-f0-9]{64}$/.test(source.sourceFingerprint) &&
+                  /^[a-f0-9]{64}$/.test(source.targetFingerprint) &&
+                  source.sourceFingerprint.slice(0, 16) === sourceHash &&
+                  source.targetFingerprint.slice(0, 16) === targetHash
+              )
+            )
+              continue;
+            const key = this.indexedFileKey(importingFile);
+            const targets = this.indexedImports.get(key) ?? new Set<string>();
+            targets.add(this.indexedFileKey(imported));
+            this.indexedImports.set(key, targets);
           }
         }
 
@@ -419,6 +448,7 @@ export class CodebaseSearcher {
       );
       this.patternIntelligence = null;
       this.importCentrality = null;
+      this.indexedImports.clear();
     }
   }
 
@@ -496,29 +526,9 @@ export class CodebaseSearcher {
     return true;
   }
 
-  private hasDirectIndexedImport(fromFile: string, toFile: string): boolean {
-    const source = path.resolve(fromFile).toLowerCase();
-    const withoutExtension = (file: string) =>
-      path.join(path.dirname(file), path.parse(file).name).toLowerCase();
-    const destination = withoutExtension(path.resolve(toFile));
-    for (const chunk of this.chunks) {
-      if (path.resolve(chunk.filePath).toLowerCase() !== source) continue;
-      const specifiers = [
-        ...(chunk.imports ?? []),
-        ...Array.from(
-          chunk.content.matchAll(
-            /\b(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"]+)['"]/g
-          ),
-          (match) => match[1]
-        )
-      ];
-      for (const specifier of specifiers) {
-        if (!specifier.startsWith('.')) continue;
-        const imported = path.resolve(path.dirname(fromFile), specifier);
-        if (withoutExtension(imported) === destination) return true;
-      }
-    }
-    return false;
+  private indexedFileKey(file: string): string {
+    const absolute = path.resolve(this.rootPath, file).replace(/\\/g, '/');
+    return process.platform === 'win32' ? absolute.toLowerCase() : absolute;
   }
 
   /**
@@ -526,22 +536,18 @@ export class CodebaseSearcher {
    * nothing, cautiously rescue chunks with multiple distinct lexical clues.
    * This is a bounded fallback, not a rewrite of the primary precision policy.
    */
-  private rescueKeywordMatches(
+  private async rescueKeywordMatches(
     query: string,
     limit: number,
     filters?: SearchFilters
-  ): FuseResult<CodeChunk>[] {
+  ): Promise<FuseResult<CodeChunk>[]> {
     if (!this.fuseIndex || /[|^$!=]/.test(query)) return [];
 
     const terms = Array.from(
       new Set(
         this.normalizeQueryTerms(query)
           .map((term) => this.normalizeLexicalTerm(term))
-          .filter(
-            (term) =>
-              term.length >= 4 &&
-              !NON_DISCRIMINATIVE_FALLBACK_TERMS.has(term)
-          )
+          .filter((term) => term.length >= 4 && !NON_DISCRIMINATIVE_FALLBACK_TERMS.has(term))
       )
     ).slice(0, 12);
     if (terms.length < 2) return [];
@@ -570,8 +576,8 @@ export class CodebaseSearcher {
         path.basename(item.relativePath)
       ].join(' ');
       const lexemes = new Set(
-        (text.replace(/([a-z\d])([A-Z])/g, '$1 $2').match(/[a-zA-Z0-9_]+/g) ?? []).map(
-          (word) => this.normalizeLexicalTerm(word)
+        (text.replace(/([a-z\d])([A-Z])/g, '$1 $2').match(/[a-zA-Z0-9_]+/g) ?? []).map((word) =>
+          this.normalizeLexicalTerm(word)
         )
       );
       const matching = new Set(terms.filter((term) => lexemes.has(term)));
@@ -579,12 +585,40 @@ export class CodebaseSearcher {
       return { result, matching, exactAnchor };
     });
 
-    const supportedCompanions = evidence.filter(({ matching }) => matching.size >= 2);
+    const supportedCompanions = new Map(
+      evidence
+        .filter(({ matching }) => matching.size >= 2)
+        .map(({ result }) => [this.indexedFileKey(result.item.filePath), result.item] as const)
+    );
+    const anchors = new Map(
+      evidence
+        .filter(({ exactAnchor }) => exactAnchor)
+        .map(({ result }) => [this.indexedFileKey(result.item.filePath), result.item] as const)
+    );
+    const corroboratedFiles = new Set<string>();
+    const corroboratingSources = new Map<string, CodeChunk>();
+    // Each candidate file's indexed adjacency is visited once; never rescan
+    // all chunks for every anchor/companion pair or guess import extensions.
+    for (const [key, anchor] of anchors) {
+      for (const target of this.indexedImports.get(key) ?? []) {
+        const companion = supportedCompanions.get(target);
+        if (!companion || target === key) continue;
+        corroboratedFiles.add(key);
+        corroboratingSources.set(key, anchor);
+        corroboratingSources.set(target, companion);
+        break;
+      }
+    }
+    // Validate both endpoints even if the companion falls outside the result
+    // limit. A stale witness cannot lend confidence to a current anchor.
+    if (corroboratingSources.size > 0) {
+      await this.validateCandidateSources(corroboratingSources.values(), new Map());
+    }
 
     // A relevant file may have distinct terms in separate symbol-aligned chunks.
     const fileEvidence = new Map<string, Set<string>>();
     for (const { result, matching } of evidence) {
-      const key = result.item.filePath.toLowerCase().replace(/\\/g, '/');
+      const key = this.indexedFileKey(result.item.filePath);
       const termsForFile = fileEvidence.get(key) ?? new Set<string>();
       for (const term of matching) termsForFile.add(term);
       fileEvidence.set(key, termsForFile);
@@ -592,19 +626,16 @@ export class CodebaseSearcher {
 
     const seenFiles = new Set<string>();
     return evidence
-      .filter(({ result, matching, exactAnchor }) => {
-        const key = result.item.filePath.toLowerCase().replace(/\\/g, '/');
-        const corroboratedAnchor =
-          exactAnchor &&
-          (matching.size >= 1 ||
-            supportedCompanions.some(({ result: other }) =>
-              this.hasDirectIndexedImport(result.item.filePath, other.item.filePath)
-            ));
+      .filter(({ result, exactAnchor }) => {
+        const key = this.indexedFileKey(result.item.filePath);
+        // One local word (including an import-looking comment/string) is not
+        // enough to make an exact symbol satisfy an otherwise unrelated query.
+        const corroboratedAnchor = exactAnchor && corroboratedFiles.has(key);
         return corroboratedAnchor || (fileEvidence.get(key)?.size ?? 0) >= 2;
       })
       .sort((a, b) => {
-        const keyA = a.result.item.filePath.toLowerCase().replace(/\\/g, '/');
-        const keyB = b.result.item.filePath.toLowerCase().replace(/\\/g, '/');
+        const keyA = this.indexedFileKey(a.result.item.filePath);
+        const keyB = this.indexedFileKey(b.result.item.filePath);
         const score = (e: typeof a, key: string) =>
           (fileEvidence.get(key)?.size ?? 0) * 8 +
           e.matching.size * 3 +
@@ -614,7 +645,7 @@ export class CodebaseSearcher {
         return score(b, keyB) - score(a, keyA);
       })
       .filter(({ result }) => {
-        const key = result.item.filePath.toLowerCase().replace(/\\/g, '/');
+        const key = this.indexedFileKey(result.item.filePath);
         if (seenFiles.has(key)) return false;
         seenFiles.add(key);
         return true;
@@ -1151,6 +1182,9 @@ export class CodebaseSearcher {
           });
         }
       } catch (error) {
+        if (error instanceof IndexCorruptedError) {
+          throw error; // Preserve the caller's existing auto-heal path
+        }
         console.warn('Keyword search failed:', error);
       }
     }
@@ -1400,7 +1434,7 @@ export class CodebaseSearcher {
     }
 
     if (fuseResults.length === 0) {
-      fuseResults = this.rescueKeywordMatches(query, limit, filters);
+      fuseResults = await this.rescueKeywordMatches(query, limit, filters);
     }
 
     return fuseResults.slice(0, limit).map((r) => {

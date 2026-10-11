@@ -2,7 +2,7 @@
  * Hybrid search combining semantic vector search with keyword matching
  */
 
-import Fuse from 'fuse.js';
+import Fuse, { type FuseResult, type IFuseOptions } from 'fuse.js';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { CodeChunk, SearchResult, SearchFilters, IntelligenceData } from '../types/index.js';
@@ -110,6 +110,45 @@ const QUERY_STOP_WORDS = new Set([
   'after',
   'before'
 ]);
+
+// Syntax and question scaffolding are poor evidence when strict keyword
+// retrieval has already failed. Do not let boilerplate make a fallback look
+// like an independently supported source match.
+const NON_DISCRIMINATIVE_FALLBACK_TERMS = new Set([
+  'class',
+  'code',
+  'const',
+  'does',
+  'export',
+  'file',
+  'function',
+  'import',
+  'return',
+  'something',
+  'still',
+  'thing',
+  'value',
+  'what',
+  'when',
+  'where',
+  'why'
+]);
+
+const KEYWORD_FUSE_OPTIONS: IFuseOptions<CodeChunk> = {
+  keys: [
+    { name: 'content', weight: 0.4 },
+    { name: 'metadata.componentName', weight: 0.25 },
+    { name: 'filePath', weight: 0.15 },
+    { name: 'relativePath', weight: 0.15 },
+    { name: 'componentType', weight: 0.15 },
+    { name: 'layer', weight: 0.1 },
+    { name: 'tags', weight: 0.15 }
+  ],
+  includeScore: true,
+  threshold: 0.4,
+  useExtendedSearch: true,
+  ignoreLocation: true
+};
 
 export class CodebaseSearcher {
   private rootPath: string;
@@ -289,21 +328,7 @@ export class CodebaseSearcher {
 
       this.chunks = chunks;
 
-      this.fuseIndex = new Fuse(this.chunks, {
-        keys: [
-          { name: 'content', weight: 0.4 },
-          { name: 'metadata.componentName', weight: 0.25 },
-          { name: 'filePath', weight: 0.15 },
-          { name: 'relativePath', weight: 0.15 },
-          { name: 'componentType', weight: 0.15 },
-          { name: 'layer', weight: 0.1 },
-          { name: 'tags', weight: 0.15 }
-        ],
-        includeScore: true,
-        threshold: 0.4,
-        useExtendedSearch: true,
-        ignoreLocation: true
-      });
+      this.fuseIndex = new Fuse(this.chunks, KEYWORD_FUSE_OPTIONS);
     } catch (error) {
       if (error instanceof IndexCorruptedError) {
         throw error;
@@ -446,6 +471,156 @@ export class CodebaseSearcher {
       .toLowerCase()
       .split(/[^a-z0-9_]+/)
       .filter((term) => term.length > 2 && !QUERY_STOP_WORDS.has(term));
+  }
+
+  private normalizeLexicalTerm(term: string): string {
+    const lower = term.toLowerCase();
+    if (lower.length > 5 && lower.endsWith('ies')) {
+      return `${lower.slice(0, -3)}y`;
+    }
+    if (lower.length > 4 && lower.endsWith('s') && !/(ss|us)$/.test(lower)) {
+      return lower.slice(0, -1);
+    }
+    return lower;
+  }
+
+  private matchesSearchFilters(chunk: CodeChunk, filters?: SearchFilters): boolean {
+    if (!filters) return true;
+    if (filters.componentType && chunk.componentType !== filters.componentType) return false;
+    if (filters.layer && chunk.layer !== filters.layer) return false;
+    if (filters.framework && chunk.framework !== filters.framework) return false;
+    if (filters.language && chunk.language !== filters.language) return false;
+    if (filters.tags?.length && !filters.tags.some((tag) => chunk.tags?.includes(tag))) {
+      return false;
+    }
+    return true;
+  }
+
+  private hasDirectIndexedImport(fromFile: string, toFile: string): boolean {
+    const source = path.resolve(fromFile).toLowerCase();
+    const withoutExtension = (file: string) =>
+      path.join(path.dirname(file), path.parse(file).name).toLowerCase();
+    const destination = withoutExtension(path.resolve(toFile));
+    for (const chunk of this.chunks) {
+      if (path.resolve(chunk.filePath).toLowerCase() !== source) continue;
+      const specifiers = [
+        ...(chunk.imports ?? []),
+        ...Array.from(
+          chunk.content.matchAll(
+            /\b(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"]+)['"]/g
+          ),
+          (match) => match[1]
+        )
+      ];
+      for (const specifier of specifiers) {
+        if (!specifier.startsWith('.')) continue;
+        const imported = path.resolve(path.dirname(fromFile), specifier);
+        if (withoutExtension(imported) === destination) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Extended Fuse queries treat spaces as AND within one chunk. If that returns
+   * nothing, cautiously rescue chunks with multiple distinct lexical clues.
+   * This is a bounded fallback, not a rewrite of the primary precision policy.
+   */
+  private rescueKeywordMatches(
+    query: string,
+    limit: number,
+    filters?: SearchFilters
+  ): FuseResult<CodeChunk>[] {
+    if (!this.fuseIndex || /[|^$!=]/.test(query)) return [];
+
+    const terms = Array.from(
+      new Set(
+        this.normalizeQueryTerms(query)
+          .map((term) => this.normalizeLexicalTerm(term))
+          .filter(
+            (term) =>
+              term.length >= 4 &&
+              !NON_DISCRIMINATIVE_FALLBACK_TERMS.has(term)
+          )
+      )
+    ).slice(0, 12);
+    if (terms.length < 2) return [];
+
+    const symbolAnchors = (query.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) ?? [])
+      .filter((term) => /[a-z][A-Z]/.test(term) && term.length >= 8)
+      .map((term) => term.toLowerCase());
+
+    const candidateLimit = Math.min(750, Math.max(256, limit * 80));
+    // A candidate cap must not discard the only matching language/framework.
+    // Reuse exactly the production Fuse options on the filtered subset.
+    const constrainedIndex = filters
+      ? new Fuse(
+          this.chunks.filter((chunk) => this.matchesSearchFilters(chunk, filters)),
+          KEYWORD_FUSE_OPTIONS
+        )
+      : this.fuseIndex;
+    const candidates = constrainedIndex.search(terms.join(' | '), { limit: candidateLimit });
+
+    const evidence = candidates.map((result) => {
+      const { item } = result;
+      const text = [
+        item.content,
+        item.metadata?.componentName ?? '',
+        item.metadata?.symbolName ?? '',
+        path.basename(item.relativePath)
+      ].join(' ');
+      const lexemes = new Set(
+        (text.replace(/([a-z\d])([A-Z])/g, '$1 $2').match(/[a-zA-Z0-9_]+/g) ?? []).map(
+          (word) => this.normalizeLexicalTerm(word)
+        )
+      );
+      const matching = new Set(terms.filter((term) => lexemes.has(term)));
+      const exactAnchor = symbolAnchors.some((symbol) => text.toLowerCase().includes(symbol));
+      return { result, matching, exactAnchor };
+    });
+
+    const supportedCompanions = evidence.filter(({ matching }) => matching.size >= 2);
+
+    // A relevant file may have distinct terms in separate symbol-aligned chunks.
+    const fileEvidence = new Map<string, Set<string>>();
+    for (const { result, matching } of evidence) {
+      const key = result.item.filePath.toLowerCase().replace(/\\/g, '/');
+      const termsForFile = fileEvidence.get(key) ?? new Set<string>();
+      for (const term of matching) termsForFile.add(term);
+      fileEvidence.set(key, termsForFile);
+    }
+
+    const seenFiles = new Set<string>();
+    return evidence
+      .filter(({ result, matching, exactAnchor }) => {
+        const key = result.item.filePath.toLowerCase().replace(/\\/g, '/');
+        const corroboratedAnchor =
+          exactAnchor &&
+          (matching.size >= 1 ||
+            supportedCompanions.some(({ result: other }) =>
+              this.hasDirectIndexedImport(result.item.filePath, other.item.filePath)
+            ));
+        return corroboratedAnchor || (fileEvidence.get(key)?.size ?? 0) >= 2;
+      })
+      .sort((a, b) => {
+        const keyA = a.result.item.filePath.toLowerCase().replace(/\\/g, '/');
+        const keyB = b.result.item.filePath.toLowerCase().replace(/\\/g, '/');
+        const score = (e: typeof a, key: string) =>
+          (fileEvidence.get(key)?.size ?? 0) * 8 +
+          e.matching.size * 3 +
+          (e.exactAnchor ? 8 : 0) -
+          (this.isTestFile(e.result.item.filePath) ? 2 : 0) -
+          (e.result.score ?? 0);
+        return score(b, keyB) - score(a, keyA);
+      })
+      .filter(({ result }) => {
+        const key = result.item.filePath.toLowerCase().replace(/\\/g, '/');
+        if (seenFiles.has(key)) return false;
+        seenFiles.add(key);
+        return true;
+      })
+      .slice(0, limit)
+      .map(({ result }) => result);
   }
 
   /**
@@ -1221,30 +1396,11 @@ export class CodebaseSearcher {
     let fuseResults = this.fuseIndex.search(query);
 
     if (filters) {
-      fuseResults = fuseResults.filter((r) => {
-        const chunk = r.item;
+      fuseResults = fuseResults.filter(({ item }) => this.matchesSearchFilters(item, filters));
+    }
 
-        if (filters.componentType && chunk.componentType !== filters.componentType) {
-          return false;
-        }
-        if (filters.layer && chunk.layer !== filters.layer) {
-          return false;
-        }
-        if (filters.framework && chunk.framework !== filters.framework) {
-          return false;
-        }
-        if (filters.language && chunk.language !== filters.language) {
-          return false;
-        }
-        if (filters.tags && filters.tags.length > 0) {
-          const chunkTags = chunk.tags || [];
-          if (!filters.tags.some((tag) => chunkTags.includes(tag))) {
-            return false;
-          }
-        }
-
-        return true;
-      });
+    if (fuseResults.length === 0) {
+      fuseResults = this.rescueKeywordMatches(query, limit, filters);
     }
 
     return fuseResults.slice(0, limit).map((r) => {

@@ -113,10 +113,7 @@ describe('loadServerConfig', () => {
     const projA = path.join(os.tmpdir(), 'ccc-test-proj-a');
     const projB = path.join(os.tmpdir(), 'ccc-test-proj-b');
     const config = JSON.stringify({
-      projects: [
-        { root: projA, excludePatterns: ['**/dist/**'] },
-        { root: projB }
-      ],
+      projects: [{ root: projA, excludePatterns: ['**/dist/**'] }, { root: projB }],
       server: { port: 5199, host: '0.0.0.0' }
     });
     await withTempConfig(config, async (filePath) => {
@@ -168,6 +165,26 @@ describe('loadServerConfig', () => {
       const result = await loadServerConfig();
 
       expect(result?.projects?.[0].parsing).toEqual({ maxChunks: 25000 });
+    });
+  });
+
+  it('preserves explicit per-project embedding mode, including false opt-in', async () => {
+    const config = JSON.stringify({
+      projects: [
+        { root: '~/model-free', skipEmbedding: true },
+        { root: '~/semantic', skipEmbedding: false },
+        { root: '~/invalid', skipEmbedding: 'false' }
+      ]
+    });
+
+    await withTempConfig(config, async (filePath) => {
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = filePath;
+      const result = await loadServerConfig();
+      expect(result?.projects?.map((project) => project.skipEmbedding)).toEqual([
+        true,
+        false,
+        undefined
+      ]);
     });
   });
 

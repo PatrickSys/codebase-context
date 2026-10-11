@@ -2,7 +2,7 @@
 
 Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter. These examples use published npm `2.2.0`.
 
-Use Node.js 22 or newer for these recipes. The package declares Node 18+, but native dependency requirements are narrower than that broad declaration; these checks do not establish Node 18.0 compatibility.
+Use Node.js 22 or newer for these recipes. The local product candidate requires Node 22+ and is checked on Windows Node 22.23.3. Published 2.2.0 declares Node 18+, but its current UUID and SDK dependency chain does not establish Node 18 compatibility; use Node 22 with the published recipes too.
 
 The copyable registration commands target PowerShell or a POSIX terminal. Windows Command Prompt was not tested; OpenCode's quoted separator is shell-dependent.
 
@@ -99,35 +99,32 @@ Trust the project if asked, restart Codex and start a new task there. Use the fi
 
 On October 6 the exact published `npx` entrypoint was also tested without a folder, environment root or MCP roots, launched from an unrelated directory. Its first tool call returned `selection_required`; an explicit `project` call selected the prepared fixture, search found the expected symbol, context returned its map, and the runner host opened the returned source. A later call without `project` retained that selection. This is SDK/protocol and runner-host evidence with warmed caches and a pre-indexed fixture, not a native Desktop task.
 
-## Unreleased installer candidate
+## Install an exact packed candidate for Codex
 
-The next release is expected to support one project-only command from the target project:
+`init --help` prints the supported flags without prompting. `init --client codex --yes` writes a project-local `.codex/config.toml` and prepares that project's local index. The generated stdio entry invokes the exact `dist/index.js` that ran `init`; it does not resolve `codebase-context` from the npm registry. This keeps a packed candidate from silently launching the older published `2.2.0` package.
 
-The `init --client codex --yes` flow is an unreleased source candidate. Published npm `2.2.0` does not include these flags. Use the published configuration above rather than an `@latest` installer command; candidate verification uses an exact built or installed candidate.
-
-A successful `init --client codex --yes` writes the project-scoped `.codex/config.toml` and prepares the index for that root. If config writing or index preparation fails, setup is incomplete and Codex is not ready to use.
-
-For candidate verification before publication, build the source checkout and run its absolute `dist/index.js` path from the project you want to configure:
+For a packed-candidate check, install the tarball into the project being configured and run its installed executable from that project:
 
 ```powershell
-# In the codebase-context source checkout
-npm run build
-
-# In the target project, using the built CLI path
-node C:\path\to\codebase-context\dist\index.js init --client codex --yes
+# Build and pack in the source checkout, then change to the target project.
+pnpm build
+pnpm pack
+Set-Location C:\path\to\project
+npm install --no-save --package-lock=false C:\path\to\codebase-context-2.3.0.tgz
+& .\node_modules\.bin\codebase-context.cmd init --client codex --yes
 ```
 
-Use `--root C:\path\to\project` when the command is run from elsewhere. Here, `root` means the project folder to configure and index. The candidate writes the project-scoped `<project>/.codex/config.toml`, preserves unrelated Codex settings, prepares the index for that folder, and does not write `AGENTS.md` or global client configuration. After a successful result, trust the project in Codex Desktop if prompted, restart or reopen Codex, start a new task in that project, and ask a small project question. A written config and ready index do not prove that Codex loaded or queried the server.
+The project-local install leaves the executable available at `node_modules/codebase-context/dist/index.js`, which the generated config records. If the project install or npm cache is removed, reinstall the same packed tarball and rerun init so the config points to the restored executable. Use `--root C:\path\to\project` only when invoking init from elsewhere; the root is validated and must be a directory.
 
-Before release, the generated `npx` server command still resolves the published package unless the candidate is installed in the target project's `node_modules`. Our packaged test installs the candidate in a disposable project and checks its file hash. Running the built setup command alone does not prove that Codex will launch that same candidate.
+Setup preserves unrelated TOML settings and refuses to replace a conflicting `codebase-context` entry. It writes only project `.codex/config.toml`; it does not edit global Codex configuration, `AGENTS.md`, project trust, or approval settings. New projects default to model-free indexing; existing projects preserve their successful mode and may require their semantic runtimes. Codex may still ask you to trust the project; accept through Codex's normal project flow, then restart or reopen Codex. A successful write and index do not prove that Codex loaded or queried the server.
 
-**Checked on 2026-09-15:** the packed candidate installed and indexed an isolated Windows project. A fresh Codex Desktop task then called the actual `search_codebase` MCP tool and located the requested chart component with its source file and lines. The normal Desktop task flow established project trust; no trust-file edits or replacement CLI/SDK search were used for that answer. This covers the small prepared project with shared caches, not a cold-machine install or the published npm package.
+Published `2.2.0` does not include these init flags. The recipes above are for a local packed candidate until the matching version is published. A packed setup and local MCP test do not establish fresh native Codex Desktop use or a cold install.
 
 ## Optional fixed-folder setup and CLI preparation
 
 To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context@2.2.0", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
 
-To prepare the index separately, run from the project folder:
+To prepare the index separately with the published CLI, run from the project folder:
 
 ```powershell
 npx -y codebase-context@2.2.0 reindex

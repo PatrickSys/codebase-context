@@ -1,5 +1,17 @@
 # Changelog
 
+## Product candidate (not published)
+
+- New projects index and search without embedding or reranker models. Existing index modes are preserved; explicit mode switches rebuild fully. Transformers and LanceDB are optional peers with actionable preflight errors.
+- Codex `init --client codex --yes` writes project-scoped stdio setup for the exact installed package/runtime. Help is noninteractive; conflicting, disabled, or global-config targets are rejected. Index failure returns nonzero without a readiness claim.
+- Added `get_code_relationships`: directed import/re-export paths up to three hops, current resolution and source checks, confined endpoints, unresolved/stale diagnostics, and a 4,000-byte response cap.
+- Search and symbol references read current confined source. Manifest snapshots describe analyzed bytes; source drift triggers refresh or a failed build rather than cached-source evidence.
+- Chunk paths are persisted relative to the selected project root, including explicit-root indexing from another working directory. Previously incorrect relative paths can require a full reindex.
+- Query advice is limited to grounded returned source, and abstained searches omit global pattern advice. Same-named symbols in different files remain eligible after file-level deduplication; TypeScript type arguments alone no longer select the JSX analyzer.
+- The candidate requires Node 22+. CLI dispatch compares canonical entrypoint identity, including npm symlink launchers, while preserving the exported server's initialization on imports.
+- Updated the runtime parser and watcher to remove the legacy braces dependency chain. Watcher exclusions use exact directory names; quoted import and export names retain their public symbol names.
+- Known limits: model-free conceptual relevance is not guaranteed; syntactic edges are not runtime calls; workspace/language-specific resolution can remain unresolved. Packed/protocol tests and scoped negative cases do not establish general agent-quality improvement or customer adoption. No npm publication is implied by this entry.
+
 ## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-04-30)
 
 

@@ -9,15 +9,18 @@ import { CodeChunk, SearchResult, SearchFilters, IntelligenceData } from '../typ
 import { EmbeddingProvider, EmbeddingConfig, getEmbeddingProvider } from '../embeddings/index.js';
 import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
-import { IndexCorruptedError } from '../errors/index.js';
+import { IndexCorruptedError, OptionalDependencyError } from '../errors/index.js';
 import { isTestingRelatedQuery } from '../preflight/query-scope.js';
 import { assessSearchQuality } from './search-quality.js';
-import { rerank, getRerankerStatus } from './reranker.js';
+import { rerank } from './reranker.js';
 import { type IndexMeta, readIndexMeta, validateIndexArtifacts } from './index-meta.js';
+import { hashFileContent, readManifest, type FileManifest } from './manifest.js';
+import { isPathWithin } from '../utils/project-discovery.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
+  MANIFEST_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 
@@ -121,6 +124,7 @@ export class CodebaseSearcher {
   private storageProvider: VectorStorageProvider | null = null;
 
   private initialized = false;
+  private sourceManifest: FileManifest | null = null;
 
   // Pattern intelligence for trend detection
   private patternIntelligence: {
@@ -145,28 +149,120 @@ export class CodebaseSearcher {
       await validateIndexArtifacts(this.rootPath, this.indexMeta);
 
       await this.loadKeywordIndex();
+      await this.loadSourceManifest();
       await this.loadPatternIntelligence();
 
       // Use the embedding config the index was built with, not the current env-var defaults.
       // This ensures query vectors are in the same space as stored vectors.
       // Legacy indexes (no embeddingProvider stored) fall back to env-var defaults.
-      const storedProvider = this.indexMeta.artifacts.vectorDb.embeddingProvider;
-      const storedModel = this.indexMeta.artifacts.vectorDb.embeddingModel;
-      const embeddingConfig: Partial<EmbeddingConfig> = storedProvider
-        ? { provider: storedProvider as EmbeddingConfig['provider'], model: storedModel }
-        : {};
-      this.embeddingProvider = await getEmbeddingProvider(embeddingConfig);
-      this.storageProvider = await getStorageProvider({
-        path: this.storagePath
-      });
+      if (this.indexMeta.artifacts.vectorDb.embeddingEnabled !== false) {
+        const storedProvider = this.indexMeta.artifacts.vectorDb.embeddingProvider;
+        const storedModel = this.indexMeta.artifacts.vectorDb.embeddingModel;
+        const embeddingConfig: Partial<EmbeddingConfig> = storedProvider
+          ? { provider: storedProvider as EmbeddingConfig['provider'], model: storedModel }
+          : {};
+        this.embeddingProvider = await getEmbeddingProvider(embeddingConfig);
+        this.storageProvider = await getStorageProvider({
+          path: this.storagePath
+        });
+      }
 
       this.initialized = true;
     } catch (error) {
+      if (error instanceof OptionalDependencyError) {
+        throw error;
+      }
       if (error instanceof IndexCorruptedError) {
         throw error; // Propagate to handler for auto-heal
       }
       console.warn('Partial initialization (keyword search only):', error);
       this.initialized = true;
+    }
+  }
+
+  private getIndexedSourcePath(chunk: CodeChunk): string {
+    if (typeof chunk.filePath !== 'string' || !chunk.filePath.trim()) {
+      throw new IndexCorruptedError('Indexed source location is invalid. Full rebuild required.');
+    }
+
+    const indexedPath = path.resolve(this.rootPath, chunk.filePath);
+    if (!isPathWithin(this.rootPath, indexedPath)) {
+      throw new IndexCorruptedError(
+        'Indexed source belongs to a different project location. Full rebuild required.'
+      );
+    }
+
+    if (typeof chunk.relativePath === 'string' && chunk.relativePath.trim()) {
+      const rawRelativePath = chunk.relativePath.trim();
+      if (!path.isAbsolute(rawRelativePath)) {
+        const relativeSourcePath = path.resolve(this.rootPath, rawRelativePath);
+        if (
+          isPathWithin(this.rootPath, relativeSourcePath) &&
+          path.relative(relativeSourcePath, indexedPath) !== ''
+        ) {
+          throw new IndexCorruptedError(
+            'Indexed source belongs to a different project location. Full rebuild required.'
+          );
+        }
+      }
+    }
+
+    // Some existing analyzers recorded relativePath from process.cwd(). The absolute
+    // filePath remains authoritative when it is confined to the selected root.
+    return indexedPath;
+  }
+
+  private async loadSourceManifest(): Promise<void> {
+    const manifest = await readManifest(
+      path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME)
+    );
+    if (!manifest?.files || Array.isArray(manifest.files)) {
+      throw new IndexCorruptedError(
+        'Source manifest is missing or invalid. Full rebuild required.'
+      );
+    }
+
+    // Reject copied indexes with foreign absolute source locations before loading models.
+    for (const chunk of this.chunks) this.getIndexedSourcePath(chunk);
+    this.sourceManifest = manifest;
+  }
+
+  private async validateCandidateSources(
+    chunks: Iterable<CodeChunk>,
+    checkedSources: Map<string, string>
+  ): Promise<void> {
+    if (!this.sourceManifest) {
+      throw new IndexCorruptedError('Source manifest is unavailable. Full rebuild required.');
+    }
+    let realRootPath: string | undefined;
+    for (const chunk of chunks) {
+      const sourcePath = this.getIndexedSourcePath(chunk);
+      const sourceKey = path.resolve(this.rootPath, chunk.filePath);
+      if (checkedSources.has(sourceKey)) continue;
+      const relativePath = path.relative(this.rootPath, sourcePath).replace(/\\/g, '/');
+      const expectedHash = this.sourceManifest.files[relativePath];
+      if (typeof expectedHash !== 'string') {
+        throw new IndexCorruptedError(
+          'Indexed source is absent from its manifest. Full rebuild required.'
+        );
+      }
+      try {
+        realRootPath ??= await fs.realpath(this.rootPath);
+        const realSourcePath = await fs.realpath(sourcePath);
+        if (!isPathWithin(realRootPath, realSourcePath)) {
+          throw new Error('Source resolves outside the selected project');
+        }
+        if (!(await fs.stat(realSourcePath)).isFile()) {
+          throw new Error('Source is not a regular file');
+        }
+        const content = await fs.readFile(realSourcePath, 'utf-8');
+        if (hashFileContent(content) !== expectedHash) throw new Error('Source content changed');
+        checkedSources.set(sourceKey, content);
+      } catch {
+        throw new IndexCorruptedError(
+          `Indexed source is changed or unreadable (${relativePath}). Full rebuild required.`
+        );
+      }
     }
   }
 
@@ -733,35 +829,9 @@ export class CodebaseSearcher {
       if (deduped.length >= limit) break;
     }
 
-    // SEARCH-01: Symbol-level deduplication
-    // Within each symbol group (symbolPath), keep only the highest-scoring chunk
-    const seenSymbols = new Map<string, SearchResult>();
-    const symbolDeduped: SearchResult[] = [];
-    for (const result of deduped) {
-      const symbolPath = result.metadata?.symbolPath;
-      if (!symbolPath) {
-        // No symbol info, keep as-is
-        symbolDeduped.push(result);
-        continue;
-      }
-
-      const symbolPathKey = Array.isArray(symbolPath) ? symbolPath.join('.') : String(symbolPath);
-      const existing = seenSymbols.get(symbolPathKey);
-      if (!existing || result.score > existing.score) {
-        if (existing) {
-          // Replace lower-scoring version
-          const idx = symbolDeduped.indexOf(existing);
-          if (idx >= 0) {
-            symbolDeduped[idx] = result;
-          }
-        } else {
-          symbolDeduped.push(result);
-        }
-        seenSymbols.set(symbolPathKey, result);
-      }
-    }
-
-    const finalResults = symbolDeduped;
+    // File-level deduplication above already keeps only one result per file.
+    // Keep same-named symbols in different files as distinct search results.
+    const finalResults = deduped;
 
     if (
       isNonTestQuery &&
@@ -927,6 +997,10 @@ export class CodebaseSearcher {
       ...DEFAULT_SEARCH_OPTIONS,
       ...options
     };
+    if (this.indexMeta?.artifacts.vectorDb.embeddingEnabled === false) {
+      merged.useSemanticSearch = false;
+      merged.enableReranker = false;
+    }
     const {
       useSemanticSearch,
       useKeywordSearch,
@@ -953,6 +1027,16 @@ export class CodebaseSearcher {
       Boolean(useKeywordSearch),
       finalSemanticWeight,
       finalKeywordWeight
+    );
+
+    // Validate every nominated source before scoring and limiting so stale top
+    // matches cannot hide a valid lower-ranked current file.
+    const checkedSources = new Map<string, string>();
+    await this.validateCandidateSources(
+      [...primaryMatches.semantic.values(), ...primaryMatches.keyword.values()].map(
+        (match) => match.chunk
+      ),
+      checkedSources
     );
 
     const primaryTotalWeight =
@@ -987,6 +1071,13 @@ export class CodebaseSearcher {
             finalKeywordWeight
           );
 
+          await this.validateCandidateSources(
+            [...rescueMatches.semantic.values(), ...rescueMatches.keyword.values()].map(
+              (match) => match.chunk
+            ),
+            checkedSources
+          );
+
           const rescueVariantWeights = rescueVariants.map((_, i) => (i === 0 ? 1 : 0.8));
           const rescueTotalWeight =
             rescueVariantWeights.reduce((sum, w) => sum + w, 0) *
@@ -1015,7 +1106,28 @@ export class CodebaseSearcher {
       }
     }
 
-    return bestResults;
+    return bestResults.map((result) => {
+      const source = checkedSources.get(path.resolve(this.rootPath, result.filePath));
+      if (source === undefined) {
+        throw new IndexCorruptedError('Result source was not validated. Full rebuild required.');
+      }
+      const lines = source.replace(/\r\n/g, '\n').split('\n');
+      if (
+        !Number.isInteger(result.startLine) ||
+        !Number.isInteger(result.endLine) ||
+        result.startLine < 1 ||
+        result.endLine < result.startLine ||
+        result.endLine > lines.length
+      ) {
+        throw new IndexCorruptedError(
+          'Indexed source line range is invalid. Full rebuild required.'
+        );
+      }
+      return {
+        ...result,
+        snippet: this.generateSnippet(lines.slice(result.startLine - 1, result.endLine).join('\n'))
+      };
+    });
   }
 
   private generateSummary(chunk: CodeChunk): string {

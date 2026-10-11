@@ -19,6 +19,21 @@ const indexerMocks = vi.hoisted(() => ({
   index: vi.fn()
 }));
 
+function getToolsCallHandler(server: unknown) {
+  const handlers = (
+    server as {
+      _requestHandlers: {
+        get(
+          name: string
+        ): ((request: unknown) => Promise<{ content: Array<{ text: string }> }>) | undefined;
+      };
+    }
+  )._requestHandlers;
+  const handler = handlers.get('tools/call');
+  if (!handler) throw new Error('tools/call handler not registered');
+  return handler;
+}
+
 vi.mock('../src/core/search.js', async () => {
   class CodebaseSearcher {
     constructor(_rootPath: string) {}
@@ -151,7 +166,7 @@ describe('search_codebase auto-heal', () => {
     );
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolsCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -171,9 +186,26 @@ describe('search_codebase auto-heal', () => {
     expect(searchMocks.search).toHaveBeenCalledTimes(1);
   }, 15000);
 
+  it('rebuilds an existing semantic index before search when startup explicitly requests model-free mode', async () => {
+    process.argv.push('--no-embeddings');
+    const { server } = await import('../src/index.js');
+    const handler = getToolsCallHandler(server);
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'test' } }
+    });
+    const payload = JSON.parse(response.content[0].text);
+    expect(payload.status).toBe('indexing');
+    expect(payload.message).toContain('retry');
+    expect(indexerMocks.index).toHaveBeenCalledTimes(1);
+    expect(searchMocks.search).not.toHaveBeenCalled();
+  }, 15000);
+
   it('returns invalid_params when search_codebase query is missing', async () => {
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolsCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -213,7 +245,7 @@ describe('search_codebase auto-heal', () => {
     );
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolsCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',

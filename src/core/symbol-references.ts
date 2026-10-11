@@ -4,11 +4,10 @@ import { CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME } from '../constants/c
 import { IndexCorruptedError } from '../errors/index.js';
 import type { UsageLocation } from '../types/index.js';
 import { detectLanguage } from '../utils/language-detection.js';
+import { isPathWithin } from '../utils/project-discovery.js';
 import { findIdentifierOccurrences } from '../utils/tree-sitter.js';
 
 interface IndexedChunk {
-  content?: unknown;
-  startLine?: unknown;
   relativePath?: unknown;
   filePath?: unknown;
 }
@@ -37,30 +36,6 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function getUsageFile(rootPath: string, chunk: IndexedChunk): string {
-  if (typeof chunk.relativePath === 'string' && chunk.relativePath.trim()) {
-    return chunk.relativePath.replace(/\\/g, '/');
-  }
-
-  if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
-    const relativePath = path.relative(rootPath, chunk.filePath);
-    if (!relativePath || relativePath.startsWith('..')) {
-      return path.basename(chunk.filePath);
-    }
-    return relativePath.replace(/\\/g, '/');
-  }
-
-  return 'unknown';
-}
-
-function buildPreview(content: string, lineOffset: number): string {
-  const lines = content.split('\n');
-  const start = Math.max(0, lineOffset - 1);
-  const end = Math.min(lines.length, lineOffset + 2);
-  const previewLines = lines.slice(start, end);
-  return previewLines.join('\n').trim();
-}
-
 function buildPreviewFromFileLines(lines: string[], line: number): string {
   const start = Math.max(0, line - 2);
   const end = Math.min(lines.length, line + 1);
@@ -70,9 +45,7 @@ function buildPreviewFromFileLines(lines: string[], line: number): string {
 function resolveAbsoluteChunkPath(rootPath: string, chunk: IndexedChunk): string | null {
   const resolvedRoot = path.resolve(rootPath);
   const isWithinRoot = (candidate: string): boolean => {
-    const resolvedCandidate = path.resolve(candidate);
-    const relative = path.relative(resolvedRoot, resolvedCandidate);
-    return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
+    return isPathWithin(resolvedRoot, candidate);
   };
 
   if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
@@ -90,15 +63,6 @@ function resolveAbsoluteChunkPath(rootPath: string, chunk: IndexedChunk): string
   }
 
   return null;
-}
-
-async function fileExists(targetPath: string): Promise<boolean> {
-  try {
-    const stat = await fs.stat(targetPath);
-    return stat.isFile();
-  } catch {
-    return false;
-  }
 }
 
 export async function findSymbolReferences(
@@ -152,94 +116,90 @@ export async function findSymbolReferences(
   let usageCount = 0;
 
   const escapedSymbol = escapeRegex(normalizedSymbol);
-  const prefilter = new RegExp(`\\b${escapedSymbol}\\b`);
   const matcher = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
 
-  // Prefilter candidate files from the keyword index. We do not trust chunk contents for
-  // exact reference counting when Tree-sitter is available; chunks only guide which files to scan.
-  const chunksByFile = new Map<
-    string,
-    { relPath: string; absPath: string | null; chunks: IndexedChunk[] }
-  >();
+  // The index nominates source files only. Current source bytes determine matches,
+  // locations, and previews, including when parser support is unavailable.
+  const candidateFiles = new Map<string, string>();
 
   for (const chunkRaw of chunks) {
     const chunk = chunkRaw as IndexedChunk;
-    if (typeof chunk.content !== 'string') continue;
-    if (!prefilter.test(chunk.content)) continue;
-
-    const relPath = getUsageFile(rootPath, chunk);
     const absPath = resolveAbsoluteChunkPath(rootPath, chunk);
-
-    const entry = chunksByFile.get(relPath);
-    if (entry) {
-      entry.chunks.push(chunk);
-      // Prefer a real absolute path when available
-      if (!entry.absPath && absPath) {
-        entry.absPath = absPath;
-      }
-    } else {
-      chunksByFile.set(relPath, { relPath, absPath, chunks: [chunk] });
+    if (!absPath) {
+      return {
+        status: 'error',
+        message:
+          'Indexed source location is invalid. Refresh the index before trusting reference results.'
+      };
     }
+    const relPath = path.relative(rootPath, absPath).replace(/\\/g, '/');
+    candidateFiles.set(relPath, absPath);
   }
 
-  for (const entry of chunksByFile.values()) {
-    const relPath = entry.relPath;
-    const absPath = entry.absPath;
-
-    // Preferred: Tree-sitter identifier walk on the real file content.
-    if (absPath && (await fileExists(absPath))) {
-      try {
-        const raw = await fs.readFile(absPath, 'utf-8');
-        const content = raw.replace(/\r\n/g, '\n');
-        const language = detectLanguage(absPath);
-        const occurrences = await findIdentifierOccurrences(content, language, normalizedSymbol);
-
-        if (occurrences) {
-          usageCount += occurrences.length;
-
-          if (usages.length < normalizedLimit && occurrences.length > 0) {
-            const lines = content.split('\n');
-            for (const occ of occurrences) {
-              if (usages.length >= normalizedLimit) break;
-              usages.push({
-                file: relPath,
-                line: occ.line,
-                preview: buildPreviewFromFileLines(lines, occ.line)
-              });
-            }
-          }
-
-          continue;
-        }
-      } catch {
-        // Fall through to chunk-regex fallback (missing grammar, parse failure, etc.)
-      }
+  let realRootPath: string;
+  try {
+    realRootPath = await fs.realpath(rootPath);
+  } catch {
+    return { status: 'error', message: 'Selected project path is missing or unreadable.' };
+  }
+  for (const [relativePath, absolutePath] of candidateFiles) {
+    let realSourcePath: string;
+    try {
+      realSourcePath = await fs.realpath(absolutePath);
+    } catch {
+      return {
+        status: 'error',
+        message: `Indexed source is missing or unreadable (${relativePath}). Refresh the index before trusting reference results.`
+      };
+    }
+    if (!isPathWithin(realRootPath, realSourcePath)) {
+      return {
+        status: 'error',
+        message: `Indexed source resolves outside the selected project (${relativePath}). Refresh the index before trusting reference results.`
+      };
     }
 
-    // Fallback: regex scan inside the matched chunks (legacy behavior).
-    for (const chunk of entry.chunks) {
-      if (typeof chunk.content !== 'string') continue;
+    let source: string;
+    try {
+      if (!(await fs.stat(realSourcePath)).isFile()) throw new Error('not a file');
+      source = (await fs.readFile(realSourcePath, 'utf-8')).replace(/\r\n/g, '\n');
+    } catch {
+      return {
+        status: 'error',
+        message: `Indexed source is missing or unreadable (${relativePath}). Refresh the index before trusting reference results.`
+      };
+    }
+    const lines = source.split('\n');
+    const occurrences = await findIdentifierOccurrences(
+      source,
+      detectLanguage(realSourcePath),
+      normalizedSymbol
+    ).catch(() => null);
 
-      const chunkContent = chunk.content;
-      const startLine = typeof chunk.startLine === 'number' ? chunk.startLine : 1;
-      matcher.lastIndex = 0;
-
-      let match: RegExpExecArray | null;
-      while ((match = matcher.exec(chunkContent)) !== null) {
-        usageCount += 1;
-
-        if (usages.length >= normalizedLimit) {
-          continue;
-        }
-
-        const prefix = chunkContent.slice(0, match.index);
-        const lineOffset = prefix.split('\n').length - 1;
-
+    if (occurrences) {
+      usageCount += occurrences.length;
+      for (const occurrence of occurrences) {
+        if (usages.length >= normalizedLimit) break;
         usages.push({
-          file: relPath,
-          line: startLine + lineOffset,
-          preview: buildPreview(chunkContent, lineOffset)
+          file: relativePath,
+          line: occurrence.line,
+          preview: buildPreviewFromFileLines(lines, occurrence.line)
         });
+      }
+      continue;
+    }
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      matcher.lastIndex = 0;
+      while (matcher.exec(lines[lineIndex]) !== null) {
+        usageCount += 1;
+        if (usages.length < normalizedLimit) {
+          usages.push({
+            file: relativePath,
+            line: lineIndex + 1,
+            preview: buildPreviewFromFileLines(lines, lineIndex + 1)
+          });
+        }
       }
     }
   }

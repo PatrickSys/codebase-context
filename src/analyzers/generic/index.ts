@@ -362,7 +362,9 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
               if (s.type === 'ImportDefaultSpecifier') return 'default';
               if (s.type === 'ImportNamespaceSpecifier') return '*';
               const specifier = s as TSESTree.ImportSpecifier;
-              return specifier.imported.name || specifier.local.name;
+              return specifier.imported.type === 'Identifier'
+                ? specifier.imported.name
+                : specifier.imported.value;
             }),
             isDefault: node.specifiers.some(
               (s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'
@@ -440,7 +442,8 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
             for (const spec of node.specifiers) {
               if (spec.type === 'ExportSpecifier') {
                 exports.push({
-                  name: spec.exported.name,
+                  name:
+                    spec.exported.type === 'Identifier' ? spec.exported.name : spec.exported.value,
                   isDefault: false,
                   type: 'named'
                 });

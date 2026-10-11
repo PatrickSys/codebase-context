@@ -115,5 +115,51 @@ export class PaymentsService {}
         'nestjs'
       );
     });
+
+    it('selects Generic for plain TypeScript generics and retains symbol-aware definitions', async () => {
+      const source = `
+interface ProjectConfiguration { targets?: Record<string, unknown> }
+const map = new Map<string, ProjectConfiguration>();
+
+export function readTargetDefaultsForTarget(
+  project: ProjectConfiguration,
+  targetName: string
+) {
+  return map.get(targetName) ?? project.targets?.[targetName];
+}
+`;
+
+      expect(analyzerRegistry.findAnalyzer('/tmp/target-defaults.ts', source)?.name).toBe(
+        'generic'
+      );
+      const result = await analyzerRegistry.analyzeFile('/tmp/target-defaults.ts', source);
+
+      expect(result?.metadata.analyzer).toBe('generic');
+      expect(
+        result?.chunks.some(
+          (chunk) =>
+            chunk.metadata.symbolName === 'readTargetDefaultsForTarget' &&
+            chunk.metadata.symbolAware === true
+        )
+      ).toBe(true);
+    });
+
+    it('preserves quoted names in TypeScript imports and exports', async () => {
+      const source = `import { "remote-name" as localName } from 'some-package';
+export { localName as "public-name" };`;
+      const result = await new GenericAnalyzer().analyze('/tmp/quoted-names.ts', source);
+
+      expect(result.imports).toMatchObject([{ source: 'some-package', imports: ['remote-name'] }]);
+      expect(result.exports).toContainEqual({
+        name: 'public-name',
+        isDefault: false,
+        type: 'named'
+      });
+
+      const angularResult = await new AngularAnalyzer().analyze('/tmp/quoted-names.ts', source);
+      expect(angularResult.imports).toMatchObject([
+        { source: 'some-package', imports: ['remote-name'] }
+      ]);
+    });
   });
 });

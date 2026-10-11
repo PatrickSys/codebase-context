@@ -3,8 +3,8 @@ import { TOOLS, dispatchTool } from '../../src/tools/index.js';
 import type { ToolContext } from '../../src/tools/types.js';
 
 describe('Tool Dispatch', () => {
-  it('exports all 11 tools', () => {
-    expect(TOOLS.length).toBe(11);
+  it('exports all 12 tools including source relationship navigation', () => {
+    expect(TOOLS.length).toBe(12);
     expect(TOOLS.map((t) => t.name)).toEqual([
       'search_codebase',
       'get_codebase_metadata',
@@ -16,7 +16,8 @@ describe('Tool Dispatch', () => {
       'detect_circular_dependencies',
       'remember',
       'get_memory',
-      'get_codebase_health'
+      'get_codebase_health',
+      'get_code_relationships'
     ]);
   });
 

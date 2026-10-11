@@ -171,7 +171,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
               if (s.type === 'ImportDefaultSpecifier') return 'default';
               if (s.type === 'ImportNamespaceSpecifier') return '*';
               const specifier = s as TSESTree.ImportSpecifier;
-              return specifier.imported.name || specifier.local.name;
+              return specifier.imported.type === 'Identifier'
+                ? specifier.imported.name
+                : specifier.imported.value;
             }),
             isDefault: node.specifiers.some(
               (s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'

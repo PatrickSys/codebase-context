@@ -1,6 +1,7 @@
 import { EmbeddingProvider, DEFAULT_MODEL } from './types.js';
 import type { FeatureExtractionPipeline } from '@huggingface/transformers';
 import os from 'os';
+import { assertOptionalDependency } from '../utils/optional-dependency.js';
 
 /**
  * Returns the number of ONNX intra-op threads to use.
@@ -55,6 +56,8 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
   async initialize(): Promise<void> {
     if (this.ready) return;
     if (this.initPromise) return this.initPromise;
+
+    assertOptionalDependency('@huggingface/transformers', '^4.2.0');
 
     this.initPromise = this._initialize();
     return this.initPromise;

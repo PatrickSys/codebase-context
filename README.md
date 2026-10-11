@@ -10,6 +10,23 @@ Codebase Context gives an agent a local view of that information through code se
 
 ## Set up your AI client
 
+### Unreleased source candidate
+
+This branch adds model-free indexing for new projects and noninteractive Codex setup. These changes are not in npm `2.2.0`. To try an exact locally packed candidate on Node 22:
+
+```bash
+npm install --save-dev /absolute/path/codebase-context-2.3.0.tgz
+npx --no-install codebase-context init --client codex --yes --root .
+```
+
+`init --help` does not prompt. The installer preserves unrelated project config, rejects conflicting or disabled CBC entries, and points Codex at the installed Node executable and package entrypoint. Keep that installation available; removing its directory or clearing an `npx` cache used for setup can invalidate the saved path. Trust/reopen the project and approve tool calls if your client requires it. A written config and ready index do not establish native agent use.
+
+New indexes use keywords, symbols, and structural analysis without embedding or reranker models. Existing indexes retain their successful mode. Semantic mode requires optional runtimes: install `@huggingface/transformers@^4.2.0` and `@lancedb/lancedb@^0.4.0` alongside the CBC installation, then run `npx --no-install codebase-context reindex --embeddings`. Installing them only in a separately selected source folder does not repair another CBC installation. Use `--no-embeddings` for a full model-free rebuild; omitting both preserves the successful mode. Local semantic models may download on opt-in. Missing runtimes produce an actionable error before index replacement.
+
+The candidate also adds `get_code_relationships` for current, directed import/re-export paths up to three hops. It returns source citations, unresolved/stale diagnostics, and explicit truncation. This is syntactic source navigation; conceptual search quality and runtime behavior still require reading and checking the actual code. See the [capabilities reference](./docs/capabilities.md).
+
+### Published package
+
 Choose your coding tool and run its command once. Use Node.js 22 or newer. These commands use published npm `2.2.0` and do not require a project folder in your configuration:
 
 ```bash

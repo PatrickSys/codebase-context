@@ -625,6 +625,126 @@ export interface UnusedExport {
 export interface ImportEdgeDetail {
   line?: number;
   importedSymbols?: string[];
+  /** Source declarations that produced this adjacency. Legacy details have no proof and stay unverified. */
+  sources?: ImportEdgeSource[];
+}
+
+export type GraphRelationKind = 'import' | 'reexport';
+
+export interface ImportEdgeSource {
+  line: number;
+  specifier: string;
+  kind: GraphRelationKind;
+  sourceFingerprint: string;
+  targetFingerprint: string;
+}
+
+export interface UnresolvedImportEdge {
+  from: string;
+  kind: GraphRelationKind;
+  source: ImportEdgeSource;
+  reason: 'external' | 'not-found' | 'outside-root' | 'unsupported-alias';
+}
+
+export interface FileGraphEdge {
+  from: string;
+  to: string;
+  kind: GraphRelationKind;
+  source: ImportEdgeSource;
+  verified: boolean;
+}
+
+export interface FileGraphTraversal {
+  paths: Array<{ nodes: string[]; edges: FileGraphEdge[] }>;
+  unresolved: UnresolvedImportEdge[];
+  truncated: boolean;
+}
+
+export function traverseFileGraph(
+  graph: {
+    imports?: Record<string, string[]>;
+    importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
+    unresolvedEdges?: UnresolvedImportEdge[];
+  },
+  start: string,
+  options: {
+    direction: 'outgoing' | 'incoming';
+    maxHops: 1 | 2 | 3;
+    maxNodes?: number;
+    maxPaths?: number;
+  }
+): FileGraphTraversal {
+  const imports = graph.imports ?? {};
+  const adjacency = new Map<string, FileGraphEdge[]>();
+  for (const [from, targets] of Object.entries(imports)) {
+    for (const to of targets) {
+      const detail = graph.importDetails?.[from]?.[to];
+      const sources = detail?.sources ?? [];
+      const edges: FileGraphEdge[] =
+        sources.length > 0
+          ? sources.map((source) => ({ from, to, kind: source.kind, source, verified: true }))
+          : [
+              {
+                from,
+                to,
+                kind: 'import',
+                verified: false,
+                source: {
+                  line: detail?.line ?? 1,
+                  specifier: '',
+                  kind: 'import',
+                  sourceFingerprint: '',
+                  targetFingerprint: ''
+                }
+              }
+            ];
+      adjacency.set(from, [...(adjacency.get(from) ?? []), ...edges]);
+    }
+  }
+
+  const neighbors = (node: string): FileGraphEdge[] => {
+    if (options.direction === 'outgoing') return adjacency.get(node) ?? [];
+    const incoming: FileGraphEdge[] = [];
+    for (const edges of adjacency.values()) {
+      for (const edge of edges) if (edge.to === node) incoming.push(edge);
+    }
+    return incoming;
+  };
+
+  const maxNodes = Math.max(1, Math.min(500, options.maxNodes ?? 100));
+  const maxPaths = Math.max(1, Math.min(500, options.maxPaths ?? 200));
+  const visitedNodes = new Set([start]);
+  const queue: Array<{ nodes: string[]; edges: FileGraphEdge[] }> = [{ nodes: [start], edges: [] }];
+  const paths: FileGraphTraversal['paths'] = [];
+  let truncated = false;
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.edges.length >= options.maxHops) continue;
+    for (const edge of neighbors(current.nodes[current.nodes.length - 1]!)) {
+      const next = options.direction === 'outgoing' ? edge.to : edge.from;
+      if (current.nodes.includes(next)) continue;
+      if (paths.length >= maxPaths) {
+        truncated = true;
+        continue;
+      }
+      if (!visitedNodes.has(next) && visitedNodes.size >= maxNodes) {
+        truncated = true;
+        continue;
+      }
+      visitedNodes.add(next);
+      const nextPath = {
+        nodes: [...current.nodes, next],
+        edges: [...current.edges, edge]
+      };
+      paths.push(nextPath);
+      queue.push(nextPath);
+    }
+  }
+  return {
+    paths,
+    unresolved: (graph.unresolvedEdges ?? []).filter((edge) => visitedNodes.has(edge.from)),
+    truncated
+  };
 }
 
 export class InternalFileGraph {
@@ -636,6 +756,7 @@ export class InternalFileGraph {
   private importedSymbols: Map<string, Set<string>> = new Map();
   // Map: fromFile -> toFile -> edge details (line/symbols)
   private importDetails: Map<string, Map<string, ImportEdgeDetail>> = new Map();
+  private unresolvedEdges: UnresolvedImportEdge[] = [];
   // Root path for relative path conversion
   private rootPath: string;
 
@@ -674,7 +795,8 @@ export class InternalFileGraph {
     importingFile: string,
     importedFile: string,
     line?: number,
-    importedSymbols?: string[]
+    importedSymbols?: string[],
+    sourceProof?: Omit<ImportEdgeSource, 'line'>
   ): void {
     const fromFile = this.normalizePath(importingFile);
     const toFile = this.normalizePath(importedFile);
@@ -694,7 +816,7 @@ export class InternalFileGraph {
         ? importedSymbols.filter((sym) => sym !== '*' && sym !== 'default')
         : [];
 
-    if (normalizedLine || normalizedSymbols.length > 0) {
+    if (normalizedLine || normalizedSymbols.length > 0 || sourceProof) {
       if (!this.importDetails.has(fromFile)) {
         this.importDetails.set(fromFile, new Map());
       }
@@ -710,9 +832,31 @@ export class InternalFileGraph {
       for (const sym of normalizedSymbols) mergedSymbolsSet.add(sym);
       const mergedSymbols = Array.from(mergedSymbolsSet);
 
+      const sources = existing.sources ? [...existing.sources] : [];
+      if (sourceProof && normalizedLine) {
+        const nextSource: ImportEdgeSource = { ...sourceProof, line: normalizedLine };
+        if (
+          !sources.some(
+            (source) =>
+              source.line === nextSource.line &&
+              source.specifier === nextSource.specifier &&
+              source.kind === nextSource.kind
+          )
+        ) {
+          sources.push(nextSource);
+        }
+      }
+
       detailsForFrom.set(toFile, {
         ...(mergedLine ? { line: mergedLine } : {}),
-        ...(mergedSymbols.length > 0 ? { importedSymbols: mergedSymbols.sort() } : {})
+        ...(mergedSymbols.length > 0 ? { importedSymbols: mergedSymbols.sort() } : {}),
+        ...(sources.length > 0
+          ? {
+              sources: sources.sort(
+                (a, b) => a.line - b.line || a.specifier.localeCompare(b.specifier)
+              )
+            }
+          : {})
       });
     }
 
@@ -724,6 +868,30 @@ export class InternalFileGraph {
       for (const sym of normalizedSymbols) {
         this.importedSymbols.get(toFile)!.add(sym);
       }
+    }
+  }
+
+  trackUnresolved(
+    importingFile: string,
+    source: ImportEdgeSource,
+    reason: UnresolvedImportEdge['reason'],
+    kind: GraphRelationKind = source.kind
+  ): void {
+    const edge: UnresolvedImportEdge = {
+      from: this.normalizePath(importingFile),
+      kind,
+      source,
+      reason
+    };
+    if (
+      !this.unresolvedEdges.some(
+        (existing) =>
+          existing.from === edge.from &&
+          existing.source.line === edge.source.line &&
+          existing.source.specifier === edge.source.specifier
+      )
+    ) {
+      this.unresolvedEdges.push(edge);
     }
   }
 
@@ -865,6 +1033,7 @@ export class InternalFileGraph {
     imports: Record<string, string[]>;
     exports: Record<string, FileExport[]>;
     importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
+    unresolvedEdges?: UnresolvedImportEdge[];
     stats: { files: number; edges: number; avgDependencies: number };
   } {
     const imports: Record<string, string[]> = {};
@@ -894,6 +1063,7 @@ export class InternalFileGraph {
       imports,
       exports,
       ...(Object.keys(importDetails).length > 0 ? { importDetails } : {}),
+      ...(this.unresolvedEdges.length > 0 ? { unresolvedEdges: this.unresolvedEdges } : {}),
       stats: this.getStats()
     };
   }
@@ -906,6 +1076,7 @@ export class InternalFileGraph {
       imports?: Record<string, string[]>;
       exports?: Record<string, FileExport[]>;
       importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
+      unresolvedEdges?: UnresolvedImportEdge[];
     },
     rootPath: string
   ): InternalFileGraph {
@@ -943,6 +1114,11 @@ export class InternalFileGraph {
         }
       }
     }
+
+    graph.unresolvedEdges = (data.unresolvedEdges ?? []).map((edge) => ({
+      ...edge,
+      from: graph.normalizePath(edge.from)
+    }));
 
     return graph;
   }

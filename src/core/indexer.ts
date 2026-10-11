@@ -3,7 +3,7 @@
  * Scans files, delegates to analyzers, creates embeddings, stores in vector DB
  */
 
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { glob } from 'glob';
@@ -24,18 +24,24 @@ import { analyzerRegistry } from './analyzer-registry.js';
 import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
 import { getSupportedExtensions, isBinaryFile, isCodeFile } from '../utils/language-detection.js';
 import {
+  assertEmbeddingRuntimeAvailable,
   getEmbeddingProvider,
   getConfiguredDimensions,
   DEFAULT_MODEL,
   parseEmbeddingProviderName
 } from '../embeddings/index.js';
-import { getStorageProvider, CodeChunkWithEmbedding } from '../storage/index.js';
+import {
+  assertStorageRuntimeAvailable,
+  getStorageProvider,
+  CodeChunkWithEmbedding
+} from '../storage/index.js';
 import {
   LibraryUsageTracker,
   PatternDetector,
   ImportGraph,
   InternalFileGraph,
-  FileExport
+  FileExport,
+  ImportEdgeSource
 } from '../utils/usage-tracker.js';
 import { mergeSmallChunks } from '../utils/chunking.js';
 import { getFileCommitDates } from '../utils/git-dates.js';
@@ -54,20 +60,28 @@ import {
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 import { deriveCodebaseHealth } from '../health/derive.js';
+import {
+  extractSourceReexports,
+  InternalSourceResolver,
+  loadTsconfigCompilerOptions
+} from '../utils/internal-source-resolver.js';
 
 const STAGING_DIRNAME = '.staging';
 const PREVIOUS_DIRNAME = '.previous';
 const DEFAULT_MAX_CHUNKS = 5000;
 
+class SourceSnapshotChangedError extends Error {}
+
 import {
   computeFileHashes,
+  hashFileContent,
   readManifest,
   writeManifest,
   diffManifest,
   type FileManifest,
   type ManifestDiff
 } from './manifest.js';
-import { readIndexMeta, checkEmbeddingMismatch } from './index-meta.js';
+import { readIndexMeta, checkEmbeddingMismatch, resolveSkipEmbedding } from './index-meta.js';
 
 let cachedToolVersion: string | null = null;
 
@@ -240,10 +254,12 @@ export class CodebaseIndexer {
   private progress: IndexingProgress;
   private onProgressCallback?: (progress: IndexingProgress) => void;
   private incrementalOnly: boolean;
+  private readonly explicitSkipEmbedding?: boolean;
 
   constructor(options: IndexerOptions) {
     this.rootPath = path.resolve(options.rootPath);
     this.config = this.mergeConfig(options.config);
+    this.explicitSkipEmbedding = options.config?.skipEmbedding;
     this.projectOptions = {
       preferredAnalyzer: options.projectOptions?.preferredAnalyzer,
       extraFileExtensions: options.projectOptions?.extraFileExtensions
@@ -324,7 +340,7 @@ export class CodebaseIndexer {
         model: defaultModel,
         batchSize: 32
       },
-      skipEmbedding: false,
+      skipEmbedding: true,
       storage: {
         provider: 'lancedb',
         path: './codebase-index'
@@ -414,6 +430,14 @@ export class CodebaseIndexer {
     let stagingDir: string | null = null;
 
     try {
+      this.config.skipEmbedding = await resolveSkipEmbedding(
+        this.rootPath,
+        this.explicitSkipEmbedding
+      );
+      if (!this.config.skipEmbedding) {
+        assertEmbeddingRuntimeAvailable(this.config.embedding);
+        assertStorageRuntimeAvailable();
+      }
       // Ensure there is at least a generic fallback analyzer registered when the indexer
       // is used directly (e.g. in tests or standalone scripts).
       if (analyzerRegistry.getAll().length === 0) {
@@ -482,10 +506,17 @@ export class CodebaseIndexer {
           const existingMeta = await readIndexMeta(this.rootPath);
           const currentProvider = this.config.embedding?.provider ?? 'transformers';
           const currentModel = this.config.embedding?.model ?? DEFAULT_MODEL;
-          if (checkEmbeddingMismatch(existingMeta, currentProvider, currentModel)) {
+          if (
+            checkEmbeddingMismatch(
+              existingMeta,
+              currentProvider,
+              currentModel,
+              !this.config.skipEmbedding
+            )
+          ) {
             const stored = existingMeta.artifacts.vectorDb;
             console.error(
-              `Embedding provider/model changed (stored: ${stored.embeddingProvider}:${stored.embeddingModel}, current: ${currentProvider}:${currentModel}) — forcing full rebuild`
+              `Embedding configuration changed (stored: ${stored.embeddingEnabled === false ? 'disabled' : `${stored.embeddingProvider ?? 'unknown'}:${stored.embeddingModel ?? 'unknown'}`}, current: ${this.config.skipEmbedding ? 'disabled' : `${currentProvider}:${currentModel}`}); forcing full rebuild`
             );
             diff = null;
           }
@@ -585,6 +616,30 @@ export class CodebaseIndexer {
       // When incremental, track which files need embedding
       const filesToProcessSet = diff ? new Set(filesToProcess.map((f) => f)) : null;
 
+      // Resolve graph edges only to discovered, root-confined source files.
+      let tsconfigPaths: Record<string, string[]> | undefined;
+      const tsconfigCompilerOptions = loadTsconfigCompilerOptions(this.rootPath);
+      if (tsconfigCompilerOptions.paths) {
+        tsconfigPaths = Object.fromEntries(
+          Object.entries(tsconfigCompilerOptions.paths).map(([alias, targets]) => [
+            alias,
+            [...targets]
+          ])
+        );
+      }
+      const sourceResolver = await InternalSourceResolver.create(this.rootPath, files, {
+        compilerOptions: tsconfigCompilerOptions
+      });
+      const sourceFingerprints = new Map<string, string>();
+      const analyzedManifestHashes = new Map<string, string>();
+      const pendingResolvedEdges: Array<{
+        from: string;
+        to: string;
+        line: number;
+        importedSymbols: string[];
+        source: Omit<ImportEdgeSource, 'line' | 'targetFingerprint'>;
+      }> = [];
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         this.progress.currentFile = file;
@@ -593,12 +648,32 @@ export class CodebaseIndexer {
 
         try {
           // Normalize line endings to \n for consistent cross-platform output
-          const rawContent = await fs.readFile(file, 'utf-8');
+          const rawBytes = await fs.readFile(file);
+          const sourceFingerprint = createHash('sha256').update(rawBytes).digest('hex');
+          sourceFingerprints.set(file, sourceFingerprint);
+          const rawContent = rawBytes.toString('utf-8');
+          const relativeFile = path.relative(this.rootPath, file).replace(/\\/g, '/');
+          const analyzedManifestHash = hashFileContent(rawContent);
+          analyzedManifestHashes.set(relativeFile, analyzedManifestHash);
+          if (
+            currentHashes &&
+            diff?.unchanged.includes(relativeFile) &&
+            currentHashes[relativeFile] !== analyzedManifestHash
+          ) {
+            throw new SourceSnapshotChangedError(
+              `Source changed during incremental scan; retry indexing: ${relativeFile}`
+            );
+          }
           const content = rawContent.replace(/\r\n/g, '\n');
           const result = await analyzerRegistry.analyzeFile(file, content, resolvedProjectOptions);
 
           if (result) {
             const isFileChanged = !filesToProcessSet || filesToProcessSet.has(file);
+
+            // Analyzer paths are derived from process.cwd(); persisted paths belong to this index root.
+            for (const chunk of result.chunks) {
+              chunk.relativePath = relativeFile;
+            }
 
             const mergedChunks = mergeSmallChunks(result.chunks, 15);
 
@@ -614,24 +689,58 @@ export class CodebaseIndexer {
               libraryTracker.track(imp.source, file);
               importGraph.trackImport(imp.source, file, imp.line || 1);
 
-              // Track internal file-to-file imports (relative paths)
-              if (imp.source.startsWith('.')) {
-                // Resolve the relative import to an absolute path
-                const fileDir = path.dirname(file);
-                let resolvedPath = path.resolve(fileDir, imp.source);
-
-                // Try common extensions if not already specified
-                const ext = path.extname(resolvedPath);
-                if (!ext) {
-                  for (const tryExt of ['.ts', '.tsx', '.js', '.jsx']) {
-                    const withExt = resolvedPath + tryExt;
-                    // We don't check if file exists for performance - just track what's referenced
-                    resolvedPath = withExt;
-                    break;
+              const resolution = await sourceResolver.resolve(file, imp.source);
+              if (resolution.status === 'resolved' && resolution.path) {
+                pendingResolvedEdges.push({
+                  from: file,
+                  to: resolution.path,
+                  line: imp.line || 1,
+                  importedSymbols: imp.imports,
+                  source: {
+                    kind: 'import',
+                    specifier: imp.source,
+                    sourceFingerprint
                   }
-                }
+                });
+              } else {
+                internalFileGraph.trackUnresolved(
+                  file,
+                  {
+                    line: imp.line || 1,
+                    specifier: imp.source,
+                    kind: 'import',
+                    sourceFingerprint,
+                    targetFingerprint: ''
+                  },
+                  resolution.reason ?? 'not-found'
+                );
+              }
+            }
 
-                internalFileGraph.trackImport(file, resolvedPath, imp.line || 1, imp.imports);
+            // Re-export relationships are separate typed edges and require AST source evidence.
+            for (const reexport of extractSourceReexports(content, file)) {
+              const resolution = await sourceResolver.resolve(file, reexport.specifier);
+              const proof = {
+                line: reexport.line,
+                specifier: reexport.specifier,
+                kind: 'reexport' as const,
+                sourceFingerprint,
+                targetFingerprint: ''
+              };
+              if (resolution.status === 'resolved' && resolution.path) {
+                pendingResolvedEdges.push({
+                  from: file,
+                  to: resolution.path,
+                  line: reexport.line,
+                  importedSymbols: [],
+                  source: {
+                    kind: proof.kind,
+                    specifier: proof.specifier,
+                    sourceFingerprint: proof.sourceFingerprint
+                  }
+                });
+              } else {
+                internalFileGraph.trackUnresolved(file, proof, resolution.reason ?? 'not-found');
               }
             }
 
@@ -727,6 +836,18 @@ export class CodebaseIndexer {
             stats.skippedFiles++;
           }
         } catch (error) {
+          if (error instanceof SourceSnapshotChangedError) throw error;
+          const relativeFile = path.relative(this.rootPath, file).replace(/\\/g, '/');
+          if (
+            diff?.unchanged.includes(relativeFile) &&
+            error instanceof Error &&
+            'code' in error &&
+            error.code === 'ENOENT'
+          ) {
+            throw new SourceSnapshotChangedError(
+              `Source disappeared during incremental scan; retry indexing: ${relativeFile}`
+            );
+          }
           stats.skippedFiles++;
           stats.errors.push({
             filePath: file,
@@ -738,6 +859,28 @@ export class CodebaseIndexer {
 
         if (this.onProgressCallback) {
           this.onProgressCallback(this.progress);
+        }
+      }
+
+      // Finish edges only after each endpoint has been read for this build. This binds both
+      // fingerprints to the exact source snapshots analyzed above, without retaining file bytes.
+      for (const edge of pendingResolvedEdges) {
+        const targetFingerprint = sourceFingerprints.get(edge.to);
+        if (targetFingerprint) {
+          internalFileGraph.trackImport(edge.from, edge.to, edge.line, edge.importedSymbols, {
+            ...edge.source,
+            targetFingerprint
+          });
+        } else {
+          internalFileGraph.trackUnresolved(
+            edge.from,
+            {
+              ...edge.source,
+              line: edge.line,
+              targetFingerprint: ''
+            },
+            'not-found'
+          );
         }
       }
 
@@ -910,20 +1053,8 @@ export class CodebaseIndexer {
       const intelligencePath = path.join(activeContextDir, INTELLIGENCE_FILENAME);
       const libraryStats = libraryTracker.getStats();
 
-      // Extract tsconfig paths for AI to understand import aliases
-      let tsconfigPaths: Record<string, string[]> | undefined;
-      try {
-        const tsconfigPath = path.join(this.rootPath, 'tsconfig.json');
-        const tsconfigContent = await fs.readFile(tsconfigPath, 'utf-8');
-        const tsconfig = JSON.parse(tsconfigContent);
-        if (tsconfig.compilerOptions?.paths) {
-          tsconfigPaths = tsconfig.compilerOptions.paths;
-          console.error(
-            `Found ${Object.keys(tsconfigPaths!).length} path aliases in tsconfig.json`
-          );
-        }
-      } catch (_error) {
-        // No tsconfig.json or no paths defined
+      if (tsconfigPaths && Object.keys(tsconfigPaths).length > 0) {
+        console.error(`Found ${Object.keys(tsconfigPaths).length} path aliases in tsconfig.json`);
       }
 
       const intelligence = {
@@ -980,6 +1111,7 @@ export class CodebaseIndexer {
         graph: {
           imports: graphData.imports || {},
           ...(graphData.importDetails ? { importDetails: graphData.importDetails } : {}),
+          ...(graphData.unresolvedEdges ? { unresolvedEdges: graphData.unresolvedEdges } : {}),
           importedBy,
           exports: graphData.exports || {}
         },
@@ -1003,10 +1135,11 @@ export class CodebaseIndexer {
       // Write manifest (both full and incremental)
       // For full rebuild, write to staging; for incremental, write to active
       const activeManifestPath = path.join(activeContextDir, MANIFEST_FILENAME);
+      const analyzedHashes = Object.fromEntries(analyzedManifestHashes);
       const manifest: FileManifest = {
         version: 1,
         generatedAt: new Date().toISOString(),
-        files: currentHashes ?? (await computeFileHashes(files, this.rootPath))
+        files: analyzedHashes
       };
       await writeManifest(activeManifestPath, manifest);
 
@@ -1036,7 +1169,8 @@ export class CodebaseIndexer {
                 path: VECTOR_DB_DIRNAME,
                 provider: 'lancedb',
                 embeddingProvider: this.config.embedding?.provider ?? 'transformers',
-                embeddingModel: this.config.embedding?.model ?? DEFAULT_MODEL
+                embeddingModel: this.config.embedding?.model ?? DEFAULT_MODEL,
+                embeddingEnabled: !this.config.skipEmbedding
               },
               intelligence: { path: INTELLIGENCE_FILENAME },
               manifest: { path: MANIFEST_FILENAME },

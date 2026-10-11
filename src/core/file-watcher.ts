@@ -1,6 +1,6 @@
 import chokidar from 'chokidar';
 import path from 'path';
-import { EXCLUDED_GLOB_PATTERNS } from '../constants/codebase-context.js';
+import { EXCLUDED_DIRECTORY_NAMES } from '../constants/codebase-context.js';
 import { getSupportedExtensions } from '../utils/language-detection.js';
 
 export interface FileWatcherOptions {
@@ -46,7 +46,10 @@ export function startFileWatcher(opts: FileWatcherOptions): () => void {
   };
 
   const watcher = chokidar.watch(rootPath, {
-    ignored: [...EXCLUDED_GLOB_PATTERNS],
+    ignored: (filePath) => {
+      const pathParts = filePath.split(/[\\/]+/);
+      return EXCLUDED_DIRECTORY_NAMES.some((directoryName) => pathParts.includes(directoryName));
+    },
     persistent: true,
     ignoreInitial: true,
     awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 100 }

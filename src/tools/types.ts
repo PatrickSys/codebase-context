@@ -56,7 +56,11 @@ export interface ToolContext {
   paths: ToolPaths;
   rootPath: string;
   project?: ProjectDescriptor;
-  performIndexing: (incrementalOnly?: boolean, reason?: string) => void;
+  performIndexing: (
+    incrementalOnly?: boolean,
+    reason?: string,
+    skipEmbedding?: boolean
+  ) => void | Promise<void>;
   listProjects?: () => ProjectDescriptor[];
   getActiveProject?: () => ProjectDescriptor | undefined;
 }

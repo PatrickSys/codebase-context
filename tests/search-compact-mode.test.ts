@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
+import { hashFileContent, writeManifest } from '../src/core/manifest.js';
 import type { SearchResponse } from '../src/tools/types.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
@@ -10,6 +11,7 @@ import {
   INDEX_META_VERSION,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
+  MANIFEST_FILENAME,
   RELATIONSHIPS_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../src/constants/codebase-context.js';
@@ -125,7 +127,11 @@ describe('search_codebase compact/full mode', () => {
               primary: {
                 name: 'Signals',
                 frequency: '78%',
-                trend: 'Rising'
+                trend: 'Rising',
+                canonicalExample: {
+                  file: 'src/auth/auth.service.ts',
+                  snippet: 'export class AuthService { getToken() { return token; } }'
+                }
               }
             },
             componentArchitecture: {
@@ -310,14 +316,141 @@ describe('search_codebase compact/full mode', () => {
     const payload = parseSearchResponse(response.content[0].text);
     expect(payload.budget).toBeDefined();
     expect(payload.budget?.mode).toBe('compact');
-    // patternSummary should include pattern info from intelligence.json
+    // Only patterns backed by source in a returned result belong in this summary.
     expect(typeof payload.patternSummary).toBe('string');
     expect(payload.patternSummary).toContain('Signals');
+    expect(payload.patternSummary).not.toContain('Standalone Components');
     // bestExample should be the top golden file
     expect(payload.bestExample).toBe('src/auth/auth.service.ts');
     // nextHops should have at least 1 entry
     expect(Array.isArray(payload.nextHops)).toBe(true);
     expect(payload.nextHops?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it('omits stale pattern examples from summaries, advice, and evidence', async () => {
+    const intelligencePath = path.join(tempRoot!, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME);
+    const intelligence = JSON.parse(await fs.readFile(intelligencePath, 'utf-8')) as {
+      patterns: Record<
+        string,
+        { primary?: Record<string, unknown>; alsoDetected?: Array<Record<string, unknown>> }
+      >;
+    };
+    intelligence.patterns.stateManagement.primary = {
+      name: 'Signals',
+      frequency: '78%',
+      trend: 'Rising',
+      canonicalExample: {
+        file: 'src/auth/auth.service.ts',
+        snippet: 'export function obsoleteSignalStore() {}'
+      }
+    };
+    intelligence.patterns.stateManagement.alsoDetected = [
+      {
+        name: 'Legacy Store',
+        frequency: '22%',
+        trend: 'Declining',
+        canonicalExample: {
+          file: 'src/auth/auth.service.ts',
+          snippet: 'export function obsoleteLegacyStore() {}'
+        }
+      }
+    ];
+    await fs.writeFile(intelligencePath, JSON.stringify(intelligence), 'utf-8');
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult(),
+      makeResult({ filePath: 'src/auth/token.service.ts' }),
+      makeResult({ filePath: 'src/auth/session.service.ts' })
+    ]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'auth service', intent: 'edit' }
+      }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.patternSummary).toBeUndefined();
+    expect(payload.preflight?.ready).toBe(false);
+    expect(payload.preflight?.patterns).toBeUndefined();
+  });
+
+  it('keeps advice for a current canonical example and excludes unrelated patterns', async () => {
+    searchMocks.search.mockResolvedValueOnce([makeResult()]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'auth service', intent: 'edit' }
+      }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.searchQuality?.status).toBe('ok');
+    expect(payload.preflight?.patterns?.do).toContain('Signals');
+    expect(payload.preflight?.patterns?.do).not.toContain('Standalone Components');
+    expect(payload.preflight?.patterns?.do?.some((pattern) => pattern.includes('adoption'))).toBe(
+      false
+    );
+  });
+
+  it('suppresses grounded pattern advice when search quality requires abstention', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ score: 0.2 }),
+      makeResult({ filePath: 'src/auth/auth.service2.ts', score: 0.19 }),
+      makeResult({ filePath: 'src/auth/auth.service3.ts', score: 0.18 })
+    ]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'auth service', intent: 'edit' }
+      }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.searchQuality?.status).toBe('low_confidence');
+    expect(payload.preflight?.abstain).toBe(true);
+    expect(payload.preflight?.patterns).toBeUndefined();
   });
 
   it('compact mode serializes symbol intelligence fields from chunk metadata', async () => {
@@ -517,64 +650,78 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.results[0].complexity).toBe(7);
   });
 
-  it('real CodebaseSearcher preserves chunk imports and exports', async () => {
-    if (!tempRoot) throw new Error('tempRoot not initialized');
+  it(
+    'real CodebaseSearcher preserves chunk imports and exports',
+    async () => {
+      if (!tempRoot) throw new Error('tempRoot not initialized');
 
-    const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
-    const actualChunk = {
-      id: 'auth-chunk',
-      content:
-        'import { tokenStore } from "./token-store";\nexport class AuthService {\n  getToken() { return tokenStore.read(); }\n}\nexport const AUTH_TOKEN = "auth";',
-      filePath: path.join(tempRoot, 'src', 'auth', 'auth.service.ts'),
-      relativePath: 'src/auth/auth.service.ts',
-      startLine: 1,
-      endLine: 5,
-      language: 'ts',
-      dependencies: [],
-      imports: [
-        'src/auth/token-store.ts',
-        'src/auth/session.ts',
-        'src/shared/logger.ts',
-        'src/config/env.ts',
-        'src/http/client.ts'
-      ],
-      exports: ['AuthService', 'AUTH_TOKEN'],
-      tags: ['service'],
-      metadata: {
-        className: 'AuthService',
-        symbolAware: true,
-        symbolName: 'AuthService',
-        symbolKind: 'class'
-      }
-    };
+      const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
+      const actualChunk = {
+        id: 'auth-chunk',
+        content:
+          'import { tokenStore } from "./token-store";\nexport class AuthService {\n  getToken() { return tokenStore.read(); }\n}\nexport const AUTH_TOKEN = "auth";',
+        filePath: path.join(tempRoot, 'src', 'auth', 'auth.service.ts'),
+        relativePath: 'src/auth/auth.service.ts',
+        startLine: 1,
+        endLine: 5,
+        language: 'ts',
+        dependencies: [],
+        imports: [
+          'src/auth/token-store.ts',
+          'src/auth/session.ts',
+          'src/shared/logger.ts',
+          'src/config/env.ts',
+          'src/http/client.ts'
+        ],
+        exports: ['AuthService', 'AUTH_TOKEN'],
+        tags: ['service'],
+        metadata: {
+          className: 'AuthService',
+          symbolAware: true,
+          symbolName: 'AuthService',
+          symbolKind: 'class'
+        }
+      };
 
-    await fs.writeFile(
-      path.join(ctxDir, KEYWORD_INDEX_FILENAME),
-      JSON.stringify(
-        {
-          header: { buildId: 'test-build-compact', formatVersion: INDEX_FORMAT_VERSION },
-          chunks: [actualChunk]
-        },
-        null,
-        2
-      ),
-      'utf-8'
-    );
+      await fs.writeFile(
+        path.join(ctxDir, KEYWORD_INDEX_FILENAME),
+        JSON.stringify(
+          {
+            header: { buildId: 'test-build-compact', formatVersion: INDEX_FORMAT_VERSION },
+            chunks: [actualChunk]
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
 
-    const actualSearchModule =
-      await vi.importActual<typeof import('../src/core/search.js')>('../src/core/search.js');
-    const searcher = new actualSearchModule.CodebaseSearcher(tempRoot);
-    const results = await searcher.search('AuthService token', 5, undefined, {
-      useSemanticSearch: false,
-      useKeywordSearch: true,
-      enableReranker: false
-    });
+      // This real-search fixture must represent actual indexed source. Older setup
+      // only wrote cached chunks, which cannot establish current-source validity.
+      await fs.mkdir(path.dirname(actualChunk.filePath), { recursive: true });
+      await fs.writeFile(actualChunk.filePath, actualChunk.content, 'utf-8');
+      await writeManifest(path.join(ctxDir, MANIFEST_FILENAME), {
+        version: 1,
+        generatedAt: new Date().toISOString(),
+        files: { [actualChunk.relativePath]: hashFileContent(actualChunk.content) }
+      });
 
-    expect(results).toHaveLength(1);
-    expect(results[0].filePath).toBe(actualChunk.filePath);
-    expect(results[0].imports).toEqual(actualChunk.imports);
-    expect(results[0].exports).toEqual(actualChunk.exports);
-  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
+      const actualSearchModule =
+        await vi.importActual<typeof import('../src/core/search.js')>('../src/core/search.js');
+      const searcher = new actualSearchModule.CodebaseSearcher(tempRoot);
+      const results = await searcher.search('AuthService token', 5, undefined, {
+        useSemanticSearch: false,
+        useKeywordSearch: true,
+        enableReranker: false
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].filePath).toBe(actualChunk.filePath);
+      expect(results[0].imports).toEqual(actualChunk.imports);
+      expect(results[0].exports).toEqual(actualChunk.exports);
+    },
+    SLOW_WINDOWS_TEST_TIMEOUT_MS
+  );
 
   it('adds a warning only when the final full payload exceeds the compact budget threshold', async () => {
     const oversizedSummary = 'Token-heavy summary '.repeat(1200);

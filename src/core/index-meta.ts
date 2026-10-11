@@ -10,6 +10,7 @@ import {
   INDEX_META_VERSION,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
+  MEMORY_FILENAME,
   RELATIONSHIPS_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
@@ -81,7 +82,8 @@ export const IndexMetaSchema = z.object({
         path: z.string().min(1),
         provider: z.string().min(1),
         embeddingProvider: z.string().optional(),
-        embeddingModel: z.string().optional()
+        embeddingModel: z.string().optional(),
+        embeddingEnabled: z.boolean().optional()
       }),
       intelligence: z
         .object({
@@ -102,9 +104,13 @@ export type IndexMeta = z.infer<typeof IndexMetaSchema>;
 export function checkEmbeddingMismatch(
   meta: IndexMeta,
   currentProvider: string,
-  currentModel: string
+  currentModel: string,
+  currentEmbeddingEnabled = true
 ): boolean {
   const stored = meta.artifacts.vectorDb;
+  const storedEmbeddingEnabled = stored.embeddingEnabled ?? true;
+  if (storedEmbeddingEnabled !== currentEmbeddingEnabled) return true;
+  if (!currentEmbeddingEnabled) return false;
   if (!stored.embeddingProvider || !stored.embeddingModel) return false; // legacy index, no info
   return stored.embeddingProvider !== currentProvider || stored.embeddingModel !== currentModel;
 }
@@ -174,6 +180,52 @@ export async function readIndexMeta(rootDir: string): Promise<IndexMeta> {
   }
 
   return meta;
+}
+
+/** Keep an existing index's successful mode; use model-free mode only for a fresh folder. */
+export async function resolveSkipEmbedding(
+  rootDir: string,
+  explicitChoice?: boolean
+): Promise<boolean> {
+  if (explicitChoice !== undefined) {
+    if (typeof explicitChoice !== 'boolean') throw new TypeError('skipEmbedding must be a boolean');
+    return explicitChoice;
+  }
+
+  try {
+    const meta = await readIndexMeta(rootDir);
+    // Metadata written before the mode field describes a semantic index.
+    return meta.artifacts.vectorDb.embeddingEnabled === false;
+  } catch (metaError) {
+    const contextDir = path.join(rootDir, CODEBASE_CONTEXT_DIRNAME);
+    // A valid older index may retain a trustworthy mode despite requiring a migration.
+    try {
+      const raw = await fs.readFile(path.join(contextDir, INDEX_META_FILENAME), 'utf8');
+      const legacy = IndexMetaSchema.safeParse(JSON.parse(raw));
+      if (
+        legacy.success &&
+        legacy.data.metaVersion <= INDEX_META_VERSION &&
+        legacy.data.formatVersion <= INDEX_FORMAT_VERSION
+      ) {
+        return legacy.data.artifacts.vectorDb.embeddingEnabled === false;
+      }
+    } catch {
+      // Malformed metadata cannot establish a safe automatic mode.
+    }
+
+    let entries: string[];
+    try {
+      entries = await fs.readdir(contextDir);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true;
+      throw asIndexCorrupted('Cannot recover embedding mode (rebuild required)', error);
+    }
+    if (entries.every((entry) => entry === MEMORY_FILENAME)) return true;
+    throw asIndexCorrupted(
+      'Cannot recover embedding mode (rebuild required). Select --no-embeddings or --embeddings explicitly',
+      metaError
+    );
+  }
 }
 
 export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): Promise<void> {

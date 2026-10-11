@@ -8,7 +8,6 @@ import type {
   SearchResult,
   IntelligenceData,
   PatternsData,
-  IntelligenceGoldenFile,
   ChunkMetadata
 } from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
@@ -335,6 +334,38 @@ export async function handle(
       })
       .filter((value): value is string => value !== null)
   );
+
+  function canonicalRootRelativePath(filePath: string): string | undefined {
+    if (!filePath || path.isAbsolute(filePath)) return undefined;
+    const normalized = filePath.replace(/\\/g, '/');
+    const parts = normalized.split('/');
+    if (
+      /^[a-z]:/i.test(parts[0]) ||
+      parts.some((part) => part === '' || part === '.' || part === '..')
+    ) {
+      return undefined;
+    }
+    return normalized;
+  }
+
+  function hasGroundedCanonicalExample(candidate: {
+    canonicalExample?: { file: string; snippet?: string };
+  }): boolean {
+    const example = candidate.canonicalExample;
+    const examplePath = example && canonicalRootRelativePath(example.file);
+    const snippet = example?.snippet;
+    if (!examplePath || !snippet?.trim()) return false;
+
+    const matches = results.filter((result) => {
+      const resultPath = canonicalRootRelativePath(normalizeGraphPath(result.filePath));
+      return resultPath === examplePath;
+    });
+    return matches.length === 1 && matches[0].snippet.includes(snippet);
+  }
+
+  function isPatternInQueryScope(category: string): boolean {
+    return shouldIncludePatternConflictCategory(category, queryStr);
+  }
 
   function getMemoryScopeBoost(memory: MemoryWithConfidence): number {
     if (!memory.scope || memory.scope.kind === 'global') return 0;
@@ -682,10 +713,16 @@ export async function handle(
   function buildPatternSummary(): string | undefined {
     const patterns = intelligence?.patterns;
     if (!patterns) return undefined;
-    const entries = Object.values(patterns)
-      .filter((data) => Boolean(data.primary))
+    const entries = Object.entries(patterns)
+      .filter(([category, data]) =>
+        Boolean(
+          data.primary &&
+          isPatternInQueryScope(category) &&
+          hasGroundedCanonicalExample(data.primary)
+        )
+      )
       .slice(0, 3)
-      .map((data) => {
+      .map(([, data]) => {
         const p = data.primary!;
         return `${p.name} (${p.frequency}, ${p.trend ?? 'Stable'})`;
       });
@@ -746,10 +783,22 @@ export async function handle(
         why: 'Read the top match for implementation details'
       });
     }
-    if (sq.status === 'low_confidence') {
-      hops.push({ tool: 'get_team_patterns', why: 'Review pattern guidance — confidence is low' });
-    } else if (hops.length < 2) {
-      hops.push({ tool: 'get_team_patterns', why: 'Review team patterns and best examples' });
+    if (compactResults.length > 0) {
+      const relativeFile = path.relative(ctx.rootPath, compactResults[0].filePath);
+      if (
+        !path.isAbsolute(relativeFile) &&
+        relativeFile !== '..' &&
+        !relativeFile.startsWith(`..${path.sep}`)
+      ) {
+        hops.push({
+          tool: 'get_code_relationships',
+          args: { file: relativeFile.replace(/\\/g, '/'), direction: 'outgoing' },
+          why:
+            sq.status === 'low_confidence'
+              ? 'Follow current import evidence while continuing source discovery'
+              : 'Follow verified imports to related implementation files'
+        });
+      }
     }
     return hops.slice(0, 2);
   }
@@ -768,10 +817,14 @@ export async function handle(
       // Use existing pattern intelligence for evidenceLock scoring, but keep the output payload lite.
       const preferredPatternsForEvidence: Array<{ pattern: string; example?: string }> = [];
       const patterns: PatternsData = intelligence.patterns || {};
-      for (const [_, data] of Object.entries(patterns)) {
+      for (const [category, data] of Object.entries(patterns)) {
         if (data.primary) {
           const p = data.primary;
-          if (p.trend === 'Rising' || p.trend === 'Stable') {
+          if (
+            (p.trend === 'Rising' || p.trend === 'Stable') &&
+            isPatternInQueryScope(category) &&
+            hasGroundedCanonicalExample(p)
+          ) {
             preferredPatternsForEvidence.push({
               pattern: p.name,
               ...(p.canonicalExample && { example: p.canonicalExample.file })
@@ -839,7 +892,11 @@ export async function handle(
           // Primary pattern = preferred if Rising or Stable
           if (data.primary) {
             const p = data.primary;
-            if (p.trend === 'Rising' || p.trend === 'Stable') {
+            if (
+              (p.trend === 'Rising' || p.trend === 'Stable') &&
+              isPatternInQueryScope(category) &&
+              hasGroundedCanonicalExample(p)
+            ) {
               preferredPatternsList.push({
                 pattern: p.name,
                 category,
@@ -853,7 +910,11 @@ export async function handle(
           // Also-detected patterns that are Declining = avoid
           if (data.alsoDetected) {
             for (const alt of data.alsoDetected) {
-              if (alt.trend === 'Declining') {
+              if (
+                alt.trend === 'Declining' &&
+                isPatternInQueryScope(category) &&
+                hasGroundedCanonicalExample(alt)
+              ) {
                 avoidPatternsList.push({
                   pattern: alt.name,
                   category,
@@ -928,14 +989,6 @@ export async function handle(
           riskLevel = 'medium';
         }
 
-        // --- Golden files (exemplar code) ---
-        const goldenFiles = (intelligence.goldenFiles ?? [])
-          .slice(0, 3)
-          .map((g: IntelligenceGoldenFile) => ({
-            file: g.file,
-            score: g.score
-          }));
-
         // --- Confidence (index freshness) ---
         // TODO: Review this confidence calculation
         //const confidence = computeIndexConfidence();
@@ -964,9 +1017,11 @@ export async function handle(
           if (shouldSkipLegacyTestingFrameworkCategory(cat, patterns)) continue;
           if (!shouldIncludePatternConflictCategory(cat, queryStr)) continue;
           if (!data.primary || !data.alsoDetected?.length) continue;
+          if (!hasGroundedCanonicalExample(data.primary)) continue;
           const primaryFreq = parseFloat(data.primary.frequency) || 100;
           if (primaryFreq >= 80) continue;
           for (const alt of data.alsoDetected) {
+            if (!hasGroundedCanonicalExample(alt)) continue;
             const altFreq = parseFloat(alt.frequency) || 0;
             if (altFreq >= 20) {
               if (isComplementaryPatternConflict(cat, data.primary.name, alt.name)) continue;
@@ -1014,13 +1069,15 @@ export async function handle(
           decisionCard.warnings = [...(decisionCard.warnings ?? []), ...freshnessGaps];
         }
 
-        // Add patterns (do/avoid, capped at 3 each, with adoption %)
-        const doPatterns = preferredPatternsForOutput
-          .slice(0, 3)
-          .map((p) => `${p.pattern} — ${p.adoption ? `${p.adoption} adoption` : ''}`);
-        const avoidPatterns = avoidPatternsForOutput
-          .slice(0, 3)
-          .map((p) => `${p.pattern} — ${p.adoption ? `${p.adoption} adoption` : ''} (declining)`);
+        // Pattern advice is actionable only when search itself did not abstain.
+        const suppressPatternAdvice =
+          evidenceLock.status === 'block' || searchQuality.status === 'low_confidence';
+        const doPatterns = suppressPatternAdvice
+          ? []
+          : preferredPatternsForOutput.slice(0, 3).map((p) => p.pattern);
+        const avoidPatterns = suppressPatternAdvice
+          ? []
+          : avoidPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} (declining)`);
         if (doPatterns.length > 0 || avoidPatterns.length > 0) {
           decisionCard.patterns = {
             ...(doPatterns.length > 0 && { do: doPatterns }),
@@ -1166,22 +1223,6 @@ export async function handle(
       }),
     // Surface reranker health so agents know if they're getting degraded results
     ...(rerankerStatus === 'unavailable' && { rerankerStatus: 'unavailable' })
-  };
-
-  type SearchResponsePayload = {
-    status: 'success';
-    searchQuality: typeof searchQualityBlock & {
-      tokenEstimate?: number;
-      warning?: string;
-    };
-    budget: { mode: 'compact' | 'full'; resultCount: number };
-    preflight?: typeof preflightPayload;
-    patternSummary?: string;
-    bestExample?: string;
-    nextHops?: Array<{ tool: string; why: string; args?: Record<string, string> }>;
-    results: Array<Record<string, unknown>>;
-    totalResults?: number;
-    relatedMemories?: string[];
   };
 
   // Compact mode (default): bounded response with light graph context

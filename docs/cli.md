@@ -46,6 +46,18 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context@2.2.0 patterns
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
 - MCP client registration — use the published 2.2.0 commands in the [client setup guide](./client-setup.md); published `init` is not a reliable setup route
 
+## `init`
+
+The local candidate CLI supports deterministic help and noninteractive Codex setup:
+
+```powershell
+codebase-context init --help
+codebase-context init --client codex --yes
+codebase-context init --client codex --yes --root "C:\path\to\project"
+```
+
+`--yes` requires `--client`. `--root` is Codex-only and must name an existing directory. Codex setup writes project `.codex/config.toml`, preserving unrelated TOML and rejecting conflicting server settings, then prepares the local index. Its stdio command points to the exact installed CLI entrypoint used for setup. Setup does not change global Codex configuration, project trust, or approval settings. See the [packed-candidate recipe](./client-setup.md#install-an-exact-packed-candidate-for-codex) before using an unreleased build.
+
 ---
 
 ## First use
@@ -216,6 +228,18 @@ Example output:
 ```
 
 ## `reindex`
+
+In the unreleased model-free candidate, use the locally installed package:
+
+```bash
+npx --no-install codebase-context reindex
+npx --no-install codebase-context reindex --incremental
+npx --no-install codebase-context reindex --no-embeddings
+# Requires the optional Transformers and LanceDB runtimes; may download models.
+npx --no-install codebase-context reindex --embeddings
+```
+
+New projects default to model-free. Omit mode flags to preserve the successful mode; explicit changes require a full rebuild even with `--incremental`. The two mode flags are mutually exclusive and index failures return nonzero. The examples below target the older published package.
 
 ```bash
 npx -y codebase-context@2.2.0 reindex

@@ -12,6 +12,8 @@ import type { AutoRefreshController } from './core/auto-refresh.js';
 import type { ToolPaths, IndexState } from './tools/types.js';
 
 export interface ProjectRuntimeOverrides {
+  /** Explicit embedding mode; absent preserves the recorded project mode. */
+  skipEmbedding?: boolean;
   /** Extra glob exclusion patterns merged with the default index-time exclusions. */
   extraExcludePatterns?: string[];
   /** Maximum chunks retained in semantic and keyword indexes for this project. */

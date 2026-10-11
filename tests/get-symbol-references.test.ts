@@ -22,7 +22,9 @@ type ToolCallResponse = {
   isError?: boolean;
 };
 
-function getToolCallHandler(server: unknown): (request: ToolCallRequest) => Promise<ToolCallResponse> {
+function getToolCallHandler(
+  server: unknown
+): (request: ToolCallRequest) => Promise<ToolCallResponse> {
   const handlers = (server as { _requestHandlers?: unknown })._requestHandlers;
   if (!(handlers instanceof Map)) {
     throw new Error('Expected server._requestHandlers to be a Map');
@@ -32,6 +34,17 @@ function getToolCallHandler(server: unknown): (request: ToolCallRequest) => Prom
     throw new Error('Expected tools/call handler to be registered');
   }
   return handler as (request: ToolCallRequest) => Promise<ToolCallResponse>;
+}
+
+async function writeProjectSource(
+  rootPath: string,
+  relativePath: string,
+  content: string
+): Promise<string> {
+  const absolutePath = path.join(rootPath, relativePath);
+  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+  await fs.writeFile(absolutePath, content, 'utf-8');
+  return absolutePath;
 }
 
 describe('get_symbol_references MCP tool', () => {
@@ -90,16 +103,22 @@ describe('get_symbol_references MCP tool', () => {
       'utf-8'
     );
 
+    const sourceA = 'export function alpha() {\n  return beta(alpha);\n}\n';
+    const sourceB = 'const beta = alpha + 1;\n';
+    const filePathA = await writeProjectSource(tempRoot, 'src/a.ts', sourceA);
+    const filePathB = await writeProjectSource(tempRoot, 'src/b.ts', sourceB);
     const chunks = [
       {
-        content: 'export function alpha() {\n  return beta(alpha);\n}',
+        content: sourceA,
         startLine: 10,
-        relativePath: 'src/a.ts'
+        relativePath: 'src/a.ts',
+        filePath: filePathA
       },
       {
-        content: 'const beta = alpha + 1;\n',
+        content: sourceB,
         startLine: 2,
-        relativePath: 'src/b.ts'
+        relativePath: 'src/b.ts',
+        filePath: filePathB
       }
     ];
 
@@ -186,7 +205,7 @@ describe('get_symbol_references MCP tool', () => {
       'const alpha = 1;',
       '// alpha only in comment',
       'console.log(alpha);',
-      'const s = \"alpha\";'
+      'const s = "alpha";'
     ].join('\n');
     await fs.writeFile(filePath, fileContent, 'utf-8');
 
@@ -272,11 +291,14 @@ describe('get_symbol_references MCP tool', () => {
       'utf-8'
     );
 
+    const source = 'export function alpha() {\n  return alpha;\n}\n';
+    const filePath = await writeProjectSource(tempRoot, 'src/test.ts', source);
     const chunks = [
       {
-        content: 'export function alpha() {\n  return alpha;\n}',
+        content: source,
         startLine: 1,
-        relativePath: 'src/test.ts'
+        relativePath: 'src/test.ts',
+        filePath
       }
     ];
 
@@ -351,11 +373,13 @@ describe('get_symbol_references MCP tool', () => {
 
     // Create a chunk with many matches
     const content = 'foo foo foo foo foo foo foo foo foo foo foo';
+    const filePath = await writeProjectSource(tempRoot, 'src/test.ts', content);
     const chunks = [
       {
         content,
         startLine: 1,
-        relativePath: 'src/test.ts'
+        relativePath: 'src/test.ts',
+        filePath
       }
     ];
 

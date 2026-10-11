@@ -333,15 +333,15 @@ describe('search source-path validity', () => {
     );
     await indexProject(rootPath);
     const differentlyCasedRoot = path.join(tempRoot, 'MIXED-CASE-PROJECT');
+    const caseVariantExists = await fs.access(differentlyCasedRoot).then(
+      () => true,
+      () => false
+    );
     const search = new CodebaseSearcher(differentlyCasedRoot).search(
       'quartzBeacon',
       5,
       undefined,
       KEYWORD_ONLY_OPTIONS
-    );
-    const caseVariantExists = await fs.access(differentlyCasedRoot).then(
-      () => true,
-      () => false
     );
     if (caseVariantExists) {
       await expectSearchResultsOpenInsideRoot(

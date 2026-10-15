@@ -2,15 +2,11 @@
 
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](https://github.com/PatrickSys/codebase-context/blob/master/package.json)
 
-## Your coding agent doesn't understand your codebase.
-
-Coding agents can read files, but they still have to discover how your repository is organized, which patterns your team follows, and which examples are worth copying.
-
-Codebase Context gives an agent a local view of that information through code search, team patterns, strong examples, and project memory. It runs as an MCP server - a local tool that your editor or command-line agent can call while it works - and keeps the index on your machine by default.
+Codebase Context gives coding agents a map of your repository through MCP, for developers who want their agent to find relevant code and follow the team's patterns. Search, examples and project memory run locally by default.
 
 ## Set up your AI client
 
-Choose your coding tool and run its command once. Use Node.js 22 or newer. These commands use published npm `2.4.0` and do not require a project folder in your configuration:
+Use Node.js 22 or newer. Choose your coding tool and run its command once; the examples target the 2.4.0 release:
 
 ```bash
 # Claude Code
@@ -25,9 +21,19 @@ opencode mcp add codebase-context '--' npx -y codebase-context@2.4.0
 
 Start a new agent session in your project, then ask:
 
-> Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project when checking get_indexing_status and searching. Wait for indexing if needed, read codebase://context, then search_codebase and open a returned source file. Show me the relevant files.
+> Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project, wait for indexing if needed, and open the relevant source files.
 
-Replace `[feature]` with something you want to find. The agent supplies the repository path in its tool calls, so the registration can serve different projects. Initial indexing may need a local model download. The October 6 isolated checks exercised published `2.2.0` client registrations and project selection/search. They did not verify `2.4.0` or establish a full native agent investigation.
+Replace `[feature]` with something you want to find. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model.
+
+### New in 2.4.0
+
+- Opt-in NestJS support from community contributor Aaron Olin. See the [analyzer options](./docs/capabilities.md#analyzers).
+- Better React/Next.js detection and a fix for reranker passage scoring.
+- Transformers.js v4 for local models.
+
+Known limits: [Intel Mac indexing crash (#68)](https://github.com/PatrickSys/codebase-context/issues/68), [custom OpenAI endpoints (#70)](https://github.com/PatrickSys/codebase-context/issues/70) and [Ollama (#71)](https://github.com/PatrickSys/codebase-context/issues/71) remain open.
+
+The existing [benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) reports 25.7% expected-file recovery versus jCodeMunch's 27.1% in a fixed retrieval comparison; it does not establish a winner or coding quality.
 
 For Codex Desktop, create or merge `.codex/config.toml` in the project you want to search:
 
@@ -50,7 +56,7 @@ Other clients use their own setup commands:
 | GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context@2.4.0` |
 | Windsurf                    | Add `~/.codeium/windsurf/mcp_config.json`                                    |
 
-Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration, the `2.4.0` project installer and its verification limits. The registration bugs found in `2.2.0` are historical.
+Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration and the interactive setup wizard's limitations.
 
 The [client setup guide](./docs/client-setup.md) has the exact commands and config for every client, plus what was checked locally and what still relies on official instructions.
 
@@ -64,7 +70,7 @@ The default connection is `stdio` (standard input/output): your client starts th
 
 ### Team patterns and examples
 
-`get_team_patterns` shows the approaches used in the repository and points to representative files. Published `2.4.0` includes dedicated analyzers for Angular, React, Next.js and NestJS, with a generic analyzer for other stacks.
+`get_team_patterns` shows the approaches used in the repository and points to representative files. Version `2.4.0` includes dedicated analyzers for Angular, React, Next.js and opt-in NestJS, with a generic analyzer for other stacks.
 
 ### Project memory
 
@@ -80,7 +86,7 @@ The `codebase-context-review` CLI creates a bounded context packet from a commit
 2. **Understand the repository.** The agent can request a compact codebase map with structure, patterns, and representative files.
 3. **Find the code for the task.** Search returns ranked files and symbols; the agent reads the selected files before editing.
 
-The same information is available from the terminal. Run these commands from your project root. The first index can take a while because it scans the project and creates local embeddings; once it is ready, inspect the map and search for the code you need:
+The same information is available from the terminal. Run these commands from your project root. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Once it is ready, inspect the map and search for the code you need:
 
 ```bash
 # Build or refresh the local index
@@ -149,7 +155,7 @@ The method and failures are documented so the measurements can be inspected with
 - Retrieval measurements describe expected-file coverage, file precision, and reported `peakPrivateGb`, not patch correctness or end-to-end coding quality.
 - The paired token observation covers two frozen investigation tasks and records observed agent behavior; it is not a universal token or time guarantee.
 - Setup checks differ by client. The detailed guide distinguishes a written config, a config recognized by the client, a local connection, and instructions checked only against official docs.
-- Published `2.4.0` has dedicated Angular, React, Next.js and NestJS analyzers. Other projects use the generic analyzer and the language parsers available for that stack.
+- Version `2.4.0` has dedicated Angular, React, Next.js and opt-in NestJS analyzers. Other projects use the generic analyzer and the language parsers available for that stack.
 - The default searchable-chunk limit is 5,000 per project. In `~/.codebase-context/config.json`, set `projects[].parsing.maxChunks` for a project that needs a higher limit.
 - The agent must identify its repository in tool calls when no default or unambiguous client root is available. Concurrent HTTP client isolation is not established by the stdio routing checks.
 

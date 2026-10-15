@@ -10,9 +10,9 @@
 
 > Output depends on the repo you run it against. The examples below are illustrative (paths, counts, and detected frameworks will vary).
 >
-> These output examples come from an earlier CLI run; they were not captured from published `2.4.0` and do not verify an MCP connection.
+> These output examples come from an earlier CLI run; they were not captured from `2.4.0` and do not verify an MCP connection.
 >
-> The commands below use published `codebase-context@2.4.0` and require Node.js 22 or newer. The CLI is intentionally single-project per invocation and targets one root via `CODEBASE_ROOT` or the current working directory. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
+> The commands below use `codebase-context@2.4.0` and require Node.js 22 or newer. The CLI is intentionally single-project per invocation and targets one root via `CODEBASE_ROOT` or the current working directory. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
 
 ## How to run
 
@@ -44,13 +44,13 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context@2.4.0 patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
-- MCP client registration — use the published 2.4.0 recipes in the [client setup guide](./client-setup.md); the setup failures documented for `init` apply to 2.2.0
+- MCP client registration — use the 2.4.0 recipes in the [client setup guide](./client-setup.md); `init` is an interactive HTTP setup wizard with the limitations described there
 
 ---
 
 ## First use
 
-Run these CLI commands from the project root. Build or refresh the local index first; the first index may take a while while the project is scanned and local embeddings are created. Then inspect the conventions map and search for the code you need:
+Run these CLI commands from the project root. Build or refresh the local index first; the first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Then inspect the conventions map and search for the code you need:
 
 ```bash
 npx -y codebase-context@2.4.0 reindex

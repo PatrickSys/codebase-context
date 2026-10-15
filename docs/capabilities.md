@@ -27,7 +27,7 @@ Copy-pasteable client config templates are shipped in the package:
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients
 - `templates/mcp/http/.mcp.json` — HTTP setup for `.mcp.json`-style clients
 
-Use Node.js 22 or newer with the published 2.4.0 commands shown here. For client registration recipes and their verification limits, see the [client setup guide](./client-setup.md).
+Use Node.js 22 or newer with the 2.4.0 commands shown here. For client registration recipes and their verification limits, see the [client setup guide](./client-setup.md).
 
 ## CLI Reference
 
@@ -50,7 +50,7 @@ For a command gallery with examples, see `docs/cli.md`.
 | `memory add`           | `--type`, `--category`, `--memory`, `--reason`                                                             | `remember`                             |
 | `memory remove <id>`   | —                                                                                                          | —                                      |
 
-Commands that list `--json` above support raw JSON output. For MCP client registration, follow the [published client setup recipes](./client-setup.md). The registration failures documented for `init` apply to published 2.2.0; see that guide for current 2.4.0 setup instructions. Errors go to stderr with exit code 1.
+Commands that list `--json` above support raw JSON output. For MCP client registration, follow the [published client setup recipes](./client-setup.md). The existing `init` wizard is interactive and generates HTTP setup; see that guide for its current limitations. Errors go to stderr with exit code 1.
 
 ```bash
 # Quick examples
@@ -274,6 +274,7 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 - **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata
 - **React**: function/class components, custom hooks, context usage, memoization, Suspense, ecosystem signal extraction
 - **Next.js**: App Router and Pages Router detection, route/API classification, route paths, `"use client"`, metadata exports
+- **NestJS (opt-in)**: modules, controllers, providers and route handlers, contributed by Aaron Olin. The library indexer accepts `config: { analyzers: { nestjs: { enabled: true } } }`; the CLI/server project configuration does not currently expose analyzer enablement.
 - **Generic**: 30+ have indexing/retrieval coverage including PHP, Ruby, Swift, Scala, Shell, config/markup., 10 languages have full symbol extraction (Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust).
 
 Notes:

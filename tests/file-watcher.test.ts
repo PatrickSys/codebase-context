@@ -16,6 +16,27 @@ describe('FileWatcher', () => {
     await rmWithRetries(tempDir);
   });
 
+  it('still observes source in index-only exclusions so opt-in files can refresh', async () => {
+    let resolveReady!: () => void;
+    let resolveChanged!: () => void;
+    const ready = new Promise<void>((resolve) => { resolveReady = resolve; });
+    const changed = new Promise<void>((resolve) => { resolveChanged = resolve; });
+    const stop = startFileWatcher({
+      rootPath: tempDir,
+      debounceMs: 50,
+      onReady: resolveReady,
+      onChanged: resolveChanged
+    });
+    try {
+      await ready;
+      await fs.mkdir(path.join(tempDir, '.agents'));
+      await fs.writeFile(path.join(tempDir, '.agents', 'source.ts'), 'export const fresh = 1;');
+      await changed;
+    } finally {
+      stop();
+    }
+  }, 8000);
+
   it('triggers onChanged after debounce window', async () => {
     const debounceMs = 400;
     let callCount = 0;

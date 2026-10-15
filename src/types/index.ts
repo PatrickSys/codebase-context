@@ -470,6 +470,8 @@ export interface CodebaseConfig {
   // File filtering
   include?: string[];
   exclude?: string[];
+  /** Root-relative source globs that override exclusions and Git ignores. */
+  includeExcluded?: string[];
   respectGitignore?: boolean;
 
   // Parsing options

@@ -138,7 +138,12 @@ async function initToolContext(): Promise<ToolContext> {
       let lastLoggedProgress = { phase: '', percentage: -1 };
       const indexer = new CodebaseIndexer({
         rootPath,
-        ...(projectConfig?.parsing ? { config: { parsing: projectConfig.parsing } } : {}),
+        config: {
+          ...(projectConfig?.parsing ? { parsing: projectConfig.parsing } : {}),
+          ...(projectConfig?.includeExcluded
+            ? { includeExcluded: projectConfig.includeExcluded }
+            : {})
+        },
         incrementalOnly,
         onProgress: (progress) => {
           const shouldLog =

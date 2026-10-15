@@ -117,4 +117,11 @@ describe('index source scope', () => {
       root = repository;
     }
   });
+
+  it('handles untracked Git paths with spaces and Unicode', async () => {
+    await fixture();
+    await write('nested/über file.ts');
+    const { paths } = await indexed();
+    expect(paths).toContain('nested/über file.ts');
+  });
 });

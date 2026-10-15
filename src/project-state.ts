@@ -14,6 +14,8 @@ import type { ToolPaths, IndexState } from './tools/types.js';
 export interface ProjectRuntimeOverrides {
   /** Extra glob exclusion patterns merged with the default index-time exclusions. */
   extraExcludePatterns?: string[];
+  /** Source globs explicitly restored through exclusions and Git ignores. */
+  includeExcluded?: string[];
   /** Maximum chunks retained in semantic and keyword indexes for this project. */
   maxChunks?: number;
   /** Analyzer name to prefer for this project without mutating global registry order. */

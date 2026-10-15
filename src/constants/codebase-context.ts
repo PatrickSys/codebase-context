@@ -56,6 +56,21 @@ export const EXCLUDED_GLOB_PATTERNS: readonly string[] = EXCLUDED_DIRECTORY_NAME
   (dir) => `**/${dir}/**`
 );
 
+/** Index-only noise. Watchers must still see files explicitly opted back in. */
+export const INDEX_ONLY_EXCLUDED_GLOB_PATTERNS: readonly string[] = [
+  ...['out', '.work', '.agents', '.codex', '.cursor'].map((dir) => `**/${dir}/**`),
+  '**/.github/agents/**',
+  '**/*.lock',
+  '**/*.lockb',
+  '**/package-lock.json',
+  '**/npm-shrinkwrap.json',
+  '**/pnpm-lock.yaml',
+  '**/packages.lock.json',
+  '**/*.min.js',
+  '**/*.min.css',
+  '**/*.map'
+];
+
 /**
  * Additional directories skipped only during project discovery (not generated
  * code, just not useful roots to recurse into).

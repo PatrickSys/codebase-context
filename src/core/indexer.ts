@@ -59,6 +59,7 @@ import {
   RELATIONSHIPS_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
+import { isPathWithin } from '../utils/project-discovery.js';
 import { deriveCodebaseHealth } from '../health/derive.js';
 import {
   extractSourceReexports,
@@ -246,6 +247,78 @@ interface PersistedIndexingStats {
   generatedAt: string;
 }
 
+const MAX_INDEX_FILES = 10000;
+const MAX_PREVIEW_SKIP_SAMPLES = 20;
+
+export interface IndexFileSelection {
+  selected: string[];
+  overLimitCount: number;
+  overLimitSamples: string[];
+}
+
+export interface IndexPreview {
+  rootPath: string;
+  eligibleFiles: string[];
+  skippedFiles: Array<{ path: string; reason: string }>;
+  skippedFileCount: number;
+  /** Patterns applied before glob enumeration; matching files are not individually observed. */
+  excludedPatterns: string[];
+}
+
+interface FileScanResult {
+  files: string[];
+  skippedFiles: Array<{ path: string; reason: string }>;
+  skippedFileCount: number;
+}
+
+type SourcePathResolution =
+  | { status: 'contained'; path: string }
+  | { status: 'outside' }
+  | { status: 'alias' }
+  | { status: 'unavailable' };
+
+function normalizeComparablePath(filePath: string): string {
+  const normalized = path.normalize(path.resolve(filePath));
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+async function resolveContainedSourcePath(
+  filePath: string,
+  canonicalRootPath: string
+): Promise<SourcePathResolution> {
+  let canonicalFilePath: string;
+  try {
+    canonicalFilePath = await fs.realpath(filePath);
+  } catch {
+    return { status: 'unavailable' };
+  }
+  if (!isPathWithin(canonicalRootPath, canonicalFilePath)) return { status: 'outside' };
+  if (normalizeComparablePath(filePath) !== normalizeComparablePath(canonicalFilePath)) {
+    return { status: 'alias' };
+  }
+  return { status: 'contained', path: canonicalFilePath };
+}
+
+function addSkippedFile(
+  scan: FileScanResult,
+  filePath: string,
+  reason: string,
+  rootPath: string
+): void {
+  scan.skippedFileCount++;
+  if (scan.skippedFiles.length < MAX_PREVIEW_SKIP_SAMPLES) {
+    scan.skippedFiles.push({ path: path.relative(rootPath, filePath).replace(/\\/g, '/'), reason });
+  }
+}
+
+export function selectFilesForIndex(files: string[]): IndexFileSelection {
+  return {
+    selected: files.slice(0, MAX_INDEX_FILES),
+    overLimitCount: Math.max(0, files.length - MAX_INDEX_FILES),
+    overLimitSamples: files.slice(MAX_INDEX_FILES, MAX_INDEX_FILES + MAX_PREVIEW_SKIP_SAMPLES)
+  };
+}
+
 export class CodebaseIndexer {
   private rootPath: string;
   private config: CodebaseConfig;
@@ -401,6 +474,38 @@ export class CodebaseIndexer {
     return Array.from(new Set([...includePatterns, ...extraPatterns]));
   }
 
+  /** Enumerate the exact files the next index pass would select, without indexing or writing. */
+  async previewFiles(): Promise<IndexPreview> {
+    const scan = await this.scanFiles(false);
+    const selection = selectFilesForIndex(scan.files);
+    const skippedFiles = [...scan.skippedFiles];
+    for (const file of selection.overLimitSamples.slice(
+      0,
+      MAX_PREVIEW_SKIP_SAMPLES - skippedFiles.length
+    )) {
+      skippedFiles.push({
+        path: path.relative(this.rootPath, file).replace(/\\/g, '/'),
+        reason: 'exceeds the indexer file-count limit'
+      });
+    }
+    const toRelativePath = (file: string): string =>
+      path.relative(this.rootPath, file).replace(/\\/g, '/');
+    const comparePaths = (left: string, right: string): number =>
+      left < right ? -1 : left > right ? 1 : 0;
+    const eligibleFiles = selection.selected.map(toRelativePath).sort(comparePaths);
+    skippedFiles.sort(
+      (left, right) =>
+        comparePaths(left.path, right.path) || comparePaths(left.reason, right.reason)
+    );
+    return {
+      rootPath: this.rootPath,
+      eligibleFiles,
+      skippedFiles,
+      skippedFileCount: scan.skippedFileCount + selection.overLimitCount,
+      excludedPatterns: [...(this.config.exclude ?? [])]
+    };
+  }
+
   async index(): Promise<IndexingStats> {
     const startTime = Date.now();
     const stats: IndexingStats = {
@@ -453,18 +558,18 @@ export class CodebaseIndexer {
 
       // Phase 1: Scanning
       this.updateProgress('scanning', 0);
-      let files = await this.scanFiles();
+      const scan = await this.scanFiles();
+      const selection = selectFilesForIndex(scan.files);
+      const files = selection.selected;
 
       // Memory safety: limit total files to prevent heap exhaustion
-      const MAX_FILES = 10000;
-      if (files.length > MAX_FILES) {
+      if (selection.overLimitCount > 0) {
         console.warn(
-          `WARNING: Found ${files.length} files, limiting to ${MAX_FILES} to prevent memory issues.`
+          `WARNING: Found ${scan.files.length} files, limiting to ${MAX_INDEX_FILES} to prevent memory issues.`
         );
         console.warn(
           `Consider using more specific include patterns or excluding large directories.`
         );
-        files = files.slice(0, MAX_FILES);
       }
 
       stats.totalFiles = files.length;
@@ -648,11 +753,22 @@ export class CodebaseIndexer {
 
         try {
           // Normalize line endings to \n for consistent cross-platform output
-          const rawBytes = await fs.readFile(file);
+          const resolution = await resolveContainedSourcePath(file, this.rootPath);
+          if (resolution.status !== 'contained') {
+            throw new Error(
+              resolution.status === 'outside'
+                ? `Source resolves outside selected root: ${file}`
+                : resolution.status === 'alias'
+                  ? `Source alias is not indexed: ${file}`
+                  : `Source could not be resolved before reading: ${file}`
+            );
+          }
+          const resolvedFile = resolution.path;
+          const rawBytes = await fs.readFile(resolvedFile);
           const sourceFingerprint = createHash('sha256').update(rawBytes).digest('hex');
-          sourceFingerprints.set(file, sourceFingerprint);
+          sourceFingerprints.set(resolvedFile, sourceFingerprint);
           const rawContent = rawBytes.toString('utf-8');
-          const relativeFile = path.relative(this.rootPath, file).replace(/\\/g, '/');
+          const relativeFile = path.relative(this.rootPath, resolvedFile).replace(/\\/g, '/');
           const analyzedManifestHash = hashFileContent(rawContent);
           analyzedManifestHashes.set(relativeFile, analyzedManifestHash);
           if (
@@ -1139,6 +1255,7 @@ export class CodebaseIndexer {
       const manifest: FileManifest = {
         version: 1,
         generatedAt: new Date().toISOString(),
+        header: { buildId, formatVersion: INDEX_FORMAT_VERSION },
         files: analyzedHashes
       };
       await writeManifest(activeManifestPath, manifest);
@@ -1225,9 +1342,10 @@ export class CodebaseIndexer {
     }
   }
 
-  private async scanFiles(): Promise<string[]> {
-    const files: string[] = [];
+  private async scanFiles(warnOnLargeFiles = true): Promise<FileScanResult> {
+    const scan: FileScanResult = { files: [], skippedFiles: [], skippedFileCount: 0 };
     const seen = new Set<string>();
+    this.rootPath = await fs.realpath(this.rootPath);
 
     // Read .gitignore if respecting it
     let ig: ReturnType<typeof ignore.default> | null = null;
@@ -1261,33 +1379,55 @@ export class CodebaseIndexer {
         seen.add(normalizedFile);
 
         const relativePath = path.relative(this.rootPath, file);
+        const sourcePath = await resolveContainedSourcePath(file, this.rootPath);
+        if (sourcePath.status !== 'contained') {
+          addSkippedFile(
+            scan,
+            file,
+            sourcePath.status === 'outside'
+              ? 'source resolves outside selected root'
+              : sourcePath.status === 'alias'
+                ? 'source alias is not indexed; use its canonical path'
+                : 'file could not be inspected',
+            this.rootPath
+          );
+          continue;
+        }
 
         // Check gitignore
         if (ig && ig.ignores(relativePath)) {
+          addSkippedFile(scan, file, 'ignored by .gitignore', this.rootPath);
           continue;
         }
 
         // Check if it's a code file
-        if (!isCodeFile(file, this.supportedCodeExtensions) || isBinaryFile(file)) {
+        if (
+          !isCodeFile(sourcePath.path, this.supportedCodeExtensions) ||
+          isBinaryFile(sourcePath.path)
+        ) {
+          addSkippedFile(scan, file, 'unsupported or binary file', this.rootPath);
           continue;
         }
 
         // Check file size
         try {
-          const stats = await fs.stat(file);
+          const stats = await fs.stat(sourcePath.path);
           if (stats.size > (this.config.parsing?.maxFileSize || 1048576)) {
-            console.warn(`Skipping large file: ${file} (${stats.size} bytes)`);
+            if (warnOnLargeFiles)
+              console.warn(`Skipping large file: ${file} (${stats.size} bytes)`);
+            addSkippedFile(scan, file, 'exceeds configured maximum file size', this.rootPath);
             continue;
           }
         } catch (_error) {
+          addSkippedFile(scan, file, 'file could not be inspected', this.rootPath);
           continue;
         }
 
-        files.push(file);
+        scan.files.push(sourcePath.path);
       }
     }
 
-    return files;
+    return scan;
   }
 
   private updateProgress(phase: IndexingPhase, percentage: number): void {

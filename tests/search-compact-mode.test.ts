@@ -27,6 +27,13 @@ vi.mock('../src/core/search.js', async () => {
     async search(query: string, limit: number, filters?: unknown) {
       return searchMocks.search(query, limit, filters);
     }
+
+    async searchWithCoverage(query: string, limit: number, filters?: unknown) {
+      return {
+        results: await this.search(query, limit, filters),
+        sourceCoverage: { status: 'current', checkedFiles: 0, skippedFiles: 0 }
+      };
+    }
   }
 
   return { CodebaseSearcher };
@@ -293,7 +300,9 @@ describe('search_codebase compact/full mode', () => {
 
   // Test 4: Compact response includes budget, patternSummary, bestExample, nextHops
   it('compact response includes budget, patternSummary, bestExample, and nextHops', async () => {
-    searchMocks.search.mockResolvedValueOnce([makeResult()]);
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ filePath: path.join(tempRoot!, 'src/auth/auth.service.ts') })
+    ]);
 
     const { server } = await import('../src/index.js');
     const handler = (
@@ -325,6 +334,33 @@ describe('search_codebase compact/full mode', () => {
     // nextHops should have at least 1 entry
     expect(Array.isArray(payload.nextHops)).toBe(true);
     expect(payload.nextHops?.length ?? 0).toBeGreaterThan(0);
+    expect(payload.nextHops?.some((hop) => hop.tool === 'read_file')).toBe(false);
+    expect(payload.nextHops?.[0].tool).toBe('get_code_relationships');
+  });
+
+  it('does not recommend an unrelated golden example for a different source result', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ filePath: path.join(tempRoot!, 'src/cli-init.ts') })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as unknown as {
+        _requestHandlers?: Map<
+          string,
+          (r: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'setup wizard' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.bestExample).toBeUndefined();
+    expect(payload.nextHops?.some((hop) => hop.tool === 'read_file')).toBe(false);
   });
 
   it('omits stale pattern examples from summaries, advice, and evidence', async () => {

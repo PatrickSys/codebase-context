@@ -52,4 +52,17 @@ describe('verified file graph traversal', () => {
     expect(outputCapped.paths).toHaveLength(1);
     expect(outputCapped.truncated).toBe(true);
   });
+
+  it.each(['incoming', 'outgoing'] as const)('terminates a cycle reachable inside three hops in %s direction', (direction) => {
+    const graph = new InternalFileGraph('C:/repo');
+    const pairs = [['a.ts', 'b.ts'], ['b.ts', 'a.ts'], ['b.ts', 'c.ts'], ['c.ts', 'b.ts']] as const;
+    for (const [from, to] of pairs) {
+      graph.trackImport(`C:/repo/${from}`, `C:/repo/${to}`, 1, [], {
+        kind: 'import', specifier: `./${to.slice(0, -3)}`, sourceFingerprint: from, targetFingerprint: to
+      });
+    }
+    const result = traverseFileGraph(graph.toJSON(), 'a.ts', { direction, maxHops: 3 });
+    expect(result.paths.map(({ nodes }) => nodes)).toEqual([['a.ts', 'b.ts'], ['a.ts', 'b.ts', 'c.ts']]);
+    expect(result.truncated).toBe(false);
+  });
 });

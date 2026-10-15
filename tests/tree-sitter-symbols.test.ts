@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { GenericAnalyzer } from '../src/analyzers/generic/index';
-import { extractTreeSitterSymbols, supportsTreeSitter } from '../src/utils/tree-sitter';
+import {
+  extractTreeSitterSymbols,
+  findIdentifierOccurrences,
+  supportsTreeSitter
+} from '../src/utils/tree-sitter';
 
 describe('Tree-sitter symbol extraction', () => {
   it('extracts TypeScript symbols including function variables', async () => {
@@ -79,5 +83,24 @@ describe('Tree-sitter symbol extraction', () => {
 
   it('reports unsupported language grammars', () => {
     expect(supportsTreeSitter('markdown')).toBe(false);
+  });
+
+  it('matches complete dollar, underscore, and Unicode identifiers in parsed code', async () => {
+    const source = [
+      'const alpha = $alpha;',
+      'const alphaSuffix = 1;',
+      'const _alpha = 2;',
+      'const προβολή = alpha;',
+      '// alpha and $alpha are comments',
+      'const message = "alpha $alpha";'
+    ].join('\n');
+
+    const alpha = await findIdentifierOccurrences(source, 'typescript', 'alpha');
+    const dollar = await findIdentifierOccurrences(source, 'typescript', '$alpha');
+    const unicode = await findIdentifierOccurrences(source, 'typescript', 'προβολή');
+
+    expect(alpha?.map((occurrence) => occurrence.line)).toEqual([1, 4]);
+    expect(dollar?.map((occurrence) => occurrence.line)).toEqual([1]);
+    expect(unicode?.map((occurrence) => occurrence.line)).toEqual([4]);
   });
 });

@@ -1,5 +1,6 @@
 import type { CodebaseIndexer } from '../core/indexer.js';
 import type { IndexingStats } from '../types/index.js';
+import type { SearchSourceCoverage } from '../core/search.js';
 
 export interface DecisionCard {
   ready: boolean;
@@ -136,6 +137,7 @@ export interface SearchResultItem {
 
 export interface SearchResponse {
   status: string;
+  sourceCoverage?: SearchSourceCoverage;
   searchQuality: SearchQuality;
   budget?: SearchBudget;
   preflight?: DecisionCard | SearchLitePreflight;

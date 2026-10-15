@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'path';
 import os from 'node:os';
 import { promises as nativeFs } from 'node:fs';
+import { EXCLUDED_GLOB_PATTERNS } from '../src/constants/codebase-context.js';
 
 // Mock node:fs/promises at the top level so Vitest can hoist it correctly.
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -14,13 +15,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     mkdir: vi.fn().mockResolvedValue(undefined)
   };
 });
-vi.mock('@inquirer/prompts', () => ({
-  select: vi.fn(),
-  confirm: vi.fn()
-}));
+vi.mock('@inquirer/select', () => ({ default: vi.fn() }));
+vi.mock('@inquirer/confirm', () => ({ default: vi.fn() }));
 
 import * as fsMod from 'node:fs/promises';
-import { select } from '@inquirer/prompts';
+import select from '@inquirer/select';
 import {
   generateMcpConfig,
   generateInstructionBlock,
@@ -144,6 +143,14 @@ describe('Codex global config alias protection', () => {
       const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
       await handleInitCli(['--client', 'codex', '--yes', '--root', projectRoot], {
+        previewIndex: async () => ({
+          status: 'ready',
+          rootPath: projectRoot,
+          eligibleFiles: [],
+          skippedFiles: [],
+          skippedFileCount: 0,
+          excludedPatterns: []
+        }),
         prepareIndex: async () => ({ status: 'ready' })
       });
 
@@ -196,6 +203,88 @@ describe('non-interactive init arguments', () => {
     expect(errors.mock.calls.flat().join('\n')).toContain('--yes requires --client');
     process.exitCode = previousExitCode;
     errors.mockRestore();
+  });
+});
+
+describe('read-only init preview', () => {
+  it('shows the canonical root and observed selection without writing config or indexing', async () => {
+    const root = await nativeFs.mkdtemp(path.join(os.tmpdir(), 'cbc init preview '));
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const previousExitCode = process.exitCode;
+    const prepareIndex = vi.fn(async () => ({ status: 'ready' as const }));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      vi.mocked(fsMod.writeFile).mockClear();
+      process.exitCode = 0;
+
+      await handleInitCli(['--client', 'codex', '--root', root, '--preview'], {
+        previewIndex: async () => ({
+          status: 'ready',
+          rootPath: root,
+          eligibleFiles: ['src/main.ts'],
+          skippedFiles: [
+            { path: 'generated/huge.ts', reason: 'exceeds configured maximum file size' }
+          ],
+          skippedFileCount: 1,
+          excludedPatterns: [...EXCLUDED_GLOB_PATTERNS, '**/private/**']
+        }),
+        prepareIndex
+      });
+
+      const rendered = output.mock.calls.flat().join('\n');
+      expect(rendered).toContain(root);
+      expect(rendered).toContain('src/main.ts');
+      expect(rendered).toContain('generated/huge.ts');
+      expect(rendered).toContain('**/private/**');
+      expect(rendered).toContain('Excluded by rules before enumeration:');
+      expect(rendered).toContain('more patterns');
+      expect(prepareIndex).not.toHaveBeenCalled();
+      expect(fsMod.writeFile).not.toHaveBeenCalled();
+      expect(errors).not.toHaveBeenCalled();
+      expect(process.exitCode).toBe(0);
+    } finally {
+      process.exitCode = previousExitCode;
+      output.mockRestore();
+      errors.mockRestore();
+      await nativeFs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('previews before the independent post-confirmation indexing callback', async () => {
+    const root = await nativeFs.mkdtemp(path.join(os.tmpdir(), 'cbc init prepare '));
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const previousExitCode = process.exitCode;
+    const events: string[] = [];
+    try {
+      vi.mocked(fsMod.writeFile).mockClear();
+      process.exitCode = 0;
+
+      await handleInitCli(['--client', 'codex', '--root', root, '--yes'], {
+        previewIndex: async () => {
+          events.push('preview');
+          return {
+            status: 'ready',
+            rootPath: root,
+            eligibleFiles: ['src/main.ts'],
+            skippedFiles: [],
+            skippedFileCount: 0,
+            excludedPatterns: []
+          };
+        },
+        prepareIndex: async () => {
+          events.push('index');
+          expect(output.mock.calls.flat().join('\n')).toContain('Repository Index Preview');
+          return { status: 'ready' };
+        }
+      });
+
+      expect(events).toEqual(['preview', 'index']);
+      expect(process.exitCode).toBe(0);
+    } finally {
+      process.exitCode = previousExitCode;
+      output.mockRestore();
+      await nativeFs.rm(root, { recursive: true, force: true });
+    }
   });
 });
 

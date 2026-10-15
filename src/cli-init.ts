@@ -6,6 +6,7 @@ import * as fs from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import select from '@inquirer/select';
 import confirm from '@inquirer/confirm';
+import { EXCLUDED_GLOB_PATTERNS } from './constants/codebase-context.js';
 
 export type Client = 'claude-code' | 'cursor' | 'codex' | 'opencode';
 
@@ -20,8 +21,19 @@ const CODEX_SERVER_HEADER =
 export type InitIndexResult =
   | { status: 'ready'; summary?: string }
   | { status: 'error'; error: string };
+export type InitPreviewResult =
+  | {
+      status: 'ready';
+      rootPath: string;
+      eligibleFiles: string[];
+      skippedFiles: Array<{ path: string; reason: string }>;
+      skippedFileCount: number;
+      excludedPatterns: string[];
+    }
+  | { status: 'error'; error: string };
 export type InitOptions = {
   rootPath?: string;
+  previewIndex?: (rootPath: string) => Promise<InitPreviewResult>;
   prepareIndex?: (rootPath: string) => Promise<InitIndexResult>;
 };
 
@@ -161,11 +173,13 @@ function parseInitArgs(argv: string[]): {
   client?: Client;
   rootPath?: string;
   yes: boolean;
+  preview: boolean;
   help: boolean;
 } {
   let client: Client | undefined;
   let rootPath: string | undefined;
   let yes = false;
+  let preview = false;
   let help = false;
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
@@ -175,6 +189,10 @@ function parseInitArgs(argv: string[]): {
     }
     if (arg === '--yes' || arg === '--non-interactive') {
       yes = true;
+      continue;
+    }
+    if (arg === '--preview') {
+      preview = true;
       continue;
     }
     if (arg === '--client' || arg === '--root') {
@@ -198,9 +216,12 @@ function parseInitArgs(argv: string[]): {
     throw new Error(`Unexpected positional init argument: ${arg}`);
   }
   if (yes && !client) throw new Error('--yes requires --client for non-interactive init');
+  if (preview && !client) throw new Error('--preview requires --client codex');
   if (rootPath && client && client !== 'codex')
     throw new Error('--root is supported only for --client codex');
-  return { client, rootPath, yes, help };
+  if (preview && client !== 'codex')
+    throw new Error('--preview is supported only for --client codex');
+  return { client, rootPath, yes, preview, help };
 }
 
 export function printInitHelp(): void {
@@ -208,7 +229,43 @@ export function printInitHelp(): void {
   console.log('  --help, -h                 Show init help without starting prompts');
   console.log('  --client <name>            claude-code | cursor | codex | opencode');
   console.log('  --root <directory>         Project root (Codex only)');
+  console.log('  --preview                  Show Codex file selection without writing or indexing');
   console.log('  --yes, --non-interactive   Apply without prompts; requires --client');
+}
+
+function printIndexPreview(preview: Extract<InitPreviewResult, { status: 'ready' }>): void {
+  const listedFiles = 12;
+  console.log('\n--- Repository Index Preview ---');
+  console.log(`Repository: ${preview.rootPath}`);
+  console.log(`Eligible files: ${preview.eligibleFiles.length}`);
+  for (const file of preview.eligibleFiles.slice(0, listedFiles)) console.log(`  + ${file}`);
+  if (preview.eligibleFiles.length > listedFiles) {
+    console.log(`  ... ${preview.eligibleFiles.length - listedFiles} more eligible files`);
+  }
+  console.log(`Skipped observed candidates: ${preview.skippedFileCount}`);
+  for (const file of preview.skippedFiles.slice(0, listedFiles)) {
+    console.log(`  - ${file.path} (${file.reason})`);
+  }
+  const unlistedSkipped =
+    preview.skippedFileCount - Math.min(preview.skippedFiles.length, listedFiles);
+  if (unlistedSkipped > 0) {
+    console.log(`  ... ${unlistedSkipped} more observed skips`);
+  }
+  const defaultPatterns = new Set(EXCLUDED_GLOB_PATTERNS);
+  const orderedPatterns = [
+    ...preview.excludedPatterns.filter((pattern) => !defaultPatterns.has(pattern)),
+    ...preview.excludedPatterns.filter((pattern) => defaultPatterns.has(pattern))
+  ];
+  const patternSample = orderedPatterns.slice(0, 6);
+  console.log(`Excluded by rules before enumeration: ${preview.excludedPatterns.length} patterns`);
+  for (const pattern of patternSample) console.log(`  x ${pattern}`);
+  if (preview.excludedPatterns.length > patternSample.length) {
+    console.log(`  ... ${preview.excludedPatterns.length - patternSample.length} more patterns`);
+  }
+  console.log('Files matching excluded patterns were not individually enumerated.');
+  console.log(
+    'This is a point-in-time preview; files or project settings may change before indexing.'
+  );
 }
 
 function codexSectionMatches(existing: string, generated: string): boolean {
@@ -385,6 +442,23 @@ export async function handleInitCli(argv: string[], options: InitOptions = {}): 
     console.error('Init failed: --root is supported only for --client codex.');
     process.exitCode = 1;
     return;
+  }
+  if (client === 'codex') {
+    let preview: InitPreviewResult;
+    try {
+      preview = options.previewIndex
+        ? await options.previewIndex(root)
+        : { status: 'error', error: 'index preview is unavailable in this CLI invocation' };
+    } catch (error) {
+      preview = { status: 'error', error: error instanceof Error ? error.message : String(error) };
+    }
+    if (preview.status === 'error') {
+      console.error(`Index preview failed: ${preview.error}`);
+      process.exitCode = 1;
+      return;
+    }
+    printIndexPreview(preview);
+    if (args.preview) return;
   }
   const config = generateMcpConfig(client, root);
   console.log('\n--- MCP Config Preview ---');

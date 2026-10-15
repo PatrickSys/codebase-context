@@ -2,7 +2,7 @@
  * Hybrid search combining semantic vector search with keyword matching
  */
 
-import Fuse from 'fuse.js';
+import Fuse, { type FuseResult, type IFuseOptions } from 'fuse.js';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { CodeChunk, SearchResult, SearchFilters, IntelligenceData } from '../types/index.js';
@@ -16,6 +16,11 @@ import { rerank } from './reranker.js';
 import { type IndexMeta, readIndexMeta, validateIndexArtifacts } from './index-meta.js';
 import { hashFileContent, readManifest, type FileManifest } from './manifest.js';
 import { isPathWithin } from '../utils/project-discovery.js';
+import {
+  InternalSourceResolver,
+  loadTsconfigCompilerOptions
+} from '../utils/internal-source-resolver.js';
+import type { ImportEdgeDetail } from '../utils/usage-tracker.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -38,6 +43,39 @@ export interface SearchOptions {
 }
 
 export type SearchIntentProfile = 'explore' | 'edit' | 'refactor' | 'migrate';
+
+/** Coverage of nominated sources, not a claim that the entire repository was searched. */
+export interface SearchSourceCoverage {
+  status: 'current' | 'partial' | 'no_fresh_results';
+  checkedFiles: number;
+  skippedFiles: number;
+  candidateBudgetExhausted?: true;
+  candidateRetrievalFailed?: true;
+  refreshAction?: string;
+}
+
+export interface SearchOutcome {
+  results: SearchResult[];
+  sourceCoverage: SearchSourceCoverage;
+}
+
+// Null records ordinary drift/unavailability; integrity failures still throw.
+type CheckedSources = Map<string, string[] | null>;
+
+interface SourceValidationContext {
+  sources: CheckedSources;
+  realRootPath?: Promise<string>;
+  candidateBudgetExhausted?: true;
+  candidateRetrievalFailed?: true;
+}
+
+interface SourceInspectionBudget {
+  limit: number;
+  inspected: Set<string>;
+}
+
+// Reuse the lexical rescue work ceiling for bounded stale-candidate replenishment.
+const MAX_CANDIDATE_WORK = 750;
 
 type QueryIntent = 'EXACT_NAME' | 'CONCEPTUAL' | 'FLOW' | 'CONFIG' | 'WIRING';
 
@@ -111,6 +149,44 @@ const QUERY_STOP_WORDS = new Set([
   'before'
 ]);
 
+// Syntax and question scaffolding are weak evidence after strict keyword
+// retrieval fails, so they cannot independently support a rescue match.
+const NON_DISCRIMINATIVE_FALLBACK_TERMS = new Set([
+  'class',
+  'code',
+  'const',
+  'does',
+  'export',
+  'file',
+  'function',
+  'import',
+  'return',
+  'something',
+  'still',
+  'thing',
+  'value',
+  'what',
+  'when',
+  'where',
+  'why'
+]);
+
+const KEYWORD_FUSE_OPTIONS: IFuseOptions<CodeChunk> = {
+  keys: [
+    { name: 'content', weight: 0.4 },
+    { name: 'metadata.componentName', weight: 0.25 },
+    { name: 'filePath', weight: 0.15 },
+    { name: 'relativePath', weight: 0.15 },
+    { name: 'componentType', weight: 0.15 },
+    { name: 'layer', weight: 0.1 },
+    { name: 'tags', weight: 0.15 }
+  ],
+  includeScore: true,
+  threshold: 0.4,
+  useExtendedSearch: true,
+  ignoreLocation: true
+};
+
 export class CodebaseSearcher {
   private rootPath: string;
   private storagePath: string;
@@ -134,6 +210,7 @@ export class CodebaseSearcher {
   } | null = null;
 
   private importCentrality: Map<string, number> | null = null;
+  private indexedImports = new Map<string, Map<string, string[]>>();
 
   constructor(rootPath: string) {
     this.rootPath = rootPath;
@@ -229,40 +306,96 @@ export class CodebaseSearcher {
 
   private async validateCandidateSources(
     chunks: Iterable<CodeChunk>,
-    checkedSources: Map<string, string>
+    validation: SourceValidationContext,
+    budget?: SourceInspectionBudget
   ): Promise<void> {
+    const checkedSources = validation.sources;
     if (!this.sourceManifest) {
       throw new IndexCorruptedError('Source manifest is unavailable. Full rebuild required.');
     }
-    let realRootPath: string | undefined;
+    validation.realRootPath ??= fs.realpath(this.rootPath).catch(() => {
+      throw new IndexCorruptedError('Selected project is unavailable. Full rebuild required.');
+    });
+    const realRootPath = await validation.realRootPath;
     for (const chunk of chunks) {
       const sourcePath = this.getIndexedSourcePath(chunk);
       const sourceKey = path.resolve(this.rootPath, chunk.filePath);
-      if (checkedSources.has(sourceKey)) continue;
       const relativePath = path.relative(this.rootPath, sourcePath).replace(/\\/g, '/');
       const expectedHash = this.sourceManifest.files[relativePath];
-      if (typeof expectedHash !== 'string') {
+      if (typeof expectedHash !== 'string' || !/^[a-f0-9]{16}$/.test(expectedHash)) {
         throw new IndexCorruptedError(
-          'Indexed source is absent from its manifest. Full rebuild required.'
+          'Indexed source is absent from its manifest or its hash is invalid. Full rebuild required.'
         );
       }
-      try {
-        realRootPath ??= await fs.realpath(this.rootPath);
-        const realSourcePath = await fs.realpath(sourcePath);
-        if (!isPathWithin(realRootPath, realSourcePath)) {
-          throw new Error('Source resolves outside the selected project');
+      this.validateSourceRange(chunk);
+      if (!checkedSources.has(sourceKey)) {
+        if (budget && budget.inspected.size >= budget.limit) {
+          validation.candidateBudgetExhausted = true;
+          continue;
         }
-        if (!(await fs.stat(realSourcePath)).isFile()) {
-          throw new Error('Source is not a regular file');
+        budget?.inspected.add(sourceKey);
+        try {
+          const realSourcePath = await fs.realpath(sourcePath);
+          if (!isPathWithin(realRootPath, realSourcePath)) {
+            throw new IndexCorruptedError(
+              'Source resolves outside the selected project. Full rebuild required.'
+            );
+          }
+          if (!(await fs.stat(realSourcePath)).isFile()) {
+            throw new IndexCorruptedError(
+              'Indexed source is not a regular file. Full rebuild required.'
+            );
+          }
+          const content = await fs.readFile(realSourcePath, 'utf-8');
+          checkedSources.set(
+            sourceKey,
+            hashFileContent(content) === expectedHash
+              ? content.replace(/\r\n/g, '\n').split('\n')
+              : null
+          );
+        } catch (error) {
+          if (error instanceof IndexCorruptedError) throw error;
+          // Source reads can fail after a successful stat (delete, permissions, I/O).
+          // Preserve other candidates and report incomplete coverage without rebuilding.
+          checkedSources.set(sourceKey, null);
         }
-        const content = await fs.readFile(realSourcePath, 'utf-8');
-        if (hashFileContent(content) !== expectedHash) throw new Error('Source content changed');
-        checkedSources.set(sourceKey, content);
-      } catch {
-        throw new IndexCorruptedError(
-          `Indexed source is changed or unreadable (${relativePath}). Full rebuild required.`
-        );
       }
+      const lines = checkedSources.get(sourceKey);
+      if (lines) this.validateSourceRange(chunk, lines);
+    }
+  }
+
+  private async selectCurrentCandidates<T>(
+    candidates: Iterable<T>,
+    limit: number,
+    getChunk: (candidate: T) => CodeChunk,
+    validation: SourceValidationContext,
+    budget: SourceInspectionBudget = { limit, inspected: new Set() }
+  ): Promise<T[]> {
+    const current: T[] = [];
+    for (const candidate of candidates) {
+      if (current.length >= limit) break;
+      const chunk = getChunk(candidate);
+      await this.validateCandidateSources([chunk], validation, budget);
+      const source = validation.sources.get(path.resolve(this.rootPath, chunk.filePath));
+      if (source === undefined) break; // Inspection budget ended before this source.
+      if (source !== null) current.push(candidate);
+    }
+    return current;
+  }
+
+  private validateSourceRange(
+    range: Pick<CodeChunk, 'startLine' | 'endLine'>,
+    lines?: string[]
+  ): void {
+    if (
+      !Number.isInteger(range.startLine) ||
+      !Number.isInteger(range.endLine) ||
+      range.startLine < 1 ||
+      range.endLine < range.startLine ||
+      (lines !== undefined && range.endLine > lines.length)
+    ) {
+      throw new IndexCorruptedError('Indexed source line range is invalid. Full rebuild required.');
     }
   }
 
@@ -289,21 +422,7 @@ export class CodebaseSearcher {
 
       this.chunks = chunks;
 
-      this.fuseIndex = new Fuse(this.chunks, {
-        keys: [
-          { name: 'content', weight: 0.4 },
-          { name: 'metadata.componentName', weight: 0.25 },
-          { name: 'filePath', weight: 0.15 },
-          { name: 'relativePath', weight: 0.15 },
-          { name: 'componentType', weight: 0.15 },
-          { name: 'layer', weight: 0.1 },
-          { name: 'tags', weight: 0.15 }
-        ],
-        includeScore: true,
-        threshold: 0.4,
-        useExtendedSearch: true,
-        ignoreLocation: true
-      });
+      this.fuseIndex = new Fuse(this.chunks, KEYWORD_FUSE_OPTIONS);
     } catch (error) {
       if (error instanceof IndexCorruptedError) {
         throw error;
@@ -318,6 +437,7 @@ export class CodebaseSearcher {
    * Load pattern intelligence for trend detection and warnings
    */
   private async loadPatternIntelligence(): Promise<void> {
+    this.indexedImports.clear();
     try {
       const intelligencePath = path.join(
         this.rootPath,
@@ -368,12 +488,37 @@ export class CodebaseSearcher {
         // Count how many files import each file (in-degree centrality)
         const importCounts = new Map<string, number>();
 
-        for (const [_importingFile, importedFiles] of Object.entries(
+        const details = intelligence.internalFileGraph.importDetails as
+          | Record<string, Record<string, ImportEdgeDetail>>
+          | undefined;
+        for (const [importingFile, importedFiles] of Object.entries(
           intelligence.internalFileGraph.imports
         )) {
           const imports = importedFiles as string[];
           for (const imported of imports) {
             importCounts.set(imported, (importCounts.get(imported) || 0) + 1);
+            const sources = details?.[importingFile]?.[imported]?.sources;
+            const sourceHash = this.sourceManifest?.files[importingFile];
+            const targetHash = this.sourceManifest?.files[imported];
+            if (!sourceHash || !targetHash || !Array.isArray(sources)) continue;
+            const witnesses = sources.filter(
+              (source) =>
+                source.kind === 'import' &&
+                source.line > 0 &&
+                !!source.specifier &&
+                /^[a-f0-9]{64}$/.test(source.sourceFingerprint) &&
+                /^[a-f0-9]{64}$/.test(source.targetFingerprint) &&
+                source.sourceFingerprint.slice(0, 16) === sourceHash &&
+                source.targetFingerprint.slice(0, 16) === targetHash
+            );
+            if (witnesses.length === 0) continue;
+            const key = this.indexedFileKey(importingFile);
+            const targets = this.indexedImports.get(key) ?? new Map<string, string[]>();
+            targets.set(
+              this.indexedFileKey(imported),
+              witnesses.map((source) => source.specifier)
+            );
+            this.indexedImports.set(key, targets);
           }
         }
 
@@ -394,6 +539,7 @@ export class CodebaseSearcher {
       );
       this.patternIntelligence = null;
       this.importCentrality = null;
+      this.indexedImports.clear();
     }
   }
 
@@ -446,6 +592,327 @@ export class CodebaseSearcher {
       .toLowerCase()
       .split(/[^a-z0-9_]+/)
       .filter((term) => term.length > 2 && !QUERY_STOP_WORDS.has(term));
+  }
+
+  private normalizeLexicalTerm(term: string): string {
+    const lower = term.toLowerCase();
+    if (lower.length > 5 && lower.endsWith('ies')) {
+      return `${lower.slice(0, -3)}y`;
+    }
+    if (lower.length > 4 && lower.endsWith('s') && !/(ss|us)$/.test(lower)) {
+      return lower.slice(0, -1);
+    }
+    return lower;
+  }
+
+  private lexicalWords(text: string): string[] {
+    return (
+      text
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+        .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+        .match(/[a-zA-Z0-9]+/g) ?? []
+    ).map((word) => this.normalizeLexicalTerm(word));
+  }
+
+  private lexicalAliases(word: string): string[] {
+    // Keep the original word: conservative suffix aliases improve recall but
+    // must not erase exact evidence. Query and indexed words use identical rules.
+    const aliases = new Set([word]);
+    const stem = word.replace(/(?:ed|ing)$/, '');
+    if (stem !== word && stem.length >= 4) {
+      aliases.add(stem);
+      aliases.add(`${stem}e`);
+      if (/([b-df-hj-np-tv-z])\1$/.test(stem)) aliases.add(stem.slice(0, -1));
+    }
+    return [...aliases];
+  }
+
+  private lexicalQueryTerms(query: string): Map<string, string[]> {
+    const groups = new Map<string, string[]>();
+    // An explicit code identifier remains one anchor, governed by the indexed
+    // edge proof below. Its component words cannot corroborate that anchor.
+    const naturalTerms = query.replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, (word) =>
+      /[a-z][A-Z]|_/.test(word) ? '' : word
+    );
+    const words = [...new Set(this.lexicalWords(naturalTerms))]
+      .filter(
+        (term) =>
+          term.length >= 4 &&
+          !QUERY_STOP_WORDS.has(term) &&
+          !NON_DISCRIMINATIVE_FALLBACK_TERMS.has(term)
+      )
+      .slice(0, 12);
+    for (const word of words) {
+      const aliases = new Set(this.lexicalAliases(word));
+      let key = word;
+      // Repeated inflections are one clue, never independent corroboration.
+      for (const [existing, values] of groups) {
+        if (!values.some((value) => aliases.has(value))) continue;
+        key = existing;
+        for (const value of values) aliases.add(value);
+        groups.delete(existing);
+      }
+      groups.set(key, [...aliases]);
+    }
+    return groups;
+  }
+
+  private lexicalEvidence(text: string): Set<string> {
+    return new Set(this.lexicalWords(text).flatMap((word) => this.lexicalAliases(word)));
+  }
+
+  private indexedDeclarationNames(chunk: Pick<CodeChunk, 'metadata'>): string[] {
+    return [
+      chunk.metadata?.symbolName,
+      chunk.metadata?.componentName,
+      chunk.metadata?.functionName,
+      chunk.metadata?.className
+    ]
+      .filter((name): name is string => typeof name === 'string')
+      .flatMap((name) => name.split('+'));
+  }
+
+  private hasExactQueryDeclaration(chunk: Pick<CodeChunk, 'metadata'>, query: string): boolean {
+    const identifiers = new Set(
+      (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(query.trim())
+        ? [query.trim()]
+        : (query.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) ?? []).filter((word) => /[a-z][A-Z]|_/.test(word))
+      ).map((word) => word.toLowerCase())
+    );
+    return this.indexedDeclarationNames(chunk).some((name) => identifiers.has(name.toLowerCase()));
+  }
+
+  private matchesSearchFilters(chunk: CodeChunk, filters?: SearchFilters): boolean {
+    if (!filters) return true;
+    if (filters.componentType && chunk.componentType !== filters.componentType) return false;
+    if (filters.layer && chunk.layer !== filters.layer) return false;
+    if (filters.framework && chunk.framework !== filters.framework) return false;
+    if (filters.language && chunk.language !== filters.language) return false;
+    if (filters.tags?.length && !filters.tags.some((tag) => chunk.tags?.includes(tag))) {
+      return false;
+    }
+    return true;
+  }
+
+  private indexedFileKey(file: string): string {
+    const absolute = path.resolve(this.rootPath, file).replace(/\\/g, '/');
+    return process.platform === 'win32' ? absolute.toLowerCase() : absolute;
+  }
+
+  /**
+   * Extended Fuse treats spaces as AND within one chunk. If strict retrieval
+   * yields nothing, admit files with multiple lexical clues or an exact symbol
+   * whose indexed import edge connects it to a multi-clue companion.
+   */
+  private async rescueKeywordMatches(
+    query: string,
+    limit: number,
+    filters?: SearchFilters,
+    validation: SourceValidationContext = { sources: new Map() },
+    sourceBudget?: SourceInspectionBudget,
+    retrievedCandidates?: FuseResult<CodeChunk>[]
+  ): Promise<FuseResult<CodeChunk>[]> {
+    const checkedSources = validation.sources;
+    if (!this.fuseIndex || /[|^$!=]/.test(query)) return [];
+
+    const queryTerms = this.lexicalQueryTerms(query);
+    const terms = [...queryTerms.keys()];
+    if (terms.length < 2) return [];
+
+    const symbolAnchors = (query.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) ?? [])
+      .filter((term) => /[a-z][A-Z]/.test(term) && term.length >= 8)
+      .map((term) => term.toLowerCase());
+
+    const candidateLimit = Math.min(MAX_CANDIDATE_WORK, Math.max(256, limit * 80));
+    const budget = sourceBudget ?? { limit: candidateLimit, inspected: new Set<string>() };
+    const aliases = [...new Set([...queryTerms.values()].flat())];
+    // Fuse's unanchored terms already match substrings. A shorter suffix alias
+    // nominates the original and longer forms too; searching all of them repeats
+    // a full-index fuzzy pass without adding lexical evidence.
+    const lookupTerms = aliases.filter(
+      (alias) => !aliases.some((other) => other !== alias && alias.includes(other))
+    );
+    // Apply filters before capping so unrelated languages cannot consume the
+    // bounded candidate window. Use production Fuse options on that subset.
+    const rawCandidates =
+      retrievedCandidates ??
+      (filters
+        ? new Fuse(
+            this.chunks.filter((chunk) => this.matchesSearchFilters(chunk, filters)),
+            KEYWORD_FUSE_OPTIONS
+          )
+        : this.fuseIndex
+      ).search([...new Set(lookupTerms.concat(symbolAnchors))].join(' | '));
+    const candidates = rawCandidates
+      .filter(({ item }) => checkedSources.get(path.resolve(this.rootPath, item.filePath)) !== null)
+      .slice(0, candidateLimit);
+    const unavailableBefore = [...checkedSources.values()].filter(
+      (source) => source === null
+    ).length;
+
+    const evidence = candidates.map((result) => {
+      const { item } = result;
+      const text = [
+        item.content,
+        item.metadata?.componentName ?? '',
+        item.metadata?.symbolName ?? '',
+        path.basename(item.relativePath)
+      ].join(' ');
+      const lexemes = this.lexicalEvidence(text);
+      const matching = new Set(
+        terms.filter((term) => queryTerms.get(term)!.some((alias) => lexemes.has(alias)))
+      );
+      // Export names remain useful lexical/graph clues, but can be re-exports;
+      // exact definition priority below requires own declaration metadata.
+      const indexedSymbols = [...this.indexedDeclarationNames(item), ...(item.exports ?? [])];
+      const exactAnchor = symbolAnchors.some((symbol) =>
+        indexedSymbols.some(
+          (indexedSymbol) =>
+            typeof indexedSymbol === 'string' && indexedSymbol.toLowerCase() === symbol
+        )
+      );
+      const declarationLexemes = this.lexicalEvidence(indexedSymbols.filter(Boolean).join(' '));
+      const declarationMatching = new Set(
+        terms.filter((term) => queryTerms.get(term)!.some((alias) => declarationLexemes.has(alias)))
+      );
+      return { result, matching, declarationMatching, exactAnchor };
+    });
+
+    const supportedCompanions = new Map(
+      evidence
+        .filter(({ matching }) => matching.size >= 2)
+        .map(({ result }) => [this.indexedFileKey(result.item.filePath), result.item] as const)
+    );
+    const anchors = new Map(
+      evidence
+        .filter(({ exactAnchor }) => exactAnchor)
+        .map(({ result }) => [this.indexedFileKey(result.item.filePath), result.item] as const)
+    );
+    const corroboratedFiles = new Set<string>();
+    const corroboratingTargets = new Map<string, Set<string>>();
+    const corroboratingSources = new Map<string, CodeChunk>();
+    // Visit each anchor's indexed adjacency once; do not rescan all chunks or
+    // infer target extensions from source text.
+    for (const [key, anchor] of anchors) {
+      for (const target of this.indexedImports.get(key)?.keys() ?? []) {
+        const companion = supportedCompanions.get(target);
+        if (!companion || target === key) continue;
+        const targets = corroboratingTargets.get(key) ?? new Set<string>();
+        targets.add(target);
+        corroboratingTargets.set(key, targets);
+        corroboratingSources.set(key, anchor);
+        corroboratingSources.set(target, companion);
+      }
+    }
+    // A stale endpoint cannot lend confidence to a current anchor, even when
+    // the companion would otherwise fall outside the returned result limit.
+    if (corroboratingSources.size > 0) {
+      await this.validateCandidateSources(corroboratingSources.values(), validation, budget);
+      // Only candidate endpoints enter the resolver. Re-read compiler options for
+      // each query: unchanged endpoint bytes do not prove unchanged alias routing.
+      const resolver = await InternalSourceResolver.create(
+        this.rootPath,
+        [...corroboratingSources.values()]
+          .filter(
+            (chunk) => checkedSources.get(path.resolve(this.rootPath, chunk.filePath)) != null
+          )
+          .map((chunk) => path.resolve(this.rootPath, chunk.filePath)),
+        { compilerOptions: loadTsconfigCompilerOptions(this.rootPath) }
+      );
+      for (const [key, targets] of corroboratingTargets) {
+        const anchor = corroboratingSources.get(key)!;
+        if (checkedSources.get(path.resolve(this.rootPath, anchor.filePath)) == null) continue;
+        for (const target of targets) {
+          const companion = corroboratingSources.get(target)!;
+          if (checkedSources.get(path.resolve(this.rootPath, companion.filePath)) == null) continue;
+          for (const specifier of this.indexedImports.get(key)?.get(target) ?? []) {
+            const current = await resolver.resolve(
+              path.resolve(this.rootPath, anchor.filePath),
+              specifier
+            );
+            if (current.reason === 'outside-root') {
+              throw new IndexCorruptedError(
+                'Import resolves outside the selected project. Full rebuild required.'
+              );
+            }
+            if (
+              current.status === 'resolved' &&
+              current.path &&
+              this.indexedFileKey(current.path) === target
+            ) {
+              corroboratedFiles.add(key);
+              break;
+            }
+          }
+          if (corroboratedFiles.has(key)) break;
+        }
+      }
+    }
+
+    const fileEvidence = new Map<string, Set<string>>();
+    for (const { result, matching } of evidence) {
+      const key = this.indexedFileKey(result.item.filePath);
+      const termsForFile = fileEvidence.get(key) ?? new Set<string>();
+      for (const term of matching) termsForFile.add(term);
+      fileEvidence.set(key, termsForFile);
+    }
+
+    const seenFiles = new Set<string>();
+    const nominated = evidence
+      .filter(({ result, exactAnchor }) => {
+        const key = this.indexedFileKey(result.item.filePath);
+        return (
+          (exactAnchor && corroboratedFiles.has(key)) || (fileEvidence.get(key)?.size ?? 0) >= 2
+        );
+      })
+      .sort((a, b) => {
+        const keyA = this.indexedFileKey(a.result.item.filePath);
+        const keyB = this.indexedFileKey(b.result.item.filePath);
+        const score = (entry: typeof a, key: string) =>
+          ((fileEvidence.get(key)?.size ?? 0) + entry.declarationMatching.size) * 8 +
+          entry.matching.size * 3 +
+          (entry.exactAnchor ? 8 : 0) -
+          (this.isTestFile(entry.result.item.filePath) ? 2 : 0) -
+          (entry.result.score ?? 0);
+        return score(b, keyB) - score(a, keyA);
+      })
+      .filter(({ result }) => {
+        const key = this.indexedFileKey(result.item.filePath);
+        if (seenFiles.has(key)) return false;
+        seenFiles.add(key);
+        return true;
+      })
+      .map(({ result, declarationMatching }) => ({
+        ...result,
+        // Equal document zones: distinct source clues nominate the file;
+        // indexed declaration clues distinguish its own work from mentions in
+        // imports or configuration. This remains bounded to [0, 1].
+        score:
+          1 -
+          ((fileEvidence.get(this.indexedFileKey(result.item.filePath))?.size ?? 0) +
+            declarationMatching.size) /
+            (terms.length * 2)
+      }));
+    const current = await this.selectCurrentCandidates(
+      nominated,
+      limit,
+      (result) => result.item,
+      validation,
+      budget
+    );
+    const unavailableAfter = [...checkedSources.values()].filter(
+      (source) => source === null
+    ).length;
+    if (
+      current.length < limit &&
+      unavailableAfter > unavailableBefore &&
+      candidates.length === candidateLimit
+    ) {
+      // Refill the same bounded evidence window after excluding every chunk of
+      // a rejected source. Fresh-prefix queries retain the original single pass.
+      return this.rescueKeywordMatches(query, limit, filters, validation, budget, rawCandidates);
+    }
+    return current;
   }
 
   /**
@@ -804,18 +1271,23 @@ export class CodebaseSearcher {
       })
       .sort((a, b) => b.score - a.score);
 
-    // SEARCH-01: Definition-first boost for EXACT_NAME intent
-    // Boost results where symbolName matches query (case-insensitive)
-    if (intent === 'EXACT_NAME') {
-      const queryNormalized = query.toLowerCase();
+    // SEARCH-01: Definition first for explicit identifiers, regardless of which
+    // analyzer populated the existing declaration metadata. Coarse component or
+    // layer boosts must not move a fuzzy same-suffix mention above that match.
+    if (
+      intent === 'EXACT_NAME' ||
+      scoredResults.some((result) => this.hasExactQueryDeclaration(result, query))
+    ) {
       for (const result of scoredResults) {
-        const symbolName = result.metadata?.symbolName;
-        if (symbolName && symbolName.toLowerCase() === queryNormalized) {
+        if (this.hasExactQueryDeclaration(result, query)) {
           result.score *= 1.15; // +15% boost for definition
         }
       }
-      // Re-sort after boost
-      scoredResults.sort((a, b) => b.score - a.score);
+      scoredResults.sort(
+        (a, b) =>
+          Number(this.hasExactQueryDeclaration(b, query)) -
+            Number(this.hasExactQueryDeclaration(a, query)) || b.score - a.score
+      );
     }
 
     // File-level deduplication
@@ -908,7 +1380,8 @@ export class CodebaseSearcher {
     useSemanticSearch: boolean,
     useKeywordSearch: boolean,
     semanticWeight: number,
-    keywordWeight: number
+    keywordWeight: number,
+    validation: SourceValidationContext
   ): Promise<{
     semantic: Map<string, { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> }>;
     keyword: Map<string, { chunk: CodeChunk; ranks: Array<{ rank: number; weight: number }> }>;
@@ -926,7 +1399,12 @@ export class CodebaseSearcher {
     if (useSemanticSearch && this.embeddingProvider && this.storageProvider) {
       try {
         for (const variant of queryVariants) {
-          const vectorResults = await this.semanticSearch(variant.query, candidateLimit, filters);
+          const vectorResults = await this.semanticSearch(
+            variant.query,
+            candidateLimit,
+            filters,
+            validation
+          );
 
           // Assign ranks based on retrieval order (0-indexed)
           vectorResults.forEach((result, index) => {
@@ -956,13 +1434,23 @@ export class CodebaseSearcher {
     if (useKeywordSearch && this.fuseIndex) {
       try {
         for (const variant of queryVariants) {
-          const keywordResults = await this.keywordSearch(variant.query, candidateLimit, filters);
+          const keywordResults = await this.keywordSearch(
+            variant.query,
+            candidateLimit,
+            filters,
+            validation
+          );
+          // Grounded multi-clue rescue needs its evidence distinction retained
+          // through fusion. Single/exact identifier searches keep their existing
+          // rank semantics and confidence calibration.
+          const weightLexicalEvidence = this.lexicalQueryTerms(variant.query).size >= 2;
 
           // Assign ranks based on retrieval order (0-indexed)
           keywordResults.forEach((result, index) => {
             const id = result.chunk.id;
             const rank = index; // 0-indexed rank
-            const weight = keywordWeight * variant.weight;
+            const weight =
+              keywordWeight * variant.weight * (weightLexicalEvidence ? result.score : 1);
             const existing = keywordRanks.get(id);
 
             if (existing) {
@@ -976,6 +1464,9 @@ export class CodebaseSearcher {
           });
         }
       } catch (error) {
+        if (error instanceof IndexCorruptedError) {
+          throw error; // Preserve the caller's existing auto-heal path.
+        }
         console.warn('Keyword search failed:', error);
       }
     }
@@ -989,6 +1480,15 @@ export class CodebaseSearcher {
     filters?: SearchFilters,
     options: SearchOptions = DEFAULT_SEARCH_OPTIONS
   ): Promise<SearchResult[]> {
+    return (await this.searchWithCoverage(query, limit, filters, options)).results;
+  }
+
+  async searchWithCoverage(
+    query: string,
+    limit: number = 5,
+    filters?: SearchFilters,
+    options: SearchOptions = DEFAULT_SEARCH_OPTIONS
+  ): Promise<SearchOutcome> {
     if (!this.initialized) {
       await this.initialize();
     }
@@ -1019,6 +1519,8 @@ export class CodebaseSearcher {
     const candidateLimit = Math.max(limit * 2, candidateFloor || 30);
     const primaryVariants = this.buildQueryVariants(query, enableQueryExpansion ? 1 : 0);
 
+    const validation: SourceValidationContext = { sources: new Map() };
+    const checkedSources = validation.sources;
     const primaryMatches = await this.collectHybridMatches(
       primaryVariants,
       candidateLimit,
@@ -1026,18 +1528,28 @@ export class CodebaseSearcher {
       Boolean(useSemanticSearch),
       Boolean(useKeywordSearch),
       finalSemanticWeight,
-      finalKeywordWeight
+      finalKeywordWeight,
+      validation
     );
+
+    const keepCurrentMatches = (matches: typeof primaryMatches): void => {
+      for (const channel of [matches.semantic, matches.keyword]) {
+        for (const [id, { chunk }] of channel) {
+          if (checkedSources.get(path.resolve(this.rootPath, chunk.filePath)) == null)
+            channel.delete(id);
+        }
+      }
+    };
 
     // Validate every nominated source before scoring and limiting so stale top
     // matches cannot hide a valid lower-ranked current file.
-    const checkedSources = new Map<string, string>();
     await this.validateCandidateSources(
       [...primaryMatches.semantic.values(), ...primaryMatches.keyword.values()].map(
         (match) => match.chunk
       ),
-      checkedSources
+      validation
     );
+    keepCurrentMatches(primaryMatches);
 
     const primaryTotalWeight =
       primaryVariants.reduce((sum, v) => sum + v.weight, 0) *
@@ -1068,15 +1580,17 @@ export class CodebaseSearcher {
             Boolean(useSemanticSearch),
             Boolean(useKeywordSearch),
             finalSemanticWeight,
-            finalKeywordWeight
+            finalKeywordWeight,
+            validation
           );
 
           await this.validateCandidateSources(
             [...rescueMatches.semantic.values(), ...rescueMatches.keyword.values()].map(
               (match) => match.chunk
             ),
-            checkedSources
+            validation
           );
+          keepCurrentMatches(rescueMatches);
 
           const rescueVariantWeights = rescueVariants.map((_, i) => (i === 0 ? 1 : 0.8));
           const rescueTotalWeight =
@@ -1106,28 +1620,41 @@ export class CodebaseSearcher {
       }
     }
 
-    return bestResults.map((result) => {
-      const source = checkedSources.get(path.resolve(this.rootPath, result.filePath));
-      if (source === undefined) {
+    const results = bestResults.map((result) => {
+      const lines = checkedSources.get(path.resolve(this.rootPath, result.filePath));
+      if (lines == null) {
         throw new IndexCorruptedError('Result source was not validated. Full rebuild required.');
       }
-      const lines = source.replace(/\r\n/g, '\n').split('\n');
-      if (
-        !Number.isInteger(result.startLine) ||
-        !Number.isInteger(result.endLine) ||
-        result.startLine < 1 ||
-        result.endLine < result.startLine ||
-        result.endLine > lines.length
-      ) {
-        throw new IndexCorruptedError(
-          'Indexed source line range is invalid. Full rebuild required.'
-        );
-      }
+      this.validateSourceRange(result, lines);
       return {
         ...result,
         snippet: this.generateSnippet(lines.slice(result.startLine - 1, result.endLine).join('\n'))
       };
     });
+    const skippedFiles = [...checkedSources.values()].filter((source) => source === null).length;
+    return {
+      results,
+      sourceCoverage: {
+        status:
+          skippedFiles === 0 &&
+          !validation.candidateBudgetExhausted &&
+          !validation.candidateRetrievalFailed
+            ? 'current'
+            : results.length > 0
+              ? 'partial'
+              : 'no_fresh_results',
+        checkedFiles: checkedSources.size,
+        skippedFiles,
+        ...(validation.candidateBudgetExhausted && { candidateBudgetExhausted: true }),
+        ...(validation.candidateRetrievalFailed && { candidateRetrievalFailed: true }),
+        ...((skippedFiles > 0 ||
+          validation.candidateBudgetExhausted ||
+          validation.candidateRetrievalFailed) && {
+          refreshAction:
+            'Run refresh_index with incrementalOnly=true to refresh changed or unavailable sources, then retry.'
+        })
+      }
+    };
   }
 
   private generateSummary(chunk: CodeChunk): string {
@@ -1193,7 +1720,8 @@ export class CodebaseSearcher {
   private async semanticSearch(
     query: string,
     limit: number,
-    filters?: SearchFilters
+    filters?: SearchFilters,
+    validation: SourceValidationContext = { sources: new Map() }
   ): Promise<{ chunk: CodeChunk; score: number }[]> {
     if (!this.embeddingProvider || !this.storageProvider) {
       return [];
@@ -1201,18 +1729,71 @@ export class CodebaseSearcher {
 
     const queryVector = await this.embeddingProvider.embed(query);
 
-    const results = await this.storageProvider.search(queryVector, limit, filters);
-
-    return results.map((r) => ({
-      chunk: r.chunk,
-      score: r.score
-    }));
+    const budget: SourceInspectionBudget = {
+      limit: Math.min(limit, MAX_CANDIDATE_WORK),
+      inspected: new Set()
+    };
+    const retainedCount = this.chunks.length;
+    let requested = Math.min(limit, MAX_CANDIDATE_WORK);
+    let retrievedWork = 0;
+    let retained: Array<{ chunk: CodeChunk; score: number }> | undefined;
+    for (;;) {
+      const results = await this.storageProvider
+        .search(queryVector, requested, filters)
+        .catch((error: unknown) => {
+          if (error instanceof IndexCorruptedError || retained === undefined) throw error;
+          validation.candidateRetrievalFailed = true;
+          console.warn('Semantic refill failed; retaining validated current candidates:', error);
+          return null;
+        });
+      if (results === null) return retained ?? [];
+      retrievedWork += results.length;
+      const current = await this.selectCurrentCandidates(
+        results,
+        limit,
+        (result) => result.chunk,
+        validation,
+        budget
+      );
+      retained = current.map(({ chunk, score }) => ({ chunk, score }));
+      if (
+        current.length >= limit ||
+        results.length < requested ||
+        (retainedCount > 0 && requested >= retainedCount)
+      ) {
+        return retained;
+      }
+      const staleSources = new Set(
+        [...validation.sources].filter(([, source]) => source === null).map(([file]) => file)
+      );
+      if (staleSources.size === 0) {
+        if (requested < limit && results.length === requested)
+          validation.candidateBudgetExhausted = true;
+        return retained;
+      }
+      const rejectedChunks = this.chunks.filter((chunk) =>
+        staleSources.has(path.resolve(this.rootPath, chunk.filePath))
+      ).length;
+      // Widen by known rejected rows, never by an arbitrary multiplier. Sum of
+      // retrieved rows is bounded, and the query vector is reused for all retries.
+      const next = Math.min(
+        retainedCount || requested,
+        limit + rejectedChunks,
+        MAX_CANDIDATE_WORK - retrievedWork
+      );
+      if (next <= requested || budget.inspected.size >= budget.limit) {
+        validation.candidateBudgetExhausted = true;
+        return retained;
+      }
+      requested = next;
+    }
   }
 
   private async keywordSearch(
     query: string,
     limit: number,
-    filters?: SearchFilters
+    filters?: SearchFilters,
+    validation: SourceValidationContext = { sources: new Map() }
   ): Promise<{ chunk: CodeChunk; score: number }[]> {
     if (!this.fuseIndex || this.chunks.length === 0) {
       return [];
@@ -1221,68 +1802,63 @@ export class CodebaseSearcher {
     let fuseResults = this.fuseIndex.search(query);
 
     if (filters) {
-      fuseResults = fuseResults.filter((r) => {
-        const chunk = r.item;
-
-        if (filters.componentType && chunk.componentType !== filters.componentType) {
-          return false;
-        }
-        if (filters.layer && chunk.layer !== filters.layer) {
-          return false;
-        }
-        if (filters.framework && chunk.framework !== filters.framework) {
-          return false;
-        }
-        if (filters.language && chunk.language !== filters.language) {
-          return false;
-        }
-        if (filters.tags && filters.tags.length > 0) {
-          const chunkTags = chunk.tags || [];
-          if (!filters.tags.some((tag) => chunkTags.includes(tag))) {
-            return false;
-          }
-        }
-
-        return true;
-      });
+      fuseResults = fuseResults.filter(({ item }) => this.matchesSearchFilters(item, filters));
     }
 
-    return fuseResults.slice(0, limit).map((r) => {
-      const chunk = r.item;
-      let score = 1 - (r.score || 0);
+    if (fuseResults.length === 0 || (fuseResults[0].score ?? 0) > KEYWORD_FUSE_OPTIONS.threshold!) {
+      const rescue = await this.rescueKeywordMatches(query, limit, filters, validation);
+      const seen = new Set(rescue.map(({ item }) => item.id));
+      fuseResults = [...rescue, ...fuseResults.filter(({ item }) => !seen.has(item.id))].sort(
+        (a, b) => (a.score ?? 0) - (b.score ?? 0)
+      );
+    }
+    const current = await this.selectCurrentCandidates(
+      fuseResults,
+      limit,
+      (result) => result.item,
+      validation
+    );
+    return current
+      .map((r) => {
+        const chunk = r.item;
+        let score = 1 - (r.score || 0);
 
-      // Boost exact matches on class name or file path
-      const queryLower = query.toLowerCase();
-      const fileName = path.basename(chunk.filePath).toLowerCase();
-      const relativePathLower = chunk.relativePath.toLowerCase();
-      const componentName = chunk.metadata?.componentName?.toLowerCase() || '';
+        // Boost exact matches on class name or file path
+        const queryLower = query.toLowerCase();
+        const fileName = path.basename(chunk.filePath).toLowerCase();
+        const relativePathLower = chunk.relativePath.toLowerCase();
 
-      // Exact class name match
-      if (componentName && queryLower === componentName) {
-        score = Math.min(1.0, score + 0.3);
-      }
+        // Use the same analyzer-neutral declaration evidence as final ranking.
+        if (this.hasExactQueryDeclaration(chunk, query)) {
+          score = Math.min(1.0, score + 0.3);
+        }
 
-      // Exact file name match
-      if (
-        fileName === queryLower ||
-        fileName.replace(/\.ts$/, '') === queryLower.replace(/\.ts$/, '')
-      ) {
-        score = Math.min(1.0, score + 0.2);
-      }
+        // Exact file name match
+        if (
+          fileName === queryLower ||
+          fileName.replace(/\.ts$/, '') === queryLower.replace(/\.ts$/, '')
+        ) {
+          score = Math.min(1.0, score + 0.2);
+        }
 
-      // File path contains query
-      if (
-        chunk.filePath.toLowerCase().includes(queryLower) ||
-        relativePathLower.includes(queryLower)
-      ) {
-        score = Math.min(1.0, score + 0.1);
-      }
+        // File path contains query
+        if (
+          chunk.filePath.toLowerCase().includes(queryLower) ||
+          relativePathLower.includes(queryLower)
+        ) {
+          score = Math.min(1.0, score + 0.1);
+        }
 
-      return {
-        chunk,
-        score
-      };
-    });
+        return {
+          chunk,
+          score
+        };
+      })
+      .sort(
+        (a, b) =>
+          Number(this.hasExactQueryDeclaration(b.chunk, query)) -
+            Number(this.hasExactQueryDeclaration(a.chunk, query)) || b.score - a.score
+      );
   }
 
   private generateRelevanceReason(chunk: CodeChunk, query: string): string {

@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { ToolContext, ToolResponse, DecisionCard } from './types.js';
 import { CodebaseSearcher } from '../core/search.js';
-import type { SearchIntentProfile } from '../core/search.js';
+import type { SearchIntentProfile, SearchSourceCoverage } from '../core/search.js';
 import type {
   SearchResult,
   IntelligenceData,
@@ -20,7 +20,7 @@ import {
 import { assessSearchQuality } from '../core/search-quality.js';
 import { getRerankerStatus } from '../core/reranker.js';
 import { IndexCorruptedError } from '../errors/index.js';
-import { formatMemoryScopeText, readMemoriesFile, withConfidence } from '../memory/store.js';
+import { readMemoriesFile, withConfidence } from '../memory/store.js';
 import type { MemoryWithConfidence } from '../memory/store.js';
 import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../health/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
@@ -103,7 +103,7 @@ export const definition: Tool = {
       includeSnippets: {
         type: 'boolean',
         description:
-          'Include code snippets in results (default: false). If you need code, prefer read_file instead.',
+          'Include code snippets in results (default: false). Open returned paths with your host file reader; CBC does not expose a file-reading tool.',
         default: false
       },
       filters: {
@@ -213,14 +213,17 @@ export async function handle(
 
   const searcher = new CodebaseSearcher(ctx.rootPath);
   let results: SearchResult[];
+  let sourceCoverage: SearchSourceCoverage;
   const searchProfile = (
     intent && ['explore', 'edit', 'refactor', 'migrate'].includes(intent) ? intent : 'explore'
   ) as SearchIntentProfile;
 
   try {
-    results = await searcher.search(queryStr, limit || 5, filters, {
+    const outcome = await searcher.searchWithCoverage(queryStr, limit || 5, filters, {
       profile: searchProfile
     });
+    results = outcome.results;
+    sourceCoverage = outcome.sourceCoverage;
   } catch (error) {
     if (error instanceof IndexCorruptedError) {
       console.error('[Auto-Heal] Index corrupted. Triggering background re-index...');
@@ -242,6 +245,32 @@ export async function handle(
       };
     }
     throw error;
+  }
+
+  if (sourceCoverage.status === 'no_fresh_results') {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: finalizeSearchPayloadText(
+            {
+              status: 'no_fresh_results',
+              message: sourceCoverage.candidateRetrievalFailed
+                ? 'No fresh results in the inspected candidates. Semantic refill failed; retry or refresh the index.'
+                : sourceCoverage.candidateBudgetExhausted
+                  ? 'No fresh results in the bounded candidate window. Some candidates remain uninspected; refresh the index or narrow the query and retry.'
+                  : 'No fresh results: nominated sources changed or could not be read. Refresh the index and retry.',
+              sourceCoverage,
+              searchQuality: { status: 'low_confidence', confidence: 0 },
+              budget: { mode: mode === 'full' ? 'full' : 'compact', resultCount: 0 },
+              preflight: { ready: false, reason: sourceCoverage.refreshAction },
+              results: []
+            },
+            { mode: mode === 'full' ? 'full' : 'compact', pretty: true, transportAware: true }
+          )
+        }
+      ]
+    };
   }
 
   // Load memories for keyword matching, enriched with confidence
@@ -385,10 +414,13 @@ export async function handle(
     return 0;
   }
 
+  function getMemoryText(memory: MemoryWithConfidence): string {
+    return `${memory.memory} ${memory.reason}`.toLowerCase();
+  }
+
   function getMemoryTextMatchCount(memory: MemoryWithConfidence): number {
-    const haystack =
-      `${memory.memory} ${memory.reason} ${formatMemoryScopeText(memory.scope)}`.toLowerCase();
-    return queryTerms.filter((term) => haystack.includes(term)).length;
+    const text = getMemoryText(memory);
+    return queryTerms.filter((term) => text.includes(term)).length;
   }
 
   function formatMemoryForOutput(memory: MemoryWithConfidence): string {
@@ -659,7 +691,7 @@ export async function handle(
     if (terms.length === 0) return [];
     return memories
       .filter((m) => {
-        const text = `${m.memory} ${m.reason} ${formatMemoryScopeText(m.scope)}`.toLowerCase();
+        const text = getMemoryText(m);
         const matchCount = terms.filter((t) => text.includes(t)).length;
         return (matchCount >= 2 || getMemoryScopeBoost(m) >= 2) && m.effectiveConfidence >= 0.5;
       })
@@ -729,45 +761,19 @@ export async function handle(
     return entries.length > 0 ? entries.join(', ') : undefined;
   }
 
-  // Return the golden file path most relevant to the given search results, using directory
-  // overlap as a query-aware proximity signal. Falls back to goldenFiles[0] when no overlap.
-  // Track B: use cross-encoder reranker to score golden files against the query for stronger
-  // relevance — deferred to avoid reranker latency on compact mode in v2.
+  // A repository-wide example is not evidence for this query. Recommend it only
+  // when search independently returned the same file, preserving result order.
   function getBestExample(topResults: Array<{ filePath: string }>): string | undefined {
     const goldenFiles = intelligence?.goldenFiles;
-    if (!goldenFiles?.length) return undefined;
-    if (!topResults?.length) return goldenFiles[0].file;
-
-    // Extract directory paths from top-5 results
-    const resultDirs = topResults.slice(0, 5).map((r) => path.dirname(r.filePath));
-
-    let bestFile = goldenFiles[0];
-    let bestScore = -1;
-
-    for (const gf of goldenFiles) {
-      const gfParts = path.dirname(gf.file).split(path.sep).filter(Boolean);
-      let maxShared = 0;
-
-      for (const resDir of resultDirs) {
-        const resParts = resDir.split(path.sep).filter(Boolean);
-        let shared = 0;
-        const minLen = Math.min(gfParts.length, resParts.length);
-        for (let i = 0; i < minLen; i++) {
-          if (gfParts[i] === resParts[i]) shared++;
-          else break;
-        }
-        if (shared > maxShared) maxShared = shared;
-      }
-
-      // Use golden file score as tie-breaker
-      const score = maxShared * 1000 + (gf.score ?? 0);
-      if (score > bestScore) {
-        bestScore = score;
-        bestFile = gf;
-      }
+    if (!goldenFiles?.length || !topResults.length) return undefined;
+    const examples = new Map(
+      goldenFiles.map((file) => [path.resolve(ctx.rootPath, file.file), file.file])
+    );
+    for (const result of topResults.slice(0, 5)) {
+      const example = examples.get(path.resolve(ctx.rootPath, result.filePath));
+      if (example) return example;
     }
-
-    return bestFile.file;
+    return undefined;
   }
 
   // Build up to 2 dynamic next-hop suggestions (compact mode)
@@ -776,13 +782,8 @@ export async function handle(
     sq: { status: string }
   ): Array<{ tool: string; args?: Record<string, string>; why: string }> {
     const hops: Array<{ tool: string; args?: Record<string, string>; why: string }> = [];
-    if (compactResults.length > 0) {
-      hops.push({
-        tool: 'read_file',
-        args: { path: compactResults[0].filePath },
-        why: 'Read the top match for implementation details'
-      });
-    }
+    // Only advertise tools this MCP server actually supplies. Source reads belong
+    // to the host; returned result paths already identify what to open there.
     if (compactResults.length > 0) {
       const relativeFile = path.relative(ctx.rootPath, compactResults[0].filePath);
       if (
@@ -1162,6 +1163,15 @@ export async function handle(
       ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
     };
   }
+  if (sourceCoverage.status === 'partial') {
+    preflightPayload = {
+      ...preflightPayload,
+      ready: false,
+      abstain: true,
+      reason: sourceCoverage.refreshAction,
+      nextAction: sourceCoverage.refreshAction
+    };
+  }
 
   // Helper: Build scope header for symbol-aware chunks (SEARCH-02)
   function buildScopeHeader(metadata: ChunkMetadata): string | null {
@@ -1237,6 +1247,7 @@ export async function handle(
     const payloadText = finalizeSearchPayloadText(
       {
         status: 'success',
+        ...(sourceCoverage.status === 'partial' && { sourceCoverage }),
         searchQuality: searchQualityBlock,
         budget: { mode: 'compact', resultCount: compactResults.length },
         ...(preflightPayload && { preflight: preflightPayload }),
@@ -1299,6 +1310,7 @@ export async function handle(
   const payloadText = finalizeSearchPayloadText(
     {
       status: 'success',
+      ...(sourceCoverage.status === 'partial' && { sourceCoverage }),
       searchQuality: searchQualityBlock,
       budget: { mode: 'full', resultCount: results.length },
       ...(preflightPayload && { preflight: preflightPayload }),

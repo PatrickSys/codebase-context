@@ -7,7 +7,8 @@ import {
   INDEX_FORMAT_VERSION,
   INDEX_META_FILENAME,
   INDEX_META_VERSION,
-  KEYWORD_INDEX_FILENAME
+  KEYWORD_INDEX_FILENAME,
+  MANIFEST_FILENAME
 } from '../src/constants/codebase-context.js';
 
 type ToolCallRequest = {
@@ -47,6 +48,30 @@ async function writeProjectSource(
   return absolutePath;
 }
 
+async function writeReferenceManifest(
+  rootPath: string,
+  buildId: string,
+  sourcePaths: string[]
+): Promise<void> {
+  const contextDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
+  const metadataPath = path.join(contextDir, INDEX_META_FILENAME);
+  const meta = JSON.parse(await fs.readFile(metadataPath, 'utf8')) as {
+    artifacts: Record<string, unknown>;
+  };
+  meta.artifacts.manifest = { path: MANIFEST_FILENAME };
+  await fs.writeFile(metadataPath, JSON.stringify(meta, null, 2), 'utf8');
+  await fs.writeFile(
+    path.join(contextDir, MANIFEST_FILENAME),
+    JSON.stringify({
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      header: { buildId, formatVersion: INDEX_FORMAT_VERSION },
+      files: Object.fromEntries(sourcePaths.map((sourcePath) => [sourcePath, 'a'.repeat(16)]))
+    }),
+    'utf8'
+  );
+}
+
 describe('get_symbol_references MCP tool', () => {
   let tempRoot: string | null = null;
   let originalArgv: string[] | null = null;
@@ -83,6 +108,36 @@ describe('get_symbol_references MCP tool', () => {
   it('registers get_symbol_references in TOOLS', async () => {
     const { TOOLS } = await import('../src/index.js');
     expect(TOOLS.some((tool) => tool.name === 'get_symbol_references')).toBe(true);
+  });
+
+  it('marks a manifest-listed source integrity failure as an MCP error', async () => {
+    if (!tempRoot) throw new Error('tempRoot not initialized');
+
+    const { server } = await import('../src/index.js');
+    const { CodebaseIndexer } = await import('../src/core/indexer.js');
+    const sourcePath = await writeProjectSource(
+      tempRoot,
+      'src/a.ts',
+      'export const alpha = 1;\nconsole.log(alpha);\n'
+    );
+    await new CodebaseIndexer({ rootPath: tempRoot }).index();
+    await fs.unlink(sourcePath);
+    await fs.mkdir(sourcePath);
+
+    const response = await getToolCallHandler(server)({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'get_symbol_references', arguments: { symbol: 'alpha' } }
+    });
+
+    expect(response.isError).toBe(true);
+    const payload = JSON.parse(response.content[0].text) as {
+      status: string;
+      message: string;
+    };
+    expect(payload.status).toBe('error');
+    expect(payload.message).toContain('src/a.ts');
   });
 
   it('returns usageCount and top usages from keyword index', async () => {
@@ -147,6 +202,7 @@ describe('get_symbol_references MCP tool', () => {
       ),
       'utf-8'
     );
+    await writeReferenceManifest(tempRoot, buildId, ['src/a.ts', 'src/b.ts']);
 
     const { server } = await import('../src/index.js');
     const handler = getToolCallHandler(server);
@@ -170,6 +226,11 @@ describe('get_symbol_references MCP tool', () => {
     expect(payload.usages.length).toBeLessThanOrEqual(2);
     expect(payload.confidence).toBe('syntactic');
     expect(typeof payload.isComplete).toBe('boolean');
+    expect(payload.coverage).toMatchObject({
+      candidateFiles: 2,
+      sourcesRead: 2,
+      filesUnavailable: 0
+    });
 
     for (const usage of payload.usages) {
       expect(usage.file).toBeTypeOf('string');
@@ -177,6 +238,60 @@ describe('get_symbol_references MCP tool', () => {
       expect(usage.preview).toBeTypeOf('string');
       expect(usage.preview.length).toBeGreaterThan(0);
     }
+  });
+
+  it('returns a structured full-reindex error when the reference manifest is missing', async () => {
+    if (!tempRoot) {
+      throw new Error('tempRoot not initialized');
+    }
+
+    const contextDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
+    await fs.mkdir(contextDir, { recursive: true });
+    const buildId = 'test-build-symbol-refs-missing-manifest';
+    await fs.mkdir(path.join(contextDir, 'index'), { recursive: true });
+    await fs.writeFile(
+      path.join(contextDir, 'index', 'index-build.json'),
+      JSON.stringify({ buildId, formatVersion: INDEX_FORMAT_VERSION }),
+      'utf8'
+    );
+    await fs.writeFile(
+      path.join(contextDir, KEYWORD_INDEX_FILENAME),
+      JSON.stringify({
+        header: { buildId, formatVersion: INDEX_FORMAT_VERSION },
+        chunks: []
+      }),
+      'utf8'
+    );
+    await fs.writeFile(
+      path.join(contextDir, INDEX_META_FILENAME),
+      JSON.stringify({
+        metaVersion: INDEX_META_VERSION,
+        formatVersion: INDEX_FORMAT_VERSION,
+        buildId,
+        generatedAt: new Date().toISOString(),
+        toolVersion: 'test',
+        artifacts: {
+          keywordIndex: { path: KEYWORD_INDEX_FILENAME },
+          vectorDb: { path: 'index', provider: 'test' },
+          manifest: { path: MANIFEST_FILENAME }
+        }
+      }),
+      'utf8'
+    );
+
+    const { server } = await import('../src/index.js');
+    const handler = getToolCallHandler(server);
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'get_symbol_references', arguments: { symbol: 'alpha' } }
+    });
+
+    expect(response.isError).toBe(true);
+    const payload = JSON.parse(response.content[0].text) as { status: string; message: string };
+    expect(payload.status).toBe('error');
+    expect(payload.message).toMatch(/full reindex.*codebase-context reindex without --incremental/i);
   });
 
   it('excludes comment and string matches when file exists and Tree-sitter is supported', async () => {
@@ -243,6 +358,7 @@ describe('get_symbol_references MCP tool', () => {
       ),
       'utf-8'
     );
+    await writeReferenceManifest(tempRoot, buildId, ['src/example.ts']);
 
     const { server } = await import('../src/index.js');
     const handler = getToolCallHandler(server);
@@ -327,6 +443,7 @@ describe('get_symbol_references MCP tool', () => {
       ),
       'utf-8'
     );
+    await writeReferenceManifest(tempRoot, buildId, ['src/test.ts']);
 
     const { server } = await import('../src/index.js');
     const handler = getToolCallHandler(server);
@@ -408,6 +525,7 @@ describe('get_symbol_references MCP tool', () => {
       ),
       'utf-8'
     );
+    await writeReferenceManifest(tempRoot, buildId, ['src/test.ts']);
 
     const { server } = await import('../src/index.js');
     const handler = getToolCallHandler(server);

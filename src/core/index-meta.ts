@@ -16,10 +16,12 @@ import {
 } from '../constants/codebase-context.js';
 import { IndexCorruptedError } from '../errors/index.js';
 
-const ArtifactHeaderSchema = z.object({
+export const ArtifactHeaderSchema = z.object({
   buildId: z.string().min(1),
   formatVersion: z.number().int().nonnegative()
 });
+
+export type ArtifactHeader = z.infer<typeof ArtifactHeaderSchema>;
 
 const KeywordIndexFileSchema = z.object({
   header: ArtifactHeaderSchema,
@@ -94,12 +96,51 @@ export const IndexMetaSchema = z.object({
         .object({
           path: z.string().min(1)
         })
+        .optional(),
+      manifest: z
+        .object({
+          path: z.string().min(1)
+        })
         .optional()
     })
     .passthrough()
 });
 
 export type IndexMeta = z.infer<typeof IndexMetaSchema>;
+
+type KeywordIndexFile = z.infer<typeof KeywordIndexFileSchema>;
+
+export function validateArtifactBuildIdentity(
+  header: ArtifactHeader,
+  meta: IndexMeta,
+  artifactLabel: string,
+  artifactFile: string
+): void {
+  if (header.formatVersion !== meta.formatVersion) {
+    throw new IndexCorruptedError(
+      `${artifactLabel} formatVersion mismatch (rebuild required): meta=${meta.formatVersion}, ${artifactFile}=${header.formatVersion}`
+    );
+  }
+  if (header.buildId !== meta.buildId) {
+    throw new IndexCorruptedError(
+      `${artifactLabel} buildId mismatch (rebuild required): meta=${meta.buildId}, ${artifactFile}=${header.buildId}`
+    );
+  }
+}
+
+/** Validate the keyword artifact's shape and identity against the active index metadata. */
+export function validateKeywordIndexArtifact(json: unknown, meta: IndexMeta): KeywordIndexFile {
+  const parsed = KeywordIndexFileSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new IndexCorruptedError(
+      `Keyword index schema mismatch (rebuild required): ${parsed.error.message}`
+    );
+  }
+
+  validateArtifactBuildIdentity(parsed.data.header, meta, 'Keyword index', 'index.json');
+
+  return parsed.data;
+}
 
 export function checkEmbeddingMismatch(
   meta: IndexMeta,
@@ -242,25 +283,7 @@ export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): 
   // Keyword index header (required)
   try {
     const raw = await fs.readFile(keywordPath, 'utf-8');
-    const json = JSON.parse(raw);
-    const parsed = KeywordIndexFileSchema.safeParse(json);
-    if (!parsed.success) {
-      throw new IndexCorruptedError(
-        `Keyword index schema mismatch (rebuild required): ${parsed.error.message}`
-      );
-    }
-
-    const { buildId, formatVersion } = parsed.data.header;
-    if (formatVersion !== meta.formatVersion) {
-      throw new IndexCorruptedError(
-        `Keyword index formatVersion mismatch (rebuild required): meta=${meta.formatVersion}, index.json=${formatVersion}`
-      );
-    }
-    if (buildId !== meta.buildId) {
-      throw new IndexCorruptedError(
-        `Keyword index buildId mismatch (rebuild required): meta=${meta.buildId}, index.json=${buildId}`
-      );
-    }
+    validateKeywordIndexArtifact(JSON.parse(raw), meta);
   } catch (error) {
     if (error instanceof IndexCorruptedError) throw error;
     throw asIndexCorrupted('Keyword index corrupted (rebuild required)', error);

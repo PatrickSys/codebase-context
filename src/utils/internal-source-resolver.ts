@@ -24,7 +24,10 @@ function isWithin(root: string, candidate: string): boolean {
 }
 
 export function loadTsconfigCompilerOptions(rootPath: string): ts.CompilerOptions {
-  const configPath = ts.findConfigFile(rootPath, ts.sys.fileExists, 'tsconfig.json');
+  // Keep discovery within this root and config paths normalized for TypeScript diagnostics.
+  const configPath = ['tsconfig.json', 'tsconfig.base.json']
+    .map((name) => path.join(rootPath, name).split(path.sep).join('/'))
+    .find((candidate) => ts.sys.fileExists(candidate));
   if (!configPath) {
     return {
       module: ts.ModuleKind.Preserve,

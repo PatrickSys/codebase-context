@@ -5,7 +5,7 @@ import path from 'path';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
 import { readIndexMeta } from '../core/index-meta.js';
 import {
-  traverseFileGraph,
+  traverseFileGraphWithVerification,
   type FileGraphEdge,
   type ImportEdgeDetail,
   type UnresolvedImportEdge
@@ -17,6 +17,8 @@ import {
 import type { ToolContext, ToolResponse } from './types.js';
 
 const RESPONSE_BYTE_BUDGET = 4000;
+const MAX_INSPECTIONS = 1000;
+const MAX_DIAGNOSTICS = 20;
 
 function serializeBoundedResponse(value: Record<string, unknown>): {
   text: string;
@@ -50,8 +52,12 @@ function serializeBoundedResponse(value: Record<string, unknown>): {
     (bounded[key] as unknown[]).pop();
     truncated = true;
     bounded.truncated = true;
-    bounded.outputNote =
-      'The serialized response reached its 4000-byte budget; some paths or diagnostics were omitted. Narrow the starting file or hop limit for more.';
+    bounded.outputNote = [
+      value.outputNote,
+      'The serialized response reached its 4000-byte budget; some paths or diagnostics were omitted. Narrow the starting file or hop limit for more.'
+    ]
+      .filter(Boolean)
+      .join(' ');
     payload = encode();
   }
   return { text: payload, truncated };
@@ -223,35 +229,17 @@ export async function handle(
       });
     }
 
-    const graphFiles = new Set<string>();
-    for (const [from, targets] of Object.entries(sidecar.graph.imports)) {
-      graphFiles.add(from);
-      for (const target of targets) graphFiles.add(target);
-    }
-    for (const file of Object.keys(sidecar.graph.exports ?? {})) graphFiles.add(file);
-    for (const edge of sidecar.graph.unresolvedEdges ?? []) graphFiles.add(edge.from);
-    const resolver = await InternalSourceResolver.create(rootRealPath, [...graphFiles], {
+    // Every edge is resolved against current confined files with allowUnindexed=true.
+    // Avoid resolving every stored graph file during setup for a nearby relationship query.
+    const resolver = await InternalSourceResolver.create(rootRealPath, [], {
       compilerOptions: loadTsconfigCompilerOptions(rootRealPath)
     });
-    const result = traverseFileGraph(sidecar.graph, start, {
-      direction,
-      maxHops,
-      maxNodes,
-      maxPaths: 40
-    });
-    const verifiedPaths: typeof result.paths = [];
-    const staleEdges: Array<{
-      from: string;
-      to: string;
-      kind: string;
-      line: number;
-      specifier: string;
-    }> = [];
     const verificationCache = new Map<string, boolean>();
-    for (const entry of result.paths) {
-      const edges: FileGraphEdge[] = [];
-      let valid = true;
-      for (const edge of entry.edges) {
+    const result = await traverseFileGraphWithVerification(
+      sidecar.graph,
+      start,
+      { direction, maxHops, maxNodes, maxPaths: 40, maxInspections: MAX_INSPECTIONS },
+      async (edge) => {
         const proofKey = JSON.stringify([
           edge.from,
           edge.to,
@@ -266,21 +254,16 @@ export async function handle(
           verified = await verifyEdge(rootRealPath, edge, resolver);
           verificationCache.set(proofKey, verified);
         }
-        if (!verified) {
-          valid = false;
-          staleEdges.push({
-            from: edge.from,
-            to: edge.to,
-            kind: edge.kind,
-            line: edge.source.line,
-            specifier: edge.source.specifier
-          });
-          break;
-        }
-        edges.push(edge);
+        return verified;
       }
-      if (valid) verifiedPaths.push({ nodes: entry.nodes, edges });
-    }
+    );
+    const staleEdges = result.rejectedEdges.slice(0, MAX_DIAGNOSTICS).map((edge) => ({
+      from: edge.from,
+      to: edge.to,
+      kind: edge.kind,
+      line: edge.source.line,
+      specifier: edge.source.specifier
+    }));
 
     const unresolved: UnresolvedImportEdge[] = [];
     const staleUnresolvedEdges: UnresolvedImportEdge[] = [];
@@ -290,15 +273,18 @@ export async function handle(
       if (importerFingerprint === edge.source.sourceFingerprint) unresolved.push(edge);
       else staleUnresolvedEdges.push(edge);
     }
-    const stale = staleEdges.length > 0 || staleUnresolvedEdges.length > 0;
-    const unverified = result.paths.length - verifiedPaths.length;
-    const visiblePaths = verifiedPaths.slice(0, 40);
-    const visibleUnresolved = unresolved;
+    const stale = result.rejectedEdges.length > 0 || staleUnresolvedEdges.length > 0;
+    const visiblePaths = result.paths;
+    const visibleUnresolved = unresolved.slice(0, MAX_DIAGNOSTICS);
     const visibleStaleEdges = staleEdges;
-    const visibleStaleUnresolved = staleUnresolvedEdges;
-    const outputLimited = visiblePaths.length < verifiedPaths.length || result.truncated;
+    const visibleStaleUnresolved = staleUnresolvedEdges.slice(0, MAX_DIAGNOSTICS);
+    const diagnosticsLimited =
+      staleEdges.length < result.rejectedEdges.length ||
+      visibleUnresolved.length < unresolved.length ||
+      visibleStaleUnresolved.length < staleUnresolvedEdges.length;
+    const outputLimited = result.truncated || diagnosticsLimited;
     return reply({
-      status: stale || unverified > 0 ? 'stale_edges' : 'success',
+      status: stale ? 'stale_edges' : 'success',
       file: start,
       direction,
       maxHops,
@@ -329,16 +315,18 @@ export async function handle(
           }
         : {}),
       truncated: outputLimited,
-      message:
-        stale || unverified > 0
-          ? 'Some stored relationships could not be proven against current confined source files. Omitted those edges; refresh indexing to update this graph.'
-          : unresolved.length > 0
-            ? 'Resolved relationships are current. Unresolved source specifiers are diagnostics and were not followed.'
-            : 'Relationships are limited to verified imports and re-exports; dynamic calls are not inferred.',
+      message: stale
+        ? 'Some stored relationships could not be proven against current confined source files. Omitted those edges; refresh indexing to update this graph.'
+        : unresolved.length > 0
+          ? 'Resolved relationships are current. Unresolved source specifiers are diagnostics and were not followed.'
+          : 'Relationships are limited to verified imports and re-exports; dynamic calls are not inferred.',
       ...(outputLimited
         ? {
-            outputNote:
-              'The node or path cap was reached; narrow the starting file or hop limit for more.'
+            outputNote: result.inspectionLimited
+              ? 'The relationship inspection budget was reached; additional relationships were not checked. Refresh indexing to remove stale edges, then retry from this file or a returned endpoint.'
+              : result.truncated
+                ? 'The accepted node or path cap was reached; narrow the hop limit or continue from a returned endpoint for more.'
+                : 'Some freshness or unresolved diagnostics were omitted. Refresh indexing to update this graph.'
           }
         : {})
     });

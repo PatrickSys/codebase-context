@@ -2,13 +2,31 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import path from 'path';
 import os from 'os';
 import { promises as fs } from 'fs';
+import { formatRefs } from '../src/cli-formatters.js';
 
 const toolMocks = vi.hoisted(() => ({
   dispatchTool: vi.fn()
 }));
 
+const cliContextMocks = vi.hoisted(() => ({
+  loadProjectConfig: vi.fn(),
+  indexer: vi.fn()
+}));
+
 vi.mock('../src/tools/index.js', () => ({
   dispatchTool: toolMocks.dispatchTool
+}));
+
+vi.mock('../src/server/config.js', () => ({
+  loadProjectConfig: cliContextMocks.loadProjectConfig
+}));
+
+vi.mock('../src/core/indexer.js', () => ({
+  CodebaseIndexer: vi.fn().mockImplementation(() => ({
+    index: cliContextMocks.indexer,
+    previewFiles: vi.fn(),
+    getProgress: vi.fn()
+  }))
 }));
 
 import { handleCliCommand, handleMemoryCli } from '../src/cli.js';
@@ -21,6 +39,12 @@ describe('CLI', () => {
 
   beforeEach(() => {
     toolMocks.dispatchTool.mockReset();
+    cliContextMocks.loadProjectConfig.mockReset().mockResolvedValue(undefined);
+    cliContextMocks.indexer.mockReset().mockResolvedValue({
+      indexedFiles: 0,
+      totalChunks: 0,
+      duration: 0
+    });
 
     originalEnvRoot = process.env.CODEBASE_ROOT;
     delete process.env.CODEBASE_ROOT;
@@ -47,6 +71,25 @@ describe('CLI', () => {
     );
     expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('reindex help returns before context creation, indexing, or dispatch', async () => {
+    await handleCliCommand(['reindex', '--help']);
+
+    const output = logSpy.mock.calls.map((call) => String(call[0] ?? '')).join('\n');
+    expect(output).toContain('reindex [--incremental]');
+    expect(cliContextMocks.loadProjectConfig).not.toHaveBeenCalled();
+    expect(cliContextMocks.indexer).not.toHaveBeenCalled();
+    expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
+  });
+
+  it('read-command help returns before context creation or dispatch', async () => {
+    await handleCliCommand(['status', '--help']);
+
+    const output = logSpy.mock.calls.map((call) => String(call[0] ?? '')).join('\n');
+    expect(output).toContain('status');
+    expect(cliContextMocks.loadProjectConfig).not.toHaveBeenCalled();
+    expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
   });
 
   it('search dispatches with typed args', async () => {
@@ -130,6 +173,45 @@ describe('CLI', () => {
     await handleCliCommand(['search', '--query', 'foo']);
     expect(toolMocks.dispatchTool).toHaveBeenCalledTimes(1);
     expect(logSpy).toHaveBeenCalled();
+  });
+
+  it('reports unavailable reference sources and labels lexical fallback uncertainty', () => {
+    const result = {
+      symbol: 'activeToken',
+      usageCount: 1,
+      confidence: 'lexical',
+      usages: [{ file: 'src/active.ts', line: 1, preview: 'activeToken();' }],
+      isComplete: false,
+      coverage: { filesUnavailable: 1 }
+    };
+
+    formatRefs(result, 'C:/repo');
+
+    const output = logSpy.mock.calls
+      .map((call) => String(call[0] ?? ''))
+      .join('\n')
+      .replace(/\s+/g, ' ');
+    expect(output).toContain('incomplete coverage: 1 indexed source unavailable');
+    expect(output).not.toContain('results capped at limit');
+    expect(output).toContain('lexical');
+    expect(output).toContain('Raw-text fallback may match comments or strings.');
+  });
+
+  it('retains the limit message when complete reference coverage reaches the limit', () => {
+    const result = {
+      symbol: 'activeToken',
+      usageCount: 10,
+      confidence: 'syntactic',
+      usages: [{ file: 'src/active.ts', line: 1, preview: 'activeToken();' }],
+      isComplete: false,
+      coverage: { filesUnavailable: 0 }
+    };
+
+    formatRefs(result, 'C:/repo');
+
+    const output = logSpy.mock.calls.map((call) => String(call[0] ?? '')).join('\n');
+    expect(output).toContain('results capped at limit');
+    expect(output).not.toContain('incomplete coverage');
   });
 
   it('memory list errors on invalid --type', async () => {

@@ -660,71 +660,99 @@ export interface FileGraphTraversal {
   truncated: boolean;
 }
 
-export function traverseFileGraph(
-  graph: {
-    imports?: Record<string, string[]>;
-    importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
-    unresolvedEdges?: UnresolvedImportEdge[];
-  },
+interface TraversableFileGraph {
+  imports?: Record<string, string[]>;
+  importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
+  unresolvedEdges?: UnresolvedImportEdge[];
+}
+
+interface FileGraphTraversalOptions {
+  direction: 'outgoing' | 'incoming';
+  maxHops: 1 | 2 | 3;
+  maxNodes?: number;
+  maxPaths?: number;
+  /** Candidate edge attempts and unresolved diagnostics share this work budget. */
+  maxInspections?: number;
+}
+
+interface CheckedFileGraphTraversal extends FileGraphTraversal {
+  rejectedEdges: FileGraphEdge[];
+  inspectionLimited: boolean;
+}
+
+/** A shared BFS lets asynchronous freshness checks run before a path consumes output limits. */
+function* fileGraphTraversal(
+  graph: TraversableFileGraph,
   start: string,
-  options: {
-    direction: 'outgoing' | 'incoming';
-    maxHops: 1 | 2 | 3;
-    maxNodes?: number;
-    maxPaths?: number;
-  }
-): FileGraphTraversal {
+  options: FileGraphTraversalOptions
+): Generator<FileGraphEdge, CheckedFileGraphTraversal, boolean> {
   const imports = graph.imports ?? {};
-  const adjacency = new Map<string, FileGraphEdge[]>();
-  for (const [from, targets] of Object.entries(imports)) {
-    for (const to of targets) {
+  const incoming = new Map<string, string[]>();
+  if (options.direction === 'incoming') {
+    // The sidecar stores forward adjacency only. Build its reverse lookup once, without source IO.
+    for (const [from, targets] of Object.entries(imports)) {
+      for (const to of targets) {
+        const importers = incoming.get(to);
+        if (importers) importers.push(from);
+        else incoming.set(to, [from]);
+      }
+    }
+  }
+  const neighbors = function* (node: string): Generator<FileGraphEdge> {
+    const targets =
+      options.direction === 'outgoing' ? (imports[node] ?? []) : (incoming.get(node) ?? []);
+    for (const neighbor of targets) {
+      const from = options.direction === 'outgoing' ? node : neighbor;
+      const to = options.direction === 'outgoing' ? neighbor : node;
       const detail = graph.importDetails?.[from]?.[to];
       const sources = detail?.sources ?? [];
-      const edges: FileGraphEdge[] =
-        sources.length > 0
-          ? sources.map((source) => ({ from, to, kind: source.kind, source, verified: true }))
-          : [
-              {
-                from,
-                to,
-                kind: 'import',
-                verified: false,
-                source: {
-                  line: detail?.line ?? 1,
-                  specifier: '',
-                  kind: 'import',
-                  sourceFingerprint: '',
-                  targetFingerprint: ''
-                }
-              }
-            ];
-      adjacency.set(from, [...(adjacency.get(from) ?? []), ...edges]);
+      if (sources.length > 0) {
+        for (const source of sources) yield { from, to, kind: source.kind, source, verified: true };
+      } else {
+        yield {
+          from,
+          to,
+          kind: 'import',
+          verified: false,
+          source: {
+            line: detail?.line ?? 1,
+            specifier: '',
+            kind: 'import',
+            sourceFingerprint: '',
+            targetFingerprint: ''
+          }
+        };
+      }
     }
-  }
-
-  const neighbors = (node: string): FileGraphEdge[] => {
-    if (options.direction === 'outgoing') return adjacency.get(node) ?? [];
-    const incoming: FileGraphEdge[] = [];
-    for (const edges of adjacency.values()) {
-      for (const edge of edges) if (edge.to === node) incoming.push(edge);
-    }
-    return incoming;
   };
 
   const maxNodes = Math.max(1, Math.min(500, options.maxNodes ?? 100));
   const maxPaths = Math.max(1, Math.min(500, options.maxPaths ?? 200));
+  const maxInspections = Math.max(1, Math.min(10000, options.maxInspections ?? 1000));
   const visitedNodes = new Set([start]);
   const queue: Array<{ nodes: string[]; edges: FileGraphEdge[] }> = [{ nodes: [start], edges: [] }];
   const paths: FileGraphTraversal['paths'] = [];
+  const rejectedEdges: FileGraphEdge[] = [];
   let truncated = false;
-  while (queue.length > 0) {
-    const current = queue.shift()!;
+  let inspections = 0;
+  let inspectionLimited = false;
+  traversal: for (let cursor = 0; cursor < queue.length; cursor++) {
+    const current = queue[cursor]!;
     if (current.edges.length >= options.maxHops) continue;
     for (const edge of neighbors(current.nodes[current.nodes.length - 1]!)) {
+      if (inspections >= maxInspections) {
+        truncated = inspectionLimited = true;
+        break traversal;
+      }
+      inspections++;
       const next = options.direction === 'outgoing' ? edge.to : edge.from;
       if (current.nodes.includes(next)) continue;
       if (paths.length >= maxPaths) {
         truncated = true;
+        break traversal;
+      }
+      if (!(yield edge)) {
+        rejectedEdges.push(edge);
         continue;
       }
       if (!visitedNodes.has(next) && visitedNodes.size >= maxNodes) {
@@ -740,11 +768,41 @@ export function traverseFileGraph(
       queue.push(nextPath);
     }
   }
-  return {
-    paths,
-    unresolved: (graph.unresolvedEdges ?? []).filter((edge) => visitedNodes.has(edge.from)),
-    truncated
-  };
+  const unresolved: UnresolvedImportEdge[] = [];
+  for (const edge of graph.unresolvedEdges ?? []) {
+    if (!visitedNodes.has(edge.from)) continue;
+    if (inspections >= maxInspections) {
+      truncated = inspectionLimited = true;
+      break;
+    }
+    inspections++;
+    unresolved.push(edge);
+  }
+  return { paths, unresolved, truncated, rejectedEdges, inspectionLimited };
+}
+
+export function traverseFileGraph(
+  graph: TraversableFileGraph,
+  start: string,
+  options: FileGraphTraversalOptions
+): FileGraphTraversal {
+  const traversal = fileGraphTraversal(graph, start, options);
+  let step = traversal.next();
+  while (!step.done) step = traversal.next(true);
+  const { paths, unresolved, truncated } = step.value;
+  return { paths, unresolved, truncated };
+}
+
+export async function traverseFileGraphWithVerification(
+  graph: TraversableFileGraph,
+  start: string,
+  options: FileGraphTraversalOptions,
+  acceptEdge: (edge: FileGraphEdge) => Promise<boolean>
+): Promise<CheckedFileGraphTraversal> {
+  const traversal = fileGraphTraversal(graph, start, options);
+  let step = traversal.next();
+  while (!step.done) step = traversal.next(await acceptEdge(step.value));
+  return step.value;
 }
 
 export class InternalFileGraph {

@@ -10,23 +10,23 @@ import type { ToolContext } from '../src/tools/types.js';
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-graph-integration-'));
 afterAll(async () => fs.rm(root, { recursive: true, force: true }));
 
-async function write(relative: string, content: string): Promise<void> {
-  const fullPath = path.join(root, relative);
+async function write(relative: string, content: string, projectRoot = root): Promise<void> {
+  const fullPath = path.join(projectRoot, relative);
   await fs.mkdir(path.dirname(fullPath), { recursive: true });
   await fs.writeFile(fullPath, content);
 }
 
-async function readGraph(): Promise<{ header: { buildId: string }; graph: { imports: Record<string, string[]>; importDetails: Record<string, Record<string, { sources?: Array<{ kind: string; specifier: string; sourceFingerprint: string; targetFingerprint: string }> }>>; unresolvedEdges?: Array<{ source: { specifier: string }; reason: string }> } }> {
-  return JSON.parse(await fs.readFile(path.join(root, CODEBASE_CONTEXT_DIRNAME, RELATIONSHIPS_FILENAME), 'utf8')) as {
+async function readGraph(projectRoot = root): Promise<{ header: { buildId: string }; graph: { imports: Record<string, string[]>; importDetails: Record<string, Record<string, { sources?: Array<{ kind: string; specifier: string; sourceFingerprint: string; targetFingerprint: string }> }>>; unresolvedEdges?: Array<{ source: { specifier: string }; reason: string }> } }> {
+  return JSON.parse(await fs.readFile(path.join(projectRoot, CODEBASE_CONTEXT_DIRNAME, RELATIONSHIPS_FILENAME), 'utf8')) as {
     header: { buildId: string };
     graph: { imports: Record<string, string[]>; importDetails: Record<string, Record<string, { sources?: Array<{ kind: string; specifier: string; sourceFingerprint: string; targetFingerprint: string }> }>>; unresolvedEdges?: Array<{ source: { specifier: string }; reason: string }> };
   };
 }
 
-function context(): ToolContext {
-  const contextDir = path.join(root, CODEBASE_CONTEXT_DIRNAME);
+function context(projectRoot = root): ToolContext {
+  const contextDir = path.join(projectRoot, CODEBASE_CONTEXT_DIRNAME);
   return {
-    rootPath: root,
+    rootPath: projectRoot,
     paths: {
       baseDir: contextDir,
       intelligence: path.join(contextDir, 'intelligence.json'),
@@ -39,6 +39,48 @@ function context(): ToolContext {
     performIndexing: () => undefined
   };
 }
+
+it('verifies the incoming three-hop alias chain in a nested root with only tsconfig.base.json', async () => {
+  const host = path.join(root, 'base-config-host');
+  const projectRoot = path.join(host, 'checkout with spaces');
+  const utility = 'libs/web/shared/utils/src/lib/time-util.ts';
+  const barrel = 'libs/web/shared/utils/src/index.ts';
+  const pipe = 'libs/web/shared/pipes/duration-pipe/src/lib/duration.pipe.ts';
+  const module = 'libs/web/shared/pipes/duration-pipe/src/lib/duration-pipe.module.ts';
+  const alias = '@angular-spotify/web/shared/utils';
+  await write('tsconfig.json', JSON.stringify({
+    compilerOptions: { baseUrl: '.', paths: { [alias]: ['wrong-parent-target.ts'] } }
+  }), host);
+  await write('tsconfig.base.json', JSON.stringify({
+    compilerOptions: { baseUrl: '.', paths: { [alias]: [barrel] } }
+  }), projectRoot);
+  await write(utility, 'export class TimeUtil { static formatDuration(value: number) { return String(value); } }\n', projectRoot);
+  await write(barrel, "export * from './lib/time-util';\n", projectRoot);
+  await write(pipe, `import { TimeUtil } from '${alias}';\nimport '@unmapped/package';\nexport class DurationPipe { transform(value: number) { return TimeUtil.formatDuration(value); } }\n`, projectRoot);
+  await write(module, "import { DurationPipe } from './duration.pipe';\nexport const pipes = [DurationPipe];\n", projectRoot);
+
+  await new CodebaseIndexer({ rootPath: projectRoot, config: { skipEmbedding: true } }).index();
+  const graph = await readGraph(projectRoot);
+  expect(graph.graph.imports[barrel]).toContain(utility);
+  expect(graph.graph.imports[pipe]).toContain(barrel);
+  expect(graph.graph.imports[module]).toContain(pipe);
+  expect(graph.graph.importDetails[pipe]?.[barrel]?.sources?.[0]).toMatchObject({
+    kind: 'import', specifier: alias, sourceFingerprint: expect.any(String), targetFingerprint: expect.any(String)
+  });
+  expect(graph.graph.unresolvedEdges).toEqual(expect.arrayContaining([
+    expect.objectContaining({ source: expect.objectContaining({ specifier: '@unmapped/package' }), reason: 'external' })
+  ]));
+  expect(graph.graph.unresolvedEdges?.some(({ source }) => source.specifier === alias)).toBe(false);
+
+  const response = await getCodeRelationships({ file: utility, direction: 'incoming', max_hops: 3, max_nodes: 10 }, context(projectRoot));
+  const result = JSON.parse(response.content?.[0]?.text ?? '{}') as {
+    status: string; paths: Array<{ nodes: string[] }>; staleEdges?: unknown[]; truncated: boolean;
+  };
+  expect(result.status).toBe('success');
+  expect(result.paths.map(({ nodes }) => nodes)).toContainEqual([utility, barrel, pipe, module]);
+  expect(result.staleEdges ?? []).toHaveLength(0);
+  expect(result.truncated).toBe(false);
+});
 
 it('resolves source aliases, directory indexes, typed barrels and three hops, then refreshes after delete/rename', async () => {
   await write('tsconfig.json', JSON.stringify({ compilerOptions: { baseUrl: '.', paths: { '@core/*': ['packages/core/src/*'] } } }));

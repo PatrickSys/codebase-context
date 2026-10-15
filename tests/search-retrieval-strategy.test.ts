@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import type { CodeChunk } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
 import { asSearcherTestHarness, materializeSourceSnapshot } from './helpers/source-snapshot.js';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { IndexCorruptedError } from '../src/errors/index.js';
 
 function createChunk(id: string, filePath: string, content: string): CodeChunk {
   return {
@@ -43,6 +46,186 @@ async function createSourceBackedSearcher(chunks: CodeChunk[]) {
 }
 
 describe('CodebaseSearcher retrieval strategy', () => {
+  it.each(['ordinary', 'integrity'] as const)(
+    'preserves validated candidates on ordinary refill failure and propagates integrity failure (%s)',
+    async (failure) => {
+      const stale = Array.from({ length: 100 }, (_, n) =>
+        createChunk(
+          `stale-${n}`,
+          'src/quartzBeacon.ts',
+          'export function quartzBeacon() { return true; }'
+        )
+      );
+      const support = createChunk(
+        'support',
+        'src/support.ts',
+        'export function support() { return quartzBeacon(); }'
+      );
+      const chunks = [...stale, support];
+      const fixture = await createSourceBackedSearcher(chunks);
+      const harness = fixture.harness as typeof fixture.harness & { chunks: CodeChunk[] };
+      harness.chunks = chunks;
+      Reflect.deleteProperty(harness, 'semanticSearch');
+      const embed = vi.fn(async () => [0.1, 0.2]);
+      const vectorSearch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          [...stale.slice(0, 29), support].map((chunk) => ({ chunk, score: 0.9, distance: 0.1 }))
+        )
+        .mockRejectedValueOnce(
+          failure === 'integrity'
+            ? new IndexCorruptedError('Invalid vector index build identity')
+            : new Error('Semantic refill temporarily unavailable')
+        );
+      harness.embeddingProvider = { embed };
+      harness.storageProvider = { search: vectorSearch };
+      try {
+        await fs.writeFile(stale[0].filePath, 'export const changed = true;\n');
+        const outcome = fixture.searcher.searchWithCoverage(
+          'ordinary semantic request',
+          1,
+          undefined,
+          {
+            useKeywordSearch: false,
+            useSemanticSearch: true,
+            enableQueryExpansion: false,
+            enableLowConfidenceRescue: false,
+            enableReranker: false
+          }
+        );
+        if (failure === 'integrity') {
+          await expect(outcome).rejects.toBeInstanceOf(IndexCorruptedError);
+        } else {
+          const result = await outcome;
+          expect(result.results.map((match) => path.basename(match.filePath))).toEqual([
+            'support.ts'
+          ]);
+          expect(result.results[0].snippet).toContain('support');
+          expect(result.sourceCoverage).toMatchObject({
+            status: 'partial',
+            checkedFiles: 2,
+            skippedFiles: 1,
+            candidateRetrievalFailed: true
+          });
+          expect(result.sourceCoverage.candidateBudgetExhausted).toBeUndefined();
+        }
+        expect(embed).toHaveBeenCalledTimes(1);
+        expect(vectorSearch).toHaveBeenCalledTimes(2);
+      } finally {
+        await fixture.cleanup();
+      }
+    }
+  );
+
+  it('discloses semantic exhaustion when widening reaches the bounded cumulative retrieval work', async () => {
+    const stale = Array.from({ length: 1000 }, (_, n) =>
+      createChunk(
+        `stale-${n}`,
+        'src/quartzBeacon.ts',
+        'export function quartzBeacon() { return true; }'
+      )
+    );
+    const support = createChunk(
+      'support',
+      'src/support.ts',
+      'export function support() { return quartzBeacon(); }'
+    );
+    const chunks = [...stale, support];
+    const fixture = await createSourceBackedSearcher(chunks);
+    const harness = fixture.harness as typeof fixture.harness & { chunks: CodeChunk[] };
+    harness.chunks = chunks;
+    Reflect.deleteProperty(harness, 'semanticSearch');
+    const embed = vi.fn(async () => [0.1, 0.2]);
+    const vectorSearch = vi.fn(async (_vector: number[], limit: number) =>
+      chunks.slice(0, limit).map((chunk) => ({ chunk, score: 0.9, distance: 0.1 }))
+    );
+    harness.embeddingProvider = { embed };
+    harness.storageProvider = { search: vectorSearch };
+    try {
+      await fs.writeFile(stale[0].filePath, 'export const changed = true;\n');
+      const outcome = await fixture.searcher.searchWithCoverage('quartzBeacon', 1, undefined, {
+        useKeywordSearch: false,
+        useSemanticSearch: true,
+        enableQueryExpansion: false,
+        enableLowConfidenceRescue: false,
+        enableReranker: false
+      });
+      expect(outcome.results).toEqual([]);
+      expect(outcome.sourceCoverage).toMatchObject({
+        status: 'no_fresh_results',
+        checkedFiles: 1,
+        skippedFiles: 1,
+        candidateBudgetExhausted: true
+      });
+      expect(embed).toHaveBeenCalledTimes(1);
+      expect(vectorSearch).toHaveBeenCalledTimes(2);
+      expect(
+        vectorSearch.mock.calls.reduce((sum, [, limit]) => sum + limit, 0)
+      ).toBeLessThanOrEqual(750);
+      expect(Math.max(...vectorSearch.mock.calls.map(([, limit]) => limit))).toBeLessThanOrEqual(
+        chunks.length
+      );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it.each([false, true])(
+    'replenishes semantic stale prefixes only when needed (changed=%s) with one embedding',
+    async (changed) => {
+      const staleChunks = Array.from({ length: 100 }, (_, n) =>
+        createChunk(
+          `stale-${n}`,
+          'src/quartzBeacon.ts',
+          'export function quartzBeacon() { return true; }'
+        )
+      );
+      const support = createChunk(
+        'support',
+        'src/support.ts',
+        'export function support() { return quartzBeacon(); }'
+      );
+      const chunks = [...staleChunks, support];
+      const fixture = await createSourceBackedSearcher(chunks);
+      const harness = fixture.harness as typeof fixture.harness & { chunks: CodeChunk[] };
+      harness.chunks = chunks;
+      Reflect.deleteProperty(harness, 'semanticSearch');
+      const embed = vi.fn(async () => [0.1, 0.2]);
+      const vectorSearch = vi.fn(async (_vector: number[], limit: number) =>
+        chunks.slice(0, limit).map((chunk) => ({ chunk, score: 0.9, distance: 0.1 }))
+      );
+      harness.embeddingProvider = { embed };
+      harness.storageProvider = { search: vectorSearch };
+      try {
+        if (changed) await fs.writeFile(staleChunks[0].filePath, 'export const changed = true;\n');
+        const outcome = await fixture.searcher.searchWithCoverage('quartzBeacon', 1, undefined, {
+          useKeywordSearch: false,
+          useSemanticSearch: true,
+          enableQueryExpansion: false,
+          enableLowConfidenceRescue: false,
+          enableReranker: false
+        });
+        expect(outcome.results).toHaveLength(1);
+        expect(path.basename(outcome.results[0].filePath)).toBe(
+          changed ? 'support.ts' : 'quartzBeacon.ts'
+        );
+        expect(embed).toHaveBeenCalledTimes(1);
+        expect(vectorSearch).toHaveBeenCalledTimes(changed ? 2 : 1);
+        expect(vectorSearch.mock.calls[0][1]).toBe(30);
+        if (changed) {
+          expect(vectorSearch.mock.calls[1][1]).toBe(101);
+          expect(outcome.sourceCoverage).toMatchObject({
+            status: 'partial',
+            checkedFiles: 2,
+            skippedFiles: 1
+          });
+        }
+      } finally {
+        await fixture.cleanup();
+      }
+    }
+  );
+
   it('enforces candidate floor independently from user limit', async () => {
     const implChunk = createChunk(
       'impl',

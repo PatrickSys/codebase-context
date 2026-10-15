@@ -27,16 +27,19 @@ function isTrackedSourcePath(filePath: string, trackedExtensions: Set<string>): 
 
 /**
  * Watch rootPath for source file changes and call onChanged (debounced).
- * Returns a stop() function that cancels the debounce timer and closes the watcher.
+ * Returns a stop() function that cancels pending work and resolves when the watcher closes.
  */
-export function startFileWatcher(opts: FileWatcherOptions): () => void {
+export function startFileWatcher(opts: FileWatcherOptions): () => Promise<void> {
   const { rootPath, debounceMs = 2000, extraExtensions, onReady, onChanged } = opts;
   const trackedExtensions = new Set(
     getSupportedExtensions(extraExtensions).map((extension) => extension.toLowerCase())
   );
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+  let closePromise: Promise<void> | undefined;
 
   const trigger = (filePath: string) => {
+    if (stopped) return;
     if (!isTrackedSourcePath(filePath, trackedExtensions)) return;
     if (debounceTimer !== undefined) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
@@ -56,14 +59,25 @@ export function startFileWatcher(opts: FileWatcherOptions): () => void {
   });
 
   watcher
-    .on('ready', () => onReady?.())
+    .on('ready', () => {
+      if (!stopped) onReady?.();
+    })
     .on('add', trigger)
     .on('change', trigger)
     .on('unlink', trigger)
     .on('error', (err: unknown) => console.error('[file-watcher] error:', err));
 
   return () => {
+    if (closePromise) return closePromise;
+    stopped = true;
     if (debounceTimer !== undefined) clearTimeout(debounceTimer);
-    void watcher.close();
+    debounceTimer = undefined;
+    try {
+      closePromise = watcher.close();
+    } catch (error) {
+      closePromise = Promise.reject(error);
+      void closePromise.catch(() => undefined);
+    }
+    return closePromise;
   };
 }

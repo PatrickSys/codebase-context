@@ -58,6 +58,8 @@ import {
   makeLegacyPaths,
   normalizeRootKey,
   removeProject,
+  stopProjectWatcher,
+  stopAllProjectWatchers,
   type ProjectRuntimeOverrides,
   type ProjectState
 } from './project-state.js';
@@ -180,9 +182,7 @@ const stdioIdleTimeoutEnv = Number.parseInt(
   10
 );
 const STDIO_IDLE_TIMEOUT_MS =
-  Number.isFinite(stdioIdleTimeoutEnv) && stdioIdleTimeoutEnv >= 0
-    ? stdioIdleTimeoutEnv
-    : 10 * 60 * 1000;
+  Number.isFinite(stdioIdleTimeoutEnv) && stdioIdleTimeoutEnv >= 0 ? stdioIdleTimeoutEnv : 0;
 let noteSessionActivity: () => void = () => undefined;
 let beginTrackedSessionWork: () => void = () => undefined;
 let endTrackedSessionWork: () => void = () => undefined;
@@ -463,7 +463,10 @@ function setActiveProject(rootPath: string): void {
   rememberProjectPath(resolvedRootPath);
 }
 
-function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>): void {
+async function syncKnownRoots(
+  rootEntries: Array<{ rootPath: string; label?: string }>
+): Promise<void> {
+  const watcherClosures: Promise<void>[] = [];
   const nextRoots = new Map<string, { rootPath: string; label?: string }>();
   const normalizedRoots =
     rootEntries.length > 0 ? rootEntries : primaryRootPath ? [{ rootPath: primaryRootPath }] : [];
@@ -485,7 +488,7 @@ function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>
 
   for (const [rootKey, existingRoot] of knownRoots.entries()) {
     if (!nextRoots.has(rootKey)) {
-      removeProject(existingRoot.rootPath);
+      watcherClosures.push(removeProject(existingRoot.rootPath));
       forgetProjectPath(existingRoot.rootPath);
     }
   }
@@ -495,7 +498,7 @@ function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>
       isPathWithin(knownRoot.rootPath, project.rootPath)
     );
     if (!stillAllowed) {
-      removeProject(project.rootPath);
+      watcherClosures.push(removeProject(project.rootPath));
       forgetProjectPath(project.rootPath);
     }
   }
@@ -512,6 +515,7 @@ function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>
       activeProjectKey = undefined;
     }
   }
+  await Promise.all(watcherClosures);
 }
 
 function parseProjectSelector(value: unknown): string | undefined {
@@ -1466,10 +1470,10 @@ async function refreshKnownRootsFromClient(): Promise<void> {
     );
 
     clientRootsEnabled = fileRoots.length > 0;
-    syncKnownRoots(fileRoots);
+    await syncKnownRoots(fileRoots);
   } catch {
     clientRootsEnabled = false;
-    syncKnownRoots(primaryRootPath ? [{ rootPath: primaryRootPath }] : []);
+    await syncKnownRoots(primaryRootPath ? [{ rootPath: primaryRootPath }] : []);
   }
 
   await refreshDiscoveredProjectsForKnownRoots();
@@ -1624,10 +1628,18 @@ async function ensureProjectInitialized(project: ProjectState): Promise<void> {
   await project.initPromise;
 }
 
-function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
+async function ensureProjectWatcher(project: ProjectState, debounceMs: number): Promise<void> {
   if (project.stopWatcher) {
     touchProject(project.rootPath);
     return;
+  }
+
+  if (project.watcherClosePromise) {
+    await project.watcherClosePromise;
+    if (project.stopWatcher) {
+      touchProject(project.rootPath);
+      return;
+    }
   }
 
   project.stopWatcher = startFileWatcher({
@@ -1671,8 +1683,7 @@ function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
 
   const projectToEvict = evictionCandidates[0];
   if (projectToEvict?.stopWatcher) {
-    projectToEvict.stopWatcher();
-    delete projectToEvict.stopWatcher;
+    await stopProjectWatcher(projectToEvict);
   }
 }
 
@@ -1687,7 +1698,7 @@ async function initProject(
   touchProject(project.rootPath);
 
   if (options.enableWatcher) {
-    ensureProjectWatcher(project, debounceMs);
+    await ensureProjectWatcher(project, debounceMs);
   }
 }
 
@@ -1827,12 +1838,6 @@ async function main() {
 
   // ── Cleanup guards (normal MCP lifecycle) ──────────────────────────────────
   let shuttingDown = false;
-  const stopAllWatchers = () => {
-    for (const project of getAllProjects()) {
-      project.stopWatcher?.();
-    }
-  };
-
   let idleTimer: NodeJS.Timeout | undefined;
   let activeSessionWork = 0;
   let mcpClientInitialized = false;
@@ -1850,8 +1855,13 @@ async function main() {
     }
     shuttingDown = true;
     clearIdleTimer();
-    stopAllWatchers();
-    process.exit(code);
+    void stopAllProjectWatchers().then(
+      () => process.exit(code),
+      (error: unknown) => {
+        console.error('[file-watcher] Shutdown cleanup failed:', error);
+        process.exit(code);
+      }
+    );
   };
 
   const scheduleIdleShutdown = () => {
@@ -1885,7 +1895,11 @@ async function main() {
     scheduleIdleShutdown();
   };
 
-  process.once('exit', stopAllWatchers);
+  process.once('exit', () => {
+    void stopAllProjectWatchers().catch((error: unknown) => {
+      console.error('[file-watcher] Exit cleanup failed:', error);
+    });
+  });
   process.once('SIGINT', () => {
     shutdown(0);
   });
@@ -2018,22 +2032,32 @@ async function startHttp(explicitPort?: number): Promise<void> {
   });
 
   // Register cleanup — no parent death guard or stdin listeners in HTTP mode
-  const stopAllWatchers = () => {
-    for (const project of getAllProjects()) {
-      project.stopWatcher?.();
-    }
-  };
-
   const shutdown = async () => {
     console.error('[HTTP] Shutting down...');
-    stopAllWatchers();
+    await stopAllProjectWatchers();
     await handle.close();
     process.exit(0);
   };
 
-  process.once('SIGINT', () => void shutdown());
-  process.once('SIGTERM', () => void shutdown());
-  process.once('exit', stopAllWatchers);
+  process.once(
+    'SIGINT',
+    () =>
+      void shutdown().catch((error: unknown) => {
+        console.error('[HTTP] Shutdown failed:', error);
+      })
+  );
+  process.once(
+    'SIGTERM',
+    () =>
+      void shutdown().catch((error: unknown) => {
+        console.error('[HTTP] Shutdown failed:', error);
+      })
+  );
+  process.once('exit', () => {
+    void stopAllProjectWatchers().catch((error: unknown) => {
+      console.error('[file-watcher] Exit cleanup failed:', error);
+    });
+  });
 
   // If a bootstrap root was provided, auto-init it
   if (primaryRootPath) {

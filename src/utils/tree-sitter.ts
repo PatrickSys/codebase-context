@@ -389,6 +389,58 @@ export interface IdentifierOccurrence {
   nodeType: string;
 }
 
+const LEXICAL_IDENTIFIER_CONTINUE = /(?:\p{ID_Continue}|[$]|\u200c|\u200d)/u;
+
+/**
+ * Conservative language-neutral token matching for files without a usable parser.
+ * This preserves whole identifier boundaries for Unicode, `_`, and `$` spellings.
+ */
+export function findLexicalIdentifierOccurrences(
+  content: string,
+  symbol: string
+): IdentifierOccurrence[] {
+  const normalizedSymbol = symbol.trim();
+  if (!normalizedSymbol) return [];
+
+  const occurrences: IdentifierOccurrence[] = [];
+  let searchFrom = 0;
+  let lineCursor = 0;
+  let line = 1;
+  while (searchFrom <= content.length - normalizedSymbol.length) {
+    const startIndex = content.indexOf(normalizedSymbol, searchFrom);
+    if (startIndex === -1) break;
+    const endIndex = startIndex + normalizedSymbol.length;
+    const previousIndex = startIndex > 0 ? startIndex - 1 : -1;
+    const previousCodePointIndex =
+      previousIndex >= 0 &&
+      content.charCodeAt(previousIndex) >= 0xdc00 &&
+      content.charCodeAt(previousIndex) <= 0xdfff
+        ? previousIndex - 1
+        : previousIndex;
+    const previousCodePoint =
+      previousCodePointIndex >= 0
+        ? String.fromCodePoint(content.codePointAt(previousCodePointIndex) ?? 0)
+        : undefined;
+    const nextCodePoint =
+      endIndex < content.length
+        ? String.fromCodePoint(content.codePointAt(endIndex) ?? 0)
+        : undefined;
+    const hasIdentifierBoundary =
+      (!previousCodePoint || !LEXICAL_IDENTIFIER_CONTINUE.test(previousCodePoint)) &&
+      (!nextCodePoint || !LEXICAL_IDENTIFIER_CONTINUE.test(nextCodePoint));
+
+    while (lineCursor < startIndex) {
+      if (content.charCodeAt(lineCursor) === 10) line += 1;
+      lineCursor += 1;
+    }
+    if (hasIdentifierBoundary) {
+      occurrences.push({ line, startIndex, endIndex, nodeType: 'lexical_identifier' });
+    }
+    searchFrom = startIndex + Math.max(1, normalizedSymbol.length);
+  }
+  return occurrences;
+}
+
 const IDENTIFIER_NODE_TYPES = [
   'identifier',
   'type_identifier',

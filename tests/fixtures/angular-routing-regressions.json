@@ -1,0 +1,330 @@
+{
+  "version": 1,
+  "purpose": "Frozen source facts for Angular-local analyzer eligibility and registry routing. These controls do not change or score retrieval gold.",
+  "eligibilityContract": "Ordinary names such as resolve, validate, intercept and canActivate are not framework evidence. Actual Angular imports and Angular-bound syntax establish eligibility; comments, string literals, filenames and other packages do not. Existing extension support is retained. Classification inside confirmed Angular files is a separate responsibility.",
+  "cases": [
+    {
+      "id": "ordinary-promise-resolve",
+      "filePath": "src/example.ts",
+      "source": "export const saveRecord = (data: object) => Promise.resolve(data);",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic",
+      "expectedSourceSymbols": ["saveRecord"]
+    },
+    {
+      "id": "node-path-resolve",
+      "filePath": "src/example.ts",
+      "source": "import path from 'node:path'; export const resolveFile = (file: string) => path.resolve(file);",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic",
+      "expectedSourceSymbols": ["resolveFile"]
+    },
+    {
+      "id": "user-defined-resolve",
+      "filePath": "src/example.ts",
+      "source": "export class Resolver { resolve(value: string) { return value; } }",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "ordinary-validator",
+      "filePath": "src/example.ts",
+      "source": "export class Schema { validate(value: unknown) { return value !== null; } }",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "ordinary-interceptor",
+      "filePath": "src/example.ts",
+      "source": "export class Middleware { intercept(request: object) { return request; } }",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "ordinary-guard-method",
+      "filePath": "src/example.ts",
+      "source": "export class Permissions { canActivate() { return true; } canMatch() { return false; } }",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "locally-defined-resolve-type",
+      "filePath": "src/example.ts",
+      "source": "type ResolveFn = () => string; export const lookup: ResolveFn = () => \"found\";",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "locally-defined-validator-interface",
+      "filePath": "src/example.ts",
+      "source": "interface Validator { validate(value: unknown): boolean; } export class Schema implements Validator { validate(value: unknown) { return !!value; } }",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "decorator-lookalikes-in-comments",
+      "filePath": "src/example.ts",
+      "source": "// @Component({selector: \"demo\"})\n/* @Injectable() */\nexport function normalize(value: string) { return value.trim(); }",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic",
+      "expectedSourceSymbols": ["normalize"]
+    },
+    {
+      "id": "decorator-lookalikes-in-strings",
+      "filePath": "src/example.ts",
+      "source": "export const hints = \"@Component({}) @Injectable() CanActivateFn ResolveFn\"; export const ready = () => true;",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "angular-import-lookalike-in-comment",
+      "filePath": "src/example.ts",
+      "source": "// import { Component } from '@angular/core';\nexport const value = 1;",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "angular-import-lookalike-in-string",
+      "filePath": "src/example.ts",
+      "source": "export const example = \"import { Component } from '@angular/core';\";",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "similarly-named-nonangular-package",
+      "filePath": "src/example.ts",
+      "source": "import { Component } from 'ui-component'; @Component({}) export class Card {}",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "nestjs-injectable-is-not-angular",
+      "filePath": "src/example.ts",
+      "source": "import { Injectable } from '@nestjs/common'; @Injectable() export class PaymentsService {}",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "nestjs"
+    },
+    {
+      "id": "component-filename-is-not-proof",
+      "filePath": "src/plain.component.ts",
+      "source": "export function resolve(value: string) { return value; }",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic",
+      "expectedSourceSymbols": ["resolve"]
+    },
+    {
+      "id": "angular-component-import",
+      "filePath": "src/example.ts",
+      "source": "import { Component } from '@angular/core'; @Component({selector: 'demo', template: ''}) export class DemoComponent {}",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-service-import",
+      "filePath": "src/example.ts",
+      "source": "import { Injectable } from '@angular/core'; @Injectable({providedIn: 'root'}) export class CacheService {}",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-directive-import",
+      "filePath": "src/example.ts",
+      "source": "import { Directive } from '@angular/core'; @Directive({selector: '[focus]'}) export class FocusDirective {}",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-pipe-import",
+      "filePath": "src/example.ts",
+      "source": "import { Pipe } from '@angular/core'; @Pipe({name: 'title'}) export class TitlePipe {}",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-module-import",
+      "filePath": "src/example.ts",
+      "source": "import { NgModule } from '@angular/core'; @NgModule({}) export class FeatureModule {}",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-aliased-component-binding",
+      "filePath": "src/example.ts",
+      "source": "import { Component as View } from '@angular/core'; @View({selector: 'demo', template: ''}) export class DemoView {}",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-namespace-decorator-binding",
+      "filePath": "src/example.ts",
+      "source": "import * as ng from '@angular/core'; @ng.Component({selector: 'demo', template: ''}) export class DemoView {}",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-class-resolver-binding",
+      "filePath": "src/example.ts",
+      "source": "import { Resolve } from '@angular/router'; export class RecordResolver implements Resolve<string> { resolve() { return 'record'; } }",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-functional-resolvefn-binding",
+      "filePath": "src/example.ts",
+      "source": "import { ResolveFn } from '@angular/router'; export const recordResolver: ResolveFn<string> = () => 'record';",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-aliased-functional-resolver",
+      "filePath": "src/example.ts",
+      "source": "import { ResolveFn as Lookup } from '@angular/router'; export const recordResolver: Lookup<string> = () => 'record';",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-class-guard-binding",
+      "filePath": "src/example.ts",
+      "source": "import { CanActivate } from '@angular/router'; export class AccessGuard implements CanActivate { canActivate() { return true; } }",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-functional-guard-binding",
+      "filePath": "src/example.ts",
+      "source": "import { CanActivateChildFn } from '@angular/router'; export const childGuard: CanActivateChildFn = () => true;",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-functional-interceptor-binding",
+      "filePath": "src/example.ts",
+      "source": "import { HttpInterceptorFn as Interceptor } from '@angular/common/http'; export const attachHeaders: Interceptor = (request, next) => next(request);",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-functional-validator-binding",
+      "filePath": "src/example.ts",
+      "source": "import { AsyncValidatorFn } from '@angular/forms'; export const checkInput: AsyncValidatorFn = control => Promise.resolve(null);",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-template-extension-retained",
+      "filePath": "src/card.html",
+      "source": "<section>@if (ready) { <p>Ready</p> }</section>",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-style-extension-retained-css",
+      "filePath": "src/card.css",
+      "source": ".card { display: block; }",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-style-extension-retained-scss",
+      "filePath": "src/card.scss",
+      "source": ".card { display: block; }",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-style-extension-retained-sass",
+      "filePath": "src/card.sass",
+      "source": ".card { display: block; }",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "angular-style-extension-retained-less",
+      "filePath": "src/card.less",
+      "source": ".card { display: block; }",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular"
+    },
+    {
+      "id": "javascript-eligibility-unchanged",
+      "filePath": "src/util.js",
+      "source": "export const resolveValue = value => Promise.resolve(value);",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "other-language-eligibility-unchanged",
+      "filePath": "src/util.py",
+      "source": "def resolve(value):\n    return value\n",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic"
+    },
+    {
+      "id": "public-excalidraw-json",
+      "filePath": "packages/excalidraw/data/json.ts",
+      "source": "import {\n  EXPORT_DATA_TYPES,\n  getExportSource,\n  MIME_TYPES,\n  VERSIONS,\n} from \"@excalidraw/common\";\n\nimport type { ExcalidrawElement, NonDeleted } from \"@excalidraw/element/types\";\n\nimport type { MaybePromise } from \"@excalidraw/common/utility-types\";\n\nimport { cleanAppStateForExport, clearAppStateForDatabase } from \"../appState\";\n\nimport { isImageFileHandle, loadFromBlob } from \"./blob\";\nimport { fileOpen, fileSave } from \"./filesystem\";\n\nimport type { AppState, BinaryFiles, LibraryItems } from \"../types\";\nimport type {\n  ExportedDataState,\n  ImportedDataState,\n  ExportedLibraryData,\n  ImportedLibraryData,\n} from \"./types\";\n\nexport type JSONExportData = {\n  elements: readonly NonDeleted<ExcalidrawElement>[];\n  appState: AppState;\n  files: BinaryFiles;\n};\n\n/**\n * Strips out files which are only referenced by deleted elements\n */\nconst filterOutDeletedFiles = (\n  elements: readonly ExcalidrawElement[],\n  files: BinaryFiles,\n) => {\n  const nextFiles: BinaryFiles = {};\n  for (const element of elements) {\n    if (\n      !element.isDeleted &&\n      \"fileId\" in element &&\n      element.fileId &&\n      files[element.fileId]\n    ) {\n      nextFiles[element.fileId] = files[element.fileId];\n    }\n  }\n  return nextFiles;\n};\n\nexport const serializeAsJSON = (\n  elements: readonly ExcalidrawElement[],\n  appState: Partial<AppState>,\n  files: BinaryFiles,\n  type: \"local\" | \"database\",\n): string => {\n  const data: ExportedDataState = {\n    type: EXPORT_DATA_TYPES.excalidraw,\n    version: VERSIONS.excalidraw,\n    source: getExportSource(),\n    elements,\n    appState:\n      type === \"local\"\n        ? cleanAppStateForExport(appState)\n        : clearAppStateForDatabase(appState),\n    files:\n      type === \"local\"\n        ? filterOutDeletedFiles(elements, files)\n        : // will be stripped from JSON\n          undefined,\n  };\n\n  return JSON.stringify(data, null, 2);\n};\n\nexport const saveAsJSON = async ({\n  data,\n  filename,\n  fileHandle,\n}: {\n  data: MaybePromise<JSONExportData>;\n  filename: string;\n  fileHandle: AppState[\"fileHandle\"];\n}) => {\n  const blob = Promise.resolve(data).then(({ elements, appState, files }) => {\n    const serialized = serializeAsJSON(elements, appState, files, \"local\");\n    return new Blob([serialized], {\n      type: MIME_TYPES.excalidraw,\n    });\n  });\n\n  const savedFileHandle = await fileSave(blob, {\n    name: filename,\n    extension: \"excalidraw\",\n    description: \"Excalidraw file\",\n    fileHandle: isImageFileHandle(fileHandle) ? null : fileHandle,\n  });\n  return { fileHandle: savedFileHandle };\n};\n\nexport const loadFromJSON = async (\n  localAppState: AppState,\n  localElements: readonly ExcalidrawElement[] | null,\n) => {\n  const file = await fileOpen({\n    description: \"Excalidraw files\",\n    // ToDo: Be over-permissive until https://bugs.webkit.org/show_bug.cgi?id=34442\n    // gets resolved. Else, iOS users cannot open `.excalidraw` files.\n    // extensions: [\"json\", \"excalidraw\", \"png\", \"svg\"],\n  });\n  return loadFromBlob(file, localAppState, localElements, file.handle);\n};\n\nexport const isValidExcalidrawData = (data?: {\n  type?: any;\n  elements?: any;\n  appState?: any;\n}): data is ImportedDataState => {\n  return (\n    data?.type === EXPORT_DATA_TYPES.excalidraw &&\n    (!data.elements ||\n      (Array.isArray(data.elements) &&\n        (!data.appState || typeof data.appState === \"object\")))\n  );\n};\n\nexport const isValidLibrary = (json: any): json is ImportedLibraryData => {\n  return (\n    typeof json === \"object\" &&\n    json &&\n    json.type === EXPORT_DATA_TYPES.excalidrawLibrary &&\n    (json.version === 1 || json.version === 2)\n  );\n};\n\nexport const serializeLibraryAsJSON = (libraryItems: LibraryItems) => {\n  const data: ExportedLibraryData = {\n    type: EXPORT_DATA_TYPES.excalidrawLibrary,\n    version: VERSIONS.excalidrawLibrary,\n    source: getExportSource(),\n    libraryItems,\n  };\n  return JSON.stringify(data, null, 2);\n};\n\nexport const saveLibraryAsJSON = async (libraryItems: LibraryItems) => {\n  const serialized = serializeLibraryAsJSON(libraryItems);\n  await fileSave(\n    new Blob([serialized], {\n      type: MIME_TYPES.excalidrawlib,\n    }),\n    {\n      name: \"library\",\n      extension: \"excalidrawlib\",\n      description: \"Excalidraw library file\",\n    },\n  );\n};\n",
+      "expectedAngularEligible": false,
+      "expectedAnalyzer": "generic",
+      "expectedSourceSymbols": ["serializeAsJSON", "saveAsJSON"],
+      "origin": {
+        "repositoryUrl": "https://github.com/excalidraw/excalidraw",
+        "path": "packages/excalidraw/data/json.ts",
+        "sourceSha256": "8ae8ad064f9a2f2060fe6ca62b8a5cf3cebeaa7dbc7c4ee8b227ed449cf9555b",
+        "lineStart": 1,
+        "lineEnd": 159,
+        "referenceFixture": "tests/fixtures/discovery-excalidraw.json",
+        "fixtureRepositoryRef": "e18c1dd213000dde0ae94ef7eb00aab537b39708",
+        "snapshotRefVerification": "not independently established; source bytes and hash are authoritative",
+        "licenseNotice": "excalidraw-mit"
+      }
+    },
+    {
+      "id": "public-angular-spotify-component",
+      "filePath": "apps/angular-spotify/src/app/app.component.ts",
+      "source": "import { Component } from '@angular/core';\r\n\r\n@Component({\r\n  selector: 'angular-spotify-root',\r\n  template: ` <router-outlet></router-outlet>`,\r\n  styleUrls: ['./app.component.scss']\r\n})\r\nexport class AppComponent {}\r\n",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular",
+      "origin": {
+        "repositoryUrl": "https://github.com/trungk18/angular-spotify",
+        "path": "apps/angular-spotify/src/app/app.component.ts",
+        "sourceSha256": "187e85f943f37ed8cd87eb7ecfee0b00850128e4e82fadbcf8510170ae962b18",
+        "lineStart": 1,
+        "lineEnd": 8,
+        "repositoryRef": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+        "licenseNotice": "angular-spotify-mit"
+      }
+    },
+    {
+      "id": "public-angular-spotify-auth-interceptor",
+      "filePath": "libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts",
+      "source": "import { Injectable, Provider } from '@angular/core';\r\nimport {\r\n  HttpEvent,\r\n  HttpInterceptor,\r\n  HttpHandler,\r\n  HttpRequest,\r\n  HTTP_INTERCEPTORS\r\n} from '@angular/common/http';\r\nimport { Observable } from 'rxjs';\r\nimport { AuthStore } from '@angular-spotify/web/auth/data-access';\r\nimport { switchMap, take } from 'rxjs/operators';\r\nimport { shouldSkipInterceptor } from './skip-urls';\r\n\r\n@Injectable()\r\nexport class AuthInterceptor implements HttpInterceptor {\r\n  constructor(private authStore: AuthStore) {}\r\n\r\n  intercept(req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {\r\n    if (shouldSkipInterceptor(req.url)) {\r\n      return next.handle(req);\r\n    }\r\n\r\n    return this.authStore.token$.pipe(\r\n      take(1),\r\n      switchMap((token) => {\r\n        if (!token) {\r\n          return next.handle(req);\r\n        }\r\n        const headers = req.headers.set('Authorization', `Bearer ${token}`);\r\n        const authReq = req.clone({\r\n          headers\r\n        });\r\n        return next.handle(authReq);\r\n      })\r\n    );\r\n  }\r\n}\r\n\r\nexport const authInterceptorProvider: Provider = {\r\n  provide: HTTP_INTERCEPTORS,\r\n  useClass: AuthInterceptor,\r\n  multi: true\r\n};\r\n",
+      "expectedAngularEligible": true,
+      "expectedAnalyzer": "angular",
+      "origin": {
+        "repositoryUrl": "https://github.com/trungk18/angular-spotify",
+        "path": "libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts",
+        "sourceSha256": "186562e4372376eb2ca1c86d51ac0255d35ef9132f7ee9281cd8eefb1d052e3a",
+        "lineStart": 1,
+        "lineEnd": 43,
+        "repositoryRef": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+        "licenseNotice": "angular-spotify-mit"
+      }
+    }
+  ],
+  "thirdPartyNotices": [
+    {
+      "id": "excalidraw-mit",
+      "repositoryUrl": "https://github.com/excalidraw/excalidraw",
+      "licensePath": "LICENSE",
+      "licenseSourceSha256": "1352d204fdb90d5e482c13139d848bc2c9300a9a7de358a0a558a23e72d0d8be",
+      "licenseText": "MIT License\n\nCopyright (c) 2020 Excalidraw\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+    },
+    {
+      "id": "angular-spotify-mit",
+      "repositoryUrl": "https://github.com/trungk18/angular-spotify",
+      "licensePath": "LICENSE",
+      "licenseSourceSha256": "002ff3de0a6eebc81bf78cd524b87c5388e334e796c7f8fe29ad829d1e9b64da",
+      "licenseText": "MIT License\r\n\r\nCopyright (c) 2021 Trung Vo\r\n\r\nPermission is hereby granted, free of charge, to any person obtaining a copy\r\nof this software and associated documentation files (the \"Software\"), to deal\r\nin the Software without restriction, including without limitation the rights\r\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\r\ncopies of the Software, and to permit persons to whom the Software is\r\nfurnished to do so, subject to the following conditions:\r\n\r\nThe above copyright notice and this permission notice shall be included in all\r\ncopies or substantial portions of the Software.\r\n\r\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\r\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\r\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\r\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\r\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\r\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\r\nSOFTWARE.\r\n"
+    }
+  ]
+}

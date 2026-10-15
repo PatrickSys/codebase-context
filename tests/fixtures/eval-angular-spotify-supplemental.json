@@ -10,7 +10,7 @@
   "notes": "Supplemental set authored after candidate-04 source/archive freeze; it is not a pre-implementation evaluation and does not replace the existing evaluation set. Do not infer adoption, release quality, or broad generalization from this set alone.",
   "queries": [
     {
-      "id": "ang-01",
+      "id": 1,
       "query": "When a Spotify API call comes back unauthorized, where is that converted into the expired-session UI signal, and what does the interceptor actually do?",
       "category": "conceptual_behavior",
       "expectedPatterns": ["libs/web/auth/util/src/lib/interceptors/unauthorized.interceptor.ts"],
@@ -18,7 +18,7 @@
       "notes": "Distinguishes 401 UI behavior from adding credentials to requests."
     },
     {
-      "id": "ang-02",
+      "id": 2,
       "query": "Which URLs bypass the shared HTTP interceptors, including the token endpoint and the external lyrics service, and what is the URL matching rule?",
       "category": "exact_identifier_and_configuration",
       "expectedPatterns": ["libs/web/auth/util/src/lib/interceptors/skip-urls.ts"],
@@ -29,7 +29,7 @@
       "notes": "The helper holds the endpoint list and substring predicate."
     },
     {
-      "id": "ang-03",
+      "id": 3,
       "query": "Trace the Spotify PKCE callback: where is the verifier recovered, the authorization code exchanged, tokens saved, and the pre-login route restored?",
       "category": "multi_concept_wiring",
       "expectedPatterns": [
@@ -43,7 +43,7 @@
       "notes": "Requires the auth flow store plus its authorize URL helper."
     },
     {
-      "id": "ang-04",
+      "id": 4,
       "query": "How does search replace results for a new term but append tracks, artists, albums, and playlists when another page is requested?",
       "category": "conceptual_pagination",
       "expectedPatterns": ["libs/web/search/data-access/src/lib/store/search.store.ts"],
@@ -51,7 +51,7 @@
       "notes": "Targets state/effect behavior, not the search page presentation."
     },
     {
-      "id": "ang-05",
+      "id": 5,
       "query": "Where are recent-played pages fetched with Spotify after-cursors and appended into the existing track list?",
       "category": "multi_file_data_flow",
       "expectedPatterns": [
@@ -64,7 +64,7 @@
       "notes": "Fetch/cursor and accumulation cross the effect and reducer."
     },
     {
-      "id": "ang-06",
+      "id": 6,
       "query": "What shared sentinel directive emits when the bottom enters view, and how does the recent-played component turn that into a load-more action?",
       "category": "cross_layer_wiring",
       "expectedPatterns": [
@@ -77,7 +77,7 @@
       "notes": "Separates viewport detection from feature-level dispatch."
     },
     {
-      "id": "ang-07",
+      "id": 7,
       "query": "Where are Spotify audio-analysis segments converted into energy, pitch, timbre and beat-phase values before the selected visualizer renderer is updated?",
       "category": "conceptual_data_transformation",
       "expectedPatterns": ["libs/web/visualizer/ui/src/lib/web-visualizer-ui.component.ts"],
@@ -85,7 +85,7 @@
       "notes": "Targets the live analysis-to-audio-data conversion, not selection state."
     },
     {
-      "id": "ang-08",
+      "id": 8,
       "query": "How does the visualizer switch into picture-in-picture after leaving its route, and what happens when the route is visited again?",
       "category": "navigation_state_behavior",
       "expectedPatterns": ["libs/web/visualizer/data-access/src/lib/store/visualizer.store.ts"],
@@ -93,7 +93,7 @@
       "notes": "Tests route-event state transitions, not the separate lyrics PiP widget."
     },
     {
-      "id": "ang-09",
+      "id": 9,
       "query": "Which effect persists the current settings after the volume-persist action, and which service applies the app-specific storage key prefix?",
       "category": "exact_identifier_and_wiring",
       "expectedPatterns": [
@@ -104,7 +104,7 @@
       "notes": "Connects the settings effect to its storage utility."
     },
     {
-      "id": "ang-10",
+      "id": 10,
       "query": "Where does the Browse shell choose between the category index and a category-id route, while registering the categories and category-playlists state/effects?",
       "category": "routing_and_registration",
       "expectedPatterns": ["libs/web/browse/feature/shell/src/lib/browse-shell.module.ts"],
@@ -114,5 +114,20 @@
       ],
       "notes": "Looks for the route/state composition module, not either routed view."
     }
-  ]
+  ],
+  "idProvenance": {
+    "mapping": {
+      "ang-01": 1,
+      "ang-02": 2,
+      "ang-03": 3,
+      "ang-04": 4,
+      "ang-05": 5,
+      "ang-06": 6,
+      "ang-07": 7,
+      "ang-08": 8,
+      "ang-09": 9,
+      "ang-10": 10
+    },
+    "reason": "declared EvalQuery.id:number; factual schema alignment before first score, with question, expected paths, categories, and order unchanged."
+  }
 }

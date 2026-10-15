@@ -1,0 +1,133 @@
+{
+  "description": "Supplemental source-grounded retrieval evaluation for angular-spotify.",
+  "codebase": "angular-spotify",
+  "repository": "https://github.com/trungk18/angular-spotify",
+  "repositoryUrl": "https://github.com/trungk18/angular-spotify",
+  "repositoryRef": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+  "repositoryRefStatus": "Task-supplied pinned revision; snapshot has no .git metadata for independent verification.",
+  "license": "MIT",
+  "frozenDate": "2026-10-15",
+  "notes": "Supplemental set authored after candidate-04 source/archive freeze; it is not a pre-implementation evaluation and does not replace the existing evaluation set. Do not infer adoption, release quality, or broad generalization from this set alone.",
+  "queries": [
+    {
+      "id": 1,
+      "query": "When a Spotify API call comes back unauthorized, where is that converted into the expired-session UI signal, and what does the interceptor actually do?",
+      "category": "conceptual_behavior",
+      "expectedPatterns": ["libs/web/auth/util/src/lib/interceptors/unauthorized.interceptor.ts"],
+      "expectedNotPatterns": ["libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts"],
+      "notes": "Distinguishes 401 UI behavior from adding credentials to requests."
+    },
+    {
+      "id": 2,
+      "query": "Which URLs bypass the shared HTTP interceptors, including the token endpoint and the external lyrics service, and what is the URL matching rule?",
+      "category": "exact_identifier_and_configuration",
+      "expectedPatterns": ["libs/web/auth/util/src/lib/interceptors/skip-urls.ts"],
+      "expectedNotPatterns": [
+        "libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts",
+        "libs/web/auth/util/src/lib/interceptors/unauthorized.interceptor.ts"
+      ],
+      "notes": "The helper holds the endpoint list and substring predicate."
+    },
+    {
+      "id": 3,
+      "query": "Trace the Spotify PKCE callback: where is the verifier recovered, the authorization code exchanged, tokens saved, and the pre-login route restored?",
+      "category": "multi_concept_wiring",
+      "expectedPatterns": [
+        "libs/web/auth/data-access/src/lib/store/auth.store.ts",
+        "libs/web/auth/data-access/src/lib/models/spotify-authorize.ts"
+      ],
+      "expectedNotPatterns": [
+        "libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts",
+        "libs/web/auth/util/src/lib/interceptors/skip-urls.ts"
+      ],
+      "notes": "Requires the auth flow store plus its authorize URL helper."
+    },
+    {
+      "id": 4,
+      "query": "How does search replace results for a new term but append tracks, artists, albums, and playlists when another page is requested?",
+      "category": "conceptual_pagination",
+      "expectedPatterns": ["libs/web/search/data-access/src/lib/store/search.store.ts"],
+      "expectedNotPatterns": ["libs/web/search/feature/src/lib/search.component.ts"],
+      "notes": "Targets state/effect behavior, not the search page presentation."
+    },
+    {
+      "id": 5,
+      "query": "Where are recent-played pages fetched with Spotify after-cursors and appended into the existing track list?",
+      "category": "multi_file_data_flow",
+      "expectedPatterns": [
+        "libs/web/home/data-access/src/lib/store/recent-played-tracks/recent-played-tracks.effect.ts",
+        "libs/web/home/data-access/src/lib/store/recent-played-tracks/recent-played-tracks.reducer.ts"
+      ],
+      "expectedNotPatterns": [
+        "libs/web/home/ui/recent-played/src/lib/recent-played.component.html"
+      ],
+      "notes": "Fetch/cursor and accumulation cross the effect and reducer."
+    },
+    {
+      "id": 6,
+      "query": "What shared sentinel directive emits when the bottom enters view, and how does the recent-played component turn that into a load-more action?",
+      "category": "cross_layer_wiring",
+      "expectedPatterns": [
+        "libs/web/shared/ui/infinite-scroll/src/lib/infinite-scroll.directive.ts",
+        "libs/web/home/ui/recent-played/src/lib/recent-played.component.ts"
+      ],
+      "expectedNotPatterns": [
+        "libs/web/home/data-access/src/lib/store/recent-played-tracks/recent-played-tracks.reducer.ts"
+      ],
+      "notes": "Separates viewport detection from feature-level dispatch."
+    },
+    {
+      "id": 7,
+      "query": "Where are Spotify audio-analysis segments converted into energy, pitch, timbre and beat-phase values before the selected visualizer renderer is updated?",
+      "category": "conceptual_data_transformation",
+      "expectedPatterns": ["libs/web/visualizer/ui/src/lib/web-visualizer-ui.component.ts"],
+      "expectedNotPatterns": ["libs/web/visualizer/data-access/src/lib/store/visualizer.store.ts"],
+      "notes": "Targets the live analysis-to-audio-data conversion, not selection state."
+    },
+    {
+      "id": 8,
+      "query": "How does the visualizer switch into picture-in-picture after leaving its route, and what happens when the route is visited again?",
+      "category": "navigation_state_behavior",
+      "expectedPatterns": ["libs/web/visualizer/data-access/src/lib/store/visualizer.store.ts"],
+      "expectedNotPatterns": ["libs/web/lyrics/ui/lyrics-pip/src/lib/lyrics-pip.component.ts"],
+      "notes": "Tests route-event state transitions, not the separate lyrics PiP widget."
+    },
+    {
+      "id": 9,
+      "query": "Which effect persists the current settings after the volume-persist action, and which service applies the app-specific storage key prefix?",
+      "category": "exact_identifier_and_wiring",
+      "expectedPatterns": [
+        "libs/web/settings/data-access/src/lib/store/settings.effects.ts",
+        "libs/web/settings/data-access/src/lib/services/local-storage.service.ts"
+      ],
+      "expectedNotPatterns": ["libs/web/auth/data-access/src/lib/store/auth.store.ts"],
+      "notes": "Connects the settings effect to its storage utility."
+    },
+    {
+      "id": 10,
+      "query": "Where does the Browse shell choose between the category index and a category-id route, while registering the categories and category-playlists state/effects?",
+      "category": "routing_and_registration",
+      "expectedPatterns": ["libs/web/browse/feature/shell/src/lib/browse-shell.module.ts"],
+      "expectedNotPatterns": [
+        "libs/web/browse/feature/categories/src/lib/categories.component.ts",
+        "libs/web/browse/feature/category/src/lib/category.component.ts"
+      ],
+      "notes": "Looks for the route/state composition module, not either routed view."
+    }
+  ],
+  "idProvenance": {
+    "mapping": {
+      "ang-01": 1,
+      "ang-02": 2,
+      "ang-03": 3,
+      "ang-04": 4,
+      "ang-05": 5,
+      "ang-06": 6,
+      "ang-07": 7,
+      "ang-08": 8,
+      "ang-09": 9,
+      "ang-10": 10
+    },
+    "reason": "declared EvalQuery.id:number; factual schema alignment before first score, with question, expected paths, categories, and order unchanged."
+  }
+}

@@ -9,6 +9,14 @@ import {
   parseEmbeddingProviderName
 } from './types.js';
 import { TransformersEmbeddingProvider, MODEL_CONFIGS } from './transformers.js';
+import { assertOptionalDependency } from '../utils/optional-dependency.js';
+
+export function assertEmbeddingRuntimeAvailable(config: Partial<EmbeddingConfig> = {}): void {
+  const provider = config.provider ?? DEFAULT_EMBEDDING_CONFIG.provider;
+  if (provider !== 'openai' && provider !== 'custom') {
+    assertOptionalDependency('@huggingface/transformers', '^4.2.0');
+  }
+}
 
 /**
  * Returns expected embedding dimensions for a given config without initializing any provider.
@@ -32,6 +40,7 @@ let cachedProviderType: string | null = null;
 export async function getEmbeddingProvider(
   config: Partial<EmbeddingConfig> = {}
 ): Promise<EmbeddingProvider> {
+  assertEmbeddingRuntimeAvailable(config);
   const mergedConfig = { ...DEFAULT_EMBEDDING_CONFIG, ...config };
   const providerKey = `${mergedConfig.provider}:${mergedConfig.model}`;
 

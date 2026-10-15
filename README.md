@@ -10,6 +10,35 @@ Codebase Context gives an agent a local view of that information through code se
 
 ## Set up your AI client
 
+### Unreleased source candidate
+
+You can ask your agent:
+
+> Set up this local Codebase Context candidate once for Codex using its documented install-once recipe. Show me this repository and its file selection before indexing, preserve unrelated client settings, then find [feature] and read the matching source lines with your normal file reader. Tell me when a new native session is needed to load the registration.
+
+This branch adds model-free indexing for new projects and noninteractive Codex setup. These changes are not in npm `2.2.0`. Install an exact locally packed candidate once in a stable directory on Node 22 or newer:
+
+```bash
+npm install --prefix /absolute/path/cbc --no-save --package-lock=false /absolute/path/codebase-context-2.3.0.tgz
+codex mcp add codebase-context -- node /absolute/path/cbc/node_modules/codebase-context/dist/index.js
+```
+
+Check any existing same-name CBC entry before updating it. Start a new native Codex session after registration; an already running chat can retain the older server even when the config file has changed. Ask the agent to pass the repository's absolute path as `project` to `get_indexing_status` and `search_codebase`, and check that `loadedStatusModulePath` points into this installation. One registration can serve multiple repositories; a separate install or registration for each repository is unnecessary. The [client setup guide](./docs/client-setup.md#install-an-exact-packed-candidate-for-codex) also covers a project-local alternative.
+
+Before indexing, run the installed `codebase-context` executable with `init --client codex --root /absolute/path/to/repository --preview` (`codebase-context.cmd` on Windows). This provides a point-in-time repository and file-selection preview without configuring the client or creating an index. It lists a bounded, deterministic sample of eligible files and observed skips, and shows project-specific exclusion rules before defaults. It does not count files inside directories excluded before enumeration. The first native project selection prepares its index if needed. This option is not available in published `2.2.0`; older local tarballs may also omit it.
+
+`init --help` does not prompt. The installer preserves unrelated project config, rejects conflicting or disabled CBC entries, and points Codex at the installed Node executable and package entrypoint. Keep that installation available; removing its directory or clearing an `npx` cache used for setup can invalidate the saved path. Trust/reopen the project and approve tool calls if your client requires it. A written config and ready index do not establish native agent use.
+
+New indexes use keywords, symbols, and structural analysis without embedding or reranker models. Existing indexes retain their successful mode. Semantic mode requires optional runtimes: install `@huggingface/transformers@^4.2.0` and `@lancedb/lancedb@^0.4.0` alongside the CBC installation, then run `npx --no-install codebase-context reindex --embeddings`. Installing them only in a separately selected source folder does not repair another CBC installation. Use `--no-embeddings` for a full model-free rebuild; omitting both preserves the successful mode. Local semantic models may download on opt-in. Missing runtimes produce an actionable error before index replacement.
+
+The candidate also adds `get_code_relationships` for current, directed import/re-export paths up to three hops. It returns source citations, unresolved/stale diagnostics, and explicit truncation. This is syntactic source navigation; conceptual search quality and runtime behavior still require reading and checking the actual code. See the [capabilities reference](./docs/capabilities.md).
+
+Relationship resolution uses the selected root's `tsconfig.json`, or its `tsconfig.base.json` when the primary file is absent, and preserves explicit `extends`. This candidate uses index format 4: older indexes rebuild even when source files are unchanged, preserving the last successful model-free or semantic mode. A failed rebuild preserves the previous index files. For other same-format graph changes, request a full `refresh_index` with `incrementalOnly:false` and the repository's absolute `project` path; omit `skipEmbedding` to preserve the existing mode.
+
+AST chunks retain contiguous source, including callable property bodies, with scope labels kept separate from persisted text. Ordinary discovery reports search quality and incomplete source coverage; edit readiness is returned only for explicit `edit`, `refactor`, or `migrate` searches. Read the returned source before changing it.
+
+### Published package
+
 Choose your coding tool and run its command once. Use Node.js 22 or newer. These commands use published npm `2.2.0` and do not require a project folder in your configuration:
 
 ```bash

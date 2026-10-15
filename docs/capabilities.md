@@ -1,6 +1,20 @@
 # Capabilities Reference
 
-Technical reference for what `codebase-context` ships today. The public product posture is map first, find second: the bounded conventions map is the first-call surface, and search narrows to the right local example after that. For the user-facing overview, see [README.md](../README.md).
+Technical reference for this source tree. The relaunch changes below are an unreleased candidate, distinct from published npm `2.2.0`. The bounded conventions map and source search provide local navigation; useful engineering still requires opening current source and checking behavior. For setup and version boundaries, see [README.md](../README.md).
+
+## Candidate source navigation
+
+`get_code_relationships` accepts an indexed repository-relative `file`, `direction` (`outgoing` or `incoming`), `max_hops` (1-3, default 2), and `max_nodes` (1-100, default 50), plus the shared project selector. Directed paths distinguish imports from re-exports and cite importer lines/specifiers. Current module resolution, both source fingerprints, and realpath confinement are checked before a path is returned. Unresolved specifiers are diagnostics; legacy proofless or changed edges are omitted with refresh guidance. The returned JSON text, including project-routing metadata, is capped at 4,000 UTF-8 bytes; this excludes the MCP transport envelope. Truncation is explicit, and dense neighborhoods may require following a returned file in another call to see a full three-hop chain.
+
+TypeScript resolution reads the selected root's `tsconfig.json`, falling back to that root's `tsconfig.base.json` only when the primary file is absent. Explicit `extends` is supported; an unrelated ancestor's configuration is not selected implicitly. An existing malformed primary file does not silently select the base file. Index format 4 rebuilds older indexes even when source hashes are unchanged. For other same-format graph changes, run one full `refresh_index` (`incrementalOnly:false`, explicit `project`, omit `skipEmbedding` to preserve the existing mode); a no-change incremental refresh otherwise retains its prior graph.
+
+TypeScript configuration/module resolution supports applicable relative paths, aliases, and config inheritance. Workspace package exports, missing sparse-checkout files, dynamic imports/calls, and language-specific resolution can remain unresolved. Three hops do not establish runtime calls, inheritance, or complete program reachability. Existing search decision-card impact remains at two hops.
+
+Search snippets and symbol references read confined current files. Search excludes changed, deleted, or unreadable nominees while retaining verified current results from its bounded candidate window. Incomplete coverage is explicit and cannot produce an edit-ready claim; stale-only evidence gives a refresh action. Candidate-budget exhaustion and failed optional semantic replenishment are disclosed separately. Malformed indexes, mismatched build identity, invalid ranges and escaping paths remain integrity errors. Compact search results offer a current source read and the relationship tool as next steps. Scores and readiness signals are heuristics, not proof that a result answers the question.
+
+Reference lookup checks current text before parsing, including references added after indexing in files recorded by the last successful index. It reads every recorded source, even when the keyword index's chunk cap retained chunks from only some files; files created after indexing require a reindex. Unavailable sources yield explicitly incomplete coverage; lexical fallback can include comments or strings and is labeled uncertain. If the reference inventory is missing or too old, run `codebase-context reindex` once without `--incremental`. Directed graph traversal verifies edges before consuming the returned path/node caps, with a separate inspection budget and explicit exhaustion. Dense stale neighborhoods can still require refreshing the index.
+
+Newly written chunk paths are relative to the selected project root, independent of the caller's working directory. An existing index created with incorrect working-directory-relative paths may require a full `reindex`; an unchanged incremental run does not migrate those artifacts.
 
 ## Transport Modes
 
@@ -40,7 +54,7 @@ For a command gallery with examples, see `docs/cli.md`.
 | `search --query <q>`   | `--intent explore\|edit\|refactor\|migrate`, `--limit <n>`, `--lang <l>`, `--framework <f>`, `--layer <l>` | `search_codebase`                      |
 | `metadata`             | —                                                                                                          | `get_codebase_metadata`                |
 | `status`               | —                                                                                                          | `get_indexing_status`                  |
-| `reindex`              | `--incremental`, `--reason <r>`                                                                            | equivalent to `refresh_index`          |
+| `reindex`              | `--incremental`, `--reason <r>`, candidate-only `--embeddings` / `--no-embeddings`                         | equivalent to `refresh_index`          |
 | `style-guide`          | `--query <q>`, `--category <c>`                                                                            | `get_style_guide`                      |
 | `patterns`             | `--category all\|di\|state\|testing\|libraries`                                                            | `get_team_patterns`                    |
 | `refs --symbol <name>` | `--limit <n>`                                                                                              | `get_symbol_references`                |
@@ -62,7 +76,7 @@ npx -y codebase-context@2.2.0 reindex --incremental
 
 ## Tool Surface
 
-10 MCP tools + active/project-scoped context resources.
+12 MCP tools + active/project-scoped context resources.
 
 Shared selector inputs:
 
@@ -77,9 +91,13 @@ Shared selector inputs:
 | ----------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets`, shared `project`/`project_directory` | Compact mode returns a bounded result set with `file`, `summary`, `score`, lightweight structural metadata (`symbol`, `symbolKind`, `scope`, `signaturePreview`), and `searchQuality` (`status`, `confidence`, optional `hint`, `tokenEstimate`, `warning`, `rerankerStatus`). Full mode adds richer relationships plus chunk-level `imports`, `exports`, and `complexity`. When `intent="edit"`, a decision card is returned with `ready`, `patterns`, `bestExample`, `impact`, and `whatWouldHelp`. |
 | `get_team_patterns`     | optional `category`, shared `project`/`project_directory`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                                                                                                                                                                                                                            |
-| `get_symbol_references` | `symbol`, optional `limit`, shared `project`/`project_directory`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). When Tree-sitter + file content are available, comments and string literals are excluded from the scan — the count reflects real identifier nodes only. Replaces the removed `get_component_usage`. |
+| `get_symbol_references` | `symbol`, optional `limit`, shared `project`/`project_directory`                                        | Current-source matches: observed `usageCount`, bounded snippets, `confidence`, `isComplete`, and coverage counts. Replaces the removed `get_component_usage`.                                                                                                                                                                                                                                   |
 | `remember`              | `type`, `category`, `memory`, `reason`, shared `project`/`project_directory`                            | Persists to `.codebase-context/memory.json`                                                                                                                                                                                                                                                                                                                                                     |
 | `get_memory`            | optional `category`, `type`, `query`, `limit`, shared `project`/`project_directory`                     | Memories with confidence decay scoring                                                                                                                                                                                                                                                                                                                                                          |
+
+`confidence: "syntactic"` means Tree-sitter identifier-node matches; comments and strings are excluded, but references are not limited to call sites. `confidence: "lexical"` means raw-text token-boundary fallback because parsing was unavailable or unsupported; comments and strings may be included, so treat matches as uncertain.
+
+`coverage` counts deduplicated manifest-listed sources (`candidateFiles`), sources read (`sourcesRead`), read sources without the symbol text (`filesWithoutText`), unavailable sources (`filesUnavailable`), parser attempts (`parserCalls`), and lexical fallback scans (`lexicalFallbackFiles`). Each available candidate source is read before checking whether parser work can be skipped. `usageCount` reports matches across the manifest-listed source set, and `isComplete: false` can mean the result limit was reached or candidate sources were unavailable; files added after the index are outside that coverage.
 
 ### Utility Tools
 
@@ -90,6 +108,10 @@ Shared selector inputs:
 | `detect_circular_dependencies` | Import cycles in the file graph                      |
 | `refresh_index`                | Full or incremental re-index + git memory extraction |
 | `get_indexing_status`          | Index state, progress, last stats                    |
+| `get_codebase_health`          | Highest-risk indexed files and health reasons; optionally one file |
+| `get_code_relationships`        | Verified directed import/re-export paths with source citations and freshness diagnostics |
+
+The `--embeddings` and `--no-embeddings` reindex flags, including how omitted mode flags preserve the project's successful mode, are candidate-only; see the [CLI reindex guide](./cli.md#reindex). Published `2.2.0` examples above do not include these flags.
 
 ## Project Routing
 
@@ -175,14 +197,14 @@ Ordered by execution:
 
 1. **Intent classification** — EXACT_NAME (for symbols), CONCEPTUAL, FLOW, CONFIG, WIRING. Sets keyword/semantic weight ratio.
 2. **Query expansion** — bounded domain term expansion for conceptual queries.
-3. **Dual retrieval** — keyword (Fuse.js) + semantic (local embeddings or OpenAI).
+3. **Retrieval** — keyword (Fuse.js) by default for new indexes; semantic retrieval joins it only for an embedding-enabled index.
 4. **RRF fusion** — Reciprocal Rank Fusion (k=60) across all retrieval channels.
 5. **Definition-first boost** — for EXACT_NAME intent, results matching the symbol name get +15% score boost (e.g., defining file ranks above using files).
 6. **Structure-aware boosting** — import centrality, composition root boost, path overlap, definition demotion for action queries.
 7. **Contamination control** — test file filtering for non-test queries.
 8. **File deduplication** — best chunk per file.
 9. **Symbol-level deduplication** — within each `symbolPath` group, keep only the highest-scoring chunk (prevents duplicate methods from same class clogging results).
-10. **Stage-2 reranking** — cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`) triggers when the score between the top files are very close. CPU-only, top-10 bounded.
+10. **Optional stage-2 reranking** — for embedding-enabled indexes, a cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`) can trigger when top scores are close. Model-free indexes skip it. CPU-only, top-10 bounded.
 11. **Result enrichment** — compact type (`componentType:layer`), pattern momentum (`trend` Rising/Declining only, Stable omitted), `patternWarning`, condensed relationships (`importedByCount`/`hasTests`), structured hints (capped callers/consumers/tests ranked by frequency), scope header for symbol-aware snippets (`// ClassName.methodName`), related memories (capped to 3), search quality assessment with `hint` when low confidence.
 12. **Payload budgeting** — final serialized search responses include `searchQuality.tokenEstimate`; warnings only appear above the 4K-token threshold and differ between compact and full mode.
 13. **Full-mode chunk metadata** — when available, full-mode results surface chunk-level `imports` (top 5), `exports` (top 5), and cyclomatic `complexity`.
@@ -190,9 +212,12 @@ Ordered by execution:
 ### Defaults
 
 - **Chunk size**: 50 lines, 0 overlap
-- **Reranker trigger**: activates when top-3 results are within 0.08 score of each other
-- **Embedding model**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@huggingface/transformers`. Override: `EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX` for Granite (8192 ctx, slower).
-- **Vector DB**: LanceDB with cosine distance
+- **New projects**: model-free; no embedding/reranker initialization. Existing valid indexes preserve their successful mode.
+- **Opt-in**: CLI `reindex --embeddings` or MCP `refresh_index` with `skipEmbedding:false`; `--no-embeddings`/`skipEmbedding:true` select model-free. Mode switches rebuild fully. Explicit startup/config choices are enforced before search.
+- **Optional semantic runtimes**: `@huggingface/transformers` and `@lancedb/lancedb` are optional peers, not default install dependencies. Missing runtimes fail before index replacement.
+- **Semantic model**: `Xenova/bge-small-en-v1.5` (512 token context); model overrides apply only in semantic mode. Semantic storage uses LanceDB with cosine distance.
+
+Compact results retain the `signaturePreview` key: it contains one contiguous window of up to three lines around the strongest query-term match in the returned source snippet, or the first three lines when none match. It does not combine distant source lines. Default and explicit exploration report retrieval quality and incomplete source coverage without an edit-readiness card.
 
 ## Decision Card (Edit Intent)
 
@@ -259,18 +284,18 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 
 ## Indexing
 
-- Initial: full scan → chunking (50 lines, 0 overlap) → embedding → vector DB (LanceDB) + keyword index (Fuse.js)
-- Incremental: SHA-256 manifest diffing, selective embed/delete, full intelligence regeneration
+- Initial: full scan → chunking → keyword/symbol/structural artifacts; embeddings and LanceDB are optional semantic additions.
+- Incremental: source-hash diffing, selective update/delete, full intelligence regeneration; drift during analysis fails closed instead of endorsing older analyzed bytes with newer hashes.
 - Auto-refresh (MCP server mode only): chokidar file watcher triggers incremental reindex after a debounce on any source file change — `node_modules/`, `.git/`, `dist/`, and `.codebase-context/` are excluded. One-shot CLI runs skip the watcher entirely.
-- Version gating: `index-meta.json` tracks format version; mismatches trigger automatic rebuild
+- Version gating: index format 4 also changes analyzer selection for TypeScript files without Angular imports, invalidating format 3 and earlier indexes. Earlier changes corrected AST boundaries and persisted chunk/embedding input, including descriptor methods omitted by format 2. Incompatible indexes rebuild even on an unchanged incremental request; the last successful model-free or semantic mode is preserved. Previously generated embeddings are not reused across this migration.
 - Crash-safe rebuilds: full rebuilds write to `.staging/` and swap atomically only on success
 - Auto-heal: corrupted index triggers automatic full re-index on next search
-- Relationships sidecar: `relationships.json` contains file import graph, symbol export index, and per-edge import details (`importDetails`: line number + imported symbol names where available)
+- Relationships sidecar: `relationships.json` contains the file import graph, symbol export index, typed import/re-export source citations and endpoint fingerprints. The query checks current resolution and source before following stored edges.
 - Storage: `.codebase-context/` directory (memory.json + generated files)
 
 ## Analyzers
 
-- **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata
+- **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata. TypeScript eligibility requires parsed imports from the Angular namespace; method or decorator spellings alone do not establish Angular identity. Files without that evidence use another eligible analyzer, including Generic AST analysis.
 - **React**: function/class components, custom hooks, context usage, memoization, Suspense, ecosystem signal extraction
 - **Next.js**: App Router and Pages Router detection, route/API classification, route paths, `"use client"`, metadata exports
 - **Generic**: 30+ have indexing/retrieval coverage including PHP, Ruby, Swift, Scala, Shell, config/markup., 10 languages have full symbol extraction (Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust).
@@ -278,7 +303,7 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 Notes:
 
 - Language detection covers common extensions including `.pyi`, `.kt`/`.kts`, `.cc`/`.cxx`, and config formats like `.toml`/`.xml`.
-- When Tree-sitter grammars are present, the Generic analyzer uses AST-aligned chunking and scope-aware prefixes for symbol-aware snippets (with fallbacks).
+- When Tree-sitter grammars are present, the Generic analyzer uses AST-aligned chunking (with fallbacks). Static callable properties retain their owning descriptor context; dynamic property names do not invent a static ownership path. Chunks persist contiguous source spans, with oversized chunks split from that source; scope labels are presentation metadata, not stored source or declaration evidence.
 
 ## Evaluation Harness
 
@@ -299,8 +324,9 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring 
 
 ## Limitations
 
-- **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
-- **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
+- **Symbol refs are not a call-graph.** With syntactic confidence, `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Lexical fallback uses raw text and may include comments or strings. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
+  Reference scans still read current manifest sources. A conservative ASCII boundary check can skip parsing longer-identifier interiors; Unicode and arbitrary query spellings retain raw-text nomination. `filesWithoutText` counts actual raw-text absence, so it does not count those interior-only skips.
+- **Decision-card impact is 2-hop max.** The separate relationship tool follows verified imports/re-exports up to three hops; neither establishes a runtime call graph.
 - **Published 2.2.0 has dedicated Angular, React, and Next.js analyzers.** NestJS support is in a newer source candidate and is not part of published 2.2.0. Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
-- **Default embedding model is `bge-small-en-v1.5` (512-token context).** Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
+- **Model-free conceptual search has limits.** Keyword/symbol matches can miss meaning or return an unrelated high-scoring file. Follow current source and relationship evidence; no general retrieval-quality improvement is claimed. Embeddings are explicit opt-in. OpenAI additionally requires an opt-in provider/key and sends code externally.
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

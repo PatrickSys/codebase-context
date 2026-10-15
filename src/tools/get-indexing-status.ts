@@ -1,5 +1,8 @@
+import { fileURLToPath } from 'node:url';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext, ToolResponse } from './types.js';
+
+const loadedStatusModulePath = fileURLToPath(import.meta.url);
 
 export const definition: Tool = {
   name: 'get_indexing_status',
@@ -26,6 +29,7 @@ export async function handle(
           {
             status: ctx.indexState.status,
             rootPath: ctx.rootPath,
+            loadedStatusModulePath,
             lastIndexed: ctx.indexState.lastIndexed?.toISOString(),
             stats: ctx.indexState.stats
               ? {

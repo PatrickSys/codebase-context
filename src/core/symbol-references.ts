@@ -2,13 +2,18 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME } from '../constants/codebase-context.js';
 import { IndexCorruptedError } from '../errors/index.js';
+import { readIndexMeta, validateKeywordIndexArtifact } from './index-meta.js';
+import { readReferenceManifest } from './manifest.js';
 import type { UsageLocation } from '../types/index.js';
 import { detectLanguage } from '../utils/language-detection.js';
-import { findIdentifierOccurrences } from '../utils/tree-sitter.js';
+import { isPathWithin } from '../utils/project-discovery.js';
+import {
+  hasIdentifierCandidate,
+  findIdentifierOccurrences,
+  findLexicalIdentifierOccurrences
+} from '../utils/tree-sitter.js';
 
 interface IndexedChunk {
-  content?: unknown;
-  startLine?: unknown;
   relativePath?: unknown;
   filePath?: unknown;
 }
@@ -22,8 +27,16 @@ interface SymbolReferencesSuccess {
   symbol: string;
   usageCount: number;
   usages: SymbolUsage[];
-  confidence: 'syntactic';
+  confidence: 'syntactic' | 'lexical';
   isComplete: boolean;
+  coverage: {
+    candidateFiles: number;
+    sourcesRead: number;
+    filesWithoutText: number;
+    filesUnavailable: number;
+    parserCalls: number;
+    lexicalFallbackFiles: number;
+  };
 }
 
 interface SymbolReferencesError {
@@ -33,33 +46,16 @@ interface SymbolReferencesError {
 
 export type SymbolReferencesResult = SymbolReferencesSuccess | SymbolReferencesError;
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+type SourceReadResult =
+  | { status: 'source'; source: string; realSourcePath: string }
+  | { status: 'without-text' }
+  | { status: 'without-candidate' }
+  | { status: 'unavailable' }
+  | SymbolReferencesError;
 
-function getUsageFile(rootPath: string, chunk: IndexedChunk): string {
-  if (typeof chunk.relativePath === 'string' && chunk.relativePath.trim()) {
-    return chunk.relativePath.replace(/\\/g, '/');
-  }
-
-  if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
-    const relativePath = path.relative(rootPath, chunk.filePath);
-    if (!relativePath || relativePath.startsWith('..')) {
-      return path.basename(chunk.filePath);
-    }
-    return relativePath.replace(/\\/g, '/');
-  }
-
-  return 'unknown';
-}
-
-function buildPreview(content: string, lineOffset: number): string {
-  const lines = content.split('\n');
-  const start = Math.max(0, lineOffset - 1);
-  const end = Math.min(lines.length, lineOffset + 2);
-  const previewLines = lines.slice(start, end);
-  return previewLines.join('\n').trim();
-}
+// Bound both outstanding source I/O and buffered source contents. Parsing remains
+// sequential because Tree-sitter caches a mutable parser for each language.
+const SOURCE_READ_BATCH_SIZE = 4;
 
 function buildPreviewFromFileLines(lines: string[], line: number): string {
   const start = Math.max(0, line - 2);
@@ -67,12 +63,47 @@ function buildPreviewFromFileLines(lines: string[], line: number): string {
   return lines.slice(start, end).join('\n').trim();
 }
 
+function isOrdinarySourceAvailabilityError(error: unknown): boolean {
+  if (error === null || typeof error !== 'object' || !('code' in error)) return false;
+  const code = error.code;
+  return code === 'ENOENT' || code === 'ENOTDIR' || code === 'EACCES' || code === 'EPERM';
+}
+
+async function readReferenceSource(
+  relativePath: string,
+  absolutePath: string,
+  realRootPath: string,
+  symbol: string
+): Promise<SourceReadResult> {
+  try {
+    const realSourcePath = await fs.realpath(absolutePath);
+    if (!isPathWithin(realRootPath, realSourcePath)) {
+      return {
+        status: 'error',
+        message: `Indexed source resolves outside the selected project (${relativePath}). Refresh the index before trusting reference results.`
+      };
+    }
+    if (!(await fs.stat(realSourcePath)).isFile()) throw new Error('not a file');
+    const source = (await fs.readFile(realSourcePath, 'utf-8')).replace(/\r\n/g, '\n');
+    if (!source.includes(symbol)) return { status: 'without-text' };
+    // The boundary screen only suppresses simple ASCII identifier interiors;
+    // other spellings and non-ASCII adjacency stay on the existing parser path.
+    return hasIdentifierCandidate(source, symbol)
+      ? { status: 'source', source, realSourcePath }
+      : { status: 'without-candidate' };
+  } catch (error) {
+    if (isOrdinarySourceAvailabilityError(error)) return { status: 'unavailable' };
+    return {
+      status: 'error',
+      message: `Indexed source is missing or unreadable (${relativePath}). Refresh the index before trusting reference results.`
+    };
+  }
+}
+
 function resolveAbsoluteChunkPath(rootPath: string, chunk: IndexedChunk): string | null {
   const resolvedRoot = path.resolve(rootPath);
   const isWithinRoot = (candidate: string): boolean => {
-    const resolvedCandidate = path.resolve(candidate);
-    const relative = path.relative(resolvedRoot, resolvedCandidate);
-    return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
+    return isPathWithin(resolvedRoot, candidate);
   };
 
   if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
@@ -92,15 +123,6 @@ function resolveAbsoluteChunkPath(rootPath: string, chunk: IndexedChunk): string
   return null;
 }
 
-async function fileExists(targetPath: string): Promise<boolean> {
-  try {
-    const stat = await fs.stat(targetPath);
-    return stat.isFile();
-  } catch {
-    return false;
-  }
-}
-
 export async function findSymbolReferences(
   rootPath: string,
   symbol: string,
@@ -117,11 +139,13 @@ export async function findSymbolReferences(
   }
 
   const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+  const meta = await readIndexMeta(rootPath);
+  const manifest = await readReferenceManifest(rootPath, meta);
 
-  let chunksRaw: unknown;
+  let keywordIndexRaw: unknown;
   try {
     const content = await fs.readFile(indexPath, 'utf-8');
-    chunksRaw = JSON.parse(content);
+    keywordIndexRaw = JSON.parse(content);
   } catch (error) {
     throw new IndexCorruptedError(
       `Keyword index missing or unreadable (rebuild required): ${
@@ -130,126 +154,141 @@ export async function findSymbolReferences(
     );
   }
 
-  if (Array.isArray(chunksRaw)) {
+  if (Array.isArray(keywordIndexRaw)) {
     throw new IndexCorruptedError(
       'Legacy keyword index format detected (missing header). Rebuild required.'
     );
   }
 
-  const chunks =
-    chunksRaw !== null &&
-    typeof chunksRaw === 'object' &&
-    'chunks' in chunksRaw &&
-    Array.isArray(chunksRaw.chunks)
-      ? (chunksRaw.chunks as unknown[])
-      : null;
-
-  if (!chunks) {
-    throw new IndexCorruptedError('Keyword index corrupted: expected { header, chunks }');
-  }
+  const { chunks } = validateKeywordIndexArtifact(keywordIndexRaw, meta);
 
   const usages: SymbolUsage[] = [];
   let usageCount = 0;
+  let sourcesRead = 0;
+  let filesWithoutText = 0;
+  let filesUnavailable = 0;
+  let parserCalls = 0;
+  let lexicalFallbackFiles = 0;
 
-  const escapedSymbol = escapeRegex(normalizedSymbol);
-  const prefilter = new RegExp(`\\b${escapedSymbol}\\b`);
-  const matcher = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
+  // The manifest nominates every analyzed source; capped keyword chunks cannot define
+  // the reference scope. Current source bytes determine matches, locations, and previews.
+  const candidateFiles = new Map<string, string>();
 
-  // Prefilter candidate files from the keyword index. We do not trust chunk contents for
-  // exact reference counting when Tree-sitter is available; chunks only guide which files to scan.
-  const chunksByFile = new Map<
-    string,
-    { relPath: string; absPath: string | null; chunks: IndexedChunk[] }
-  >();
+  for (const relativePath of Object.keys(manifest.files)) {
+    const absPath = resolveAbsoluteChunkPath(rootPath, { relativePath });
+    if (!absPath) {
+      throw new IndexCorruptedError(
+        `Reference manifest contains an invalid source path (${relativePath}). Rebuild required.`
+      );
+    }
+    const relPath = path.relative(rootPath, absPath).replace(/\\/g, '/');
+    candidateFiles.set(relPath, absPath);
+  }
 
   for (const chunkRaw of chunks) {
     const chunk = chunkRaw as IndexedChunk;
-    if (typeof chunk.content !== 'string') continue;
-    if (!prefilter.test(chunk.content)) continue;
-
-    const relPath = getUsageFile(rootPath, chunk);
     const absPath = resolveAbsoluteChunkPath(rootPath, chunk);
-
-    const entry = chunksByFile.get(relPath);
-    if (entry) {
-      entry.chunks.push(chunk);
-      // Prefer a real absolute path when available
-      if (!entry.absPath && absPath) {
-        entry.absPath = absPath;
-      }
-    } else {
-      chunksByFile.set(relPath, { relPath, absPath, chunks: [chunk] });
+    if (!absPath) {
+      return {
+        status: 'error',
+        message:
+          'Indexed source location is invalid. Refresh the index before trusting reference results.'
+      };
+    }
+    const relPath = path.relative(rootPath, absPath).replace(/\\/g, '/');
+    if (!Object.hasOwn(manifest.files, relPath)) {
+      throw new IndexCorruptedError(
+        `Keyword index source is absent from the build-bound manifest (${relPath}). Rebuild required.`
+      );
     }
   }
 
-  for (const entry of chunksByFile.values()) {
-    const relPath = entry.relPath;
-    const absPath = entry.absPath;
+  let realRootPath: string;
+  try {
+    realRootPath = await fs.realpath(rootPath);
+  } catch {
+    return { status: 'error', message: 'Selected project path is missing or unreadable.' };
+  }
+  const sourceFiles = [...candidateFiles];
+  for (let offset = 0; offset < sourceFiles.length; offset += SOURCE_READ_BATCH_SIZE) {
+    const batch = sourceFiles.slice(offset, offset + SOURCE_READ_BATCH_SIZE);
+    // Reads return values even on failure. Settle every started read before a fatal
+    // return, then consume in manifest order so snippets and totals stay deterministic.
+    const sources = await Promise.all(
+      batch.map(([relativePath, absolutePath]) =>
+        readReferenceSource(relativePath, absolutePath, realRootPath, normalizedSymbol)
+      )
+    );
+    const fatalSource = sources.find((source) => source.status === 'error');
+    if (fatalSource?.status === 'error') return fatalSource;
 
-    // Preferred: Tree-sitter identifier walk on the real file content.
-    if (absPath && (await fileExists(absPath))) {
-      try {
-        const raw = await fs.readFile(absPath, 'utf-8');
-        const content = raw.replace(/\r\n/g, '\n');
-        const language = detectLanguage(absPath);
-        const occurrences = await findIdentifierOccurrences(content, language, normalizedSymbol);
-
-        if (occurrences) {
-          usageCount += occurrences.length;
-
-          if (usages.length < normalizedLimit && occurrences.length > 0) {
-            const lines = content.split('\n');
-            for (const occ of occurrences) {
-              if (usages.length >= normalizedLimit) break;
-              usages.push({
-                file: relPath,
-                line: occ.line,
-                preview: buildPreviewFromFileLines(lines, occ.line)
-              });
-            }
-          }
-
-          continue;
-        }
-      } catch {
-        // Fall through to chunk-regex fallback (missing grammar, parse failure, etc.)
+    for (let index = 0; index < batch.length; index += 1) {
+      const [relativePath] = batch[index];
+      const result = sources[index];
+      if (result.status === 'error') return result;
+      if (result.status === 'unavailable') {
+        filesUnavailable += 1;
+        continue;
       }
-    }
+      sourcesRead += 1;
+      if (result.status === 'without-text') {
+        filesWithoutText += 1;
+        continue;
+      }
+      // Raw query text was present but only inside longer ASCII identifiers;
+      // keep this distinct from filesWithoutText coverage.
+      if (result.status === 'without-candidate') continue;
+      const { source, realSourcePath } = result;
+      const lines = source.split('\n');
+      parserCalls += 1;
+      const occurrences = await findIdentifierOccurrences(
+        source,
+        detectLanguage(realSourcePath),
+        normalizedSymbol
+      ).catch(() => null);
 
-    // Fallback: regex scan inside the matched chunks (legacy behavior).
-    for (const chunk of entry.chunks) {
-      if (typeof chunk.content !== 'string') continue;
-
-      const chunkContent = chunk.content;
-      const startLine = typeof chunk.startLine === 'number' ? chunk.startLine : 1;
-      matcher.lastIndex = 0;
-
-      let match: RegExpExecArray | null;
-      while ((match = matcher.exec(chunkContent)) !== null) {
-        usageCount += 1;
-
-        if (usages.length >= normalizedLimit) {
-          continue;
+      if (occurrences) {
+        usageCount += occurrences.length;
+        for (const occurrence of occurrences) {
+          if (usages.length >= normalizedLimit) break;
+          usages.push({
+            file: relativePath,
+            line: occurrence.line,
+            preview: buildPreviewFromFileLines(lines, occurrence.line)
+          });
         }
+        continue;
+      }
 
-        const prefix = chunkContent.slice(0, match.index);
-        const lineOffset = prefix.split('\n').length - 1;
-
+      lexicalFallbackFiles += 1;
+      const lexicalOccurrences = findLexicalIdentifierOccurrences(source, normalizedSymbol);
+      usageCount += lexicalOccurrences.length;
+      for (const occurrence of lexicalOccurrences) {
+        if (usages.length >= normalizedLimit) break;
         usages.push({
-          file: relPath,
-          line: startLine + lineOffset,
-          preview: buildPreview(chunkContent, lineOffset)
+          file: relativePath,
+          line: occurrence.line,
+          preview: buildPreviewFromFileLines(lines, occurrence.line)
         });
       }
     }
   }
 
+  const coverageComplete = filesUnavailable === 0;
   return {
     status: 'success',
     symbol: normalizedSymbol,
     usageCount,
     usages,
-    confidence: 'syntactic',
-    isComplete: usageCount < normalizedLimit
+    confidence: lexicalFallbackFiles === 0 ? 'syntactic' : 'lexical',
+    isComplete: coverageComplete && usageCount < normalizedLimit,
+    coverage: {
+      candidateFiles: candidateFiles.size,
+      sourcesRead,
+      filesWithoutText,
+      filesUnavailable,
+      parserCalls,
+      lexicalFallbackFiles
+    }
   };
 }

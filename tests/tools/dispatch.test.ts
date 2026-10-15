@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'node:url';
 import { TOOLS, dispatchTool } from '../../src/tools/index.js';
 import type { ToolContext } from '../../src/tools/types.js';
 
 describe('Tool Dispatch', () => {
-  it('exports all 11 tools', () => {
-    expect(TOOLS.length).toBe(11);
+  it('exports all 12 tools including source relationship navigation', () => {
+    expect(TOOLS.length).toBe(12);
     expect(TOOLS.map((t) => t.name)).toEqual([
       'search_codebase',
       'get_codebase_metadata',
@@ -16,7 +17,8 @@ describe('Tool Dispatch', () => {
       'detect_circular_dependencies',
       'remember',
       'get_memory',
-      'get_codebase_health'
+      'get_codebase_health',
+      'get_code_relationships'
     ]);
   });
 
@@ -96,5 +98,11 @@ describe('Tool Dispatch', () => {
     expect(result.content![0].type).toBe('text');
     const text = result.content![0].text;
     expect(text).toContain('idle');
+    const status = JSON.parse(text) as { rootPath: string; loadedStatusModulePath: string };
+    expect(status.rootPath).toBe('/tmp');
+    expect(status.loadedStatusModulePath).toBe(
+      fileURLToPath(new URL('../../src/tools/get-indexing-status.ts', import.meta.url))
+    );
+    expect(status.loadedStatusModulePath).not.toBe(status.rootPath);
   });
 });

@@ -56,8 +56,10 @@ export const MAX_AST_CHUNK_FILE_LINES = 10_000; // 10K lines
  */
 export function generateScopePrefix(node: SymbolNode, ancestors: SymbolNode[]): string {
   // Build scope path: ancestor names joined with " > ", then current node
-  const pathParts = ancestors.map((a) => a.symbol.name);
-  pathParts.push(node.symbol.name);
+  const pathParts = node.symbol.symbolPath ?? [
+    ...ancestors.map((a) => a.symbol.name),
+    node.symbol.name
+  ];
   const scopePath = pathParts.join(' > ');
 
   // Build signature hint from the symbol content
@@ -69,7 +71,7 @@ export function generateScopePrefix(node: SymbolNode, ancestors: SymbolNode[]): 
 /**
  * Extract a short signature hint from a symbol's content.
  */
-function extractSignatureHint(sym: TreeSitterSymbol): string {
+function extractSignatureHint(sym: Pick<TreeSitterSymbol, 'kind' | 'content'>): string {
   const kind = sym.kind;
 
   if (kind === 'class') return 'class';
@@ -132,13 +134,18 @@ export function buildSymbolTree(symbols: TreeSitterSymbol[]): SymbolNode[] {
       const cs = candidate.symbol;
       const ns = node.symbol;
 
-      // candidate must fully contain node (and not be identical range unless different symbol)
-      if (
-        cs.startLine <= ns.startLine &&
-        cs.endLine >= ns.endLine &&
-        !(cs.startLine === ns.startLine && cs.endLine === ns.endLine)
-      ) {
-        const span = cs.endLine - cs.startLine;
+      // Real parser offsets disambiguate nested and sibling symbols on the same line.
+      // Synthetic callers without offsets retain the public line-range contract.
+      const hasOffsets = cs.endIndex > cs.startIndex && ns.endIndex > ns.startIndex;
+      const contains = hasOffsets
+        ? cs.startIndex <= ns.startIndex &&
+          cs.endIndex >= ns.endIndex &&
+          (cs.startIndex !== ns.startIndex || cs.endIndex !== ns.endIndex)
+        : cs.startLine <= ns.startLine &&
+          cs.endLine >= ns.endLine &&
+          !(cs.startLine === ns.startLine && cs.endLine === ns.endLine);
+      if (contains) {
+        const span = hasOffsets ? cs.endIndex - cs.startIndex : cs.endLine - cs.startLine;
         if (span < bestSpan) {
           bestSpan = span;
           bestParent = candidate;
@@ -172,146 +179,111 @@ export function generateASTChunks(
   options: ASTChunkOptions
 ): CodeChunk[] {
   const lines = content.split('\n');
-  const totalLines = lines.length;
+  if (symbols.length === 0) return [makeFillerChunk(lines, 1, lines.length, options)];
 
-  if (symbols.length === 0) {
-    // No symbols: entire file is one filler chunk
-    return [makeFillerChunk(lines, 1, totalLines, options)];
+  const lineStarts = [0];
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] === '\n') lineStarts.push(i + 1);
   }
-
-  const roots = buildSymbolTree(symbols);
-
-  // Sort roots by startLine for ordered processing
-  roots.sort((a, b) => a.symbol.startLine - b.symbol.startLine);
-
-  const chunks: CodeChunk[] = [];
-  let cursor = 1; // 1-based line cursor
-
-  const shouldPrefix = options.includeScopePrefix !== false;
-
-  for (const root of roots) {
-    // Gap before this root
-    if (root.symbol.startLine > cursor) {
-      chunks.push(makeFillerChunk(lines, cursor, root.symbol.startLine - 1, options));
+  const lineAt = (offset: number): number => {
+    let low = 0;
+    let high = lineStarts.length;
+    while (low + 1 < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (lineStarts[middle] <= offset) low = middle;
+      else high = middle;
     }
-    // Process the root symbol (recurse for containers)
-    chunks.push(...processNode(root, lines, options, null, [], shouldPrefix));
-    cursor = root.symbol.endLine + 1;
-  }
-
-  // Suffix after last root
-  if (cursor <= totalLines) {
-    chunks.push(makeFillerChunk(lines, cursor, totalLines, options));
-  }
-
-  return chunks;
-}
-
-/** Recursively process a SymbolNode into chunks. */
-function processNode(
-  node: SymbolNode,
-  lines: string[],
-  options: ASTChunkOptions,
-  parentName: string | null,
-  ancestors: SymbolNode[],
-  shouldPrefix: boolean
-): CodeChunk[] {
-  const sym = node.symbol;
-  const symbolPath = parentName ? [parentName, sym.name] : [sym.name];
-
-  if (node.children.length === 0) {
-    // Leaf symbol → single chunk
-    const chunk = makeSymbolChunk(sym, lines, options, symbolPath, parentName);
-    if (shouldPrefix) {
-      const prefix = generateScopePrefix(node, ancestors);
-      chunk.content = prefix + '\n' + chunk.content;
-    }
-    if (chunk.metadata) {
-      (chunk.metadata as Record<string, unknown>).symbolPath = symbolPath;
-    }
-    return [chunk];
-  }
-
-  // Container symbol — split into header, children, footer
-  const chunks: CodeChunk[] = [];
-  const sortedChildren = [...node.children].sort((a, b) => a.symbol.startLine - b.symbol.startLine);
-
-  // Header: from container start to first child start - 1
-  const headerEnd = sortedChildren[0].symbol.startLine - 1;
-  if (headerEnd >= sym.startLine) {
-    const headerLines = extractLines(lines, sym.startLine, headerEnd);
-    const nonBlank = headerLines.filter((l) => l.trim().length > 0).length;
-    if (nonBlank > 2) {
-      const headerChunk = makeSymbolChunk(
-        {
-          ...sym,
-          name: `${sym.name}:header`,
-          startLine: sym.startLine,
-          endLine: headerEnd,
-          content: headerLines.join('\n')
-        },
-        lines,
-        options,
-        symbolPath,
-        parentName,
-        true // use provided content
-      );
-      if (shouldPrefix) {
-        const prefix = generateScopePrefix(node, ancestors);
-        headerChunk.content = `${prefix}\n${headerChunk.content}`;
-      }
-      chunks.push(headerChunk);
-    }
-  }
-
-  // Children
-  let childCursor = sortedChildren[0].symbol.startLine;
-  for (const child of sortedChildren) {
-    // Gap between children within container
-    if (child.symbol.startLine > childCursor) {
-      const gapStart = childCursor;
-      const gapEnd = child.symbol.startLine - 1;
-      const gapLines = extractLines(lines, gapStart, gapEnd);
-      const nonBlank = gapLines.filter((l) => l.trim().length > 0).length;
-      if (nonBlank > 0) {
-        chunks.push(makeFillerChunk(lines, gapStart, gapEnd, options));
+    return low + 1;
+  };
+  const ranges = new Map<TreeSitterSymbol, { start: number; end: number }>();
+  for (const symbol of symbols) {
+    let start = lineStarts[symbol.startLine - 1] ?? content.length;
+    let end = symbol.endLine < lineStarts.length ? lineStarts[symbol.endLine] - 1 : content.length;
+    if (symbol.endIndex > symbol.startIndex) {
+      start = symbol.startIndex;
+      end = symbol.endIndex;
+      // web-tree-sitter releases may expose byte offsets or UTF-16 offsets.
+      // Match the already extracted source rather than guessing from non-ASCII text.
+      if (content.slice(start, end) !== symbol.content) {
+        const bytes = Buffer.from(content, 'utf8');
+        start = bytes.subarray(0, symbol.startIndex).toString('utf8').length;
+        end = bytes.subarray(0, symbol.endIndex).toString('utf8').length;
       }
     }
-    chunks.push(
-      ...processNode(child, lines, options, sym.name, [...ancestors, node], shouldPrefix)
+    ranges.set(symbol, { start, end });
+  }
+
+  const chunks: CodeChunk[] = [];
+  const appendRange = (
+    start: number,
+    end: number,
+    owner?: SymbolNode,
+    ancestors: SymbolNode[] = [],
+    suffix = ''
+  ): void => {
+    const originalStart = start;
+    const fragment = content.slice(start, end);
+    const first = fragment.search(/\S/);
+    if (first < 0) return;
+    const last = fragment.search(/\s*$/);
+    // Drop only whitespace crossing a line boundary. Same-line separators remain
+    // exact source; indentation on an adjacent symbol's line is not a body span.
+    if (fragment.slice(0, first).includes('\n')) start = lineStarts[lineAt(start + first) - 1];
+    if (fragment.slice(last).includes('\n')) end = originalStart + last;
+    const startLine = lineAt(start);
+    const endLine = lineAt(Math.max(start, end - 1));
+    const source = content.slice(start, end);
+    if (!owner) {
+      chunks.push({ ...makeFillerChunk(lines, startLine, endLine, options), content: source });
+      return;
+    }
+    const symbol = owner.symbol;
+    const symbolPath = symbol.symbolPath ?? [
+      ...ancestors.map((ancestor) => ancestor.symbol.name),
+      symbol.name
+    ];
+    const chunk = makeSymbolChunk(
+      { ...symbol, name: symbol.name + suffix, startLine, endLine, content: source },
+      lines,
+      options,
+      symbolPath,
+      symbolPath.at(-2) ?? null,
+      true
     );
-    childCursor = child.symbol.endLine + 1;
-  }
-
-  // Footer: from last child end + 1 to container end
-  const lastChildEnd = sortedChildren[sortedChildren.length - 1].symbol.endLine;
-  if (lastChildEnd < sym.endLine) {
-    const footerStart = lastChildEnd + 1;
-    const footerLines = extractLines(lines, footerStart, sym.endLine);
-    const nonBlank = footerLines.filter((l) => l.trim().length > 0).length;
-    if (nonBlank > 2) {
-      const footerChunk = makeSymbolChunk(
-        {
-          ...sym,
-          name: `${sym.name}:footer`,
-          startLine: footerStart,
-          endLine: sym.endLine,
-          content: footerLines.join('\n')
-        },
-        lines,
-        options,
-        symbolPath,
-        parentName,
-        true
-      );
-      if (shouldPrefix) {
-        const prefix = generateScopePrefix(node, ancestors);
-        footerChunk.content = `${prefix}\n${footerChunk.content}`;
-      }
-      chunks.push(footerChunk);
+    if (options.includeScopePrefix !== false)
+      chunk.content = generateScopePrefix(owner, ancestors) + '\n' + chunk.content;
+    chunks.push(chunk);
+  };
+  const processNode = (node: SymbolNode, ancestors: SymbolNode[]): void => {
+    const range = ranges.get(node.symbol)!;
+    const children = [...node.children].sort(
+      (a, b) => ranges.get(a.symbol)!.start - ranges.get(b.symbol)!.start
+    );
+    if (children.length === 0) {
+      appendRange(range.start, range.end, node, ancestors);
+      return;
     }
+    let cursor = range.start;
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      const childRange = ranges.get(child.symbol)!;
+      appendRange(cursor, childRange.start, node, ancestors, i === 0 ? ':header' : ':body');
+      processNode(child, [...ancestors, node]);
+      cursor = childRange.end;
+    }
+    appendRange(cursor, range.end, node, ancestors, ':footer');
+  };
+  const roots = buildSymbolTree(symbols).sort(
+    (a, b) => ranges.get(a.symbol)!.start - ranges.get(b.symbol)!.start
+  );
+  let cursor = 0;
+  for (const root of roots) {
+    const range = ranges.get(root.symbol)!;
+    appendRange(cursor, range.start);
+    processNode(root, []);
+    cursor = range.end;
   }
-
+  appendRange(cursor, content.length);
   return chunks;
 }
 
@@ -490,16 +462,43 @@ function findSafeSplitPoint(lines: string[], targetIdx: number): number {
 
 /**
  * Main public API: generate AST-aligned chunks from content + symbols,
- * then merge tiny chunks and split oversized ones.
+ * then split oversized source spans and optionally add presentation context.
  */
 export function createASTAlignedChunks(
   content: string,
   symbols: TreeSitterSymbol[],
   options: ASTChunkOptions
 ): CodeChunk[] {
-  const raw = generateASTChunks(content, symbols, options);
-  const merged = mergeSmallSymbolChunks(raw, options.minChunkLines);
-  const final = splitOversizedChunks(merged, options.maxChunkLines);
+  // Partition source before adding presentation context. Persisted callers opt out
+  // of the final prefix; they receive exactly the same source ranges and bytes.
+  const raw = generateASTChunks(content, symbols, { ...options, includeScopePrefix: false });
+  // Even identical owner labels can describe distinct declarations. The public
+  // merge helper is retained for callers, but persisted source spans stay separate.
+  const final = splitOversizedChunks(raw, options.maxChunkLines);
+  if (options.includeScopePrefix !== false) {
+    const prefixes = new Map<string, string>();
+    for (const chunk of raw) {
+      if (!chunk.metadata.symbolAware) continue;
+      const path = chunk.metadata.symbolPath ?? [];
+      const key = JSON.stringify(path);
+      if (!prefixes.has(key)) {
+        const symbol = symbols.find(
+          (candidate) =>
+            candidate.name === path.at(-1) &&
+            candidate.startLine <= chunk.startLine &&
+            candidate.endLine >= chunk.endLine
+        );
+        prefixes.set(
+          key,
+          `// ${path.join(' > ')} :: ${extractSignatureHint(symbol ?? { kind: chunk.metadata.symbolKind ?? '', content: chunk.content })}`
+        );
+      }
+    }
+    for (const chunk of final) {
+      const prefix = prefixes.get(JSON.stringify(chunk.metadata.symbolPath ?? []));
+      if (chunk.metadata.symbolAware && prefix) chunk.content = `${prefix}\n${chunk.content}`;
+    }
+  }
   return final;
 }
 
@@ -547,9 +546,10 @@ function makeSymbolChunk(
   parentName: string | null,
   useProvidedContent = false
 ): CodeChunk {
-  const chunkContent = useProvidedContent
-    ? sym.content
-    : extractLines(lines, sym.startLine, sym.endLine).join('\n');
+  const chunkContent =
+    useProvidedContent || sym.endIndex > sym.startIndex
+      ? sym.content
+      : extractLines(lines, sym.startLine, sym.endLine).join('\n');
 
   return {
     id: uuidv4(),

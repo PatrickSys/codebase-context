@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CodebaseSearcher } from '../src/core/search.js';
 import type { CodeChunk, SearchResult } from '../src/types/index.js';
+import { asSearcherTestHarness, materializeSourceSnapshot } from './helpers/source-snapshot.js';
 import type { EvalFixture, EvalQuery } from '../src/eval/types.js';
 import {
   countUtf8Bytes,
@@ -49,10 +50,11 @@ function setupSearcherWithResultsByQuery(
   byQuery: Record<string, SearchResult[]>,
   fallback: SearchResult[] = []
 ): CodebaseSearcher {
-  const searcher = new CodebaseSearcher('C:/repo') as any;
-  searcher.initialized = true;
-  searcher.search = vi.fn(async (query: string) => byQuery[query] ?? fallback);
-  return searcher as CodebaseSearcher;
+  const searcher = new CodebaseSearcher('C:/repo');
+  const harness = asSearcherTestHarness(searcher);
+  harness.initialized = true;
+  harness.search = vi.fn(async (query: string) => byQuery[query] ?? fallback);
+  return searcher;
 }
 
 function fixtureForSingleQuery(query: EvalQuery): EvalFixture {
@@ -268,23 +270,30 @@ describe('Eval Harness - integration with CodebaseSearcher (mocked)', () => {
       { componentType: 'unknown' }
     );
 
-    const searcher = new CodebaseSearcher('C:/repo') as any;
-    searcher.initialized = true;
-    searcher.embeddingProvider = {
-      embed: vi.fn(async () => new Array(384).fill(0.01))
-    };
-    searcher.storageProvider = {
-      search: vi.fn(async () => [
-        { chunk: authServiceChunk, score: 0.65 },
-        { chunk: e2eChunk, score: 0.55 }
-      ]),
-      count: vi.fn(async () => 2)
-    };
-    searcher.fuseIndex = null;
-    searcher.patternIntelligence = null;
+    const snapshot = await materializeSourceSnapshot([authServiceChunk, e2eChunk]);
+    try {
+      const searcher = new CodebaseSearcher(snapshot.rootPath);
+      const harness = asSearcherTestHarness(searcher);
+      harness.initialized = true;
+      harness.sourceManifest = snapshot.manifest;
+      harness.embeddingProvider = {
+        embed: vi.fn(async () => new Array(384).fill(0.01))
+      };
+      harness.storageProvider = {
+        search: vi.fn(async () => [
+          { chunk: authServiceChunk, score: 0.65 },
+          { chunk: e2eChunk, score: 0.55 }
+        ]),
+        count: vi.fn(async () => 2)
+      };
+      harness.fuseIndex = null;
+      harness.patternIntelligence = null;
 
-    const results = await (searcher as CodebaseSearcher).search('AuthService', 5);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0].filePath).toContain('auth.service.ts');
+      const results = await searcher.search('AuthService', 5);
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].filePath).toContain('auth.service.ts');
+    } finally {
+      await snapshot.cleanup();
+    }
   });
 });

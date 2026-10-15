@@ -4,9 +4,9 @@
  */
 
 import path from 'path';
-import { FrameworkAnalyzer, AnalysisResult } from '../types/index.js';
+import { FrameworkAnalyzer, AnalysisResult, AnalysisOptions } from '../types/index.js';
 
-export interface AnalyzerSelectionOptions {
+export interface AnalyzerSelectionOptions extends AnalysisOptions {
   preferredAnalyzer?: string;
   extraFileExtensions?: string[];
 }
@@ -118,7 +118,7 @@ export class AnalyzerRegistry {
     }
 
     try {
-      return await analyzer.analyze(filePath, content);
+      return await analyzer.analyze(filePath, content, options);
     } catch (error) {
       console.error(`Error analyzing ${filePath} with ${analyzer.name}:`, error);
       return null;

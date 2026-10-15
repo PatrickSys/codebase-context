@@ -4,6 +4,7 @@ import path from 'node:path';
 
 export interface ProjectConfig {
   root: string;
+  skipEmbedding?: boolean;
   excludePatterns?: string[];
   parsing?: {
     maxChunks?: number;
@@ -85,6 +86,13 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
 
         const resolvedRoot = path.resolve(expandTilde(rawRoot));
         const parsedProject: ProjectConfig = { root: resolvedRoot };
+        if (typeof project.skipEmbedding === 'boolean') {
+          parsedProject.skipEmbedding = project.skipEmbedding;
+        } else if (project.skipEmbedding !== undefined) {
+          console.error(
+            `[config] Ignoring invalid project skipEmbedding: ${project.skipEmbedding}`
+          );
+        }
         const excludePatterns = parseStringArray(project.excludePatterns);
         if (excludePatterns) {
           parsedProject.excludePatterns = excludePatterns;

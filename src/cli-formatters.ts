@@ -480,7 +480,25 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
 
   if (data.isComplete === false) {
     lines.push('');
-    lines.push(`${g.arrow} results capped at limit — use --limit to see more`);
+    const coverage = 'coverage' in data ? data.coverage : undefined;
+    const filesUnavailable =
+      coverage !== null &&
+      typeof coverage === 'object' &&
+      'filesUnavailable' in coverage &&
+      typeof coverage.filesUnavailable === 'number'
+        ? coverage.filesUnavailable
+        : 0;
+    if (filesUnavailable > 0) {
+      const noun = filesUnavailable === 1 ? 'source' : 'sources';
+      lines.push(`${g.arrow} incomplete coverage: ${filesUnavailable} indexed ${noun} unavailable`);
+    } else {
+      lines.push(`${g.arrow} results capped at limit — use --limit to see more`);
+    }
+  }
+
+  if (confidence === 'lexical') {
+    lines.push('');
+    lines.push('Raw-text fallback may match comments or strings.');
   }
 
   lines.push('');

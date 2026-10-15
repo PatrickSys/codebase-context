@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { GenericAnalyzer } from '../src/analyzers/generic/index';
 import { MAX_AST_CHUNK_FILE_LINES } from '../src/utils/ast-chunker';
+import { createASTAlignedChunks } from '../src/utils/ast-chunker';
+import { extractTreeSitterSymbols } from '../src/utils/tree-sitter';
+import structuralFixture from './fixtures/structural-context-regressions.json';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -68,6 +71,197 @@ export function createUserService(db: Database): UserService {
 // ---------------------------------------------------------------------------
 
 const analyzer = new GenericAnalyzer();
+
+describe('frozen structural raw chunks', () => {
+  for (const descriptor of [
+    {
+      name: 'concise-value',
+      fields: 'value() { closeConnections(); }',
+      markers: ['closeConnections()']
+    },
+    { name: 'concise-get', fields: 'get() { return readState(); }', markers: ['readState()'] },
+    {
+      name: 'concise-set',
+      fields: 'set(next) { writeState(next); }',
+      markers: ['writeState(next)']
+    },
+    {
+      name: 'mixed-accessors',
+      fields: 'get() { return readState(); }, set: next => writeState(next), enumerable: true',
+      markers: ['readState()', 'writeState(next)']
+    }
+  ]) {
+    it(`keeps the nearest concise descriptor owner with its body: ${descriptor.name}`, async () => {
+      const source = `function createHandlers() { return { shutdown: { ${descriptor.fields} }, sibling: { value() { reloadConnections(); } }, services: { billing: { reconcile() { persistInvoice(); } } } }; }`;
+      const parsed = await extractTreeSitterSymbols(source, 'javascript');
+      expect(parsed).not.toBeNull();
+      const owner = parsed!.symbols.find((symbol) => symbol.name === 'shutdown');
+      expect(owner).toBeDefined();
+      expect(owner!.symbolPath).toEqual(['createHandlers', 'shutdown']);
+      expect(owner!.content).toBe(`shutdown: { ${descriptor.fields} }`);
+      const chunks = createASTAlignedChunks(source, parsed!.symbols, {
+        filePath: '/virtual/concise-descriptor.js',
+        language: 'javascript',
+        minChunkLines: 10,
+        maxChunkLines: 150,
+        includeScopePrefix: false
+      });
+      const implementation = chunks.find((chunk) => chunk.metadata.symbolName === 'shutdown');
+      expect(implementation).toBeDefined();
+      expect(implementation!.metadata.symbolPath).toEqual(['createHandlers', 'shutdown']);
+      expect(implementation!.content).toBe(owner!.content);
+      for (const marker of descriptor.markers) expect(implementation!.content).toContain(marker);
+      expect(implementation!.content).not.toContain('reloadConnections()');
+      expect(implementation!.content).not.toContain('persistInvoice()');
+      expect(
+        chunks.find((chunk) => chunk.metadata.symbolName === 'reconcile')?.metadata.symbolPath
+      ).toEqual(['createHandlers', 'services', 'billing', 'reconcile']);
+      expect(
+        parsed!.symbols.some(
+          (symbol) => symbol.symbolPath?.join('.') === 'createHandlers.shutdown.value'
+        )
+      ).toBe(false);
+    });
+  }
+
+  for (const fields of [
+    'value() { closeConnections(); }, unknown: true',
+    '[operation]() { closeConnections(); }'
+  ]) {
+    it(`does not coalesce an unresolved descriptor shape: ${fields}`, async () => {
+      const source = `function createHandlers() { return { shutdown: { ${fields} } }; }`;
+      const parsed = await extractTreeSitterSymbols(source, 'javascript');
+      expect(parsed).not.toBeNull();
+      expect(parsed!.symbols.some((symbol) => symbol.name === 'shutdown')).toBe(false);
+    });
+  }
+
+  it('preserves same-line container statements before and after a nested callback', async () => {
+    const source = 'function start(){ before(); const hooks={onReady:()=>openQueue()}; after(); }';
+    const parsed = await extractTreeSitterSymbols(source, 'javascript');
+    const chunks = createASTAlignedChunks(source, parsed!.symbols, {
+      filePath: '/virtual/container.js',
+      language: 'javascript',
+      minChunkLines: 10,
+      maxChunkLines: 150,
+      includeScopePrefix: false
+    });
+    expect(chunks.map((chunk) => chunk.content).join('')).toBe(source);
+    const callback = chunks.find((chunk) => chunk.metadata.symbolName === 'onReady');
+    expect(callback).toBeDefined();
+    expect(callback!.content).toContain('openQueue()');
+    expect(callback!.content).not.toContain('before()');
+    expect(callback!.content).not.toContain('after()');
+    for (const chunk of chunks) {
+      expect(chunk.startLine).toBe(1);
+      expect(chunk.endLine).toBe(1);
+      expect(source).toContain(chunk.content);
+    }
+  });
+
+  for (const fixture of structuralFixture.cases) {
+    it(`keeps raw owner bodies isolated: ${fixture.id}`, async () => {
+      const parsed = await extractTreeSitterSymbols(fixture.source, fixture.language);
+      expect(parsed).not.toBeNull();
+      const chunks = createASTAlignedChunks(fixture.source, parsed!.symbols, {
+        filePath: '/virtual/structural.ts',
+        language: fixture.language,
+        minChunkLines: 10,
+        maxChunkLines: 150,
+        includeScopePrefix: false
+      });
+      for (const fact of fixture.sourceSymbols) {
+        if ('scopeOnly' in fact && fact.scopeOnly) {
+          expect(
+            chunks.some((chunk) =>
+              fact.bodyMarkers.every((marker) => chunk.content.includes(marker))
+            )
+          ).toBe(true);
+          continue;
+        }
+        const matching = chunks.filter(
+          (chunk) => JSON.stringify(chunk.metadata.symbolPath) === JSON.stringify(fact.ownerChain)
+        );
+        expect(matching.length, `${fixture.id}: ${fact.ownerChain.join(' > ')}`).toBeGreaterThan(0);
+        for (const marker of fact.bodyMarkers)
+          expect(matching.some((chunk) => chunk.content.includes(marker))).toBe(true);
+        for (const chunk of matching) {
+          expect(fixture.source).toContain(chunk.content);
+          if ('forbiddenSiblingBodyMarkers' in fact) {
+            for (const marker of fact.forbiddenSiblingBodyMarkers ?? [])
+              expect(chunk.content).not.toContain(marker);
+          }
+        }
+      }
+    });
+  }
+
+  it('coalesces only an immediate callable descriptor, without swallowing singleton wrappers', async () => {
+    const source = [
+      'function buildHandlers() {',
+      '  return {',
+      '    shutdown: {',
+      '      configurable: true,',
+      '      value: () => { closeConnections(); }',
+      '    },',
+      '    services: { billing: { reconcile: () => persistInvoice() } }',
+      '  };',
+      '}'
+    ].join('\n');
+    const parsed = await extractTreeSitterSymbols(source, 'javascript');
+    const chunks = createASTAlignedChunks(source, parsed!.symbols, {
+      filePath: '/virtual/descriptor.js',
+      language: 'javascript',
+      minChunkLines: 10,
+      maxChunkLines: 150,
+      includeScopePrefix: false
+    });
+    const shutdown = chunks.find((chunk) => chunk.metadata.symbolName === 'shutdown');
+    expect(shutdown).toBeDefined();
+    expect(shutdown!.content).toContain('shutdown: {');
+    expect(shutdown!.content).toContain('closeConnections()');
+    expect(shutdown!.content).not.toContain('persistInvoice()');
+    const reconcile = chunks.find((chunk) => chunk.metadata.symbolName === 'reconcile');
+    expect(reconcile).toBeDefined();
+    expect(reconcile!.content).not.toContain('services:');
+    expect(reconcile!.content).not.toContain('billing:');
+  });
+
+  it('splits raw source before display prefixes without shifting source coordinates', async () => {
+    const source = [
+      'function consume() {',
+      '// consume :: ()',
+      ...Array.from({ length: 175 }, (_, i) => `  step${i}();`),
+      '}'
+    ].join('\n');
+    const parsed = await extractTreeSitterSymbols(source, 'javascript');
+    const options = {
+      filePath: '/virtual/large.js',
+      language: 'javascript',
+      minChunkLines: 10,
+      maxChunkLines: 35
+    };
+    const raw = createASTAlignedChunks(source, parsed!.symbols, {
+      ...options,
+      includeScopePrefix: false
+    });
+    const displayed = createASTAlignedChunks(source, parsed!.symbols, options);
+    expect(displayed.map(({ startLine, endLine }) => [startLine, endLine])).toEqual(
+      raw.map(({ startLine, endLine }) => [startLine, endLine])
+    );
+    for (const chunk of raw) {
+      expect(chunk.content).toBe(
+        source
+          .split('\n')
+          .slice(chunk.startLine - 1, chunk.endLine)
+          .join('\n')
+      );
+      expect(chunk.endLine - chunk.startLine + 1).toBeLessThanOrEqual(35);
+    }
+    expect(raw.map((chunk) => chunk.content).join('\n')).toBe(source);
+    expect(raw[0].content).toContain('// consume :: ()');
+  });
+});
 
 describe('AST Chunker Integration', () => {
   // Test 1: Supported language, normal file — AST chunks with scope prefixes

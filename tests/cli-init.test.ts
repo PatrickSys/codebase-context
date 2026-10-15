@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'path';
+import os from 'node:os';
+import { promises as nativeFs } from 'node:fs';
+import { EXCLUDED_GLOB_PATTERNS } from '../src/constants/codebase-context.js';
 
 // Mock node:fs/promises at the top level so Vitest can hoist it correctly.
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -12,14 +15,19 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     mkdir: vi.fn().mockResolvedValue(undefined)
   };
 });
+vi.mock('@inquirer/select', () => ({ default: vi.fn() }));
+vi.mock('@inquirer/confirm', () => ({ default: vi.fn() }));
 
 import * as fsMod from 'node:fs/promises';
+import select from '@inquirer/select';
 import {
   generateMcpConfig,
   generateInstructionBlock,
   resolveInstructionFilePath,
   _appendInstructionBlock,
-  _buildMergedMcpContent
+  _buildMergedMcpContent,
+  _mergeCodexMcpContent,
+  handleInitCli
 } from '../src/cli-init.js';
 
 // --- generateMcpConfig ---
@@ -47,14 +55,30 @@ describe('generateMcpConfig', () => {
     expect(parsed.mcpServers['codebase-context'].type).toBe('http');
   });
 
-  it('codex returns a command with mcp add', () => {
+  it('codex returns project-scoped stdio config for the selected root', () => {
     const result = generateMcpConfig('codex');
-    expect(result.kind).toBe('command');
-    if (result.kind !== 'command') return;
-    expect(result.args).toContain('mcp');
-    expect(result.args).toContain('add');
-    expect(result.args).toContain('codebase-context');
-    expect(result.args).toContain('http://127.0.0.1:3100/mcp');
+    expect(result.kind).toBe('file');
+    if (result.kind !== 'file') return;
+    expect(result.path).toContain(path.join('.codex', 'config.toml'));
+    expect(result.content).toContain(`command = ${JSON.stringify(process.execPath)}`);
+    expect(result.content).toContain(
+      `args = [${JSON.stringify(path.resolve(process.argv[1] ?? ''))},`
+    );
+    expect(result.content).not.toContain('http://');
+  });
+
+  it('Codex setup targets this installed CLI through project-scoped stdio config', () => {
+    const root = path.resolve('project with spaces');
+    const result = generateMcpConfig('codex', root);
+    expect(result.kind).toBe('file');
+    if (result.kind !== 'file') return;
+    expect(result.path).toBe(path.join(root, '.codex', 'config.toml'));
+    expect(result.content).toContain('command =');
+    expect(result.content).toContain('cwd =');
+    expect(result.content).toContain('args =');
+    expect(result.content).not.toContain('http://');
+    expect(result.content).not.toContain('codebase-context@2.2.0');
+    expect(result.content).toContain(JSON.stringify(root));
   });
 
   it('opencode returns a file at opencode.json with remote type', () => {
@@ -66,6 +90,201 @@ describe('generateMcpConfig', () => {
       mcp: { 'codebase-context': { type: string } };
     };
     expect(parsed.mcp['codebase-context'].type).toBe('remote');
+  });
+});
+
+describe('_mergeCodexMcpContent', () => {
+  const generated =
+    '[mcp_servers.codebase-context]\ncommand = "node"\ncwd = "C:/project with spaces"\nargs = ["C:/package/dist/index.js", "C:/project with spaces"]\n';
+
+  it('preserves unrelated TOML and appends project server settings', () => {
+    const result = _mergeCodexMcpContent('[profiles.safe]\nmodel = "gpt-6"\n', generated);
+    expect(result.changed).toBe(true);
+    expect(result.content).toContain('[profiles.safe]\nmodel = "gpt-6"');
+    expect(result.content).toContain(generated);
+  });
+
+  it('leaves a matching entry unchanged and refuses to overwrite a conflict', () => {
+    const existing = `# preserved\n${generated}enabled = true\ncustom_setting = "preserve me"\n`;
+    expect(_mergeCodexMcpContent(existing, generated)).toEqual({
+      content: existing,
+      changed: false
+    });
+    expect(() =>
+      _mergeCodexMcpContent(existing.replace('command = "node"', 'command = "other"'), generated)
+    ).toThrow('conflict');
+  });
+
+  it('refuses to treat an explicitly disabled server as a ready idempotent entry', () => {
+    const disabled = `${generated}enabled = false\n`;
+    expect(() => _mergeCodexMcpContent(disabled, generated)).toThrow(/disabled/i);
+  });
+});
+
+describe('Codex global config alias protection', () => {
+  it('rejects CODEX_HOME when a junction aliases the project .codex directory', async () => {
+    const tempRoot = await nativeFs.mkdtemp(path.join(os.tmpdir(), 'cbc codex alias '));
+    const projectRoot = path.join(tempRoot, 'project');
+    const projectCodex = path.join(projectRoot, '.codex');
+    const globalAlias = path.join(tempRoot, 'codex-home-alias');
+    const oldCodexHome = process.env.CODEX_HOME;
+    const oldExitCode = process.exitCode;
+    try {
+      await nativeFs.mkdir(projectCodex, { recursive: true });
+      await nativeFs.symlink(
+        projectCodex,
+        globalAlias,
+        process.platform === 'win32' ? 'junction' : 'dir'
+      );
+      process.env.CODEX_HOME = globalAlias;
+      process.exitCode = 0;
+      vi.mocked(fsMod.writeFile).mockClear().mockResolvedValue(undefined);
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+      await handleInitCli(['--client', 'codex', '--yes', '--root', projectRoot], {
+        previewIndex: async () => ({
+          status: 'ready',
+          rootPath: projectRoot,
+          eligibleFiles: [],
+          skippedFiles: [],
+          skippedFileCount: 0,
+          excludedPatterns: []
+        }),
+        prepareIndex: async () => ({ status: 'ready' })
+      });
+
+      expect(process.exitCode).toBe(1);
+      expect(errors.mock.calls.flat().join('\n')).toMatch(/global config/i);
+      expect(fsMod.writeFile).not.toHaveBeenCalled();
+      errors.mockRestore();
+      output.mockRestore();
+    } finally {
+      if (oldCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = oldCodexHome;
+      process.exitCode = oldExitCode;
+      await nativeFs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('non-interactive init arguments', () => {
+  it('prints init help without invoking the client picker', async () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(select).mockClear();
+    const previousExitCode = process.exitCode;
+    await handleInitCli(['--help']);
+    expect(output.mock.calls.flat().join('\n')).toContain('--client <name>');
+    expect(select).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(previousExitCode);
+    output.mockRestore();
+  });
+
+  it('rejects an unknown client with a nonzero exit code', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const previousExitCode = process.exitCode;
+    process.exitCode = 0;
+    await handleInitCli(['--client', 'unknown', '--yes']);
+    expect(process.exitCode).toBe(1);
+    expect(errors.mock.calls.flat().join('\n')).toContain('Unknown client');
+    process.exitCode = previousExitCode;
+    errors.mockRestore();
+  });
+
+  it('rejects missing flag values and --yes without a client', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const previousExitCode = process.exitCode;
+    for (const argv of [['--client', '--yes'], ['--root'], ['--yes']]) {
+      process.exitCode = 0;
+      await handleInitCli(argv);
+      expect(process.exitCode).toBe(1);
+    }
+    expect(errors.mock.calls.flat().join('\n')).toContain('requires a value');
+    expect(errors.mock.calls.flat().join('\n')).toContain('--yes requires --client');
+    process.exitCode = previousExitCode;
+    errors.mockRestore();
+  });
+});
+
+describe('read-only init preview', () => {
+  it('shows the canonical root and observed selection without writing config or indexing', async () => {
+    const root = await nativeFs.mkdtemp(path.join(os.tmpdir(), 'cbc init preview '));
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const previousExitCode = process.exitCode;
+    const prepareIndex = vi.fn(async () => ({ status: 'ready' as const }));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      vi.mocked(fsMod.writeFile).mockClear();
+      process.exitCode = 0;
+
+      await handleInitCli(['--client', 'codex', '--root', root, '--preview'], {
+        previewIndex: async () => ({
+          status: 'ready',
+          rootPath: root,
+          eligibleFiles: ['src/main.ts'],
+          skippedFiles: [
+            { path: 'generated/huge.ts', reason: 'exceeds configured maximum file size' }
+          ],
+          skippedFileCount: 1,
+          excludedPatterns: [...EXCLUDED_GLOB_PATTERNS, '**/private/**']
+        }),
+        prepareIndex
+      });
+
+      const rendered = output.mock.calls.flat().join('\n');
+      expect(rendered).toContain(root);
+      expect(rendered).toContain('src/main.ts');
+      expect(rendered).toContain('generated/huge.ts');
+      expect(rendered).toContain('**/private/**');
+      expect(rendered).toContain('Excluded by rules before enumeration:');
+      expect(rendered).toContain('more patterns');
+      expect(prepareIndex).not.toHaveBeenCalled();
+      expect(fsMod.writeFile).not.toHaveBeenCalled();
+      expect(errors).not.toHaveBeenCalled();
+      expect(process.exitCode).toBe(0);
+    } finally {
+      process.exitCode = previousExitCode;
+      output.mockRestore();
+      errors.mockRestore();
+      await nativeFs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('previews before the independent post-confirmation indexing callback', async () => {
+    const root = await nativeFs.mkdtemp(path.join(os.tmpdir(), 'cbc init prepare '));
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const previousExitCode = process.exitCode;
+    const events: string[] = [];
+    try {
+      vi.mocked(fsMod.writeFile).mockClear();
+      process.exitCode = 0;
+
+      await handleInitCli(['--client', 'codex', '--root', root, '--yes'], {
+        previewIndex: async () => {
+          events.push('preview');
+          return {
+            status: 'ready',
+            rootPath: root,
+            eligibleFiles: ['src/main.ts'],
+            skippedFiles: [],
+            skippedFileCount: 0,
+            excludedPatterns: []
+          };
+        },
+        prepareIndex: async () => {
+          events.push('index');
+          expect(output.mock.calls.flat().join('\n')).toContain('Repository Index Preview');
+          return { status: 'ready' };
+        }
+      });
+
+      expect(events).toEqual(['preview', 'index']);
+      expect(process.exitCode).toBe(0);
+    } finally {
+      process.exitCode = previousExitCode;
+      output.mockRestore();
+      await nativeFs.rm(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -173,7 +392,11 @@ describe('_buildMergedMcpContent', () => {
     const generated = generateMcpConfig('cursor');
     if (generated.kind !== 'file') throw new Error('expected file config');
 
-    const merged = await _buildMergedMcpContent('/test/.cursor/mcp.json', generated.content, 'cursor');
+    const merged = await _buildMergedMcpContent(
+      '/test/.cursor/mcp.json',
+      generated.content,
+      'cursor'
+    );
     const parsed = JSON.parse(merged.content) as {
       mcpServers: Record<string, { type: string; url: string }>;
       someOtherKey: boolean;
@@ -206,7 +429,11 @@ describe('_buildMergedMcpContent', () => {
     const generated = generateMcpConfig('opencode');
     if (generated.kind !== 'file') throw new Error('expected file config');
 
-    const merged = await _buildMergedMcpContent('/test/opencode.json', generated.content, 'opencode');
+    const merged = await _buildMergedMcpContent(
+      '/test/opencode.json',
+      generated.content,
+      'opencode'
+    );
     const parsed = JSON.parse(merged.content) as {
       mcp: Record<string, { type: string; url: string }>;
       extra: string;

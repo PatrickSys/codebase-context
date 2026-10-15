@@ -11,8 +11,8 @@ import {
 import { CODEBASE_CONTEXT_DIRNAME } from '../src/constants/codebase-context.js';
 
 describe('project-state', () => {
-  afterEach(() => {
-    clearProjects();
+  afterEach(async () => {
+    await clearProjects();
     vi.restoreAllMocks();
   });
 
@@ -85,33 +85,54 @@ describe('project-state', () => {
   });
 
   describe('clearProjects', () => {
-    it('empties the map', () => {
+    it('empties the map', async () => {
       getOrCreateProject('/projects/app-a');
       getOrCreateProject('/projects/app-b');
-      clearProjects();
+      await clearProjects();
 
       // After clearing, getOrCreateProject should return a fresh instance
       const p = getOrCreateProject('/projects/app-a');
       expect(p.indexState.status).toBe('idle');
     });
 
-    it('calls stopWatcher on projects with watchers', () => {
+    it('calls stopWatcher on projects with watchers', async () => {
       const p = getOrCreateProject('/projects/my-app');
-      const stopSpy = vi.fn();
+      const stopSpy = vi.fn(async () => undefined);
       p.stopWatcher = stopSpy;
 
-      clearProjects();
+      await clearProjects();
       expect(stopSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for watcher close after synchronously clearing project state', async () => {
+      let finishClose!: () => void;
+      const closeCompletion = new Promise<void>((resolve) => {
+        finishClose = resolve;
+      });
+      const project = getOrCreateProject('/projects/closing-app');
+      project.stopWatcher = vi.fn(() => closeCompletion);
+
+      let clearResolved = false;
+      const clearing = clearProjects().then(() => {
+        clearResolved = true;
+      });
+      expect(getProject('/projects/closing-app')).toBeUndefined();
+      await Promise.resolve();
+      expect(clearResolved).toBe(false);
+
+      finishClose();
+      await clearing;
+      expect(clearResolved).toBe(true);
     });
   });
 
   describe('removeProject', () => {
-    it('removes a project and stops its watcher', () => {
+    it('removes a project and stops its watcher', async () => {
       const project = getOrCreateProject('/projects/my-app');
-      const stopSpy = vi.fn();
+      const stopSpy = vi.fn(async () => undefined);
       project.stopWatcher = stopSpy;
 
-      removeProject('/projects/my-app');
+      await removeProject('/projects/my-app');
 
       expect(stopSpy).toHaveBeenCalledTimes(1);
       expect(getProject('/projects/my-app')).toBeUndefined();

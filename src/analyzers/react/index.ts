@@ -87,12 +87,21 @@ export class ReactAnalyzer implements FrameworkAnalyzer {
       return false;
     }
 
-    return (
+    const hasReactMarker =
       /\bfrom\s+['"]react['"]/.test(content) ||
       /\brequire\(\s*['"]react['"]\s*\)/.test(content) ||
-      /\bReact\.createElement\b/.test(content) ||
-      /<[A-Za-z][^>]*>/.test(content)
-    );
+      /\bReact\.createElement\b/.test(content);
+    if (hasReactMarker) {
+      return true;
+    }
+
+    // TypeScript JSX requires .tsx. Plain TypeScript angle brackets also
+    // start generics and type assertions, so they cannot identify React.
+    if (extension === '.ts' || extension === '.mts' || extension === '.cts') {
+      return false;
+    }
+
+    return /<[A-Za-z][^>]*>/.test(content);
   }
 
   async analyze(filePath: string, content: string): Promise<AnalysisResult> {

@@ -12,9 +12,47 @@ import {
   VECTOR_DB_DIRNAME
 } from '../src/constants/codebase-context.js';
 
+type SourceCoverageMock = {
+  status: 'current' | 'partial' | 'no_fresh_results';
+  checkedFiles: number;
+  skippedFiles: number;
+  refreshAction?: string;
+};
+
+type ToolCallRequest = {
+  jsonrpc: '2.0';
+  id: number;
+  method: 'tools/call';
+  params: { name: string; arguments: Record<string, unknown> };
+};
+
+type ToolCallResponse = { content: Array<{ type: string; text: string }> };
+
+type SearchPayload = {
+  status: string;
+  searchQuality?: { status: string; confidence: number };
+  sourceCoverage?: SourceCoverageMock;
+  preflight?: { ready: boolean; abstain?: boolean; reason?: string };
+};
+
 const searchMocks = vi.hoisted(() => ({
-  search: vi.fn()
+  search: vi.fn(),
+  sourceCoverage: vi.fn((): SourceCoverageMock => ({
+    status: 'current',
+    checkedFiles: 0,
+    skippedFiles: 0
+  }))
 }));
+
+function getToolCallHandler(
+  server: unknown
+): (request: ToolCallRequest) => Promise<ToolCallResponse> {
+  const handlers = (server as { _requestHandlers?: unknown })._requestHandlers;
+  if (!(handlers instanceof Map)) throw new Error('Expected server._requestHandlers to be a Map');
+  const handler = handlers.get('tools/call');
+  if (typeof handler !== 'function') throw new Error('Expected tools/call handler');
+  return handler as (request: ToolCallRequest) => Promise<ToolCallResponse>;
+}
 
 vi.mock('../src/core/search.js', async () => {
   class CodebaseSearcher {
@@ -22,6 +60,13 @@ vi.mock('../src/core/search.js', async () => {
 
     async search(query: string, limit: number, filters?: unknown) {
       return searchMocks.search(query, limit, filters);
+    }
+
+    async searchWithCoverage(query: string, limit: number, filters?: unknown) {
+      return {
+        results: await this.search(query, limit, filters),
+        sourceCoverage: searchMocks.sourceCoverage()
+      };
     }
   }
 
@@ -35,6 +80,11 @@ describe('search_codebase preflight', () => {
 
   beforeEach(async () => {
     searchMocks.search.mockReset();
+    searchMocks.sourceCoverage.mockReset().mockReturnValue({
+      status: 'current',
+      checkedFiles: 0,
+      skippedFiles: 0
+    });
     vi.resetModules();
 
     originalArgv = [...process.argv];
@@ -122,7 +172,7 @@ describe('search_codebase preflight', () => {
     }
   });
 
-  it('returns preflight with ready flag when intent is omitted (intelligence present)', async () => {
+  it('omits edit readiness for discovery when intent is omitted', async () => {
     searchMocks.search.mockResolvedValueOnce([
       {
         summary: 'Auth interceptor implementation',
@@ -137,7 +187,7 @@ describe('search_codebase preflight', () => {
     ]);
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -151,11 +201,51 @@ describe('search_codebase preflight', () => {
       }
     });
 
-    const payload = JSON.parse(response.content[0].text);
+    const payload = JSON.parse(response.content[0].text) as SearchPayload;
     expect(payload.status).toBe('success');
-    // Preflight is flattened to { ready, reason }
-    expect(payload.preflight).toBeTruthy();
-    expect(typeof payload.preflight.ready).toBe('boolean');
+    expect(payload.searchQuality).toBeDefined();
+    expect(payload.preflight).toBeUndefined();
+  });
+
+  it('keeps currentness and retrieval uncertainty visible for explicit exploration', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      {
+        summary: 'Local cache recovery path',
+        snippet: 'reloadCache() { return readSnapshot(); }',
+        filePath: 'src/cache/recovery.ts',
+        startLine: 14,
+        endLine: 19,
+        score: 0.05,
+        language: 'ts',
+        metadata: {}
+      }
+    ]);
+    searchMocks.sourceCoverage.mockReturnValueOnce({
+      status: 'partial',
+      checkedFiles: 2,
+      skippedFiles: 1,
+      refreshAction: 'Refresh the index to inspect remaining candidates.'
+    });
+
+    const { server } = await import('../src/index.js');
+    const handler = getToolCallHandler(server);
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'cache recovery', intent: 'explore' }
+      }
+    });
+
+    const payload = JSON.parse(response.content[0].text) as SearchPayload;
+    expect(payload.sourceCoverage?.status).toBe('partial');
+    expect(payload.sourceCoverage?.refreshAction).toBe(
+      'Refresh the index to inspect remaining candidates.'
+    );
+    expect(payload.searchQuality?.status).toBeDefined();
+    expect(payload.preflight).toBeUndefined();
   });
 
   it('returns preflight with ready flag when intent="edit"', async () => {
@@ -173,7 +263,7 @@ describe('search_codebase preflight', () => {
     ]);
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -188,10 +278,49 @@ describe('search_codebase preflight', () => {
       }
     });
 
-    const payload = JSON.parse(response.content[0].text);
+    const payload = JSON.parse(response.content[0].text) as SearchPayload;
     expect(payload.status).toBe('success');
-    // Preflight is flattened to { ready, reason }
     expect(payload.preflight).toBeTruthy();
-    expect(typeof payload.preflight.ready).toBe('boolean');
+    expect(typeof payload.preflight?.ready).toBe('boolean');
+  });
+
+  it('keeps the explicit edit gate closed when source coverage is partial', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      {
+        summary: 'Local cache recovery path',
+        snippet: 'reloadCache() { return readSnapshot(); }',
+        filePath: 'src/cache/recovery.ts',
+        startLine: 14,
+        endLine: 19,
+        score: 0.05,
+        language: 'ts',
+        metadata: {}
+      }
+    ]);
+    searchMocks.sourceCoverage.mockReturnValueOnce({
+      status: 'partial',
+      checkedFiles: 2,
+      skippedFiles: 1,
+      refreshAction: 'Refresh the index to inspect remaining candidates.'
+    });
+
+    const { server } = await import('../src/index.js');
+    const handler = getToolCallHandler(server);
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'cache recovery', intent: 'edit' }
+      }
+    });
+
+    const payload = JSON.parse(response.content[0].text) as SearchPayload;
+    expect(payload.preflight?.ready).toBe(false);
+    expect(payload.preflight?.abstain).toBe(true);
+    expect(payload.preflight?.reason).toBe(
+      'Refresh the index to inspect remaining candidates.'
+    );
   });
 });

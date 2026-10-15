@@ -64,6 +64,12 @@ vi.mock('../src/core/search.js', async () => {
     async search(query: string, limit: number, filters?: unknown, options?: unknown) {
       return searchMocks.search(this.rootPath, query, limit, filters, options);
     }
+    async searchWithCoverage(query: string, limit: number, filters?: unknown, options?: unknown) {
+      return {
+        results: await this.search(query, limit, filters, options),
+        sourceCoverage: { status: 'current', checkedFiles: 0, skippedFiles: 0 }
+      };
+    }
   }
 
   return { CodebaseSearcher };
@@ -221,7 +227,7 @@ describe('multi-project routing', () => {
 
   afterEach(async () => {
     const { clearProjects } = await import('../src/project-state.js');
-    clearProjects();
+    await clearProjects();
 
     if (originalArgv) process.argv = originalArgv;
     if (originalEnvRoot === undefined) {
@@ -480,6 +486,76 @@ describe('multi-project routing', () => {
     );
   });
 
+  it('reserves watcher slots while concurrent opens evict and reopen a closing project', async () => {
+    const roots = [primaryRoot, secondaryRoot, nestedProjectRoot];
+    for (let index = 0; index < 4; index += 1) {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), `cc-watcher-limit-${index}-`));
+      roots.push(root);
+      await seedValidIndex(root);
+    }
+
+    const oldestRoot = roots[0]!;
+    const [openingRootA, openingRootB] = roots.slice(5);
+    if (!openingRootA || !openingRootB) throw new Error('expected two new watcher roots');
+
+    let finishOldestClose!: () => void;
+    const oldestClose = new Promise<void>((resolve) => {
+      finishOldestClose = resolve;
+    });
+    const stopCalls = new Map<string, number>();
+    watcherMocks.start.mockImplementation(({ rootPath }: { rootPath: string }) => () => {
+      stopCalls.set(rootPath, (stopCalls.get(rootPath) ?? 0) + 1);
+      return rootPath === oldestRoot ? oldestClose : Promise.resolve();
+    });
+
+    const { server } = await import('../src/index.js');
+    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    try {
+      for (const [id, root] of roots.slice(0, 5).entries()) {
+        await callTool(handler, 200 + id, 'search_codebase', { query: 'feature', project: root });
+      }
+
+      const opening = [
+        callTool(handler, 210, 'search_codebase', { query: 'feature', project: openingRootA }),
+        callTool(handler, 211, 'search_codebase', { query: 'feature', project: openingRootB })
+      ];
+      await vi.waitFor(() => {
+        expect(stopCalls.get(oldestRoot)).toBeGreaterThan(0);
+      });
+
+      const reopening = [
+        callTool(handler, 212, 'search_codebase', { query: 'feature', project: oldestRoot }),
+        callTool(handler, 213, 'search_codebase', { query: 'feature', project: oldestRoot })
+      ];
+      await vi.waitFor(() => {
+        expect(watcherMocks.start).toHaveBeenCalledWith(
+          expect.objectContaining({ rootPath: oldestRoot })
+        );
+      });
+      expect(
+        watcherMocks.start.mock.calls.filter(([options]) => options.rootPath === oldestRoot)
+      ).toHaveLength(1);
+
+      finishOldestClose();
+      await Promise.all([...opening, ...reopening]);
+
+      const { getAllProjects } = await import('../src/project-state.js');
+      expect(getAllProjects().filter((project) => project.stopWatcher)).toHaveLength(5);
+      expect(
+        watcherMocks.start.mock.calls.filter(([options]) => options.rootPath === oldestRoot)
+      ).toHaveLength(2);
+      expect(stopCalls.get(oldestRoot)).toBe(1);
+    } finally {
+      finishOldestClose();
+      await fs.rm(roots[3]!, { recursive: true, force: true });
+      await fs.rm(roots[4]!, { recursive: true, force: true });
+      await fs.rm(roots[5]!, { recursive: true, force: true });
+      await fs.rm(roots[6]!, { recursive: true, force: true });
+    }
+  });
+
   it('uses the active project for later tool calls and returns project metadata', async () => {
     const { server } = await import('../src/index.js');
     const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
@@ -591,7 +667,9 @@ describe('multi-project routing', () => {
   it('lists bounded and full context resources for active and project-scoped flows', async () => {
     const { server } = await import('../src/index.js');
     const toolHandler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
-    const resourcesHandler = (server as unknown as TestServer)._requestHandlers.get('resources/list');
+    const resourcesHandler = (server as unknown as TestServer)._requestHandlers.get(
+      'resources/list'
+    );
 
     if (!toolHandler || !resourcesHandler) {
       throw new Error('required handlers not registered');

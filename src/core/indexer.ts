@@ -626,7 +626,9 @@ export class CodebaseIndexer {
             diff = null;
           }
         } catch {
-          // No meta yet or legacy index without embedding fields — proceed with incremental
+          // Chunk semantics and embedding input may have changed even when source hashes did not.
+          // Incompatible metadata must never reuse chunks from the previous format.
+          diff = null;
         }
 
         // Short-circuit: nothing changed
@@ -781,7 +783,10 @@ export class CodebaseIndexer {
             );
           }
           const content = rawContent.replace(/\r\n/g, '\n');
-          const result = await analyzerRegistry.analyzeFile(file, content, resolvedProjectOptions);
+          const result = await analyzerRegistry.analyzeFile(file, content, {
+            ...resolvedProjectOptions,
+            includeScopePrefix: false
+          });
 
           if (result) {
             const isFileChanged = !filesToProcessSet || filesToProcessSet.has(file);

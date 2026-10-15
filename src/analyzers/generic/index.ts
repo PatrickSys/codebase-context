@@ -8,6 +8,7 @@ import path from 'path';
 import type { TSESTree } from '@typescript-eslint/typescript-estree';
 import {
   FrameworkAnalyzer,
+  AnalysisOptions,
   AnalysisResult,
   CodebaseMetadata,
   CodeChunk,
@@ -99,7 +100,11 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     return this.supportedExtensions.includes(ext);
   }
 
-  async analyze(filePath: string, content: string): Promise<AnalysisResult> {
+  async analyze(
+    filePath: string,
+    content: string,
+    options?: AnalysisOptions
+  ): Promise<AnalysisResult> {
     const language = detectLanguage(filePath);
     const relativePath = path.relative(process.cwd(), filePath);
 
@@ -173,7 +178,8 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
           filePath,
           language,
           framework: 'generic',
-          componentType: 'module'
+          componentType: 'module',
+          includeScopePrefix: options?.includeScopePrefix
         });
         // Enrich AST chunks with the correct relativePath
         for (const chunk of chunks) {

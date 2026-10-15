@@ -212,9 +212,16 @@ describe('search source-path validity', () => {
       expect(payload.sourceCoverage).toMatchObject({ status: 'no_fresh_results', skippedFiles: 1 });
       expect(payload.sourceCoverage?.refreshAction).toMatch(/refresh_index/);
       expect(payload.results).toEqual([]);
-      expect(payload.preflight?.ready).toBe(false);
+      expect(payload.preflight).toBeUndefined();
       expect(ctx.performIndexing).not.toHaveBeenCalled();
       expect(JSON.stringify(payload)).not.toContain('old top');
+      for (const intent of ['edit', 'refactor', 'migrate'] as const) {
+        const guarded = await searchCodebase({ query: 'quartzBeacon', mode, intent }, ctx);
+        const guardedPayload = JSON.parse(guarded.content![0].text) as SearchResponse;
+        expect(guardedPayload.status).toBe('no_fresh_results');
+        expect(guardedPayload.sourceCoverage?.status).toBe('no_fresh_results');
+        expect(guardedPayload.preflight?.ready).toBe(false);
+      }
       const empty = await searchCodebase({ query: 'nonexistentUnrelatedNomination', mode }, ctx);
       const emptyPayload = JSON.parse(empty.content![0].text) as SearchResponse;
       expect(emptyPayload.status).toBe('success');
@@ -271,7 +278,9 @@ describe('search source-path validity', () => {
     expect(current.sourceCoverage).toEqual({ status: 'current', checkedFiles: 1, skippedFiles: 0 });
   });
 
-  it('replenishes current candidates when one changed source fills the old chunk window', async () => {
+  it.each(['compact', 'full'] as const)(
+    'replenishes current candidates while retaining mutation gates in %s mode',
+    async (mode) => {
     const rootPath = path.join(tempRoot, 'one stale source many chunks');
     const sourcePath = path.join(rootPath, 'src/quartzBeacon.ts');
     const supportPath = path.join(rootPath, 'src/support.ts');
@@ -335,19 +344,31 @@ describe('search source-path validity', () => {
         ).toHaveLength(1);
       }
       const ctx = searchContext(rootPath);
-      const response = await searchCodebase({ query: 'quartzBeacon', limit: 1 }, ctx);
+      const response = await searchCodebase({ query: 'quartzBeacon', limit: 1, mode }, ctx);
       const payload = JSON.parse(response.content![0].text) as SearchResponse;
       expect(payload.status).toBe('success');
       expect(payload.results).toHaveLength(1);
       expect(payload.results[0].file).toContain('support.ts:');
-      expect(payload.preflight?.ready).toBe(false);
+      expect(payload.sourceCoverage?.status).toBe('partial');
+      expect(payload.preflight).toBeUndefined();
+      for (const intent of ['edit', 'refactor', 'migrate'] as const) {
+        const guarded = await searchCodebase(
+          { query: 'quartzBeacon', limit: 1, mode, intent },
+          ctx
+        );
+        const guardedPayload = JSON.parse(guarded.content![0].text) as SearchResponse;
+        expect(guardedPayload.sourceCoverage?.status).toBe('partial');
+        expect(guardedPayload.preflight?.ready).toBe(false);
+        expect(guardedPayload.preflight?.nextAction).toMatch(/refresh/i);
+      }
       expect(ctx.performIndexing).not.toHaveBeenCalled();
       expect(await fs.readFile(indexPath, 'utf8')).toBe(indexBefore);
     } finally {
       readSpy.mockRestore();
       realPathSpy.mockRestore();
     }
-  });
+    }
+  );
 
   it('discloses exhausted source inspection budget instead of claiming all nominated evidence is stale', async () => {
     const rootPath = path.join(tempRoot, 'bounded stale sources');

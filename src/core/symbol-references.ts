@@ -8,6 +8,7 @@ import type { UsageLocation } from '../types/index.js';
 import { detectLanguage } from '../utils/language-detection.js';
 import { isPathWithin } from '../utils/project-discovery.js';
 import {
+  hasIdentifierCandidate,
   findIdentifierOccurrences,
   findLexicalIdentifierOccurrences
 } from '../utils/tree-sitter.js';
@@ -48,6 +49,7 @@ export type SymbolReferencesResult = SymbolReferencesSuccess | SymbolReferencesE
 type SourceReadResult =
   | { status: 'source'; source: string; realSourcePath: string }
   | { status: 'without-text' }
+  | { status: 'without-candidate' }
   | { status: 'unavailable' }
   | SymbolReferencesError;
 
@@ -83,11 +85,12 @@ async function readReferenceSource(
     }
     if (!(await fs.stat(realSourcePath)).isFile()) throw new Error('not a file');
     const source = (await fs.readFile(realSourcePath, 'utf-8')).replace(/\r\n/g, '\n');
-    // Both exact AST matching and the Unicode-aware lexical matcher require this
-    // spelling. Discard nonmatching buffers before the batch is consumed.
-    return source.includes(symbol)
+    if (!source.includes(symbol)) return { status: 'without-text' };
+    // The boundary screen only suppresses simple ASCII identifier interiors;
+    // other spellings and non-ASCII adjacency stay on the existing parser path.
+    return hasIdentifierCandidate(source, symbol)
       ? { status: 'source', source, realSourcePath }
-      : { status: 'without-text' };
+      : { status: 'without-candidate' };
   } catch (error) {
     if (isOrdinarySourceAvailabilityError(error)) return { status: 'unavailable' };
     return {
@@ -232,6 +235,9 @@ export async function findSymbolReferences(
         filesWithoutText += 1;
         continue;
       }
+      // Raw query text was present but only inside longer ASCII identifiers;
+      // keep this distinct from filesWithoutText coverage.
+      if (result.status === 'without-candidate') continue;
       const { source, realSourcePath } = result;
       const lines = source.split('\n');
       parserCalls += 1;

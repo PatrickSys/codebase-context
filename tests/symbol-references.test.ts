@@ -415,6 +415,40 @@ describe('findSymbolReferences', () => {
     });
   });
 
+  it('skips longer-identifier candidates without changing exact references or text coverage', async () => {
+    const root = await createIndex([
+      { path: 'src/long.ts', source: 'const SceneData = 1;' },
+      { path: 'src/exact.ts', source: 'const Scene = 1; Scene();' }
+    ]);
+    findIdentifierOccurrences.mockResolvedValue([
+      { line: 1, startIndex: 6, endIndex: 11, nodeType: 'identifier' }
+    ]);
+
+    const result = await findSymbolReferences(root, 'Scene');
+
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') throw new Error('Expected successful current-source scan');
+    expect(findIdentifierOccurrences).toHaveBeenCalledTimes(1);
+    expect(findIdentifierOccurrences).toHaveBeenCalledWith(
+      'const Scene = 1; Scene();',
+      'typescript',
+      'Scene'
+    );
+    expect(findIdentifierOccurrences).not.toHaveBeenCalledWith(
+      'const SceneData = 1;',
+      'typescript',
+      'Scene'
+    );
+    expect(result.usageCount).toBe(1);
+    expect(result.usages).toMatchObject([{ file: 'src/exact.ts', line: 1 }]);
+    expect(result.coverage).toMatchObject({
+      candidateFiles: 2,
+      sourcesRead: 2,
+      filesWithoutText: 0,
+      parserCalls: 1
+    });
+  });
+
   it('finds references added after indexing by checking current source', async () => {
     const root = await createIndex([{ path: 'src/a.ts', source: 'const previousOnly = 1;' }]);
     await fs.writeFile(

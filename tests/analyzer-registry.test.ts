@@ -5,6 +5,8 @@ import { NextJsAnalyzer } from '../src/analyzers/nextjs/index';
 import { NestJsAnalyzer } from '../src/analyzers/nestjs/index';
 import { ReactAnalyzer } from '../src/analyzers/react/index';
 import { GenericAnalyzer } from '../src/analyzers/generic/index';
+import angularRoutingFixture from './fixtures/angular-routing-regressions.json';
+import { createHash } from 'node:crypto';
 
 // Register default analyzers
 analyzerRegistry.register(new AngularAnalyzer());
@@ -12,6 +14,45 @@ analyzerRegistry.register(new NextJsAnalyzer());
 analyzerRegistry.register(new NestJsAnalyzer());
 analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
+
+describe('frozen Angular-local routing source facts', () => {
+  const registry = new AnalyzerRegistry();
+  const angular = new AngularAnalyzer();
+  registry.register(angular);
+  registry.register(new NextJsAnalyzer());
+  registry.register(new NestJsAnalyzer());
+  registry.register(new ReactAnalyzer());
+  registry.register(new GenericAnalyzer());
+
+  for (const fixture of angularRoutingFixture.cases) {
+    it(`routes according to actual source evidence: ${fixture.id}`, async () => {
+      const filePath = `/virtual/${fixture.filePath}`;
+      expect(angular.canAnalyze(filePath, fixture.source)).toBe(fixture.expectedAngularEligible);
+      expect(registry.findAnalyzer(filePath, fixture.source)?.name).toBe(fixture.expectedAnalyzer);
+      if ('origin' in fixture && fixture.origin) {
+        expect(createHash('sha256').update(fixture.source, 'utf8').digest('hex')).toBe(
+          fixture.origin.sourceSha256
+        );
+      }
+      if ('expectedSourceSymbols' in fixture && fixture.expectedSourceSymbols) {
+        const result = await registry.analyzeFile(filePath, fixture.source, {
+          includeScopePrefix: false
+        });
+        expect(result?.metadata.analyzer).toBe('generic');
+        expect(result?.metadata.chunkStrategy).toBe('ast-aligned');
+        for (const name of fixture.expectedSourceSymbols) {
+          const symbol = result?.chunks.find((chunk) => chunk.metadata.symbolName === name);
+          expect(symbol, name).toBeDefined();
+          expect(symbol!.metadata.symbolAware).toBe(true);
+          expect(symbol!.metadata.symbolPath).toContain(name);
+          expect(fixture.source).toContain(symbol!.content);
+          expect(symbol!.startLine).toBeGreaterThanOrEqual(1);
+          expect(symbol!.endLine).toBeLessThanOrEqual(fixture.source.split('\n').length);
+        }
+      }
+    });
+  }
+});
 
 describe('AnalyzerRegistry', () => {
   describe('missing analyzer logging', () => {
@@ -110,7 +151,7 @@ export class PaymentsService {}
 
       expect(
         analyzerRegistry.findAllAnalyzers('/tmp/payments.service.ts', content).map((a) => a.name)
-      ).toEqual(['nestjs', 'angular', 'generic']);
+      ).toEqual(['nestjs', 'generic']);
       expect(analyzerRegistry.findAnalyzer('/tmp/payments.service.ts', content)?.name).toBe(
         'nestjs'
       );

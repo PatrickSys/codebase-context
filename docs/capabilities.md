@@ -6,7 +6,7 @@ Technical reference for this source tree. The relaunch changes below are an unre
 
 `get_code_relationships` accepts an indexed repository-relative `file`, `direction` (`outgoing` or `incoming`), `max_hops` (1-3, default 2), and `max_nodes` (1-100, default 50), plus the shared project selector. Directed paths distinguish imports from re-exports and cite importer lines/specifiers. Current module resolution, both source fingerprints, and realpath confinement are checked before a path is returned. Unresolved specifiers are diagnostics; legacy proofless or changed edges are omitted with refresh guidance. The returned JSON text, including project-routing metadata, is capped at 4,000 UTF-8 bytes; this excludes the MCP transport envelope. Truncation is explicit, and dense neighborhoods may require following a returned file in another call to see a full three-hop chain.
 
-TypeScript resolution reads the selected root's `tsconfig.json`, falling back to that root's `tsconfig.base.json` only when the primary file is absent. Explicit `extends` is supported; an unrelated ancestor's configuration is not selected implicitly. An existing malformed primary file does not silently select the base file. After upgrading an older local candidate, run one full `refresh_index` (`incrementalOnly:false`, explicit `project`, omit `skipEmbedding` to preserve the existing mode). A no-change incremental refresh retains the old graph and cannot recover aliases omitted by its previous configuration.
+TypeScript resolution reads the selected root's `tsconfig.json`, falling back to that root's `tsconfig.base.json` only when the primary file is absent. Explicit `extends` is supported; an unrelated ancestor's configuration is not selected implicitly. An existing malformed primary file does not silently select the base file. Index format 4 rebuilds older indexes even when source hashes are unchanged. For other same-format graph changes, run one full `refresh_index` (`incrementalOnly:false`, explicit `project`, omit `skipEmbedding` to preserve the existing mode); a no-change incremental refresh otherwise retains its prior graph.
 
 TypeScript configuration/module resolution supports applicable relative paths, aliases, and config inheritance. Workspace package exports, missing sparse-checkout files, dynamic imports/calls, and language-specific resolution can remain unresolved. Three hops do not establish runtime calls, inheritance, or complete program reachability. Existing search decision-card impact remains at two hops.
 
@@ -217,6 +217,8 @@ Ordered by execution:
 - **Optional semantic runtimes**: `@huggingface/transformers` and `@lancedb/lancedb` are optional peers, not default install dependencies. Missing runtimes fail before index replacement.
 - **Semantic model**: `Xenova/bge-small-en-v1.5` (512 token context); model overrides apply only in semantic mode. Semantic storage uses LanceDB with cosine distance.
 
+Compact results retain the `signaturePreview` key: it contains one contiguous window of up to three lines around the strongest query-term match in the returned source snippet, or the first three lines when none match. It does not combine distant source lines. Default and explicit exploration report retrieval quality and incomplete source coverage without an edit-readiness card.
+
 ## Decision Card (Edit Intent)
 
 Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`.
@@ -285,7 +287,7 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 - Initial: full scan → chunking → keyword/symbol/structural artifacts; embeddings and LanceDB are optional semantic additions.
 - Incremental: source-hash diffing, selective update/delete, full intelligence regeneration; drift during analysis fails closed instead of endorsing older analyzed bytes with newer hashes.
 - Auto-refresh (MCP server mode only): chokidar file watcher triggers incremental reindex after a debounce on any source file change — `node_modules/`, `.git/`, `dist/`, and `.codebase-context/` are excluded. One-shot CLI runs skip the watcher entirely.
-- Version gating: `index-meta.json` tracks format version; mismatches trigger automatic rebuild
+- Version gating: index format 4 also changes analyzer selection for TypeScript files without Angular imports, invalidating format 3 and earlier indexes. Earlier changes corrected AST boundaries and persisted chunk/embedding input, including descriptor methods omitted by format 2. Incompatible indexes rebuild even on an unchanged incremental request; the last successful model-free or semantic mode is preserved. Previously generated embeddings are not reused across this migration.
 - Crash-safe rebuilds: full rebuilds write to `.staging/` and swap atomically only on success
 - Auto-heal: corrupted index triggers automatic full re-index on next search
 - Relationships sidecar: `relationships.json` contains the file import graph, symbol export index, typed import/re-export source citations and endpoint fingerprints. The query checks current resolution and source before following stored edges.
@@ -293,7 +295,7 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 
 ## Analyzers
 
-- **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata
+- **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata. TypeScript eligibility requires parsed imports from the Angular namespace; method or decorator spellings alone do not establish Angular identity. Files without that evidence use another eligible analyzer, including Generic AST analysis.
 - **React**: function/class components, custom hooks, context usage, memoization, Suspense, ecosystem signal extraction
 - **Next.js**: App Router and Pages Router detection, route/API classification, route paths, `"use client"`, metadata exports
 - **Generic**: 30+ have indexing/retrieval coverage including PHP, Ruby, Swift, Scala, Shell, config/markup., 10 languages have full symbol extraction (Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust).
@@ -301,7 +303,7 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 Notes:
 
 - Language detection covers common extensions including `.pyi`, `.kt`/`.kts`, `.cc`/`.cxx`, and config formats like `.toml`/`.xml`.
-- When Tree-sitter grammars are present, the Generic analyzer uses AST-aligned chunking and scope-aware prefixes for symbol-aware snippets (with fallbacks).
+- When Tree-sitter grammars are present, the Generic analyzer uses AST-aligned chunking (with fallbacks). Static callable properties retain their owning descriptor context; dynamic property names do not invent a static ownership path. Chunks persist contiguous source spans, with oversized chunks split from that source; scope labels are presentation metadata, not stored source or declaration evidence.
 
 ## Evaluation Harness
 
@@ -323,6 +325,7 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring 
 ## Limitations
 
 - **Symbol refs are not a call-graph.** With syntactic confidence, `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Lexical fallback uses raw text and may include comments or strings. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
+  Reference scans still read current manifest sources. A conservative ASCII boundary check can skip parsing longer-identifier interiors; Unicode and arbitrary query spellings retain raw-text nomination. `filesWithoutText` counts actual raw-text absence, so it does not count those interior-only skips.
 - **Decision-card impact is 2-hop max.** The separate relationship tool follows verified imports/re-exports up to three hops; neither establishes a runtime call graph.
 - **Published 2.2.0 has dedicated Angular, React, and Next.js analyzers.** NestJS support is in a newer source candidate and is not part of published 2.2.0. Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
 - **Model-free conceptual search has limits.** Keyword/symbol matches can miss meaning or return an unrelated high-scoring file. Follow current source and relationship evidence; no general retrieval-quality improvement is claimed. Embeddings are explicit opt-in. OpenAI additionally requires an opt-in provider/key and sends code externally.

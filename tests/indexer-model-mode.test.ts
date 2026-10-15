@@ -3,6 +3,8 @@ import { promises as fs } from 'node:fs';
 import { writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import structuralFixture from './fixtures/structural-context-regressions.json';
+import type { CodeChunk } from '../src/types/index.js';
 import {
   resolveSkipEmbedding,
   checkEmbeddingMismatch,
@@ -13,9 +15,11 @@ import {
   INDEX_FORMAT_VERSION,
   INDEX_META_FILENAME,
   INDEX_META_VERSION,
+  HEALTH_FILENAME,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
   MANIFEST_FILENAME,
+  RELATIONSHIPS_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../src/constants/codebase-context.js';
 
@@ -54,6 +58,33 @@ import { CodebaseIndexer } from '../src/core/indexer.js';
 describe('persisted embedding mode', () => {
   let rootPath: string | undefined;
 
+  async function retainLegacyFormat(legacyRoot: string, formatVersion: number): Promise<IndexMeta> {
+    const contextDir = path.join(legacyRoot, CODEBASE_CONTEXT_DIRNAME);
+    const metaPath = path.join(contextDir, INDEX_META_FILENAME);
+    const meta = JSON.parse(await fs.readFile(metaPath, 'utf8')) as IndexMeta;
+    meta.formatVersion = formatVersion;
+    await fs.writeFile(metaPath, JSON.stringify(meta));
+    for (const filename of [
+      KEYWORD_INDEX_FILENAME,
+      INTELLIGENCE_FILENAME,
+      RELATIONSHIPS_FILENAME,
+      HEALTH_FILENAME,
+      MANIFEST_FILENAME
+    ]) {
+      const artifactPath = path.join(contextDir, filename);
+      const artifact = JSON.parse(await fs.readFile(artifactPath, 'utf8')) as {
+        header: { formatVersion: number };
+      };
+      artifact.header.formatVersion = formatVersion;
+      await fs.writeFile(artifactPath, JSON.stringify(artifact));
+    }
+    await fs.writeFile(
+      path.join(contextDir, VECTOR_DB_DIRNAME, 'index-build.json'),
+      JSON.stringify({ buildId: meta.buildId, formatVersion })
+    );
+    return meta;
+  }
+
   afterEach(async () => {
     if (rootPath) await fs.rm(rootPath, { recursive: true, force: true });
     rootPath = undefined;
@@ -65,39 +96,42 @@ describe('persisted embedding mode', () => {
     await expect(resolveSkipEmbedding(rootPath, false)).resolves.toBe(false);
   });
 
-  it('preserves a recorded semantic or model-free mode when no choice is supplied', async () => {
-    rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-mode-existing-'));
-    await fs.mkdir(path.join(rootPath, '.codebase-context'), { recursive: true });
-    const writeMeta = async (embeddingEnabled: boolean): Promise<void> => {
-      const meta: IndexMeta = {
-        metaVersion: 1,
-        formatVersion: 1,
-        buildId: 'build-1',
-        generatedAt: new Date().toISOString(),
-        toolVersion: '1.0.0',
-        artifacts: {
-          keywordIndex: { path: 'index.json' },
-          vectorDb: {
-            path: 'vector-db',
-            provider: 'lancedb',
-            embeddingProvider: 'transformers',
-            embeddingModel: 'Xenova/bge-small-en-v1.5',
-            embeddingEnabled
+  it.each([1, 2, 3])(
+    'preserves a format-%i recorded semantic or model-free mode when no choice is supplied',
+    async (formatVersion) => {
+      rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-mode-existing-'));
+      await fs.mkdir(path.join(rootPath, '.codebase-context'), { recursive: true });
+      const writeMeta = async (embeddingEnabled: boolean): Promise<void> => {
+        const meta: IndexMeta = {
+          metaVersion: 1,
+          formatVersion,
+          buildId: 'build-1',
+          generatedAt: new Date().toISOString(),
+          toolVersion: '1.0.0',
+          artifacts: {
+            keywordIndex: { path: 'index.json' },
+            vectorDb: {
+              path: 'vector-db',
+              provider: 'lancedb',
+              embeddingProvider: 'transformers',
+              embeddingModel: 'Xenova/bge-small-en-v1.5',
+              embeddingEnabled
+            }
           }
-        }
+        };
+        await fs.writeFile(
+          path.join(rootPath!, '.codebase-context', 'index-meta.json'),
+          JSON.stringify(meta)
+        );
       };
-      await fs.writeFile(
-        path.join(rootPath!, '.codebase-context', 'index-meta.json'),
-        JSON.stringify(meta)
-      );
-    };
 
-    await writeMeta(false);
-    await expect(resolveSkipEmbedding(rootPath)).resolves.toBe(true);
-    await expect(resolveSkipEmbedding(rootPath, false)).resolves.toBe(false);
-    await writeMeta(true);
-    await expect(resolveSkipEmbedding(rootPath)).resolves.toBe(false);
-  });
+      await writeMeta(false);
+      await expect(resolveSkipEmbedding(rootPath)).resolves.toBe(true);
+      await expect(resolveSkipEmbedding(rootPath, false)).resolves.toBe(false);
+      await writeMeta(true);
+      await expect(resolveSkipEmbedding(rootPath)).resolves.toBe(false);
+    }
+  );
 
   it('fails closed when index artifacts exist but mode metadata cannot be read', async () => {
     rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-mode-corrupt-'));
@@ -227,6 +261,135 @@ describe('persisted embedding mode', () => {
     expect(rebuiltIndex).not.toContain('original source');
     expect(embeddingInit).not.toHaveBeenCalled();
   }, 60000);
+
+  it('persists exact raw AST bodies, keeps same-line siblings separate, and preserves prefix-like source comments', async () => {
+    rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-raw-ast-'));
+    const fixture = structuralFixture.cases.find(
+      (item) => item.id === 'same-line-property-callback-bodies-stay-distinct'
+    );
+    expect(fixture).toBeDefined();
+    await fs.writeFile(path.join(rootPath, 'handlers.js'), fixture!.source);
+    const commented = 'function consume() {\n// consume :: ()\n  consumeMessage();\n}\n';
+    await fs.writeFile(path.join(rootPath, 'consume.js'), commented);
+    await new CodebaseIndexer({ rootPath }).index();
+    const persisted = JSON.parse(
+      await fs.readFile(
+        path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
+        'utf8'
+      )
+    ) as { chunks: CodeChunk[] };
+    for (const fact of fixture!.sourceSymbols) {
+      const own = persisted.chunks.filter(
+        (chunk) => JSON.stringify(chunk.metadata.symbolPath) === JSON.stringify(fact.ownerChain)
+      );
+      expect(own.length).toBeGreaterThan(0);
+      for (const marker of fact.bodyMarkers)
+        expect(own.some((chunk) => chunk.content.includes(marker))).toBe(true);
+      for (const chunk of own) {
+        expect(fixture!.source).toContain(chunk.content);
+        if ('forbiddenSiblingBodyMarkers' in fact) {
+          for (const marker of fact.forbiddenSiblingBodyMarkers ?? [])
+            expect(chunk.content).not.toContain(marker);
+        }
+      }
+    }
+    const consume = persisted.chunks.find((chunk) => chunk.metadata.symbolName === 'consume');
+    expect(consume).toBeDefined();
+    expect(consume!.content).toBe(commented.trimEnd());
+    expect(consume!.content.match(/\/\/ consume :: \(\)/g)).toHaveLength(1);
+  }, 60000);
+
+  it('persists concise descriptor implementations under their nearest static owner', async () => {
+    rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-concise-descriptor-'));
+    const source =
+      'function createHandlers() { return { shutdown: { value() { closeConnections(); } }, state: { get() { return readState(); }, set: next => writeState(next) }, sibling: { value() { reloadConnections(); } } }; }';
+    await fs.writeFile(path.join(rootPath, 'handlers.js'), source);
+    await new CodebaseIndexer({ rootPath }).index();
+    const persisted = JSON.parse(
+      await fs.readFile(
+        path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
+        'utf8'
+      )
+    ) as { chunks: CodeChunk[] };
+    for (const fact of [
+      {
+        name: 'shutdown',
+        body: 'shutdown: { value() { closeConnections(); } }',
+        forbidden: ['readState()', 'reloadConnections()']
+      },
+      {
+        name: 'state',
+        body: 'state: { get() { return readState(); }, set: next => writeState(next) }',
+        forbidden: ['closeConnections()', 'reloadConnections()']
+      }
+    ]) {
+      const own = persisted.chunks.filter((chunk) => chunk.metadata.symbolName === fact.name);
+      expect(own).toHaveLength(1);
+      expect(own[0].content).toBe(fact.body);
+      expect(own[0].metadata.symbolPath).toEqual(['createHandlers', fact.name]);
+      for (const marker of fact.forbidden) expect(own[0].content).not.toContain(marker);
+    }
+  }, 60000);
+
+  it.each([1, 2, 3])(
+    'rebuilds an otherwise consistent format-%i index on an unchanged incremental pass',
+    async (formatVersion) => {
+      rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-format-recovery-'));
+      await fs.writeFile(
+        path.join(rootPath, 'source.ts'),
+        'export function handle() { return dispatch(); }\n'
+      );
+      await new CodebaseIndexer({ rootPath }).index();
+      const contextDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
+      const metaPath = path.join(contextDir, INDEX_META_FILENAME);
+      const oldMeta = await retainLegacyFormat(rootPath, formatVersion);
+      await expect(resolveSkipEmbedding(rootPath)).resolves.toBe(true);
+      const stats = await new CodebaseIndexer({ rootPath, incrementalOnly: true }).index();
+      expect(stats.errors).toEqual([]);
+      const rebuilt = JSON.parse(await fs.readFile(metaPath, 'utf8')) as IndexMeta;
+      expect(rebuilt.formatVersion).toBe(4);
+      expect(rebuilt.buildId).not.toBe(oldMeta.buildId);
+      expect(rebuilt.artifacts.vectorDb.embeddingEnabled).toBe(false);
+    },
+    60000
+  );
+
+  it.each([1, 2, 3])(
+    'preserves a format-%i successful index when semantic migration opt-in cannot initialize',
+    async (formatVersion) => {
+      rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-format-atomic-'));
+      await fs.writeFile(
+        path.join(rootPath, 'source.ts'),
+        'export function handle() { return dispatch(); }\n'
+      );
+      await new CodebaseIndexer({ rootPath }).index();
+      const contextDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
+      const metaPath = path.join(contextDir, INDEX_META_FILENAME);
+      await retainLegacyFormat(rootPath, formatVersion);
+      const originalMeta = await fs.readFile(metaPath, 'utf8');
+      const originalIndex = await fs.readFile(
+        path.join(contextDir, KEYWORD_INDEX_FILENAME),
+        'utf8'
+      );
+      await expect(resolveSkipEmbedding(rootPath)).resolves.toBe(true);
+      const unavailable = new Error('migration semantic runtime unavailable');
+      embeddingRuntimeAssert.mockImplementationOnce(() => {
+        throw unavailable;
+      });
+      await expect(
+        new CodebaseIndexer({
+          rootPath,
+          incrementalOnly: true,
+          config: { skipEmbedding: false }
+        }).index()
+      ).rejects.toBe(unavailable);
+      expect(await fs.readFile(metaPath, 'utf8')).toBe(originalMeta);
+      expect(await fs.readFile(path.join(contextDir, KEYWORD_INDEX_FILENAME), 'utf8')).toBe(
+        originalIndex
+      );
+    },
+    60000
+  );
 
   it('checks semantic dependencies before creating or replacing index artifacts', async () => {
     rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-semantic-runtime-'));

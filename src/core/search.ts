@@ -726,42 +726,74 @@ export class CodebaseSearcher {
     const candidateLimit = Math.min(MAX_CANDIDATE_WORK, Math.max(256, limit * 80));
     const budget = sourceBudget ?? { limit: candidateLimit, inspected: new Set<string>() };
     const aliases = [...new Set([...queryTerms.values()].flat())];
-    // Fuse's unanchored terms already match substrings. A shorter suffix alias
-    // nominates the original and longer forms too; searching all of them repeats
-    // a full-index fuzzy pass without adding lexical evidence.
-    const lookupTerms = aliases.filter(
-      (alias) => !aliases.some((other) => other !== alias && alias.includes(other))
+    // Invert the existing suffix aliases conservatively: policy/policies share
+    // "polic", and archive/archiving share "archiv". These fragments only nominate;
+    // the unchanged exact lexical evidence below still decides admission.
+    const fragments = [...new Set(aliases.map((alias) => alias.replace(/[ey]$/, '')))];
+    const lookupTerms = fragments.filter(
+      (fragment) => !fragments.some((other) => other !== fragment && fragment.includes(other))
     );
-    // Apply filters before capping so unrelated languages cannot consume the
-    // bounded candidate window. Use production Fuse options on that subset.
+    // Keep original chunk ordinals, including ties, and nominate across every
+    // exact evidence zone. Filters apply before the bounded evidence window.
     const rawCandidates =
       retrievedCandidates ??
-      (filters
-        ? new Fuse(
-            this.chunks.filter((chunk) => this.matchesSearchFilters(chunk, filters)),
-            KEYWORD_FUSE_OPTIONS
-          )
-        : this.fuseIndex
-      ).search([...new Set(lookupTerms.concat(symbolAnchors))].join(' | '));
-    const candidates = rawCandidates
-      .filter(({ item }) => checkedSources.get(path.resolve(this.rootPath, item.filePath)) !== null)
-      .slice(0, candidateLimit);
+      this.chunks.flatMap((item, refIndex): FuseResult<CodeChunk>[] => {
+        if (!this.matchesSearchFilters(item, filters)) return [];
+        const fields = [
+          item.content,
+          path.basename(item.relativePath),
+          ...this.indexedDeclarationNames(item),
+          ...(item.exports ?? [])
+        ];
+        const matches = fields.some((field) => {
+          const text = field.toLowerCase();
+          return (
+            lookupTerms.some((term) => text.includes(term)) ||
+            symbolAnchors.some((anchor) => text.includes(anchor))
+          );
+        });
+        return matches ? [{ item, refIndex, score: 0 }] : [];
+      });
+    const availableCandidates = rawCandidates.filter(
+      ({ item }) => checkedSources.get(path.resolve(this.rootPath, item.filePath)) !== null
+    );
+    if (availableCandidates.length > candidateLimit) validation.candidateBudgetExhausted = true;
+    const candidates = availableCandidates.slice(0, candidateLimit);
     const unavailableBefore = [...checkedSources.values()].filter(
       (source) => source === null
     ).length;
 
+    const queryAliases = new Map(
+      terms.map((term) => [term, new Set(queryTerms.get(term)!)] as const)
+    );
     const evidence = candidates.map((result) => {
       const { item } = result;
-      const text = [
-        item.content,
-        item.metadata?.componentName ?? '',
-        item.metadata?.symbolName ?? '',
-        path.basename(item.relativePath)
-      ].join(' ');
-      const lexemes = this.lexicalEvidence(text);
+      const bodyWords = this.lexicalWords(item.content);
+      const bodyLexemes = new Set<string>();
+      const nonBodyLexemes = this.lexicalEvidence(
+        [
+          item.metadata?.componentName ?? '',
+          item.metadata?.symbolName ?? '',
+          path.basename(item.relativePath)
+        ].join(' ')
+      );
+      const termFrequencies = new Map<string, number>(terms.map((term) => [term, 0]));
+      for (const word of bodyWords) {
+        const wordAliases = this.lexicalAliases(word);
+        for (const alias of wordAliases) bodyLexemes.add(alias);
+        for (const term of terms) {
+          if (wordAliases.some((alias) => queryAliases.get(term)!.has(alias))) {
+            termFrequencies.set(term, termFrequencies.get(term)! + 1);
+          }
+        }
+      }
+      const lexemes = new Set([...bodyLexemes, ...nonBodyLexemes]);
       const matching = new Set(
         terms.filter((term) => queryTerms.get(term)!.some((alias) => lexemes.has(alias)))
       );
+      const density =
+        terms.reduce((total, term) => total + Math.sqrt(termFrequencies.get(term)!), 0) /
+        Math.sqrt(Math.max(1, bodyWords.length));
       // Export names remain useful lexical/graph clues, but can be re-exports;
       // exact definition priority below requires own declaration metadata.
       const indexedSymbols = [...this.indexedDeclarationNames(item), ...(item.exports ?? [])];
@@ -775,7 +807,7 @@ export class CodebaseSearcher {
       const declarationMatching = new Set(
         terms.filter((term) => queryTerms.get(term)!.some((alias) => declarationLexemes.has(alias)))
       );
-      return { result, matching, declarationMatching, exactAnchor };
+      return { result, matching, declarationMatching, exactAnchor, density };
     });
 
     const supportedCompanions = new Map(
@@ -874,7 +906,9 @@ export class CodebaseSearcher {
           (entry.exactAnchor ? 8 : 0) -
           (this.isTestFile(entry.result.item.filePath) ? 2 : 0) -
           (entry.result.score ?? 0);
-        return score(b, keyB) - score(a, keyA);
+        const primaryDifference = score(b, keyB) - score(a, keyA);
+        if (primaryDifference !== 0) return primaryDifference;
+        return b.density - a.density || a.result.refIndex - b.result.refIndex;
       })
       .filter(({ result }) => {
         const key = this.indexedFileKey(result.item.filePath);

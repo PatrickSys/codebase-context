@@ -11,7 +11,6 @@ import type {
   ChunkMetadata
 } from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
-import type { EvidenceLock } from '../preflight/evidence-lock.js';
 import { shouldIncludePatternConflictCategory } from '../preflight/query-scope.js';
 import {
   isComplementaryPatternConflict,
@@ -263,7 +262,9 @@ export async function handle(
               sourceCoverage,
               searchQuality: { status: 'low_confidence', confidence: 0 },
               budget: { mode: mode === 'full' ? 'full' : 'compact', resultCount: 0 },
-              preflight: { ready: false, reason: sourceCoverage.refreshAction },
+              ...(searchProfile !== 'explore' && {
+                preflight: { ready: false, reason: sourceCoverage.refreshAction }
+              }),
               results: []
             },
             { mode: mode === 'full' ? 'full' : 'compact', pretty: true, transportAware: true }
@@ -806,61 +807,6 @@ export async function handle(
 
   const searchQuality = assessSearchQuality(queryStr, results);
 
-  // Always-on edit preflight (lite): do not require intent and keep payload small.
-  let editPreflight:
-    | { mode: string; riskLevel: string; confidence: string; evidenceLock: EvidenceLock }
-    | undefined = undefined;
-  if (intelligence && (!intent || intent === 'explore')) {
-    try {
-      const resultPaths = results.map((r) => r.filePath);
-      const impactCandidates = computeImpactCandidates(resultPaths);
-
-      // Use existing pattern intelligence for evidenceLock scoring, but keep the output payload lite.
-      const preferredPatternsForEvidence: Array<{ pattern: string; example?: string }> = [];
-      const patterns: PatternsData = intelligence.patterns || {};
-      for (const [category, data] of Object.entries(patterns)) {
-        if (data.primary) {
-          const p = data.primary;
-          if (
-            (p.trend === 'Rising' || p.trend === 'Stable') &&
-            isPatternInQueryScope(category) &&
-            hasGroundedCanonicalExample(p)
-          ) {
-            preferredPatternsForEvidence.push({
-              pattern: p.name,
-              ...(p.canonicalExample && { example: p.canonicalExample.file })
-            });
-          }
-        }
-      }
-
-      let riskLevel: 'low' | 'medium' | 'high' = 'low';
-      if (impactCandidates.length > 10) {
-        riskLevel = 'high';
-      } else if (impactCandidates.length > 3) {
-        riskLevel = 'medium';
-      }
-
-      editPreflight = {
-        mode: 'lite',
-        riskLevel,
-        confidence: computeIndexConfidence(),
-        evidenceLock: buildEvidenceLock({
-          results,
-          preferredPatterns: preferredPatternsForEvidence.slice(0, 5),
-          relatedMemories,
-          failureWarnings: [],
-          patternConflicts: [],
-          searchQualityStatus: searchQuality.status
-          // Note: indexFreshness intentionally omitted — explore intent is for navigation,
-          // not mutation; freshness gating does not apply.
-        })
-      };
-    } catch {
-      // editPreflight is best-effort - never fail search over it
-    }
-  }
-
   // Compose preflight card for edit/refactor/migrate intents
   let preflight: DecisionCard | undefined = undefined;
   const preflightIntents = ['edit', 'refactor', 'migrate'];
@@ -1149,21 +1095,13 @@ export async function handle(
     }
   }
 
-  // For edit/refactor/migrate: return clean decision card.
-  // For explore or lite-only: return lightweight { ready, reason }.
+  // Discovery returns retrieval quality and source coverage; mutation intents get edit readiness.
   let preflightPayload: { ready: boolean; reason?: string } | Record<string, unknown> | undefined;
   if (preflight) {
     // preflight is already a clean decision card (DecisionCard type)
     preflightPayload = preflight;
-  } else if (editPreflight) {
-    // Lite preflight for explore intent
-    const el = editPreflight.evidenceLock;
-    preflightPayload = {
-      ready: el?.readyToEdit ?? false,
-      ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
-    };
   }
-  if (sourceCoverage.status === 'partial') {
+  if (sourceCoverage.status === 'partial' && preflightIntents.includes(searchProfile)) {
     preflightPayload = {
       ...preflightPayload,
       ready: false,
@@ -1238,6 +1176,32 @@ export async function handle(
   // Compact mode (default): bounded response with light graph context
   const isCompact = mode !== 'full';
 
+  function buildSignaturePreview(snippet: string | undefined): string | undefined {
+    if (!snippet) return undefined;
+
+    const lines = snippet.replace(/^\r?\n+/, '').split('\n');
+    const previewTerms = [...new Set(queryTerms.filter((term) => term.length > 3))];
+    const strongestMatch = lines
+      .map((line, index) => ({
+        index,
+        matches: previewTerms.filter((term) => line.toLowerCase().includes(term)).length
+      }))
+      .filter((entry) => entry.matches > 0)
+      .sort((a, b) => b.matches - a.matches || a.index - b.index)[0];
+
+    let previewLines = lines.slice(0, 3);
+    if (strongestMatch) {
+      const windowLength = Math.min(3, lines.length);
+      const windowStart = Math.max(
+        0,
+        Math.min(strongestMatch.index - 1, lines.length - windowLength)
+      );
+      previewLines = lines.slice(windowStart, windowStart + windowLength);
+    }
+
+    return previewLines.join('\n').trim() || undefined;
+  }
+
   if (isCompact) {
     const compactResults = results.slice(0, 6);
     const strongMemories = filterStrongMemories(relatedMemories, queryStr);
@@ -1259,15 +1223,7 @@ export async function handle(
           const topExports = getTopExports(r.filePath);
           const scope = buildScopeHeader(r.metadata);
           const health = getResultHealth(r.filePath);
-          // First 3 lines of chunk content as a lightweight signature preview
-          const signaturePreview = r.snippet
-            ? r.snippet
-                .replace(/^\r?\n+/, '')
-                .split('\n')
-                .slice(0, 3)
-                .join('\n')
-                .trim() || undefined
-            : undefined;
+          const signaturePreview = buildSignaturePreview(r.snippet);
           return {
             file: `${r.filePath}:${r.startLine}-${r.endLine}`,
             summary: r.summary,

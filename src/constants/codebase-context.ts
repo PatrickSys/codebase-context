@@ -11,7 +11,7 @@ export const CODEBASE_CONTEXT_DIRNAME = '.codebase-context' as const;
  * - Embedding input string changes (e.g. scope-prefix content, prepended metadata)
  * - Required persisted fields/artifact headers change
  */
-export const INDEX_FORMAT_VERSION = 1 as const;
+export const INDEX_FORMAT_VERSION = 4 as const;
 
 /** Schema version for `.codebase-context/index-meta.json` itself. */
 export const INDEX_META_VERSION = 1 as const;

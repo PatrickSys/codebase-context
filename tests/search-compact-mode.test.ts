@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { hashFileContent, writeManifest } from '../src/core/manifest.js';
 import type { SearchResponse } from '../src/tools/types.js';
+import structuralContextFixture from './fixtures/structural-context-regressions.json';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INDEX_FORMAT_VERSION,
@@ -527,6 +528,109 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.results[0].scope).toBe('AuthModule.AuthService');
     expect(payload.results[0].signaturePreview).toBe(
       'export class AuthService {\n  getToken() {\n    return tokenStore.read();'
+    );
+  });
+
+  it.each([
+    {
+      id: 'test-companion-midchunk-line-is-supporting-context',
+      query: 'accountId',
+      context: [
+        "import { parseInvoice } from './invoice-parser';",
+        "import { fixture } from './invoice-fixture';",
+        'const options = {};'
+      ]
+    },
+    {
+      id: 'declaration-companion-midchunk-line-is-supporting-context',
+      query: 'InvoiceParser parse',
+      context: [
+        "import type { Invoice } from './invoice';",
+        "import type { ParserOptions } from './parser-options';",
+        'const source = readSource();'
+      ]
+    }
+  ])('compact previews retain query-relevant source lines for $id', async (testCase) => {
+    const fixtureCase = structuralContextFixture.cases.find(
+      (entry) => entry.id === testCase.id
+    );
+    if (!fixtureCase) throw new Error(`Missing structural fixture case: ${testCase.id}`);
+    const marker = fixtureCase.supportingOnlyMarkers?.[0];
+    if (!marker) throw new Error(`Missing supporting source marker: ${testCase.id}`);
+
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ snippet: [...testCase.context, fixtureCase.source].join('\n') })
+    ]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: testCase.query }
+      }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    const preview = payload.results[0]?.signaturePreview;
+
+    expect(preview).toContain(marker);
+    expect((preview ?? '').split('\n').length).toBeLessThanOrEqual(3);
+  });
+
+  it('keeps compact preview lines contiguous around the strongest source match', async () => {
+    const fixtureCase = structuralContextFixture.cases.find(
+      (entry) => entry.id === 'method-body-has-interior-witness-and-sibling-control'
+    );
+    if (!fixtureCase) throw new Error('Missing bounded method-body fixture case');
+
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ snippet: fixtureCase.source, startLine: 1, endLine: 12 })
+    ]);
+
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: { query: 'beginImport finishImport saved' }
+      }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    const previewLines = (payload.results[0]?.signaturePreview ?? '')
+      .split('\n')
+      .map((line) => line.trim());
+    const sourceLines = fixtureCase.source.split('\n').map((line) => line.trim());
+    const previewStart = sourceLines.indexOf(previewLines[0] ?? '');
+
+    expect(previewLines).toContain('finishImport(saved);');
+    expect(previewLines.length).toBeGreaterThan(0);
+    expect(previewLines.length).toBeLessThanOrEqual(3);
+    expect(sourceLines.slice(previewStart, previewStart + previewLines.length)).toEqual(
+      previewLines
     );
   });
 

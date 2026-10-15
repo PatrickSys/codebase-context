@@ -15,6 +15,7 @@ export interface TreeSitterSymbol {
   endIndex: number;
   content: string;
   nodeType: string;
+  symbolPath?: string[];
 }
 
 export interface TreeSitterSymbolExtraction {
@@ -42,6 +43,9 @@ const SYMBOL_CANDIDATE_NODE_TYPES = [
   'method',
   'method_declaration',
   'method_definition',
+  'pair',
+  'field_definition',
+  'public_field_definition',
   'struct_item',
   'struct_specifier',
   'trait_item',
@@ -218,6 +222,10 @@ function maybeGetNameNode(node: Node): Node | null {
 }
 
 function extractNodeName(node: Node): string {
+  if (node.type === 'pair') return staticPropertyName(node.childForFieldName('key')) ?? 'anonymous';
+  if (['method_definition', 'field_definition', 'public_field_definition'].includes(node.type)) {
+    return staticPropertyName(node.childForFieldName('name')) ?? 'anonymous';
+  }
   const nameNode = maybeGetNameNode(node);
   if (nameNode?.text) {
     const normalized = normalizeSymbolName(nameNode.text);
@@ -237,6 +245,114 @@ function extractNodeName(node: Node): string {
   return 'anonymous';
 }
 
+/** Read only literal property keys; a computed identifier is not its runtime value. */
+function staticPropertyName(node: Node | null): string | null {
+  if (!node) return null;
+  if (node.type === 'computed_property_name') {
+    const expression = node.namedChildren[0];
+    return expression?.type === 'string' || expression?.type === 'number'
+      ? staticPropertyName(expression)
+      : null;
+  }
+  if (node.type === 'string') {
+    const text = node.text.slice(1, -1);
+    return text.replace(
+      /\\(?:u\{([\da-f]+)\}|u([\da-f]{4})|x([\da-f]{2})|([\s\S]))/gi,
+      (
+        _match: string,
+        codePoint: string | undefined,
+        unicode: string | undefined,
+        hex: string | undefined,
+        escaped: string | undefined
+      ) => {
+        const digits = codePoint ?? unicode ?? hex;
+        if (digits) return String.fromCodePoint(Number.parseInt(digits, 16));
+        const escapes: Record<string, string> = {
+          n: '\n',
+          r: '\r',
+          t: '\t',
+          b: '\b',
+          f: '\f',
+          v: '\v',
+          '0': '\0',
+          '\n': '',
+          '\r': ''
+        };
+        return escaped === undefined ? '' : (escapes[escaped] ?? escaped);
+      }
+    );
+  }
+  return ['identifier', 'property_identifier', 'private_property_identifier', 'number'].includes(
+    node.type
+  )
+    ? normalizeSymbolName(node.text)
+    : null;
+}
+
+function isCallableValue(node: Node | null): boolean {
+  if (node?.type === 'parenthesized_expression')
+    return isCallableValue(node.namedChildren[0] ?? null);
+  return (
+    node?.type === 'arrow_function' ||
+    node?.type === 'function_expression' ||
+    node?.type === 'generator_function'
+  );
+}
+
+/** Property descriptors keep their immediate named owner and implementation together. */
+function isCallableDescriptor(node: Node | null): boolean {
+  if (node?.type !== 'object') return false;
+  const fields = node.namedChildren.filter(
+    (child): child is Node => child !== null && child.type !== 'comment'
+  );
+  const descriptorKeys = new Set(['value', 'get', 'set', 'writable', 'enumerable', 'configurable']);
+  const fieldKey = (field: Node): string | null =>
+    staticPropertyName(field.childForFieldName(field.type === 'pair' ? 'key' : 'name'));
+  return (
+    fields.length > 0 &&
+    fields.every(
+      (field) =>
+        (field.type === 'pair' || field.type === 'method_definition') &&
+        descriptorKeys.has(fieldKey(field) ?? '')
+    ) &&
+    fields.some((field) => {
+      return (
+        ['value', 'get', 'set'].includes(fieldKey(field) ?? '') &&
+        (field.type === 'method_definition'
+          ? field.childForFieldName('body') !== null
+          : isCallableValue(field.childForFieldName('value')))
+      );
+    })
+  );
+}
+
+function getSymbolPath(node: Node): string[] {
+  const names: string[] = [];
+  let current: Node | null = node;
+  while (current) {
+    if (
+      current.type === 'pair' ||
+      current.type === 'variable_declarator' ||
+      ((SYMBOL_CANDIDATE_NODE_TYPES as readonly string[]).includes(current.type) &&
+        !['lexical_declaration', 'type_declaration'].includes(current.type))
+    ) {
+      const name = extractNodeName(current);
+      // A dynamic property interrupts the static route; omitting it would falsely
+      // connect the inner declaration directly to an outer owner.
+      if (
+        ['pair', 'method_definition', 'field_definition', 'public_field_definition'].includes(
+          current.type
+        ) &&
+        name === 'anonymous'
+      )
+        break;
+      if (name !== 'anonymous') names.unshift(name);
+    }
+    current = current.parent;
+  }
+  return names;
+}
+
 function isFunctionVariableDeclarator(node: Node): boolean {
   if (node.type !== 'variable_declarator') {
     return false;
@@ -251,6 +367,20 @@ function isFunctionVariableDeclarator(node: Node): boolean {
 }
 
 function shouldSkipNode(language: string, node: Node): boolean {
+  if (
+    (node.type === 'pair' || node.type === 'method_definition') &&
+    node.parent?.parent?.type === 'pair' &&
+    isCallableDescriptor(node.parent)
+  ) {
+    return true;
+  }
+  if (node.type === 'pair') {
+    const value = node.childForFieldName('value');
+    return !isCallableValue(value) && !isCallableDescriptor(value);
+  }
+  if (node.type === 'field_definition' || node.type === 'public_field_definition') {
+    return !isCallableValue(node.childForFieldName('value'));
+  }
   if (node.type === 'variable_declarator') {
     return (
       !['javascript', 'javascriptreact', 'typescript', 'typescriptreact'].includes(language) ||
@@ -288,7 +418,8 @@ function buildSymbol(node: Node, content: string): TreeSitterSymbol {
     startIndex: rangeNode.startIndex,
     endIndex: rangeNode.endIndex,
     content: extractNodeContent(rangeNode, content),
-    nodeType: node.type
+    nodeType: node.type,
+    symbolPath: getSymbolPath(node)
   };
 }
 
@@ -346,7 +477,7 @@ export async function extractTreeSitterSymbols(
           continue;
         }
 
-        const key = `${symbol.kind}:${symbol.name}:${symbol.startLine}:${symbol.endLine}`;
+        const key = `${symbol.kind}:${symbol.name}:${symbol.startIndex}:${symbol.endIndex}`;
         if (seen.has(key)) {
           continue;
         }
@@ -390,6 +521,35 @@ export interface IdentifierOccurrence {
 }
 
 const LEXICAL_IDENTIFIER_CONTINUE = /(?:\p{ID_Continue}|[$]|\u200c|\u200d)/u;
+const ASCII_IDENTIFIER_CONTINUE = /[A-Za-z0-9_$]/;
+const ASCII_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/**
+ * Conservatively nominate source for identifier matching without parsing longer
+ * ASCII identifiers. Non-ASCII and non-identifier query spellings retain raw
+ * substring behavior, so grammar-specific and uncertain cases remain included.
+ */
+export function hasIdentifierCandidate(content: string, symbol: string): boolean {
+  const normalizedSymbol = symbol.trim();
+  if (!normalizedSymbol) return false;
+  if (!ASCII_IDENTIFIER.test(normalizedSymbol)) return content.includes(normalizedSymbol);
+
+  let searchFrom = 0;
+  while (searchFrom <= content.length - normalizedSymbol.length) {
+    const startIndex = content.indexOf(normalizedSymbol, searchFrom);
+    if (startIndex === -1) return false;
+
+    const endIndex = startIndex + normalizedSymbol.length;
+    const previous = startIndex > 0 ? content[startIndex - 1] : undefined;
+    const next = endIndex < content.length ? content[endIndex] : undefined;
+    const hasLeftBoundary = previous === undefined || !ASCII_IDENTIFIER_CONTINUE.test(previous);
+    const hasRightBoundary = next === undefined || !ASCII_IDENTIFIER_CONTINUE.test(next);
+    if (hasLeftBoundary && hasRightBoundary) return true;
+
+    searchFrom = startIndex + Math.max(1, normalizedSymbol.length);
+  }
+  return false;
+}
 
 /**
  * Conservative language-neutral token matching for files without a usable parser.

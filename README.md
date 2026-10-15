@@ -33,7 +33,9 @@ New indexes use keywords, symbols, and structural analysis without embedding or 
 
 The candidate also adds `get_code_relationships` for current, directed import/re-export paths up to three hops. It returns source citations, unresolved/stale diagnostics, and explicit truncation. This is syntactic source navigation; conceptual search quality and runtime behavior still require reading and checking the actual code. See the [capabilities reference](./docs/capabilities.md).
 
-Relationship resolution uses the selected root's `tsconfig.json`, or its `tsconfig.base.json` when the primary file is absent, and preserves explicit `extends`. After upgrading an older local candidate's relationship index, request one full `refresh_index` with `incrementalOnly:false` and the repository's absolute `project` path. Omit `skipEmbedding` to preserve the existing index mode; an unchanged incremental refresh does not rebuild previously omitted aliases.
+Relationship resolution uses the selected root's `tsconfig.json`, or its `tsconfig.base.json` when the primary file is absent, and preserves explicit `extends`. This candidate uses index format 4: older indexes rebuild even when source files are unchanged, preserving the last successful model-free or semantic mode. A failed rebuild preserves the previous index files. For other same-format graph changes, request a full `refresh_index` with `incrementalOnly:false` and the repository's absolute `project` path; omit `skipEmbedding` to preserve the existing mode.
+
+AST chunks retain contiguous source, including callable property bodies, with scope labels kept separate from persisted text. Ordinary discovery reports search quality and incomplete source coverage; edit readiness is returned only for explicit `edit`, `refactor`, or `migrate` searches. Read the returned source before changing it.
 
 ### Published package
 

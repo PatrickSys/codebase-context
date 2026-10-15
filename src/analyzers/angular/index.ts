@@ -103,9 +103,20 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       return false;
     }
 
-    // For TypeScript files, check if it contains Angular decorators
+    // Eligibility comes from actual framework imports. Method/decorator spellings
+    // classify confirmed Angular code later; comments and lookalikes are not proof.
     if (ext === '.ts' && content) {
-      return Object.values(this.angularPatterns).some((pattern) => pattern.test(content));
+      try {
+        const ast = parse(content);
+        return ast.body.some(
+          (node) =>
+            node.type === 'ImportDeclaration' &&
+            typeof node.source.value === 'string' &&
+            node.source.value.startsWith('@angular/')
+        );
+      } catch {
+        return false;
+      }
     }
 
     // Angular component templates and styles

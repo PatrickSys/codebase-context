@@ -143,33 +143,43 @@ describe('search_codebase auto-heal', () => {
     }
   });
 
-  it('fires background re-index and returns retry message when IndexCorruptedError is thrown', async () => {
-    const { IndexCorruptedError } = await import('../src/errors/index.js');
+  it.each([
+    [
+      'missing initial index metadata',
+      'Index meta missing or unreadable (rebuild required): ENOENT'
+    ],
+    ['genuine index corruption', 'LanceDB index corrupted: missing vector column']
+  ])(
+    'starts background re-index and returns retry guidance for %s',
+    async (_scenario, errorMessage) => {
+      const { IndexCorruptedError } = await import('../src/errors/index.js');
 
-    searchMocks.search.mockRejectedValueOnce(
-      new IndexCorruptedError('LanceDB index corrupted: missing vector column')
-    );
+      searchMocks.search.mockRejectedValueOnce(new IndexCorruptedError(errorMessage));
 
-    const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+      const { server } = await import('../src/index.js');
+      const handler = (server as any)._requestHandlers.get('tools/call');
 
-    const response = await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: {
-          query: 'test'
+      const response = await handler({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'search_codebase',
+          arguments: {
+            query: 'test'
+          }
         }
-      }
-    });
+      });
 
-    const payload = JSON.parse(response.content[0].text);
-    expect(payload.status).toBe('indexing');
-    expect(payload.message).toContain('retry');
-    expect(searchMocks.search).toHaveBeenCalledTimes(1);
-  }, 15000);
+      const payload = JSON.parse(response.content[0].text);
+      expect(payload.status).toBe('indexing');
+      expect(payload.message).toBe(
+        'Index is unavailable or not ready. Indexing has started. Check indexing status, then retry.'
+      );
+      expect(searchMocks.search).toHaveBeenCalledTimes(1);
+    },
+    15000
+  );
 
   it('returns invalid_params when search_codebase query is missing', async () => {
     const { server } = await import('../src/index.js');

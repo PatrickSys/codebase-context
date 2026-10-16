@@ -30,6 +30,7 @@ import {
   _buildMergedCodexContent,
   handleInitCli
 } from '../src/cli-init.js';
+import { buildWritePlans, type InstallProbe } from '../src/init-clients.js';
 
 // --- generateMcpConfig ---
 
@@ -445,13 +446,258 @@ describe('handleInitCli', () => {
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 
-  it('keeps the interactive preview read-only when the user declines', async () => {
+  it('keeps the HTTP wizard read-only when the user declines', async () => {
     vi.mocked(select).mockResolvedValue('claude-code');
     vi.mocked(confirm).mockResolvedValue(false);
 
-    await handleInitCli([]);
+    await handleInitCli(['--http']);
+
+    expect(select).toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the HTTP cursor config behind --http', async () => {
+    const projectRoot = path.resolve('C:/projects/Http Cursor');
+
+    await handleInitCli(['--http', '--client', 'cursor', '--yes', '--root', projectRoot]);
+
+    expect(confirm).not.toHaveBeenCalled();
+    const [writtenPath, writtenContent] = writeFileMock.mock.calls[0] as [
+      string,
+      string,
+      ...unknown[]
+    ];
+    expect(writtenPath).toBe(path.join(projectRoot, '.cursor', 'mcp.json'));
+    const parsed = JSON.parse(writtenContent) as {
+      mcpServers: { 'codebase-context': { type: string; url: string } };
+    };
+    expect(parsed.mcpServers['codebase-context']).toEqual({
+      type: 'http',
+      url: 'http://127.0.0.1:3100/mcp'
+    });
+  });
+
+  it('requires a client when the HTTP wizard is non-interactive', async () => {
+    const previousExitCode = process.exitCode;
+
+    await handleInitCli(['--http', '--yes']);
 
     expect(writeFileMock).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+    process.exitCode = previousExitCode;
+  });
+});
+
+describe('stdio init', () => {
+  const readFileMock = vi.mocked(fsMod.readFile);
+  const writeFileMock = vi.mocked(fsMod.writeFile);
+  const mkdirMock = vi.mocked(fsMod.mkdir);
+  const accessMock = vi.mocked(fsMod.access);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    writeFileMock.mockResolvedValue(undefined);
+    mkdirMock.mockResolvedValue(undefined);
+    readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+  });
+
+  function installProbe(projectRoot: string, overrides: Partial<InstallProbe> = {}): InstallProbe {
+    return {
+      homeDir: path.join(projectRoot, 'home'),
+      platform: process.platform,
+      env: {},
+      projectRoot,
+      commandExists: async () => false,
+      pathExists: async () => false,
+      ...overrides
+    };
+  }
+
+  it('writes stdio config for each detected client without prompting', async () => {
+    const projectRoot = path.resolve('C:/projects/Detected App');
+    const probe = installProbe(projectRoot, {
+      commandExists: async (command) => command === 'claude' || command === 'code'
+    });
+
+    await handleInitCli(['--yes', '--root', projectRoot], { probe });
+
+    expect(select).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+    const writtenPaths = writeFileMock.mock.calls.map((call) => String(call[0]));
+    expect(writtenPaths).toEqual([
+      path.join(projectRoot, '.mcp.json'),
+      path.join(projectRoot, '.vscode', 'mcp.json')
+    ]);
+    const claude = JSON.parse(String(writeFileMock.mock.calls[0]?.[1])) as {
+      mcpServers: { 'codebase-context': { args: string[] } };
+    };
+    const vscode = JSON.parse(String(writeFileMock.mock.calls[1]?.[1])) as {
+      servers: { 'codebase-context': { type: string; args: string[] } };
+    };
+    expect(claude.mcpServers['codebase-context'].args.at(-1)).toBe(projectRoot);
+    expect(vscode.servers['codebase-context'].type).toBe('stdio');
+    expect(vscode.servers['codebase-context'].args.at(-1)).toBe(projectRoot);
+  });
+
+  it('writes nothing when auto setup is declined', async () => {
+    const projectRoot = path.resolve('C:/projects/Declined App');
+    vi.mocked(confirm).mockResolvedValue(false);
+
+    await handleInitCli(['--root', projectRoot], {
+      probe: installProbe(projectRoot, {
+        commandExists: async (command) => command === 'cursor'
+      })
+    });
+
+    expect(select).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when no clients are installed', async () => {
+    const projectRoot = path.resolve('C:/projects/Empty Machine');
+
+    await handleInitCli(['--yes', '--root', projectRoot], { probe: installProbe(projectRoot) });
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('backs up an existing file, then merges the new stdio server', async () => {
+    const projectRoot = path.resolve('C:/projects/Backup App');
+    const original = JSON.stringify(
+      {
+        mcpServers: { other: { command: 'keep', args: [] } },
+        extra: true
+      },
+      null,
+      2
+    );
+    readFileMock.mockResolvedValue(original as unknown as Buffer);
+    const previousExitCode = process.exitCode;
+
+    await handleInitCli(['--client', 'cursor', '--yes', '--root', projectRoot], {
+      now: () => new Date('2026-10-16T12:00:00.000Z')
+    });
+
+    const backupPath = `${path.join(projectRoot, '.cursor', 'mcp.json')}.2026-10-16T12-00-00-000Z.bak`;
+    expect(writeFileMock.mock.calls[0]?.[0]).toBe(backupPath);
+    expect(writeFileMock.mock.calls[0]?.[1]).toBe(original);
+    const merged = JSON.parse(String(writeFileMock.mock.calls[1]?.[1])) as {
+      extra: boolean;
+      mcpServers: Record<string, { command?: string; args?: string[]; type?: string }>;
+    };
+    expect(merged.extra).toBe(true);
+    expect(merged.mcpServers.other).toEqual({ command: 'keep', args: [] });
+    expect(merged.mcpServers['codebase-context']?.args?.at(-1)).toBe(projectRoot);
+    expect(merged.mcpServers['codebase-context']?.type).toBeUndefined();
+    expect(process.exitCode).toBe(previousExitCode);
+  });
+
+  it('does not write or back up a different existing stdio entry', async () => {
+    const projectRoot = path.resolve('C:/projects/Protected App');
+    const original = JSON.stringify({
+      servers: {
+        other: { type: 'stdio', command: 'keep', args: [] },
+        'codebase-context': { type: 'stdio', command: 'old', args: ['elsewhere'] }
+      }
+    });
+    readFileMock.mockResolvedValue(original as unknown as Buffer);
+    const previousExitCode = process.exitCode;
+
+    await handleInitCli(['--client', 'vscode', '--yes', '--root', projectRoot]);
+
+    expect(writeFileMock).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+    process.exitCode = previousExitCode;
+  });
+
+  it('leaves a conflicting client untouched and still writes the others', async () => {
+    const projectRoot = path.resolve('C:/projects/Partial App');
+    readFileMock.mockImplementation(async (filePath: unknown) => {
+      if (String(filePath).endsWith(`${path.sep}.mcp.json`)) {
+        return JSON.stringify({
+          mcpServers: { 'codebase-context': { command: 'other' } }
+        }) as unknown as Buffer;
+      }
+      throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+    });
+    const previousExitCode = process.exitCode;
+
+    await handleInitCli(['--yes', '--root', projectRoot], {
+      probe: installProbe(projectRoot, {
+        commandExists: async (command) => command === 'claude' || command === 'cursor'
+      })
+    });
+
+    expect(writeFileMock).toHaveBeenCalledOnce();
+    expect(String(writeFileMock.mock.calls[0]?.[0])).toBe(
+      path.join(projectRoot, '.cursor', 'mcp.json')
+    );
+    expect(process.exitCode).toBe(1);
+    process.exitCode = previousExitCode;
+  });
+
+  it('does not rewrite a config that already has the same server', async () => {
+    const projectRoot = path.resolve('C:/projects/Same App');
+    const plan = buildWritePlans(
+      [
+        {
+          id: 'windsurf',
+          label: 'Windsurf',
+          configPath: path.join(projectRoot, 'home', '.codeium', 'windsurf', 'mcp_config.json')
+        }
+      ],
+      {
+        nodeExecutable: process.execPath,
+        serverEntrypoint: path.resolve(process.argv[1] ?? ''),
+        projectRoot
+      }
+    )[0];
+    if (!plan) throw new Error('expected a Windsurf plan');
+    readFileMock.mockResolvedValue(plan.content as unknown as Buffer);
+
+    await handleInitCli(['--client', 'windsurf', '--yes', '--root', projectRoot], {
+      probe: installProbe(projectRoot)
+    });
+
+    expect(writeFileMock).not.toHaveBeenCalled();
+    expect(mkdirMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves other VS Code servers when adding codebase-context', async () => {
+    const projectRoot = path.resolve('C:/projects/Vs Code App');
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        servers: { other: { type: 'stdio', command: 'keep', args: ['a'] } },
+        inputs: []
+      }) as unknown as Buffer
+    );
+
+    await handleInitCli(['--client', 'vscode', '--yes', '--root', projectRoot], {
+      now: () => new Date('2026-10-16T12:00:00.000Z')
+    });
+
+    expect(String(writeFileMock.mock.calls[0]?.[0])).toContain('.bak');
+    const merged = JSON.parse(String(writeFileMock.mock.calls[1]?.[1])) as {
+      inputs: unknown[];
+      servers: Record<string, { command?: string; type?: string; args?: string[] }>;
+    };
+    expect(merged.inputs).toEqual([]);
+    expect(merged.servers.other).toEqual({ type: 'stdio', command: 'keep', args: ['a'] });
+    expect(merged.servers['codebase-context']?.command).toBe(process.execPath);
+    expect(merged.servers['codebase-context']?.args?.at(-1)).toBe(projectRoot);
+  });
+
+  it('rejects OpenCode unless the HTTP wizard is selected', async () => {
+    const previousExitCode = process.exitCode;
+
+    await handleInitCli(['--client', 'opencode', '--yes']);
+
+    expect(writeFileMock).not.toHaveBeenCalled();
+    expect(accessMock).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+    process.exitCode = previousExitCode;
   });
 });
 

@@ -1,6 +1,6 @@
 /**
  * Interactive setup wizard for codebase-context.
- * Handles `codebase-context init` — generates MCP config and instruction block
+ * Handles `codebase-context init` — detects clients and merges project MCP configs
  * for the four first-wave AI clients: Claude Code, Cursor, Codex, OpenCode.
  *
  * Depends only on Node built-ins and @inquirer/prompts.
@@ -10,96 +10,134 @@
 
 import path from 'path';
 import * as fs from 'node:fs/promises';
-import { select, confirm } from '@inquirer/prompts';
+import { checkbox } from '@inquirer/prompts';
+import { homedir } from 'node:os';
+import { constants } from 'node:fs';
+import { createRequire } from 'node:module';
 
-export type Client = 'claude-code' | 'cursor' | 'codex' | 'opencode';
+export type Client = (typeof CLIENTS)[number]['id'];
 
 export type McpConfigResult = { kind: 'file'; path: string; content: string };
 
 export type McpConfigOptions = {
   rootPath?: string;
-  nodeExecutable?: string;
-  serverEntrypoint?: string;
+  platform?: NodeJS.Platform;
+  packageVersion?: string;
 };
 
 type JsonObject = Record<string, unknown>;
 
-function quoteTomlString(value: string): string {
-  return JSON.stringify(value);
+const { version: packageVersion } = createRequire(import.meta.url)('../package.json') as {
+  version: string;
+};
+
+export const CLIENTS = [
+  { id: 'claude-code', name: 'Claude Code', executable: 'claude', directory: '.claude' },
+  { id: 'codex', name: 'Codex', executable: 'codex', directory: '.codex' },
+  { id: 'cursor', name: 'Cursor', executable: 'cursor', directory: '.cursor' },
+  { id: 'opencode', name: 'OpenCode', executable: 'opencode', directory: '.opencode' }
+] as const;
+
+export async function detectClients(
+  rootPath: string,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): Promise<Client[]> {
+  const paths = platform === 'win32' ? path.win32 : path.posix;
+  const home = env.HOME || env.USERPROFILE || homedir();
+  const configHome = env.XDG_CONFIG_HOME || paths.join(home, '.config');
+  const searchPath = (env.PATH || env.Path || '').split(platform === 'win32' ? ';' : ':');
+  const extensions = platform === 'win32' ? ['', '.exe', '.cmd', '.bat', '.ps1'] : [''];
+  const detected: Client[] = [];
+  for (const client of CLIENTS) {
+    const userDirectory =
+      client.id === 'codex'
+        ? env.CODEX_HOME || paths.join(home, '.codex')
+        : client.id === 'claude-code'
+          ? env.CLAUDE_CONFIG_DIR || paths.join(home, '.claude')
+          : client.id === 'opencode'
+            ? paths.join(configHome, 'opencode')
+            : paths.join(home, client.directory);
+    const directories = [paths.join(rootPath, client.directory), userDirectory];
+    const executables = searchPath
+      .filter(Boolean)
+      .flatMap((directory) =>
+        extensions.map((extension) => paths.join(directory, client.executable + extension))
+      );
+    const candidates = [
+      ...directories.map((candidate) => ({ path: candidate, directory: true })),
+      ...executables.map((candidate) => ({ path: candidate, directory: false }))
+    ];
+    for (const candidate of candidates) {
+      try {
+        await fs.access(
+          candidate.path,
+          candidate.directory || platform === 'win32' ? constants.F_OK : constants.X_OK
+        );
+        const info = await fs.stat(candidate.path);
+        if (candidate.directory ? !info.isDirectory() : !info.isFile()) continue;
+        detected.push(client.id);
+        break;
+      } catch (error) {
+        if (
+          !isFileNotFound(error) &&
+          !(
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            (error.code === 'EACCES' || error.code === 'ENOTDIR')
+          )
+        )
+          throw error;
+      }
+    }
+  }
+  return detected;
 }
 
 export function generateMcpConfig(client: Client, options: McpConfigOptions = {}): McpConfigResult {
   const rootPath = path.resolve(options.rootPath ?? process.cwd());
-  const nodeExecutable = options.nodeExecutable ?? process.execPath;
-  const serverEntrypoint = path.resolve(
-    options.serverEntrypoint ?? process.argv[1] ?? path.join(rootPath, 'dist', 'index.js')
-  );
-  const stdioArgs = [serverEntrypoint, rootPath];
-
-  switch (client) {
-    case 'claude-code':
-      return {
-        kind: 'file',
-        path: path.join(rootPath, '.mcp.json'),
-        content: JSON.stringify(
-          {
-            mcpServers: {
-              'codebase-context': {
-                command: nodeExecutable,
-                args: stdioArgs
-              }
-            }
-          },
-          null,
-          2
-        )
-      };
-    case 'cursor':
-      return {
-        kind: 'file',
-        path: path.join(rootPath, '.cursor', 'mcp.json'),
-        content: JSON.stringify(
-          {
-            mcpServers: {
-              'codebase-context': {
-                type: 'http',
-                url: 'http://127.0.0.1:3100/mcp'
-              }
-            }
-          },
-          null,
-          2
-        )
-      };
-    case 'codex':
-      return {
-        kind: 'file',
-        path: path.join(rootPath, '.codex', 'config.toml'),
-        content:
-          `[mcp_servers.codebase-context]\n` +
-          `command = ${quoteTomlString(nodeExecutable)}\n` +
-          `args = [${stdioArgs.map(quoteTomlString).join(', ')}]\n` +
-          'startup_timeout_sec = 120\n'
-      };
-    case 'opencode':
-      return {
-        kind: 'file',
-        path: path.join(rootPath, 'opencode.json'),
-        content: JSON.stringify(
-          {
-            $schema: 'https://opencode.ai/config.json',
-            mcp: {
-              'codebase-context': {
-                type: 'remote',
-                url: 'http://127.0.0.1:3100/mcp'
-              }
-            }
-          },
-          null,
-          2
-        )
-      };
+  const version = options.packageVersion ?? packageVersion;
+  const windows = (options.platform ?? process.platform) === 'win32';
+  const command = windows ? 'npx.cmd' : 'npx';
+  const args = ['--yes', `codebase-context@${version}`, rootPath];
+  if (client === 'codex') {
+    return {
+      kind: 'file',
+      path: path.join(rootPath, '.codex', 'config.toml'),
+      content:
+        `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(command)}\n` +
+        `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 120\n`
+    };
   }
+  const configPath =
+    client === 'claude-code'
+      ? '.mcp.json'
+      : client === 'cursor'
+        ? '.cursor/mcp.json'
+        : 'opencode.json';
+  return {
+    kind: 'file',
+    path: path.join(rootPath, configPath),
+    content: JSON.stringify(
+      client === 'opencode'
+        ? {
+            $schema: 'https://opencode.ai/config.json',
+            mcp: { 'codebase-context': { type: 'local', command: [command, ...args] } }
+          }
+        : {
+            mcpServers: {
+              'codebase-context': {
+                ...(client === 'cursor' ? { type: 'stdio' } : {}),
+                command,
+                args
+              }
+            }
+          },
+      null,
+      2
+    )
+  };
 }
 
 export function resolveInitRoot(
@@ -128,58 +166,6 @@ export function resolveInitRoot(
   }
 
   return path.resolve(explicitRoot ?? (envRoot ? envRoot : cwd));
-}
-
-export function generateInstructionBlock(): string {
-  return `<!-- codebase-context:start -->
-## Codebase Context (MCP)
-
-**Start of every task:** Call \`get_memory\` to load team conventions before writing any code.
-
-**Before editing existing code:** Call \`search_codebase\` with \`intent: "edit"\`. If the preflight card says \`ready: false\`, read the listed files before touching anything.
-
-**Before writing new code:** Call \`get_team_patterns\` to check how the team handles DI, state, testing, and library wrappers — don't introduce a new pattern if one already exists.
-
-**When asked to "remember" or "record" something:** Call \`remember\` immediately, before doing anything else.
-
-**When adding imports that cross module boundaries:** Call \`detect_circular_dependencies\` with the relevant scope after adding the import.
-<!-- codebase-context:end -->
-`;
-}
-
-export function resolveInstructionFilePath(client: Client, cwd: string): string | null {
-  switch (client) {
-    case 'claude-code':
-      return path.join(cwd, 'CLAUDE.md');
-    case 'cursor':
-      return path.join(cwd, '.cursorrules');
-    case 'codex':
-      return path.join(cwd, 'AGENTS.md');
-    case 'opencode':
-      return null;
-  }
-}
-
-/**
- * Appends the instruction block to an existing file, or skips if already present.
- * Exported with leading underscore to signal internal/test-only use.
- */
-export async function _appendInstructionBlock(filePath: string): Promise<'written' | 'skipped'> {
-  let existing = '';
-  try {
-    existing = await fs.readFile(filePath, 'utf8');
-  } catch {
-    // file does not exist — write fresh
-    await fs.writeFile(filePath, generateInstructionBlock(), 'utf8');
-    return 'written';
-  }
-
-  if (existing.includes('<!-- codebase-context:start -->')) {
-    return 'skipped';
-  }
-
-  await fs.writeFile(filePath, existing + '\n' + generateInstructionBlock(), 'utf8');
-  return 'written';
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -217,9 +203,58 @@ async function readExistingConfig(filePath: string): Promise<string | null> {
   }
 }
 
+function isAbsolutePath(value: string): boolean {
+  return path.posix.isAbsolute(value) || path.win32.isAbsolute(value);
+}
+
+/** Recognize only CBC-specific launch shapes written by init. */
+function isGeneratedLaunch(command: unknown, args: unknown): boolean {
+  if (
+    typeof command !== 'string' ||
+    !Array.isArray(args) ||
+    !args.every((arg) => typeof arg === 'string')
+  )
+    return false;
+  const executable = path.basename(command.replace(/\\/g, '/')).toLowerCase();
+  if (executable === 'node' || executable === 'node.exe') {
+    return (
+      args.length === 2 &&
+      /[\\/]node_modules[\\/]codebase-context[\\/]dist[\\/]index\.js$/.test(args[0]) &&
+      isAbsolutePath(args[0]) &&
+      isAbsolutePath(args[1])
+    );
+  }
+  const launch = command === 'npx' || command === 'npx.cmd' ? args : [];
+  return (
+    launch.length === 3 &&
+    (launch[0] === '--yes' || launch[0] === '-y') &&
+    /^codebase-context@\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(launch[1]) &&
+    isAbsolutePath(launch[2])
+  );
+}
+
+function mergeGeneratedServer(existing: unknown, generated: unknown, client: Client): unknown {
+  if (jsonValuesEqual(existing, generated)) return existing;
+  if (!isJsonObject(existing) || !isJsonObject(generated) || 'url' in existing) return null;
+  const local = client === 'opencode';
+  const command = local && Array.isArray(existing.command) ? existing.command[0] : existing.command;
+  const args = local && Array.isArray(existing.command) ? existing.command.slice(1) : existing.args;
+  if (
+    (existing.type !== undefined && existing.type !== (local ? 'local' : 'stdio')) ||
+    !isGeneratedLaunch(command, args)
+  )
+    return null;
+  return {
+    ...existing,
+    command: generated.command,
+    ...(!local ? { args: generated.args } : {}),
+    ...(generated.type ? { type: generated.type } : {})
+  };
+}
+
 /**
  * Merge generated MCP config into an existing JSON config file when possible.
- * Preserves unrelated keys and refuses to replace a different codebase-context entry.
+ * Preserves unrelated keys and updates only recognized generated launches.
  */
 export async function _buildMergedMcpContent(
   filePath: string,
@@ -262,28 +297,21 @@ export async function _buildMergedMcpContent(
     'codebase-context'
   );
   const generatedCodebaseContext = generatedServersValue['codebase-context'];
-  if (
-    hasExistingCodebaseContext &&
-    !jsonValuesEqual(existingServers['codebase-context'], generatedCodebaseContext)
-  ) {
+  const mergedServer = hasExistingCodebaseContext
+    ? mergeGeneratedServer(existingServers['codebase-context'], generatedCodebaseContext, client)
+    : generatedCodebaseContext;
+  if (mergedServer === null) {
     throw new Error(
       `Cannot merge ${client} config at ${filePath}: it already contains a different codebase-context configuration.`
     );
   }
-
+  const merged = {
+    ...generated,
+    ...existing,
+    [serverKey]: { ...existingServers, 'codebase-context': mergedServer }
+  };
   return {
-    content: JSON.stringify(
-      {
-        ...existing,
-        ...generated,
-        [serverKey]: {
-          ...existingServers,
-          ...generatedServersValue
-        }
-      },
-      null,
-      2
-    ),
+    content: jsonValuesEqual(existing, merged) ? existingText : JSON.stringify(merged, null, 2),
     mergedFromExisting: true
   };
 }
@@ -297,8 +325,7 @@ function tomlKeyPattern(key: string): string {
 }
 
 /**
- * Appends the project MCP table to Codex TOML, preserving other settings and
- * refusing to replace an existing codebase-context table.
+ * Merges the generated Codex launch, preserving unrelated settings and custom entries.
  */
 export async function _buildMergedCodexContent(
   filePath: string,
@@ -333,13 +360,62 @@ export async function _buildMergedCodexContent(
     if (comparableSection === normalizedGenerated) {
       return { content: existing, mergedFromExisting: true };
     }
+    const commandLine = /^([ \t]*command[ \t]*=[ \t]*)("(?:[^"\\]|\\.)*")([ \t]*(?:#.*)?)$/m;
+    const argsLine = /^([ \t]*args[ \t]*=[ \t]*)(\[[^\r\n]*\])([ \t]*(?:#.*)?)$/m;
+    const oldCommand = commandLine.exec(section);
+    const oldArgs = argsLine.exec(section);
+    const newCommand = commandLine.exec(normalizedGenerated);
+    const newArgs = argsLine.exec(normalizedGenerated);
+    if (
+      exactEntryHeader.test(section) &&
+      oldCommand &&
+      oldArgs &&
+      newCommand &&
+      newArgs &&
+      !/^[ \t]*url[ \t]*=/m.test(section) &&
+      section.match(/^[ \t]*command[ \t]*=/gm)?.length === 1 &&
+      section.match(/^[ \t]*args[ \t]*=/gm)?.length === 1
+    ) {
+      try {
+        if (isGeneratedLaunch(JSON.parse(oldCommand[2]), JSON.parse(oldArgs[2]))) {
+          if (
+            jsonValuesEqual(JSON.parse(oldCommand[2]), JSON.parse(newCommand[2])) &&
+            jsonValuesEqual(JSON.parse(oldArgs[2]), JSON.parse(newArgs[2]))
+          ) {
+            return { content: existing, mergedFromExisting: true };
+          }
+          const updated = normalizedExisting
+            .slice(existingEntry.index, sectionEnd)
+            .replace(
+              commandLine,
+              (_line, prefix: string, _value: string, comment: string) =>
+                prefix + newCommand[2] + comment
+            )
+            .replace(
+              argsLine,
+              (_line, prefix: string, _value: string, comment: string) =>
+                prefix + newArgs[2] + comment
+            );
+          const content =
+            normalizedExisting.slice(0, existingEntry.index) +
+            updated +
+            normalizedExisting.slice(sectionEnd);
+          return {
+            content: existing.includes('\r\n') ? content.replace(/\n/g, '\r\n') : content,
+            mergedFromExisting: true
+          };
+        }
+      } catch {
+        // Non-generated TOML values remain untouched and are reported as conflicts.
+      }
+    }
     throw new Error(
       `Cannot merge Codex config at ${filePath}: it already contains a different codebase-context configuration.`
     );
   }
 
   const dottedEntry = new RegExp(
-    `^\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}\\s*\\.`,
+    `^\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}\\s*(?:=|\\.)`,
     'm'
   );
   if (dottedEntry.test(normalizedExisting)) {
@@ -384,51 +460,40 @@ export async function _buildMergedCodexContent(
 }
 
 type InitOptions = {
-  client?: Client;
+  clients: Client[];
   rootPath: string;
   yes: boolean;
   help: boolean;
 };
 
 function parseClient(value: string): Client {
-  if (value === 'claude-code' || value === 'cursor' || value === 'codex' || value === 'opencode') {
-    return value;
-  }
-  throw new Error(`Unknown client "${value}". Choose claude-code, cursor, codex, or opencode.`);
+  const client = CLIENTS.find((client) => client.id === value);
+  if (client) return client.id;
+  throw new Error(
+    `Unknown client "${value}". Choose ${CLIENTS.map((client) => client.id).join(', ')}.`
+  );
 }
 
 function parseInitOptions(args: string[]): InitOptions {
-  if (args.includes('--help') || args.includes('-h')) {
-    return { rootPath: process.cwd(), yes: false, help: true };
-  }
-
-  let client: Client | undefined;
+  if (args.includes('--help') || args.includes('-h'))
+    return { clients: [], rootPath: process.cwd(), yes: false, help: true };
+  const clients: Client[] = [];
   let yes = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
-    if (arg === '--yes' || arg === '-y') {
-      yes = true;
-    } else if (arg === '--client') {
-      const value = args[index + 1];
-      if (!value || value.startsWith('--')) {
-        throw new Error('Expected a client after --client.');
-      }
-      client = parseClient(value);
-      index++;
-    } else if (arg?.startsWith('--client=')) {
-      client = parseClient(arg.slice('--client='.length));
-    } else if (arg === '--root') {
-      index++;
-    } else if (arg?.startsWith('--root=')) {
-      // Root values are validated once by resolveInitRoot below.
-    } else {
-      throw new Error(`Unknown init option "${arg}".`);
-    }
+    if (arg === '--yes' || arg === '-y') yes = true;
+    else if (arg === '--client') {
+      const value = args[++index];
+      if (!value || value.startsWith('--')) throw new Error('Expected a client after --client.');
+      clients.push(parseClient(value));
+    } else if (arg?.startsWith('--client='))
+      clients.push(parseClient(arg.slice('--client='.length)));
+    else if (arg === '--root') index++;
+    else if (!arg?.startsWith('--root=')) throw new Error(`Unknown init option "${arg}".`);
   }
-
   return {
-    ...(client ? { client } : {}),
-    rootPath: resolveInitRoot(args, process.env.CODEBASE_ROOT, process.cwd()),
+    clients: [...new Set(clients)],
+    rootPath: resolveInitRoot(args, process.env.CODEBASE_ROOT),
     yes,
     help: false
   };
@@ -436,131 +501,83 @@ function parseInitOptions(args: string[]): InitOptions {
 
 function printInitUsage(): void {
   console.log('codebase-context init [options]');
-  console.log('');
-  console.log('Set up MCP config for an AI client.');
-  console.log('');
-  console.log('Options:');
-  console.log('  --client <name>  claude-code, cursor, codex, or opencode');
+  console.log(
+    'Detect and configure coding tools together. With a terminal, Space toggles and Enter applies.'
+  );
+  console.log(
+    '  --client <name>  Choose a tool (repeatable): ' +
+      CLIENTS.map((client) => client.id).join(', ')
+  );
   console.log('  --root <path>    Project root (default: CODEBASE_ROOT or cwd)');
-  console.log('  --yes, -y        Write the MCP config without prompts');
+  console.log('  --yes, -y        Configure every detected tool without prompts');
   console.log('  --help, -h       Show this help');
 }
 
-function getCurrentCliEntrypoint(): string {
-  const entrypoint = process.argv[1];
-  if (!entrypoint) {
-    throw new Error('Cannot locate the codebase-context CLI entrypoint.');
-  }
-  return path.resolve(entrypoint);
-}
-
 export async function handleInitCli(args: string[]): Promise<void> {
-  let options: InitOptions;
   try {
-    options = parseInitOptions(args);
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    printInitUsage();
-    process.exitCode = 1;
-    return;
-  }
+    const options = parseInitOptions(args);
+    if (options.help) {
+      printInitUsage();
+      return;
+    }
+    if (!(await fs.stat(options.rootPath)).isDirectory())
+      throw new Error(`Project root is not a directory: ${options.rootPath}`);
+    console.log(`Set up Codebase Context in ${options.rootPath}`);
+    let clients = options.clients;
+    if (!clients.length) {
+      const detected = await detectClients(options.rootPath);
+      clients =
+        !options.yes && process.stdin.isTTY && process.stdout.isTTY
+          ? await checkbox<Client>({
+              message: 'Choose tools (Space toggles, Enter sets up):',
+              choices: CLIENTS.map((client) => ({
+                name: client.name + (detected.includes(client.id) ? ' (detected)' : ''),
+                value: client.id,
+                checked: detected.includes(client.id)
+              }))
+            })
+          : detected;
+    }
+    if (!clients.length)
+      throw new Error(
+        'No coding tools selected or detected. Choose with --client claude-code, --client codex, --client cursor, or --client opencode.'
+      );
 
-  if (options.help) {
-    printInitUsage();
-    return;
-  }
-  if (options.yes && !options.client) {
-    console.error('Error: --yes requires --client.');
-    printInitUsage();
-    process.exitCode = 1;
-    return;
-  }
-
-  console.log('\nSet up codebase-context for your AI client\n');
-
-  const client =
-    options.client ??
-    (await select<Client>({
-      message: 'Which client?',
-      choices: [
-        { name: 'Claude Code', value: 'claude-code' },
-        { name: 'Cursor', value: 'cursor' },
-        { name: 'Codex', value: 'codex' },
-        { name: 'OpenCode', value: 'opencode' }
-      ]
-    }));
-
-  const mcpResult = generateMcpConfig(client, {
-    rootPath: options.rootPath,
-    nodeExecutable: process.execPath,
-    serverEntrypoint: getCurrentCliEntrypoint()
-  });
-
-  console.log('\n--- MCP Config Preview ---');
-  console.log(
-    'Existing unrelated settings will be preserved; a different codebase-context entry will stop setup.'
-  );
-  console.log(`File: ${mcpResult.path}\n${mcpResult.content}`);
-
-  const applyMcp = options.yes
-    ? true
-    : await confirm({
-        message: 'Apply MCP config? [y/N]',
-        default: false
-      });
-
-  const instructionPath = options.yes ? null : resolveInstructionFilePath(client, options.rootPath);
-
-  let applyInstruction = false;
-  if (instructionPath !== null) {
-    console.log(`\n--- Instruction Block Preview (will append to ${instructionPath}) ---`);
-    console.log(generateInstructionBlock());
-
-    applyInstruction = await confirm({
-      message: 'Write instruction block? [y/N]',
-      default: false
-    });
-  }
-
-  try {
-    if (applyMcp) {
-      try {
-        await fs.access(options.rootPath);
-      } catch {
-        throw new Error(`Project root does not exist or is not accessible: ${options.rootPath}`);
-      }
-      const dir = path.dirname(mcpResult.path);
-      await fs.mkdir(dir, { recursive: true });
-      const mergedConfig =
+    const prepared = [];
+    for (const client of clients) {
+      const config = generateMcpConfig(client, { rootPath: options.rootPath });
+      const merged =
         client === 'codex'
-          ? await _buildMergedCodexContent(mcpResult.path, mcpResult.content)
-          : await _buildMergedMcpContent(mcpResult.path, mcpResult.content, client);
-      await fs.writeFile(mcpResult.path, mergedConfig.content, 'utf8');
-      if (mergedConfig.mergedFromExisting) {
-        console.log(`Merged: ${mcpResult.path} (existing entries preserved)`);
-      }
-      console.log(`Written: ${mcpResult.path}`);
+          ? await _buildMergedCodexContent(config.path, config.content)
+          : await _buildMergedMcpContent(config.path, config.content, client);
+      prepared.push({
+        ...config,
+        content: merged.content,
+        unchanged: (await readExistingConfig(config.path)) === merged.content
+      });
     }
-
-    if (applyInstruction && instructionPath !== null) {
-      const status = await _appendInstructionBlock(instructionPath);
-      if (status === 'skipped') {
-        console.log(`Instruction block already present in ${instructionPath}, skipping.`);
-      } else {
-        console.log(`Written: ${instructionPath}`);
+    for (const config of prepared) {
+      if (!config.unchanged) {
+        await fs.mkdir(path.dirname(config.path), { recursive: true });
+        await fs.writeFile(config.path, config.content, 'utf8');
       }
+      console.log(
+        `${config.unchanged ? 'Unchanged' : 'Configured'}: ${path.relative(options.rootPath, config.path)}`
+      );
     }
+    console.log('Reopen your tools; approve the server or project trust if asked.');
+    console.log("The first search builds this repository's index.");
   } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === 'ExitPromptError' ||
+        error.name === 'AbortPromptError' ||
+        error.name === 'CancelPromptError')
+    ) {
+      console.log('Setup cancelled; no files written.');
+      return;
+    }
     console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
-    return;
   }
-
-  const nextSteps =
-    client === 'claude-code' || client === 'codex'
-      ? '  Restart or reopen the client in this project to load the MCP server.\n' +
-        '  Run `npx codebase-context map` to see your codebase conventions\n'
-      : '  Run `npx codebase-context map` to see your codebase conventions\n' +
-        '  Start the HTTP server: npx codebase-context --http\n';
-  console.log(`\nNext steps:\n${nextSteps}`);
 }

@@ -46,7 +46,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context@2.4.0 patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
-- MCP client registration — use the 2.4.0 recipes in the [client setup guide](./client-setup.md); `init` is an interactive HTTP setup wizard with the limitations described there
+- MCP client registration — `init` detects Claude Code, Codex, Cursor and OpenCode and configures the selected tools together. Use `init --yes` for all detected tools, repeat `--client <name>` to choose tools, and pass `--root <path>` for another repository. See the [client setup guide](./client-setup.md).
 
 ---
 

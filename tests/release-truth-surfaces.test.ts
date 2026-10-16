@@ -134,11 +134,11 @@ describe('release truth surfaces', () => {
     const setupPages = [
       [
         'README.md',
-        'claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0'
+        'npx --yes codebase-context@2.4.0 init'
       ],
       [
         'docs/client-setup.md',
-        'claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0'
+        'npx --yes codebase-context@2.4.0 init'
       ],
       ['docs/capabilities.md', '| **stdio** (default) |'],
       ['docs/cli.md', 'CODEBASE_ROOT=/path/to/repo npx -y codebase-context@2.4.0 status'],

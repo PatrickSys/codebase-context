@@ -2,13 +2,34 @@
 
 **These commands use 2.4.0.** If that version is not available on npm yet, use the published 2.2.0 [setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
 
-Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter. These recipes target the 2.4.0 release.
+Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Use `init` to configure your supported coding tools for a repository. Each tool starts its own server with that repository selected; the agent can still select another repository with the `project` tool parameter. These recipes target the 2.4.0 release.
 
 Use Node.js 22 or newer, as required by the package.
 
 The copyable registration commands target PowerShell or a POSIX terminal. Windows Command Prompt was not tested; OpenCode's quoted separator is shell-dependent.
 
-## Client recipes for 2.4.0
+## Set up your coding tools
+
+Automatic multi-tool setup is awaiting publication. These instructions describe the implementation in this repository; the README's unpinned prompt depends on a published release containing it.
+
+Run `npx --yes codebase-context@2.4.0 init` from your repository, or copy the agent prompt in the [README](../README.md#set-up-your-coding-tools).
+
+Setup shows Claude Code, Codex, Cursor and OpenCode together. It checks their executables on PATH and their known user/project directories, respecting `CODEX_HOME`, `CLAUDE_CONFIG_DIR` and `XDG_CONFIG_HOME`. It does not read credentials or run tools to detect them. Detected tools start checked; Space toggles a choice and Enter configures the selected tools once. Cancel leaves files unchanged.
+
+With `--yes`, or without terminal input/output, setup configures every detected tool. If none is found, it writes nothing and asks you to select tools explicitly:
+
+```bash
+npx --yes codebase-context@2.4.0 init --client claude-code --client codex --root /path/to/repository --yes
+```
+
+`--root` takes priority over `CODEBASE_ROOT` and the current directory. Claude Code writes `.mcp.json`, Codex `.codex/config.toml`, Cursor `.cursor/mcp.json`, and OpenCode `opencode.json` inside that repository. All four start local servers with a version-pinned `npx` command; setup does not start a daemon or depend on the installer's cache location.
+
+Rerun the same command after moving a repository or updating the package. Identical entries stay unchanged. Setup updates recognized generated launch/root fields and preserves other settings. Custom or HTTP entries are left intact and reported as conflicts; all selected configs are checked before any are written. Resolve a conflict explicitly rather than removing unrelated settings.
+
+Reopen your tools and approve project trust or the server if asked. The first search builds the index. Setup writes MCP configs only; repository instructions belong to your agent and the README prompt. A successful setup exit does not by itself prove a client connected.
+
+## Manual client recipes for 2.4.0
+
 
 Claude Code, Codex CLI and OpenCode registration commands were checked again on October 6 without a project argument. The other clients retain their older config-shape evidence; no-folder native agent use is unverified for them. See the dated notes below.
 
@@ -101,24 +122,6 @@ Trust the project if asked, restart Codex and start a new task there. Use the fi
 
 On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a folder, environment root or MCP roots, launched from an unrelated directory. That check does not verify the `2.4.0` package. Its first tool call returned `selection_required`; an explicit `project` call selected the prepared fixture, search found the expected symbol, context returned its map, and the runner host opened the returned source. A later call without `project` retained that selection. This is SDK/protocol and runner-host evidence with warmed caches and a pre-indexed fixture, not a native Desktop task.
 
-## Interactive setup wizard
-
-Run setup from the project you want the client to search:
-
-```bash
-# Claude Code
-npx -y codebase-context@2.4.0 init --client claude-code --yes
-
-# Codex
-npx -y codebase-context@2.4.0 init --client codex --yes
-```
-
-Claude Code writes `.mcp.json`; Codex writes `.codex/config.toml`. Both configs start the installed server with the selected project. Setup uses the current folder unless `--root` or `CODEBASE_ROOT` selects another one; `--root` takes priority.
-
-`--yes` writes the config without prompts. Run `init` without flags to choose a client interactively and optionally add project instructions. Cursor and OpenCode still use HTTP and need a separately running server.
-
-Existing settings are kept. If a different Codebase Context entry is already present, setup leaves the file unchanged and reports the conflict. Restart the client after setup and approve the server if asked. The first use builds the code index. Rerun setup if the Codebase Context installation moves, because the config uses its installed location.
-
 ## Optional fixed-folder setup and CLI preparation
 
 To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context@2.4.0", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
@@ -128,8 +131,6 @@ To prepare the index separately, run from the project folder:
 ```powershell
 npx -y codebase-context@2.4.0 reindex
 ```
-
-The interactive wizard limitations described above are still present in the 2.4.0 source. A successful wizard exit alone does not establish working client registration.
 
 ## Gemini CLI
 

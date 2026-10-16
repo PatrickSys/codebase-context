@@ -114,8 +114,15 @@ describe('release truth surfaces', () => {
     expect(visualsDoc).toContain('Historical snapshot');
   });
 
-  it('keeps the manual publish fallback aligned to the package version', () => {
-    expect(workflow).toContain(`description: 'Tag to publish (e.g. v${expectedVersion})'`);
-    expect(workflow).toContain(`default: 'v${expectedVersion}'`);
+  it('requires an explicit release tag for the manual publish fallback', () => {
+    const manualTagInput = workflow.match(/^ {6}tag:\r?\n((?: {8}[^\r\n]*\r?\n)+)/m)?.[1] ?? '';
+
+    expect(manualTagInput).toMatch(/^\s*required:\s*true\s*$/m);
+    expect(manualTagInput).toMatch(/^\s*type:\s*string\s*$/m);
+    expect(manualTagInput).not.toMatch(/^\s*default:/m);
+    expect(workflow).toMatch(/^  release:\r?\n {4}types: \[published\]/m);
+    expect(workflow).toContain(
+      'ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}'
+    );
   });
 });

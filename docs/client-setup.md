@@ -1,5 +1,7 @@
 # Client Setup
 
+**2.4.0 setup preview:** use these commands only after that version is available on npm. To install published 2.2.0, follow the [versioned setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
+
 Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter. These recipes target the 2.4.0 release.
 
 Use Node.js 22 or newer for these recipes. The package still declares Node 18+, but the built pack failed to index source on Node 18.20.4 with `ReferenceError: crypto is not defined` in UUID chunk creation. Node 22 is the lowest version used successfully in the package check; the engine declaration remains an open compatibility issue.

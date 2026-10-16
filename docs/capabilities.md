@@ -1,6 +1,8 @@
 # Capabilities Reference
 
-Technical reference for what `codebase-context` ships today. The public product posture is map first, find second: the bounded conventions map is the first-call surface, and search narrows to the right local example after that. For the user-facing overview, see [README.md](../README.md).
+Technical reference for the 2.4.0 setup preview. The public product posture is map first, find second: the bounded conventions map is the first-call surface, and search narrows to the right local example after that. For the user-facing overview, see [README.md](../README.md).
+
+**2.4.0 setup preview:** use these commands only after that version is available on npm. To install published 2.2.0, follow the [versioned setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
 
 ## Transport Modes
 
@@ -27,7 +29,7 @@ Copy-pasteable client config templates are shipped in the package:
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients
 - `templates/mcp/http/.mcp.json` — HTTP setup for `.mcp.json`-style clients
 
-Use Node.js 22 or newer with the 2.4.0 commands shown here. For client registration recipes and their verification limits, see the [client setup guide](./client-setup.md).
+Use Node.js 22 or newer with the 2.4.0 commands shown here. For 2.4.0 setup preview recipes and their verification limits, see the [client setup guide](./client-setup.md).
 
 ## CLI Reference
 
@@ -50,7 +52,7 @@ For a command gallery with examples, see `docs/cli.md`.
 | `memory add`           | `--type`, `--category`, `--memory`, `--reason`                                                             | `remember`                             |
 | `memory remove <id>`   | —                                                                                                          | —                                      |
 
-Commands that list `--json` above support raw JSON output. For MCP client registration, follow the [published client setup recipes](./client-setup.md). The existing `init` wizard is interactive and generates HTTP setup; see that guide for its current limitations. Errors go to stderr with exit code 1.
+Commands that list `--json` above support raw JSON output. For MCP client registration, follow the [2.4.0 setup preview recipes](./client-setup.md). The existing `init` wizard is interactive and generates HTTP setup; see that guide for its current limitations. Errors go to stderr with exit code 1.
 
 ```bash
 # Quick examples
@@ -303,6 +305,6 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring 
 
 - **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
 - **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
-- **Published 2.4.0 has dedicated Angular, React, Next.js and NestJS analyzers.** Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
+- **The 2.4.0 preview source has dedicated Angular, React, Next.js and NestJS analyzers.** Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
 - **Default embedding model is `bge-small-en-v1.5` (512-token context).** Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

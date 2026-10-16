@@ -125,4 +125,44 @@ describe('release truth surfaces', () => {
       'ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}'
     );
   });
+
+  it('marks 2.4.0 commands as a setup preview before the first runnable command', () => {
+    const previewNotice = '**2.4.0 setup preview:**';
+    const currentVersionGuide =
+      'https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md';
+    const previewPages = [
+      ['docs/capabilities.md', '| **stdio** (default) |'],
+      ['docs/cli.md', 'CODEBASE_ROOT=/path/to/repo npx -y codebase-context@2.4.0 status'],
+      ['docs/demo.md', 'npx -y codebase-context@2.4.0 reindex'],
+      ['docs/review-context.md', 'pnpm build']
+    ] as const;
+
+    for (const [path, firstCommand] of previewPages) {
+      const page = readText(path);
+      const noticeIndex = page.indexOf(previewNotice);
+      const guideIndex = page.indexOf(currentVersionGuide);
+      const commandIndex = page.indexOf(firstCommand);
+
+      expect(
+        noticeIndex,
+        `${path} should include the current-version fallback`
+      ).toBeGreaterThanOrEqual(0);
+      expect(guideIndex, `${path} should link the published 2.2.0 setup`).toBeGreaterThan(
+        noticeIndex
+      );
+      expect(page.slice(noticeIndex, guideIndex)).toContain('available on npm');
+      expect(page.slice(noticeIndex, guideIndex)).toContain('published 2.2.0');
+      expect(commandIndex, `${path} should retain its first runnable command`).toBeGreaterThan(0);
+      expect(noticeIndex, `${path} should qualify commands before they appear`).toBeLessThan(
+        commandIndex
+      );
+    }
+  });
+
+  it('does not describe the unpublished 2.4.0 preview as current or published', () => {
+    const capabilities = readText('docs/capabilities.md');
+
+    expect(capabilities).not.toContain('what `codebase-context` ships today');
+    expect(capabilities).not.toContain('Published 2.4.0 has');
+  });
 });

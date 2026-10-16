@@ -114,8 +114,65 @@ describe('release truth surfaces', () => {
     expect(visualsDoc).toContain('Historical snapshot');
   });
 
-  it('keeps the manual publish fallback aligned to the package version', () => {
-    expect(workflow).toContain(`description: 'Tag to publish (e.g. v${expectedVersion})'`);
-    expect(workflow).toContain(`default: 'v${expectedVersion}'`);
+  it('requires an explicit release tag for the manual publish fallback', () => {
+    const manualTagInput = workflow.match(/^ {6}tag:\r?\n((?: {8}[^\r\n]*\r?\n)+)/m)?.[1] ?? '';
+
+    expect(manualTagInput).toMatch(/^\s*required:\s*true\s*$/m);
+    expect(manualTagInput).toMatch(/^\s*type:\s*string\s*$/m);
+    expect(manualTagInput).not.toMatch(/^\s*default:/m);
+    expect(workflow).toMatch(/^  release:\r?\n {4}types: \[published\]/m);
+    expect(workflow).toContain(
+      'ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}'
+    );
+  });
+
+  it('keeps 2.4.0 setup guidance accurate before and after publication', () => {
+    const versionNotice = 'These commands use 2.4.0.';
+    const fallbackNotice = 'If that version is not available on npm yet, use the published 2.2.0';
+    const currentVersionGuide =
+      'https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md';
+    const setupPages = [
+      [
+        'README.md',
+        'claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0'
+      ],
+      [
+        'docs/client-setup.md',
+        'claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0'
+      ],
+      ['docs/capabilities.md', '| **stdio** (default) |'],
+      ['docs/cli.md', 'CODEBASE_ROOT=/path/to/repo npx -y codebase-context@2.4.0 status'],
+      ['docs/demo.md', 'npx -y codebase-context@2.4.0 reindex'],
+      ['docs/review-context.md', 'pnpm build']
+    ] as const;
+
+    for (const [path, firstCommand] of setupPages) {
+      const page = readText(path);
+      const noticeIndex = page.indexOf(versionNotice);
+      const guideIndex = page.indexOf(currentVersionGuide);
+      const commandIndex = page.indexOf(firstCommand);
+
+      expect(
+        noticeIndex,
+        `${path} should explain the current-version fallback`
+      ).toBeGreaterThanOrEqual(0);
+      expect(guideIndex, `${path} should link the published 2.2.0 setup`).toBeGreaterThan(
+        noticeIndex
+      );
+      expect(page.slice(noticeIndex, guideIndex)).toContain(fallbackNotice);
+      expect(page.slice(noticeIndex, guideIndex)).toContain('[setup guide](');
+      expect(page).not.toContain('**2.4.0 setup preview:**');
+      expect(commandIndex, `${path} should retain its first runnable command`).toBeGreaterThan(0);
+      expect(noticeIndex, `${path} should qualify commands before they appear`).toBeLessThan(
+        commandIndex
+      );
+    }
+  });
+
+  it('does not describe the unpublished 2.4.0 preview as current or published', () => {
+    const capabilities = readText('docs/capabilities.md');
+
+    expect(capabilities).not.toContain('what `codebase-context` ships today');
+    expect(capabilities).not.toContain('Published 2.4.0 has');
   });
 });

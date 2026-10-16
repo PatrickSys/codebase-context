@@ -29,7 +29,7 @@ Replace `[feature]` with something you want to find. The first run downloads a l
 
 ### New in 2.4.0
 
-- Opt-in NestJS support from community contributor Aaron Olin. See the [analyzer options](./docs/capabilities.md#analyzers).
+- NestJS support from community contributor Aaron Olin. See the [analyzer details](./docs/capabilities.md#analyzers).
 - Better React/Next.js detection and a fix for reranker passage scoring.
 - Transformers.js v4 for local models.
 
@@ -72,7 +72,7 @@ The default connection is `stdio` (standard input/output): your client starts th
 
 ### Team patterns and examples
 
-`get_team_patterns` shows the approaches used in the repository and points to representative files. Version `2.4.0` includes dedicated analyzers for Angular, React, Next.js and opt-in NestJS, with a generic analyzer for other stacks.
+`get_team_patterns` shows the approaches used in the repository and points to representative files. Version `2.4.0` includes dedicated analyzers for Angular, React, Next.js and NestJS, with a generic analyzer for other stacks.
 
 ### Project memory
 
@@ -157,7 +157,7 @@ The method and failures are documented so the measurements can be inspected with
 - Retrieval measurements describe expected-file coverage, file precision, and reported `peakPrivateGb`, not patch correctness or end-to-end coding quality.
 - The paired token observation covers two frozen investigation tasks and records observed agent behavior; it is not a universal token or time guarantee.
 - Setup checks differ by client. The detailed guide distinguishes a written config, a config recognized by the client, a local connection, and instructions checked only against official docs.
-- Version `2.4.0` has dedicated Angular, React, Next.js and opt-in NestJS analyzers. Other projects use the generic analyzer and the language parsers available for that stack.
+- Version `2.4.0` has dedicated Angular, React, Next.js and NestJS analyzers. Other projects use the generic analyzer and the language parsers available for that stack.
 - The default searchable-chunk limit is 5,000 per project. In `~/.codebase-context/config.json`, set `projects[].parsing.maxChunks` for a project that needs a higher limit.
 - The agent must identify its repository in tool calls when no default or unambiguous client root is available. Concurrent HTTP client isolation is not established by the stdio routing checks.
 

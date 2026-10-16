@@ -8,6 +8,7 @@ import {
   CODEBASE_CONTEXT_DIRNAME,
   KEYWORD_INDEX_FILENAME
 } from '../src/constants/codebase-context.js';
+import { gitEnvironmentWithoutLocalRepositoryContext } from '../src/utils/git-environment.js';
 import { rmWithRetries } from './test-helpers.js';
 
 const junk = [
@@ -40,9 +41,11 @@ const junk = [
 
 describe('index source scope', () => {
   let root: string;
+  let outerRoot: string | undefined;
 
   afterEach(async () => {
     if (root) await rmWithRetries(root);
+    if (outerRoot) await rmWithRetries(outerRoot);
   });
 
   async function write(relative: string, content = 'export const sample = 1;\n') {
@@ -53,7 +56,12 @@ describe('index source scope', () => {
 
   async function fixture() {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-index-scope-'));
-    const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+    const git = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: root,
+        stdio: 'pipe',
+        env: gitEnvironmentWithoutLocalRepositoryContext()
+      });
     git('init');
     await write('src/app.ts');
     await write('nested/keep.ts');
@@ -66,7 +74,7 @@ describe('index source scope', () => {
         file.endsWith('.json') || file.endsWith('.map') ? '{"value":1}\n' : undefined
       );
     }
-    git('add', '.');
+    git('add', '-f', '.');
     git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-m', 'fixture');
     await write('.gitignore', 'root-ignored.ts\ntracked-ignored.ts\n');
     await write('nested/.gitignore', 'generated.ts\n');
@@ -164,6 +172,72 @@ describe('index source scope', () => {
       expect(paths).toEqual(['keep.ts']);
     } finally {
       root = repository;
+    }
+  });
+
+  it('uses the target repository when caller Git variables point at another repository', async () => {
+    await fixture();
+    outerRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-index-outer-git-'));
+    const outerGit = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: outerRoot,
+        stdio: 'pipe',
+        env: gitEnvironmentWithoutLocalRepositoryContext()
+      });
+
+    outerGit('init');
+    await fs.writeFile(path.join(outerRoot, 'outer-only.ts'), 'export const outer = true;\n');
+    outerGit('add', '-f', '.');
+    outerGit('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-m', 'outer fixture');
+
+    const globalIgnorePath = path.join(outerRoot, 'global-ignore');
+    const globalConfigPath = path.join(outerRoot, 'global.gitconfig');
+    await fs.writeFile(globalIgnorePath, 'globally-ignored.ts\n');
+    await write('globally-ignored.ts');
+    outerGit('config', '--file', globalConfigPath, 'core.excludesFile', globalIgnorePath);
+
+    const outerGitDirectory = path.join(outerRoot, '.git');
+    const outerIndexPath = path.join(outerGitDirectory, 'index');
+    const headBefore = outerGit('rev-parse', 'HEAD').toString('utf8').trim();
+    const indexBefore = await fs.readFile(outerIndexPath);
+    const inheritedVariables = [
+      'GIT_DIR',
+      'GIT_WORK_TREE',
+      'GIT_INDEX_FILE',
+      'GIT_COMMON_DIR',
+      'GIT_CONFIG_GLOBAL'
+    ];
+    const previousValues = new Map(
+      inheritedVariables.map((name) => [name, process.env[name]] as const)
+    );
+
+    process.env.GIT_DIR = outerGitDirectory;
+    process.env.GIT_WORK_TREE = outerRoot;
+    process.env.GIT_INDEX_FILE = outerIndexPath;
+    process.env.GIT_COMMON_DIR = outerGitDirectory;
+    process.env.GIT_CONFIG_GLOBAL = globalConfigPath;
+
+    try {
+      const { paths } = await indexed();
+
+      expect(paths).toEqual([
+        '.github/workflows/ci.yml',
+        '.releaserc.json',
+        'fresh.ts',
+        'nested/keep.ts',
+        'src/app.ts',
+        'tracked-ignored.ts'
+      ]);
+      expect(paths).not.toContain('nested/generated.ts');
+      expect(paths).not.toContain('outer-only.ts');
+      expect(paths).not.toContain('globally-ignored.ts');
+      expect((await fs.readFile(outerIndexPath)).equals(indexBefore)).toBe(true);
+      expect(outerGit('rev-parse', 'HEAD').toString('utf8').trim()).toBe(headBefore);
+    } finally {
+      for (const [name, value] of previousValues) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
     }
   });
 

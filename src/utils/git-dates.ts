@@ -5,6 +5,7 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { gitEnvironmentWithoutLocalRepositoryContext } from './git-environment.js';
 
 const execAsync = promisify(exec);
 const commitDateCache = new Map<string, Map<string, Date>>();
@@ -46,6 +47,7 @@ export async function getFileCommitDates(rootPath: string): Promise<Map<string, 
     // Format: ":::ISO_DATE" followed by affected files on new lines
     const { stdout } = await execAsync('git log --format=":::%cd" --name-only --date=iso-strict', {
       cwd: rootPath,
+      env: gitEnvironmentWithoutLocalRepositoryContext(),
       maxBuffer: 50 * 1024 * 1024 // 50MB buffer for large repos
     });
 

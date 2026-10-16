@@ -25,6 +25,7 @@ import {
 import { analyzerRegistry } from './analyzer-registry.js';
 import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
 import { getSupportedExtensions, isBinaryFile, isCodeFile } from '../utils/language-detection.js';
+import { gitEnvironmentWithoutLocalRepositoryContext } from '../utils/git-environment.js';
 import {
   getEmbeddingProvider,
   getConfiguredDimensions,
@@ -1096,10 +1097,13 @@ export class CodebaseIndexer {
   }
 
   private async gitFiles(): Promise<Set<string> | null> {
+    let gitEnvironment: NodeJS.ProcessEnv;
+
     try {
+      gitEnvironment = gitEnvironmentWithoutLocalRepositoryContext();
       const { stdout } = await execFileAsync('git', ['rev-parse', '--is-inside-work-tree'], {
         cwd: this.rootPath,
-        env: { ...process.env, LC_ALL: 'C' }
+        env: { ...gitEnvironment, LC_ALL: 'C' }
       });
       if (stdout.trim() !== 'true') return null;
     } catch (error) {
@@ -1116,6 +1120,7 @@ export class CodebaseIndexer {
     return new Promise((resolve, reject) => {
       const git = spawn('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
         cwd: this.rootPath,
+        env: gitEnvironment,
         stdio: ['ignore', 'pipe', 'pipe']
       });
       const files = new Set<string>();

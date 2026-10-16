@@ -367,6 +367,30 @@ describe('multi-project routing', () => {
     }
   });
 
+  it('reports status-check guidance when an index build is already running', async () => {
+    const { server } = await import('../src/index.js');
+    const { getOrCreateProject } = await import('../src/project-state.js');
+    const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
+    if (!handler) throw new Error('tools/call handler not registered');
+
+    const project = getOrCreateProject(primaryRoot);
+    const originalStatus = project.indexState.status;
+    project.indexState.status = 'indexing';
+    try {
+      const response = await callTool(handler, 20, 'search_codebase', {
+        query: 'feature',
+        project: primaryRoot
+      });
+      const payload = parsePayload(response) as { status: string; message: string };
+
+      expect(payload.status).toBe('indexing');
+      expect(payload.message).toBe('Index build in progress. Check indexing status, then retry.');
+      expect(searchMocks.search).not.toHaveBeenCalled();
+    } finally {
+      project.indexState.status = originalStatus;
+    }
+  });
+
   it('triggers a background rebuild for a corrupted explicit project without falling back to cwd', async () => {
     delete process.env.CODEBASE_ROOT;
     delete process.argv[2];
@@ -398,7 +422,7 @@ describe('multi-project routing', () => {
       };
 
       expect(payload.status).toBe('indexing');
-      expect(payload.message).toContain('retry shortly');
+      expect(payload.message).toBe('Index rebuild in progress. Check indexing status, then retry.');
       expect(payload.index?.action).toBe('rebuild-started');
       expect(String(payload.index?.reason || '')).toContain('Index meta');
     } finally {
@@ -591,7 +615,9 @@ describe('multi-project routing', () => {
   it('lists bounded and full context resources for active and project-scoped flows', async () => {
     const { server } = await import('../src/index.js');
     const toolHandler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
-    const resourcesHandler = (server as unknown as TestServer)._requestHandlers.get('resources/list');
+    const resourcesHandler = (server as unknown as TestServer)._requestHandlers.get(
+      'resources/list'
+    );
 
     if (!toolHandler || !resourcesHandler) {
       throw new Error('required handlers not registered');

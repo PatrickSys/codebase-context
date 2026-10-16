@@ -1041,7 +1041,7 @@ export function registerHandlers(target: Server): void {
                   type: 'text',
                   text: JSON.stringify({
                     status: 'indexing',
-                    message: 'Index build in progress - please retry shortly'
+                    message: 'Index build in progress. Check indexing status, then retry.'
                   })
                 }
               ]
@@ -1068,7 +1068,7 @@ export function registerHandlers(target: Server): void {
                   type: 'text',
                   text: JSON.stringify({
                     status: 'indexing',
-                    message: 'Index rebuild in progress - please retry shortly',
+                    message: 'Index rebuild in progress. Check indexing status, then retry.',
                     index: indexSignal
                   })
                 }

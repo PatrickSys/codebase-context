@@ -183,7 +183,7 @@ export async function handle(
           text: JSON.stringify(
             {
               status: 'indexing',
-              message: 'Index is still being built. Retry in a moment.',
+              message: 'Index build in progress. Check indexing status, then retry.',
               progress: ctx.indexState.indexer?.getProgress()
             },
             null,
@@ -233,7 +233,8 @@ export async function handle(
             text: JSON.stringify(
               {
                 status: 'indexing',
-                message: 'Index was corrupt. Rebuild started — retry shortly.'
+                message:
+                  'Index is unavailable or not ready. Indexing has started. Check indexing status, then retry.'
               },
               null,
               2

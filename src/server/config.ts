@@ -5,6 +5,7 @@ import path from 'node:path';
 export interface ProjectConfig {
   root: string;
   excludePatterns?: string[];
+  includeExcluded?: string[];
   parsing?: {
     maxChunks?: number;
   };
@@ -88,6 +89,10 @@ export async function loadServerConfig(): Promise<ServerConfig | null> {
         const excludePatterns = parseStringArray(project.excludePatterns);
         if (excludePatterns) {
           parsedProject.excludePatterns = excludePatterns;
+        }
+        const includeExcluded = parseStringArray(project.includeExcluded);
+        if (includeExcluded) {
+          parsedProject.includeExcluded = includeExcluded;
         }
 
         if (

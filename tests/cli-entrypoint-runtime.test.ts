@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '..');
@@ -54,4 +56,47 @@ describe('CLI entrypoint runtime', () => {
     expect(parsed.rootPath).toBe(root);
     expect(parsed.hint).toContain('refresh_index');
   }, 120_000);
+
+  it('prints usage for help from a project containing a directory named help', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'cbc-cli-help-'));
+    const helpDirectory = join(projectRoot, 'help');
+
+    const env = { ...process.env };
+    delete env.CODEBASE_ROOT;
+
+    try {
+      await mkdir(helpDirectory);
+
+      const result = spawnSync(
+        process.execPath,
+        ['--import', import.meta.resolve('tsx'), entrypoint, 'help'],
+        {
+          cwd: projectRoot,
+          env,
+          encoding: 'utf8',
+          timeout: 60_000
+        }
+      );
+
+      expect({
+        errorCode: result.error?.code,
+        exitCode: result.status,
+        helpText: result.stdout.includes('codebase-context <command> [options]'),
+        commandsSection: result.stdout.includes('Commands:'),
+        stderr: result.stderr,
+        projectEntries: await readdir(projectRoot),
+        helpEntries: await readdir(helpDirectory)
+      }).toEqual({
+        errorCode: undefined,
+        exitCode: 0,
+        helpText: true,
+        commandsSection: true,
+        stderr: '',
+        projectEntries: ['help'],
+        helpEntries: []
+      });
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  }, 70_000);
 });

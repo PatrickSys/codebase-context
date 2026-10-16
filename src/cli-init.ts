@@ -339,7 +339,7 @@ export async function _buildMergedCodexContent(
   }
 
   const dottedEntry = new RegExp(
-    `^\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}\\s*\\.`,
+    `^\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}\\s*(?:\\.|=)`,
     'm'
   );
   if (dottedEntry.test(normalizedExisting)) {

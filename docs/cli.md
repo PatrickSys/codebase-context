@@ -48,15 +48,16 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context@2.2.0 patterns
 
 ## `init`
 
-The local candidate CLI supports deterministic help and noninteractive Codex setup:
+`init` detects Claude Code, Codex, Cursor and OpenCode, then configures the selected tools together. In a terminal, detected tools start selected; use Space to change the selection and Enter to apply it. Without a terminal, it configures all detected tools.
 
 ```powershell
 codebase-context init --help
-codebase-context init --client codex --yes
-codebase-context init --client codex --yes --root "C:\path\to\project"
+codebase-context init
+codebase-context init --yes
+codebase-context init --client codex --client cursor --root "C:\path\to\project"
 ```
 
-`--yes` requires `--client`. `--root` is Codex-only and must name an existing directory. Codex setup writes project `.codex/config.toml`, preserving unrelated TOML and rejecting conflicting server settings, then prepares the local index. Its stdio command points to the exact installed CLI entrypoint used for setup. Setup does not change global Codex configuration, project trust, or approval settings. See the [packed-candidate recipe](./client-setup.md#install-an-exact-packed-candidate-for-codex) before using an unreleased build.
+Use repeatable `--client` options to choose tools explicitly. `--yes` configures every detected tool when no clients are named. `--root` selects another repository; otherwise `CODEBASE_ROOT` or the current directory is used. Setup writes client registrations but does not build an index or change agent instructions. The first search creates the index. The multi-tool flow is not in published npm `2.2.0` yet; see the [main setup guide](../README.md#set-up-your-coding-tools) for its publication status and the [client setup guide](./client-setup.md) for current manual recipes.
 
 ---
 
@@ -232,11 +233,11 @@ Example output:
 In the unreleased model-free candidate, use the locally installed package:
 
 ```bash
-npx --no-install codebase-context reindex
-npx --no-install codebase-context reindex --incremental
-npx --no-install codebase-context reindex --no-embeddings
+CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex
+CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --incremental
+CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --no-embeddings
 # Requires the optional Transformers and LanceDB runtimes; may download models.
-npx --no-install codebase-context reindex --embeddings
+CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --embeddings
 ```
 
 New projects default to model-free. Omit mode flags to preserve the successful mode; explicit changes require a full rebuild even with `--incremental`. The two mode flags are mutually exclusive and index failures return nonzero. The examples below target the older published package.

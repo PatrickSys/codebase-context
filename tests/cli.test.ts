@@ -24,7 +24,6 @@ vi.mock('../src/server/config.js', () => ({
 vi.mock('../src/core/indexer.js', () => ({
   CodebaseIndexer: vi.fn().mockImplementation(() => ({
     index: cliContextMocks.indexer,
-    previewFiles: vi.fn(),
     getProgress: vi.fn()
   }))
 }));
@@ -63,6 +62,23 @@ describe('CLI', () => {
 
     if (originalEnvRoot === undefined) delete process.env.CODEBASE_ROOT;
     else process.env.CODEBASE_ROOT = originalEnvRoot;
+  });
+
+  it('init configures the selected repository without preparing its index', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-only-'));
+    const previousExitCode = process.exitCode;
+    try {
+      process.exitCode = undefined;
+      await handleCliCommand(['init', '--client', 'codex', '--yes', '--root', root]);
+      expect(cliContextMocks.indexer).not.toHaveBeenCalled();
+      expect(cliContextMocks.loadProjectConfig).not.toHaveBeenCalled();
+      expect(await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8')).toContain(
+        '[mcp_servers.codebase-context]'
+      );
+    } finally {
+      process.exitCode = previousExitCode;
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 
   it('search errors when --query has no value', async () => {
@@ -157,7 +173,7 @@ describe('CLI', () => {
 
       const out = logSpy.mock.calls.map((c) => String(c[0] ?? '')).join('\n');
       expect(out).toMatch(/Index Status/);
-      expect(out).toMatch(/\+\- Index Status/);
+      expect(out).toMatch(/\+- Index Status/);
       expect(out).toMatch(/Progress:/);
     } finally {
       if (originalAscii === undefined) delete process.env.CODEBASE_CONTEXT_ASCII;

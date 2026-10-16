@@ -1,516 +1,583 @@
-/** Setup wizard and project-scoped native client configuration. */
+/**
+ * Interactive setup wizard for codebase-context.
+ * Handles `codebase-context init` — detects clients and merges project MCP configs
+ * for the four first-wave AI clients: Claude Code, Cursor, Codex, OpenCode.
+ *
+ * Depends only on Node built-ins and @inquirer/prompts.
+ * No imports from the rest of the codebase — keeps this module side-effect-free
+ * outside the wizard call and easy to unit test.
+ */
 
-import path from 'node:path';
-import { homedir } from 'node:os';
+import path from 'path';
 import * as fs from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
-import select from '@inquirer/select';
-import confirm from '@inquirer/confirm';
-import { EXCLUDED_GLOB_PATTERNS } from './constants/codebase-context.js';
+import { checkbox } from '@inquirer/prompts';
+import { homedir } from 'node:os';
+import { constants } from 'node:fs';
+import { createRequire } from 'node:module';
 
-export type Client = 'claude-code' | 'cursor' | 'codex' | 'opencode';
+export type Client = (typeof CLIENTS)[number]['id'];
 
-export type McpConfigResult =
-  | { kind: 'file'; path: string; content: string }
-  | { kind: 'command'; executable: string; args: string[] };
+export type McpConfigResult = { kind: 'file'; path: string; content: string };
 
-type JsonObject = Record<string, unknown>;
-const CODEX_SERVER_HEADER =
-  /^\s*\[mcp_servers\.(?:"codebase-context"|'codebase-context'|codebase-context)\]\s*$/m;
-
-export type InitIndexResult =
-  | { status: 'ready'; summary?: string }
-  | { status: 'error'; error: string };
-export type InitPreviewResult =
-  | {
-      status: 'ready';
-      rootPath: string;
-      eligibleFiles: string[];
-      skippedFiles: Array<{ path: string; reason: string }>;
-      skippedFileCount: number;
-      excludedPatterns: string[];
-    }
-  | { status: 'error'; error: string };
-export type InitOptions = {
+export type McpConfigOptions = {
   rootPath?: string;
-  previewIndex?: (rootPath: string) => Promise<InitPreviewResult>;
-  prepareIndex?: (rootPath: string) => Promise<InitIndexResult>;
+  platform?: NodeJS.Platform;
+  packageVersion?: string;
 };
 
-function resolveRoot(rootPath?: string): string {
-  return path.resolve(rootPath ?? process.env.CODEBASE_ROOT ?? process.cwd());
-}
+type JsonObject = Record<string, unknown>;
 
-export function generateMcpConfig(client: Client, rootPath = resolveRoot()): McpConfigResult {
-  switch (client) {
-    case 'claude-code':
-      return {
-        kind: 'command',
-        executable: 'claude',
-        args: ['mcp', 'add', '--transport', 'http', 'codebase-context', 'http://127.0.0.1:3100/mcp']
-      };
-    case 'cursor':
-      return {
-        kind: 'file',
-        path: '.cursor/mcp.json',
-        content: JSON.stringify(
-          {
-            mcpServers: { 'codebase-context': { type: 'http', url: 'http://127.0.0.1:3100/mcp' } }
-          },
-          null,
-          2
+const { version: packageVersion } = createRequire(import.meta.url)('../package.json') as {
+  version: string;
+};
+
+export const CLIENTS = [
+  { id: 'claude-code', name: 'Claude Code', executable: 'claude', directory: '.claude' },
+  { id: 'codex', name: 'Codex', executable: 'codex', directory: '.codex' },
+  { id: 'cursor', name: 'Cursor', executable: 'cursor', directory: '.cursor' },
+  { id: 'opencode', name: 'OpenCode', executable: 'opencode', directory: '.opencode' }
+] as const;
+
+export async function detectClients(
+  rootPath: string,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): Promise<Client[]> {
+  const paths = platform === 'win32' ? path.win32 : path.posix;
+  const home = env.HOME || env.USERPROFILE || homedir();
+  const configHome = env.XDG_CONFIG_HOME || paths.join(home, '.config');
+  const searchPath = (env.PATH || env.Path || '').split(platform === 'win32' ? ';' : ':');
+  const extensions = platform === 'win32' ? ['', '.exe', '.cmd', '.bat', '.ps1'] : [''];
+  const detected: Client[] = [];
+  for (const client of CLIENTS) {
+    const userDirectory =
+      client.id === 'codex'
+        ? env.CODEX_HOME || paths.join(home, '.codex')
+        : client.id === 'claude-code'
+          ? env.CLAUDE_CONFIG_DIR || paths.join(home, '.claude')
+          : client.id === 'opencode'
+            ? paths.join(configHome, 'opencode')
+            : paths.join(home, client.directory);
+    const directories = [paths.join(rootPath, client.directory), userDirectory];
+    const executables = searchPath
+      .filter(Boolean)
+      .flatMap((directory) =>
+        extensions.map((extension) => paths.join(directory, client.executable + extension))
+      );
+    const candidates = [
+      ...directories.map((candidate) => ({ path: candidate, directory: true })),
+      ...executables.map((candidate) => ({ path: candidate, directory: false }))
+    ];
+    for (const candidate of candidates) {
+      try {
+        await fs.access(
+          candidate.path,
+          candidate.directory || platform === 'win32' ? constants.F_OK : constants.X_OK
+        );
+        const info = await fs.stat(candidate.path);
+        if (candidate.directory ? !info.isDirectory() : !info.isFile()) continue;
+        detected.push(client.id);
+        break;
+      } catch (error) {
+        if (
+          !isFileNotFound(error) &&
+          !(
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            (error.code === 'EACCES' || error.code === 'ENOTDIR')
+          )
         )
-      };
-    case 'codex': {
-      const root = resolveRoot(rootPath);
-      const executable = path.resolve(process.argv[1] ?? '');
-      const content =
-        '[mcp_servers.codebase-context]\n' +
-        `command = ${JSON.stringify(process.execPath)}\n` +
-        `cwd = ${JSON.stringify(root)}\n` +
-        `args = [${JSON.stringify(executable)}, ${JSON.stringify(root)}]\n`;
-      return { kind: 'file', path: path.join(root, '.codex', 'config.toml'), content };
+          throw error;
+      }
     }
-    case 'opencode':
-      return {
-        kind: 'file',
-        path: 'opencode.json',
-        content: JSON.stringify(
-          {
+  }
+  return detected;
+}
+
+export function generateMcpConfig(client: Client, options: McpConfigOptions = {}): McpConfigResult {
+  const rootPath = path.resolve(options.rootPath ?? process.cwd());
+  const version = options.packageVersion ?? packageVersion;
+  const windows = (options.platform ?? process.platform) === 'win32';
+  const command = windows ? 'npx.cmd' : 'npx';
+  const args = ['--yes', `codebase-context@${version}`, rootPath];
+  if (client === 'codex') {
+    return {
+      kind: 'file',
+      path: path.join(rootPath, '.codex', 'config.toml'),
+      content:
+        `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(command)}\n` +
+        `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 300\n`
+    };
+  }
+  const configPath =
+    client === 'claude-code'
+      ? '.mcp.json'
+      : client === 'cursor'
+        ? '.cursor/mcp.json'
+        : 'opencode.json';
+  return {
+    kind: 'file',
+    path: path.join(rootPath, configPath),
+    content: JSON.stringify(
+      client === 'opencode'
+        ? {
             $schema: 'https://opencode.ai/config.json',
-            mcp: { 'codebase-context': { type: 'remote', url: 'http://127.0.0.1:3100/mcp' } }
+            mcp: { 'codebase-context': { type: 'local', command: [command, ...args] } }
+          }
+        : {
+            mcpServers: {
+              'codebase-context': {
+                ...(client === 'cursor' ? { type: 'stdio' } : {}),
+                command,
+                args
+              }
+            }
           },
-          null,
-          2
-        )
-      };
-  }
+      null,
+      2
+    )
+  };
 }
 
-export function generateInstructionBlock(): string {
-  return `<!-- codebase-context:start -->
-## Codebase Context (MCP)
+export function resolveInitRoot(
+  args: string[],
+  envRoot: string | undefined,
+  cwd = process.cwd()
+): string {
+  let explicitRoot: string | undefined;
 
-**Start of every task:** Call \`get_memory\` to load team conventions before writing any code.
-**Before editing existing code:** Call \`search_codebase\` with \`intent: "edit"\`. If the preflight card says \`ready: false\`, read the listed files before touching anything.
-**Before writing new code:** Call \`get_team_patterns\` to check how the team handles DI, state, testing, and library wrappers — don't introduce a new pattern if one already exists.
-**When asked to "remember" or "record" something:** Call \`remember\` immediately, before doing anything else.
-**When adding imports that cross module boundaries:** Call \`detect_circular_dependencies\` with the relevant scope after adding the import.
-<!-- codebase-context:end -->
-`;
-}
-
-export function resolveInstructionFilePath(client: Client, cwd: string): string | null {
-  switch (client) {
-    case 'claude-code':
-      return path.join(cwd, 'CLAUDE.md');
-    case 'cursor':
-      return path.join(cwd, '.cursorrules');
-    case 'codex':
-      return path.join(cwd, 'AGENTS.md');
-    case 'opencode':
-      return null;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === '--root') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) {
+        throw new Error('Expected a directory path after --root.');
+      }
+      explicitRoot = value;
+      index++;
+    } else if (arg?.startsWith('--root=')) {
+      const value = arg.slice('--root='.length);
+      if (!value) {
+        throw new Error('Expected a directory path after --root.');
+      }
+      explicitRoot = value;
+    }
   }
-}
 
-export async function _appendInstructionBlock(filePath: string): Promise<'written' | 'skipped'> {
-  let existing: string;
-  try {
-    existing = await fs.readFile(filePath, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    await fs.writeFile(filePath, generateInstructionBlock(), 'utf8');
-    return 'written';
-  }
-  if (existing.includes('<!-- codebase-context:start -->')) return 'skipped';
-  await fs.writeFile(filePath, `${existing}\n${generateInstructionBlock()}`, 'utf8');
-  return 'written';
+  return path.resolve(explicitRoot ?? (envRoot ? envRoot : cwd));
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function normalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeJson);
+  }
+  if (isJsonObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, normalizeJson(entry)])
+    );
+  }
+  return value;
+}
+
+function jsonValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(normalizeJson(left)) === JSON.stringify(normalizeJson(right));
+}
+
+function isFileNotFound(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+async function readExistingConfig(filePath: string): Promise<string | null> {
+  try {
+    return await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    if (isFileNotFound(error)) return null;
+    throw error;
+  }
+}
+
+function isAbsolutePath(value: string): boolean {
+  return path.posix.isAbsolute(value) || path.win32.isAbsolute(value);
+}
+
+/** Recognize only CBC-specific launch shapes written by init. */
+function isGeneratedLaunch(command: unknown, args: unknown): boolean {
+  if (
+    typeof command !== 'string' ||
+    !Array.isArray(args) ||
+    !args.every((arg) => typeof arg === 'string')
+  )
+    return false;
+  const executable = path.basename(command.replace(/\\/g, '/')).toLowerCase();
+  if (executable === 'node' || executable === 'node.exe') {
+    return (
+      args.length === 2 &&
+      /[\\/]node_modules[\\/]codebase-context[\\/]dist[\\/]index\.js$/.test(args[0]) &&
+      isAbsolutePath(args[0]) &&
+      isAbsolutePath(args[1])
+    );
+  }
+  const launch = command === 'npx' || command === 'npx.cmd' ? args : [];
+  return (
+    launch.length === 3 &&
+    (launch[0] === '--yes' || launch[0] === '-y') &&
+    /^codebase-context@\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(launch[1]) &&
+    isAbsolutePath(launch[2])
+  );
+}
+
+function mergeGeneratedServer(existing: unknown, generated: unknown, client: Client): unknown {
+  if (jsonValuesEqual(existing, generated)) return existing;
+  if (!isJsonObject(existing) || !isJsonObject(generated) || 'url' in existing) return null;
+  const local = client === 'opencode';
+  const command = local && Array.isArray(existing.command) ? existing.command[0] : existing.command;
+  const args = local && Array.isArray(existing.command) ? existing.command.slice(1) : existing.args;
+  if (
+    (existing.type !== undefined && existing.type !== (local ? 'local' : 'stdio')) ||
+    !isGeneratedLaunch(command, args)
+  )
+    return null;
+  return {
+    ...existing,
+    command: generated.command,
+    ...(!local ? { args: generated.args } : {}),
+    ...(generated.type ? { type: generated.type } : {})
+  };
+}
+
+/**
+ * Merge generated MCP config into an existing JSON config file when possible.
+ * Preserves unrelated keys and updates only recognized generated launches.
+ */
 export async function _buildMergedMcpContent(
   filePath: string,
   generatedContent: string,
-  client: Extract<Client, 'cursor' | 'opencode'>
+  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode'>
 ): Promise<{ content: string; mergedFromExisting: boolean }> {
+  const existingText = await readExistingConfig(filePath);
+  if (existingText === null) {
+    return { content: generatedContent, mergedFromExisting: false };
+  }
+
   let existing: unknown;
   try {
-    existing = JSON.parse(await fs.readFile(filePath, 'utf8'));
-  } catch {
-    return { content: generatedContent, mergedFromExisting: false };
+    existing = JSON.parse(existingText) as unknown;
+  } catch (error) {
+    throw new Error(`Cannot merge ${client} config at ${filePath}: existing JSON is invalid.`, {
+      cause: error
+    });
   }
+
   const generated = JSON.parse(generatedContent) as unknown;
-  if (!isJsonObject(existing) || !isJsonObject(generated))
-    return { content: generatedContent, mergedFromExisting: false };
-  if (client === 'cursor') {
-    const existingServers = isJsonObject(existing.mcpServers) ? existing.mcpServers : {};
-    const generatedServers = isJsonObject(generated.mcpServers) ? generated.mcpServers : {};
-    return {
-      content: JSON.stringify(
-        { ...existing, ...generated, mcpServers: { ...existingServers, ...generatedServers } },
-        null,
-        2
-      ),
-      mergedFromExisting: true
-    };
+  if (!isJsonObject(existing) || !isJsonObject(generated)) {
+    throw new Error(`Cannot merge ${client} config at ${filePath}: expected a JSON object.`);
   }
-  const existingMcp = isJsonObject(existing.mcp) ? existing.mcp : {};
-  const generatedMcp = isJsonObject(generated.mcp) ? generated.mcp : {};
+
+  const serverKey = client === 'opencode' ? 'mcp' : 'mcpServers';
+  const existingServersValue = existing[serverKey];
+  if (existingServersValue !== undefined && !isJsonObject(existingServersValue)) {
+    throw new Error(
+      `Cannot merge ${client} config at ${filePath}: ${serverKey} must be a JSON object.`
+    );
+  }
+  const generatedServersValue = generated[serverKey];
+  if (!isJsonObject(generatedServersValue)) {
+    throw new Error(`Invalid generated ${client} MCP config.`);
+  }
+  const existingServers = isJsonObject(existingServersValue) ? existingServersValue : {};
+  const hasExistingCodebaseContext = Object.prototype.hasOwnProperty.call(
+    existingServers,
+    'codebase-context'
+  );
+  const generatedCodebaseContext = generatedServersValue['codebase-context'];
+  const mergedServer = hasExistingCodebaseContext
+    ? mergeGeneratedServer(existingServers['codebase-context'], generatedCodebaseContext, client)
+    : generatedCodebaseContext;
+  if (mergedServer === null) {
+    throw new Error(
+      `Cannot merge ${client} config at ${filePath}: it already contains a different codebase-context configuration.`
+    );
+  }
+  const merged = {
+    ...generated,
+    ...existing,
+    [serverKey]: { ...existingServers, 'codebase-context': mergedServer }
+  };
   return {
-    content: JSON.stringify(
-      { ...existing, ...generated, mcp: { ...existingMcp, ...generatedMcp } },
-      null,
-      2
-    ),
+    content: jsonValuesEqual(existing, merged) ? existingText : JSON.stringify(merged, null, 2),
     mergedFromExisting: true
   };
 }
 
-function parseInitArgs(argv: string[]): {
-  client?: Client;
-  rootPath?: string;
-  yes: boolean;
-  preview: boolean;
-  help: boolean;
-} {
-  let client: Client | undefined;
-  let rootPath: string | undefined;
-  let yes = false;
-  let preview = false;
-  let help = false;
-  for (let index = 0; index < argv.length; index++) {
-    const arg = argv[index];
-    if (arg === '--help' || arg === '-h') {
-      help = true;
-      continue;
-    }
-    if (arg === '--yes' || arg === '--non-interactive') {
-      yes = true;
-      continue;
-    }
-    if (arg === '--preview') {
-      preview = true;
-      continue;
-    }
-    if (arg === '--client' || arg === '--root') {
-      const value = argv[++index];
-      if (!value || value.startsWith('--')) throw new Error(`${arg} requires a value`);
-      if (arg === '--root') rootPath = value;
-      else if (
-        value === 'claude-code' ||
-        value === 'cursor' ||
-        value === 'codex' ||
-        value === 'opencode'
-      )
-        client = value;
-      else
-        throw new Error(
-          `Unknown client "${value}". Choose claude-code, cursor, codex, or opencode.`
-        );
-      continue;
-    }
-    if (arg.startsWith('-')) throw new Error(`Unknown init option: ${arg}`);
-    throw new Error(`Unexpected positional init argument: ${arg}`);
-  }
-  if (yes && !client) throw new Error('--yes requires --client for non-interactive init');
-  if (preview && !client) throw new Error('--preview requires --client codex');
-  if (rootPath && client && client !== 'codex')
-    throw new Error('--root is supported only for --client codex');
-  if (preview && client !== 'codex')
-    throw new Error('--preview is supported only for --client codex');
-  return { client, rootPath, yes, preview, help };
+function normalizeTomlNewlines(value: string): string {
+  return value.replace(/\r\n/g, '\n');
 }
 
-export function printInitHelp(): void {
-  console.log('codebase-context init [options]');
-  console.log('  --help, -h                 Show init help without starting prompts');
-  console.log('  --client <name>            claude-code | cursor | codex | opencode');
-  console.log('  --root <directory>         Project root (Codex only)');
-  console.log('  --preview                  Show Codex file selection without writing or indexing');
-  console.log('  --yes, --non-interactive   Apply without prompts; requires --client');
+function tomlKeyPattern(key: string): string {
+  return `(?:${key}|"${key}"|'${key}')`;
 }
 
-function printIndexPreview(preview: Extract<InitPreviewResult, { status: 'ready' }>): void {
-  const listedFiles = 12;
-  console.log('\n--- Repository Index Preview ---');
-  console.log(`Repository: ${preview.rootPath}`);
-  console.log(`Eligible files: ${preview.eligibleFiles.length}`);
-  for (const file of preview.eligibleFiles.slice(0, listedFiles)) console.log(`  + ${file}`);
-  if (preview.eligibleFiles.length > listedFiles) {
-    console.log(`  ... ${preview.eligibleFiles.length - listedFiles} more eligible files`);
+/**
+ * Merges the generated Codex launch, preserving unrelated settings and custom entries.
+ */
+export async function _buildMergedCodexContent(
+  filePath: string,
+  generatedContent: string
+): Promise<{ content: string; mergedFromExisting: boolean }> {
+  const existing = await readExistingConfig(filePath);
+  if (existing === null) {
+    return { content: generatedContent, mergedFromExisting: false };
   }
-  console.log(`Skipped observed candidates: ${preview.skippedFileCount}`);
-  for (const file of preview.skippedFiles.slice(0, listedFiles)) {
-    console.log(`  - ${file.path} (${file.reason})`);
-  }
-  const unlistedSkipped =
-    preview.skippedFileCount - Math.min(preview.skippedFiles.length, listedFiles);
-  if (unlistedSkipped > 0) {
-    console.log(`  ... ${unlistedSkipped} more observed skips`);
-  }
-  const defaultPatterns = new Set(EXCLUDED_GLOB_PATTERNS);
-  const orderedPatterns = [
-    ...preview.excludedPatterns.filter((pattern) => !defaultPatterns.has(pattern)),
-    ...preview.excludedPatterns.filter((pattern) => defaultPatterns.has(pattern))
-  ];
-  const patternSample = orderedPatterns.slice(0, 6);
-  console.log(`Excluded by rules before enumeration: ${preview.excludedPatterns.length} patterns`);
-  for (const pattern of patternSample) console.log(`  x ${pattern}`);
-  if (preview.excludedPatterns.length > patternSample.length) {
-    console.log(`  ... ${preview.excludedPatterns.length - patternSample.length} more patterns`);
-  }
-  console.log('Files matching excluded patterns were not individually enumerated.');
-  console.log(
-    'This is a point-in-time preview; files or project settings may change before indexing.'
+
+  const normalizedExisting = normalizeTomlNewlines(existing);
+  const normalizedGenerated = normalizeTomlNewlines(generatedContent).trim();
+  const mcpServersKey = tomlKeyPattern('mcp_servers');
+  const codebaseContextKey = tomlKeyPattern('codebase-context');
+  const entryHeader = new RegExp(
+    `^\\s*\\[{1,2}\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}(?:\\s*\\.\\s*[^\\]]+)?\\s*\\]{1,2}\\s*(?:#.*)?$`,
+    'gm'
   );
-}
+  const existingEntry = entryHeader.exec(normalizedExisting);
 
-function codexSectionMatches(existing: string, generated: string): boolean {
-  const match = CODEX_SERVER_HEADER.exec(existing);
-  if (!match || match.index === undefined) return false;
-  const section = getCodexServerSection(existing, match);
-  if (section === undefined) return false;
-  const expected = generated
-    .slice(generated.indexOf('\n') + 1)
-    .trim()
-    .split(/\r?\n/)
-    .map((line) => line.trim());
-  return expected.every((line) =>
-    section.split(/\r?\n/).some((existingLine) => existingLine.trim() === line)
+  if (existingEntry) {
+    const nextTable = /^\s*\[{1,2}[^\r\n]+\]{1,2}\s*(?:#.*)?$/gm;
+    nextTable.lastIndex = entryHeader.lastIndex;
+    const nextTableMatch = nextTable.exec(normalizedExisting);
+    const sectionEnd = nextTableMatch?.index ?? normalizedExisting.length;
+    const section = normalizedExisting.slice(existingEntry.index, sectionEnd).trim();
+    const exactEntryHeader = new RegExp(
+      `^\\[\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}\\s*\\]\\s*(?:#.*)?$`,
+      'm'
+    );
+    const comparableSection = section.replace(exactEntryHeader, '[mcp_servers.codebase-context]');
+    if (comparableSection === normalizedGenerated) {
+      return { content: existing, mergedFromExisting: true };
+    }
+    const commandLine = /^([ \t]*command[ \t]*=[ \t]*)("(?:[^"\\]|\\.)*")([ \t]*(?:#.*)?)$/m;
+    const argsLine = /^([ \t]*args[ \t]*=[ \t]*)(\[[^\r\n]*\])([ \t]*(?:#.*)?)$/m;
+    const oldCommand = commandLine.exec(section);
+    const oldArgs = argsLine.exec(section);
+    const newCommand = commandLine.exec(normalizedGenerated);
+    const newArgs = argsLine.exec(normalizedGenerated);
+    if (
+      exactEntryHeader.test(section) &&
+      oldCommand &&
+      oldArgs &&
+      newCommand &&
+      newArgs &&
+      !/^[ \t]*url[ \t]*=/m.test(section) &&
+      section.match(/^[ \t]*command[ \t]*=/gm)?.length === 1 &&
+      section.match(/^[ \t]*args[ \t]*=/gm)?.length === 1
+    ) {
+      try {
+        if (isGeneratedLaunch(JSON.parse(oldCommand[2]), JSON.parse(oldArgs[2]))) {
+          if (
+            jsonValuesEqual(JSON.parse(oldCommand[2]), JSON.parse(newCommand[2])) &&
+            jsonValuesEqual(JSON.parse(oldArgs[2]), JSON.parse(newArgs[2]))
+          ) {
+            return { content: existing, mergedFromExisting: true };
+          }
+          const updated = normalizedExisting
+            .slice(existingEntry.index, sectionEnd)
+            .replace(
+              commandLine,
+              (_line, prefix: string, _value: string, comment: string) =>
+                prefix + newCommand[2] + comment
+            )
+            .replace(
+              argsLine,
+              (_line, prefix: string, _value: string, comment: string) =>
+                prefix + newArgs[2] + comment
+            );
+          const content =
+            normalizedExisting.slice(0, existingEntry.index) +
+            updated +
+            normalizedExisting.slice(sectionEnd);
+          return {
+            content: existing.includes('\r\n') ? content.replace(/\n/g, '\r\n') : content,
+            mergedFromExisting: true
+          };
+        }
+      } catch {
+        // Non-generated TOML values remain untouched and are reported as conflicts.
+      }
+    }
+    throw new Error(
+      `Cannot merge Codex config at ${filePath}: it already contains a different codebase-context configuration.`
+    );
+  }
+
+  const dottedEntry = new RegExp(
+    `^\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}\\s*(?:=|\\.)`,
+    'm'
   );
-}
+  if (dottedEntry.test(normalizedExisting)) {
+    throw new Error(
+      `Cannot merge Codex config at ${filePath}: it already contains a different codebase-context configuration.`
+    );
+  }
 
-function getCodexServerSection(
-  existing: string,
-  headerMatch = CODEX_SERVER_HEADER.exec(existing)
-): string | undefined {
-  if (!headerMatch || headerMatch.index === undefined) return undefined;
-  const start = headerMatch.index + headerMatch[0].length;
-  const rest = existing.slice(start);
-  const endMatch = /^\s*\[[^\]]+\]\s*$/m.exec(rest);
-  return rest.slice(0, endMatch?.index ?? rest.length);
-}
-
-export function _mergeCodexMcpContent(
-  existing: string,
-  generated: string
-): { content: string; changed: boolean } {
-  if (CODEX_SERVER_HEADER.test(existing)) {
-    const section = getCodexServerSection(existing);
-    if (/^\s*enabled\s*=\s*false\s*(?:#.*)?$/m.test(section ?? '')) {
+  const parentTableHeader = new RegExp(`^\\s*\\[\\s*${mcpServersKey}\\s*\\]\\s*(?:#.*)?$`, 'gm');
+  let parentTable = parentTableHeader.exec(normalizedExisting);
+  while (parentTable) {
+    const nextTable = /^\s*\[{1,2}[^\r\n]+\]{1,2}\s*(?:#.*)?$/gm;
+    nextTable.lastIndex = parentTableHeader.lastIndex;
+    const nextTableMatch = nextTable.exec(normalizedExisting);
+    const sectionEnd = nextTableMatch?.index ?? normalizedExisting.length;
+    const parentSettings = normalizedExisting.slice(parentTableHeader.lastIndex, sectionEnd);
+    const childEntry = new RegExp(`^\\s*${codebaseContextKey}\\s*(?:=|\\.)`, 'm');
+    if (childEntry.test(parentSettings)) {
       throw new Error(
-        'Existing codebase-context server is disabled; set enabled = true explicitly, then rerun init.'
+        `Cannot merge Codex config at ${filePath}: it already contains a different codebase-context configuration.`
       );
     }
-    if (codexSectionMatches(existing, generated)) return { content: existing, changed: false };
-    throw new Error('Existing codebase-context settings conflict; refusing to overwrite them.');
+    parentTable = parentTableHeader.exec(normalizedExisting);
   }
+
+  const firstTable = /^\s*\[/m.exec(normalizedExisting);
+  const rootSettings = firstTable
+    ? normalizedExisting.slice(0, firstTable.index)
+    : normalizedExisting;
+  const inlineServers = new RegExp(`^\\s*${mcpServersKey}\\s*=`, 'm');
+  if (inlineServers.test(rootSettings)) {
+    throw new Error(
+      `Cannot merge Codex config at ${filePath}: mcp_servers is already configured inline.`
+    );
+  }
+
+  const prefix = normalizedExisting.trimEnd();
   return {
-    content: `${existing}${existing && !existing.endsWith('\n') ? '\n' : existing ? '\n' : ''}${generated}`,
-    changed: true
+    content: `${prefix ? `${prefix}\n\n` : ''}${normalizedGenerated}\n`,
+    mergedFromExisting: true
   };
 }
 
-async function writeCodexConfig(filePath: string, content: string): Promise<void> {
-  const directory = path.dirname(filePath);
-  const globalConfigs = [path.join(homedir(), '.codex', 'config.toml')];
-  if (process.env.CODEX_HOME) globalConfigs.push(path.join(process.env.CODEX_HOME, 'config.toml'));
-  const canonicalPaths = await Promise.all(
-    [filePath, ...globalConfigs].map(resolveCanonicalPathWithMissingLeaf)
+type InitOptions = {
+  clients: Client[];
+  rootPath: string;
+  yes: boolean;
+  help: boolean;
+};
+
+function parseClient(value: string): Client {
+  const client = CLIENTS.find((client) => client.id === value);
+  if (client) return client.id;
+  throw new Error(
+    `Unknown client "${value}". Choose ${CLIENTS.map((client) => client.id).join(', ')}.`
   );
-  const normalizedConfig = normalizeComparablePath(canonicalPaths[0] ?? path.resolve(filePath));
-  if (
-    canonicalPaths
-      .slice(1)
-      .some((globalConfig) => normalizeComparablePath(globalConfig) === normalizedConfig)
-  ) {
-    throw new Error(
-      'Project root resolves to a Codex global config; refusing a project-only init write.'
-    );
-  }
-  try {
-    const directoryStat = await fs.lstat(directory);
-    if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory())
-      throw new Error(`Unsafe Codex config directory: ${directory}`);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    await fs.mkdir(directory, { recursive: false });
-  }
-  let existing = '';
-  try {
-    const stat = await fs.lstat(filePath);
-    if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink > 1)
-      throw new Error(`Unsafe Codex config file: ${filePath}`);
-    existing = await fs.readFile(filePath, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  }
-  let merged: { content: string; changed: boolean };
-  try {
-    merged = _mergeCodexMcpContent(existing, content);
-  } catch (error) {
-    throw new Error(`${error instanceof Error ? error.message : String(error)} (${filePath})`);
-  }
-  if (merged.changed) await fs.writeFile(filePath, merged.content, 'utf8');
 }
 
-function normalizeComparablePath(value: string): string {
-  const normalized = path.normalize(value);
-  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
-}
-
-async function resolveCanonicalPathWithMissingLeaf(targetPath: string): Promise<string> {
-  let candidate = path.resolve(targetPath);
-  const missingSegments: string[] = [];
-  while (true) {
-    try {
-      const resolvedAncestor = await fs.realpath(candidate);
-      if (missingSegments.length > 0 && !(await fs.stat(resolvedAncestor)).isDirectory()) {
-        throw new Error(
-          `Cannot safely resolve Codex config path through non-directory ${candidate}`
-        );
-      }
-      return path.resolve(resolvedAncestor, ...missingSegments.reverse());
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (
-        error instanceof Error &&
-        error.message.startsWith('Cannot safely resolve Codex config path through')
-      ) {
-        throw error;
-      }
-      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
-        throw new Error(
-          `Cannot safely resolve Codex config path ${candidate}: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-      const parent = path.dirname(candidate);
-      if (parent === candidate) {
-        throw new Error(`Cannot safely resolve Codex config path: ${targetPath}`);
-      }
-      missingSegments.push(path.basename(candidate));
-      candidate = parent;
-    }
+function parseInitOptions(args: string[]): InitOptions {
+  if (args.includes('--help') || args.includes('-h'))
+    return { clients: [], rootPath: process.cwd(), yes: false, help: true };
+  const clients: Client[] = [];
+  let yes = false;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === '--yes' || arg === '-y') yes = true;
+    else if (arg === '--client') {
+      const value = args[++index];
+      if (!value || value.startsWith('--')) throw new Error('Expected a client after --client.');
+      clients.push(parseClient(value));
+    } else if (arg?.startsWith('--client='))
+      clients.push(parseClient(arg.slice('--client='.length)));
+    else if (arg === '--root') index++;
+    else if (!arg?.startsWith('--root=')) throw new Error(`Unknown init option "${arg}".`);
   }
+  return {
+    clients: [...new Set(clients)],
+    rootPath: resolveInitRoot(args, process.env.CODEBASE_ROOT),
+    yes,
+    help: false
+  };
 }
 
-async function resolveProjectRoot(root: string): Promise<string> {
-  const stat = await fs.stat(root);
-  if (!stat.isDirectory()) throw new Error(`Project root is not a directory: ${root}`);
-  return path.resolve(await fs.realpath(root));
+function printInitUsage(): void {
+  console.log('codebase-context init [options]');
+  console.log(
+    'Detect and configure coding tools together. With a terminal, Space toggles and Enter applies.'
+  );
+  console.log(
+    '  --client <name>  Choose a tool (repeatable): ' +
+      CLIENTS.map((client) => client.id).join(', ')
+  );
+  console.log('  --root <path>    Project root (default: CODEBASE_ROOT or cwd)');
+  console.log('  --yes, -y        Configure every detected tool without prompts');
+  console.log('  --help, -h       Show this help');
 }
 
-export async function handleInitCli(argv: string[], options: InitOptions = {}): Promise<void> {
-  let args: ReturnType<typeof parseInitArgs>;
+export async function handleInitCli(args: string[]): Promise<void> {
   try {
-    args = parseInitArgs(argv);
-  } catch (error) {
-    console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
-    return;
-  }
-  if (args.help) {
-    printInitHelp();
-    return;
-  }
-
-  let root: string;
-  try {
-    root = await resolveProjectRoot(resolveRoot(options.rootPath ?? args.rootPath));
-  } catch (error) {
-    console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
-    return;
-  }
-
-  console.log('\nSet up codebase-context for your AI client\n');
-  const client =
-    args.client ??
-    (await select<Client>({
-      message: 'Which client?',
-      choices: [
-        { name: 'Claude Code', value: 'claude-code' },
-        { name: 'Cursor', value: 'cursor' },
-        { name: 'Codex', value: 'codex' },
-        { name: 'OpenCode', value: 'opencode' }
-      ]
-    }));
-  if (args.rootPath && client !== 'codex') {
-    console.error('Init failed: --root is supported only for --client codex.');
-    process.exitCode = 1;
-    return;
-  }
-  if (client === 'codex') {
-    let preview: InitPreviewResult;
-    try {
-      preview = options.previewIndex
-        ? await options.previewIndex(root)
-        : { status: 'error', error: 'index preview is unavailable in this CLI invocation' };
-    } catch (error) {
-      preview = { status: 'error', error: error instanceof Error ? error.message : String(error) };
-    }
-    if (preview.status === 'error') {
-      console.error(`Index preview failed: ${preview.error}`);
-      process.exitCode = 1;
+    const options = parseInitOptions(args);
+    if (options.help) {
+      printInitUsage();
       return;
     }
-    printIndexPreview(preview);
-    if (args.preview) return;
-  }
-  const config = generateMcpConfig(client, root);
-  console.log('\n--- MCP Config Preview ---');
-  if (config.kind === 'file') console.log(`File: ${config.path}\n${config.content}`);
-  else console.log(`Command to run: ${config.executable} ${config.args.join(' ')}`);
-  const apply = args.yes || (await confirm({ message: 'Apply MCP config? [y/N]', default: false }));
-  const instructionPath = client === 'codex' ? null : resolveInstructionFilePath(client, root);
-  let applyInstruction = false;
-  if (instructionPath) {
-    console.log(
-      `\n--- Instruction Block Preview (${instructionPath}) ---\n${generateInstructionBlock()}`
-    );
-    applyInstruction =
-      args.yes || (await confirm({ message: 'Write instruction block? [y/N]', default: false }));
-  }
-  if (!apply) return;
-  try {
-    if (config.kind === 'file' && client === 'codex')
-      await writeCodexConfig(config.path, config.content);
-    else if (config.kind === 'file') {
-      const merged = await _buildMergedMcpContent(
-        config.path,
-        config.content,
-        client as Extract<Client, 'cursor' | 'opencode'>
+    if (!(await fs.stat(options.rootPath)).isDirectory())
+      throw new Error(`Project root is not a directory: ${options.rootPath}`);
+    console.log(`Set up Codebase Context in ${options.rootPath}`);
+    let clients = options.clients;
+    if (!clients.length) {
+      const detected = await detectClients(options.rootPath);
+      clients =
+        !options.yes && process.stdin.isTTY && process.stdout.isTTY
+          ? await checkbox<Client>({
+              message: 'Choose tools (Space toggles, Enter sets up):',
+              choices: CLIENTS.map((client) => ({
+                name: client.name + (detected.includes(client.id) ? ' (detected)' : ''),
+                value: client.id,
+                checked: detected.includes(client.id)
+              }))
+            })
+          : detected;
+    }
+    if (!clients.length)
+      throw new Error(
+        'No coding tools selected or detected. Choose with --client claude-code, --client codex, --client cursor, or --client opencode.'
       );
-      await fs.mkdir(path.dirname(config.path), { recursive: true });
-      await fs.writeFile(config.path, merged.content, 'utf8');
-    } else execFileSync(config.executable, config.args, { stdio: 'inherit' });
-  } catch (error) {
-    console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
-    return;
-  }
-  if (applyInstruction && instructionPath) await _appendInstructionBlock(instructionPath);
-  if (client === 'codex') {
-    let indexed: InitIndexResult;
-    try {
-      indexed = options.prepareIndex
-        ? await options.prepareIndex(root)
-        : { status: 'error', error: 'index preparation is unavailable in this CLI invocation' };
-    } catch (error) {
-      indexed = { status: 'error', error: error instanceof Error ? error.message : String(error) };
+
+    const prepared = [];
+    for (const client of clients) {
+      const config = generateMcpConfig(client, { rootPath: options.rootPath });
+      const merged =
+        client === 'codex'
+          ? await _buildMergedCodexContent(config.path, config.content)
+          : await _buildMergedMcpContent(config.path, config.content, client);
+      prepared.push({
+        ...config,
+        content: merged.content,
+        unchanged: (await readExistingConfig(config.path)) === merged.content
+      });
     }
-    if (indexed.status === 'error') {
-      console.error(`Index preparation failed: ${indexed.error}`);
-      process.exitCode = 1;
+    for (const config of prepared) {
+      if (!config.unchanged) {
+        await fs.mkdir(path.dirname(config.path), { recursive: true });
+        await fs.writeFile(config.path, config.content, 'utf8');
+      }
+      console.log(
+        `${config.unchanged ? 'Unchanged' : 'Configured'}: ${path.relative(options.rootPath, config.path)}`
+      );
+    }
+    console.log('Reopen your tools; approve the server or project trust if asked.');
+    console.log("The first search builds this repository's index.");
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === 'ExitPromptError' ||
+        error.name === 'AbortPromptError' ||
+        error.name === 'CancelPromptError')
+    ) {
+      console.log('Setup cancelled; no files written.');
       return;
     }
-    console.log(`Index ready for ${root}${indexed.summary ? ` — ${indexed.summary}` : ''}`);
-    console.log(`Trust this project in Codex if prompted, then restart/reopen Codex: ${root}`);
-    console.log(
-      'A written configuration and ready index do not prove Codex loaded or queried the server.'
-    );
+    console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
   }
 }

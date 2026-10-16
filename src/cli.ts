@@ -7,7 +7,6 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import {
-  EXCLUDED_GLOB_PATTERNS,
   CODEBASE_CONTEXT_DIRNAME,
   MEMORY_FILENAME,
   INTELLIGENCE_FILENAME,
@@ -28,7 +27,7 @@ import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { formatJson } from './cli-formatters.js';
 import { handleMemoryCli } from './cli-memory.js';
 export { handleMemoryCli } from './cli-memory.js';
-import { handleInitCli, type InitIndexResult, type InitPreviewResult } from './cli-init.js';
+import { handleInitCli } from './cli-init.js';
 import { handleMapCli } from './cli-map.js';
 import { loadProjectConfig } from './server/config.js';
 
@@ -105,37 +104,6 @@ function printUsage(): void {
 
 function resolveCliRootPath(): string {
   return path.resolve(process.env.CODEBASE_ROOT || process.cwd());
-}
-
-async function createIndexerForInit(rootPath: string): Promise<CodebaseIndexer> {
-  const projectConfig = await loadProjectConfig(rootPath);
-  return new CodebaseIndexer({
-    rootPath,
-    config: {
-      exclude: [...EXCLUDED_GLOB_PATTERNS, ...(projectConfig?.excludePatterns ?? [])],
-      ...(projectConfig?.parsing ? { parsing: projectConfig.parsing } : {}),
-      ...(projectConfig?.skipEmbedding !== undefined
-        ? { skipEmbedding: projectConfig.skipEmbedding }
-        : {})
-    }
-  });
-}
-
-async function previewIndexForInit(rootPath: string): Promise<InitPreviewResult> {
-  const indexer = await createIndexerForInit(rootPath);
-  return {
-    status: 'ready',
-    ...(await indexer.previewFiles())
-  };
-}
-
-async function prepareIndexForInit(rootPath: string): Promise<InitIndexResult> {
-  const indexer = await createIndexerForInit(rootPath);
-  const stats = await indexer.index();
-  return {
-    status: 'ready',
-    summary: `${stats.indexedFiles} files indexed in ${(stats.duration / 1000).toFixed(2)}s`
-  };
 }
 
 async function initToolContext(): Promise<ToolContext> {
@@ -319,10 +287,7 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
   }
 
   if (command === 'init') {
-    return handleInitCli(argv.slice(1), {
-      previewIndex: previewIndexForInit,
-      prepareIndex: prepareIndexForInit
-    });
+    return handleInitCli(argv.slice(1));
   }
 
   if (command === 'map') {

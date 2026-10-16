@@ -8,28 +8,19 @@ Coding agents can read files, but they still have to discover how your repositor
 
 Codebase Context gives an agent a local view of that information through code search, team patterns, strong examples, and project memory. It runs as an MCP server - a local tool that your editor or command-line agent can call while it works - and keeps the index on your machine by default.
 
-## Set up your AI client
+## Set up your coding tools
 
-### Unreleased source candidate
+Automatic multi-tool setup is awaiting publication. The unpinned prompt below will support this flow once a release containing it is available; until then, use the published manual recipes in the [client setup guide](./docs/client-setup.md).
 
-You can ask your agent:
+Use Node.js 22 or newer. Copy this prompt to your coding agent:
 
-> Set up this local Codebase Context candidate once for Codex using its documented install-once recipe. Show me this repository and its file selection before indexing, preserve unrelated client settings, then find [feature] and read the matching source lines with your normal file reader. Tell me when a new native session is needed to load the registration.
+> Set up Codebase Context for this repository and any other repositories I explicitly name. Read https://github.com/PatrickSys/codebase-context#readme and the installed init help. Detect my supported coding tools and configure all of them, using `npx --yes codebase-context init --yes` once per repository. Preserve existing settings and instructions; explain any conflicting entry you cannot safely preserve. Add only a short, relevant usage note where this repository keeps agent instructions. Pass each repository's actual directory with --root. Once available, call Codebase Context to find a real source symbol and open its returned file. Report what works; if a tool needs reopening or trust approval, give me that exact next step and do not claim it connected.
 
-This branch adds model-free indexing for new projects and noninteractive Codex setup. These changes are not in npm `2.2.0`. Install an exact locally packed candidate once in a stable directory on Node 22 or newer:
+After this flow is published, you can run `npx --yes codebase-context init` in your project. In a terminal, detected Claude Code, Codex, Cursor and OpenCode tools start selected; use Space to change the selection and Enter to apply. Use `--yes` to select all detected tools or repeat `--client` to choose explicitly. Pass `--root` when setting up a different repository.
 
-```bash
-npm install --prefix /absolute/path/cbc --no-save --package-lock=false /absolute/path/codebase-context-2.3.0.tgz
-codex mcp add codebase-context -- node /absolute/path/cbc/node_modules/codebase-context/dist/index.js
-```
+Each tool starts its own local server when needed. Reopen the tools and approve the server or project trust if asked. The first search builds the repository's index; setup itself does not index or change agent instructions.
 
-Check any existing same-name CBC entry before updating it. Start a new native Codex session after registration; an already running chat can retain the older server even when the config file has changed. Ask the agent to pass the repository's absolute path as `project` to `get_indexing_status` and `search_codebase`, and check that `loadedStatusModulePath` points into this installation. One registration can serve multiple repositories; a separate install or registration for each repository is unnecessary. The [client setup guide](./docs/client-setup.md#install-an-exact-packed-candidate-for-codex) also covers a project-local alternative.
-
-Before indexing, run the installed `codebase-context` executable with `init --client codex --root /absolute/path/to/repository --preview` (`codebase-context.cmd` on Windows). This provides a point-in-time repository and file-selection preview without configuring the client or creating an index. It lists a bounded, deterministic sample of eligible files and observed skips, and shows project-specific exclusion rules before defaults. It does not count files inside directories excluded before enumeration. The first native project selection prepares its index if needed. This option is not available in published `2.2.0`; older local tarballs may also omit it.
-
-`init --help` does not prompt. The installer preserves unrelated project config, rejects conflicting or disabled CBC entries, and points Codex at the installed Node executable and package entrypoint. Keep that installation available; removing its directory or clearing an `npx` cache used for setup can invalidate the saved path. Trust/reopen the project and approve tool calls if your client requires it. A written config and ready index do not establish native agent use.
-
-New indexes use keywords, symbols, and structural analysis without embedding or reranker models. Existing indexes retain their successful mode. Semantic mode requires optional runtimes: install `@huggingface/transformers@^4.2.0` and `@lancedb/lancedb@^0.4.0` alongside the CBC installation, then run `npx --no-install codebase-context reindex --embeddings`. Installing them only in a separately selected source folder does not repair another CBC installation. Use `--no-embeddings` for a full model-free rebuild; omitting both preserves the successful mode. Local semantic models may download on opt-in. Missing runtimes produce an actionable error before index replacement.
+New indexes use keywords, symbols, and structural analysis without embedding or reranker models. Existing indexes retain their successful mode. Semantic mode requires optional runtimes installed alongside CBC with `npm install --prefix /path/to/cbc --no-save --package-lock=false @huggingface/transformers@^4.2.0 @lancedb/lancedb@^0.4.0`. Reindex the target repository through that installation's actual entrypoint, for example `CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --embeddings`; do not run `npx --no-install` from a different repository. Installing the runtimes only in a separately selected source folder does not repair another CBC installation. Use `--no-embeddings` for a full model-free rebuild; omitting both preserves the successful mode. Local semantic models may download on opt-in. Missing runtimes produce an actionable error before index replacement.
 
 The candidate also adds `get_code_relationships` for current, directed import/re-export paths up to three hops. It returns source citations, unresolved/stale diagnostics, and explicit truncation. This is syntactic source navigation; conceptual search quality and runtime behavior still require reading and checking the actual code. See the [capabilities reference](./docs/capabilities.md).
 
@@ -37,53 +28,7 @@ Relationship resolution uses the selected root's `tsconfig.json`, or its `tsconf
 
 AST chunks retain contiguous source, including callable property bodies, with scope labels kept separate from persisted text. Ordinary discovery reports search quality and incomplete source coverage; edit readiness is returned only for explicit `edit`, `refactor`, or `migrate` searches. Read the returned source before changing it.
 
-### Published package
-
-Choose your coding tool and run its command once. Use Node.js 22 or newer. These commands use published npm `2.2.0` and do not require a project folder in your configuration:
-
-```bash
-# Claude Code
-claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.2.0
-
-# Codex CLI
-codex mcp add codebase-context -- npx -y codebase-context@2.2.0
-
-# OpenCode 1.x (keep the quoted separator on Windows)
-opencode mcp add codebase-context '--' npx -y codebase-context@2.2.0
-```
-
-Start a new agent session in your project, then ask:
-
-> Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project when checking get_indexing_status and searching. Wait for indexing if needed, read codebase://context, then search_codebase and open a returned source file. Show me the relevant files.
-
-Replace `[feature]` with something you want to find. The agent supplies the repository path in its tool calls, so the registration can serve different projects. Initial indexing may need a local model download. The October 6 isolated checks proved these client registrations and published-package project selection/search; they did not establish a full native agent investigation.
-
-For Codex Desktop, create or merge `.codex/config.toml` in the project you want to search:
-
-```toml
-[mcp_servers.codebase-context]
-command = "npx"
-args = ["-y", "codebase-context@2.2.0"]
-startup_timeout_sec = 120
-```
-
-Trust the project if asked, restart Codex, and start a new task there. Use the prompt above. Config placement alone does not establish successful first use; this no-folder recipe has not been accepted in a fresh native Desktop task.
-
-Other clients use their own setup commands:
-
-| Client                      | Shortest current setup                                                       |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context@2.2.0` |
-| Cursor                      | Add `.cursor/mcp.json`                                                       |
-| VS Code with GitHub Copilot | Add `.vscode/mcp.json`                                                       |
-| GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context@2.2.0` |
-| Windsurf                    | Add `~/.codeium/windsurf/mcp_config.json`                                    |
-
-Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration, verification limits and the unreleased installer. Published `2.2.0`'s interactive `init` has registration bugs; use the commands above.
-
-The [client setup guide](./docs/client-setup.md) has the exact commands and config for every client, plus what was checked locally and what still relies on official instructions.
-
-The default connection is `stdio` (standard input/output): your client starts the server when it needs it. HTTP is an advanced, client-dependent option; verify the setup guide and client support before relying on it.
+The [client setup guide](./docs/client-setup.md) retains manual recipes for published packages, including Gemini, GitHub Copilot and Windsurf, optional fixed-folder configuration and advanced HTTP. The default connection is `stdio` (standard input/output): your client starts the server when it needs it. HTTP is an advanced, client-dependent option; verify the setup guide and client support before relying on it.
 
 ## What your agent gets
 

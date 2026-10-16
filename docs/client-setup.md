@@ -1,6 +1,6 @@
 # Client Setup
 
-Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter. These examples use published npm `2.2.0`.
+Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter. These examples use published npm `2.2.0`. The one-prompt multi-tool flow is described in [Set up your coding tools](../README.md#set-up-your-coding-tools) and is awaiting publication.
 
 Use Node.js 22 or newer for these recipes. The local product candidate requires Node 22+ and is checked on Windows Node 22.23.3. Published 2.2.0 declares Node 18+, but its current UUID and SDK dependency chain does not establish Node 18 compatibility; use Node 22 with the published recipes too.
 
@@ -73,7 +73,7 @@ Equivalent project config:
 [mcp_servers.codebase-context]
 command = "npx"
 args = ["-y", "codebase-context@2.2.0"]
-startup_timeout_sec = 120
+startup_timeout_sec = 300
 ```
 
 **What was checked:** The command ran with an isolated `CODEX_HOME`, wrote `config.toml`, and `codex mcp get` returned the same command and arguments.
@@ -90,52 +90,14 @@ Create or merge `.codex/config.toml` in the project you want to search. Preserve
 [mcp_servers.codebase-context]
 command = "npx"
 args = ["-y", "codebase-context@2.2.0"]
-startup_timeout_sec = 120
+startup_timeout_sec = 300
 ```
 
 Trust the project if asked, restart Codex and start a new task there. Use the first-use prompt above so the agent selects the current repository. The CLI command in the preceding section writes user-level config; this recipe uses a trusted project's config instead.
 
-**Verification boundary:** isolated Windows CLI and SDK/MCP checks on October 5 indexed a six-file fixture with published `2.2.0`, selected its project, retrieved context and found a source that the host could open. The exact `npx -y codebase-context@2.2.0 <project>` entrypoint also passed using a warmed isolated npm cache and prepared index. This does not establish a fully cold download or a fresh Codex Desktop agent session. The September Desktop session below used a packed candidate; keep it separate from published-package acceptance.
+**Verification boundary:** isolated Windows CLI and SDK/MCP checks on October 5 indexed a six-file fixture with published `2.2.0`, selected its project, retrieved context and found a source that the host could open. The exact `npx -y codebase-context@2.2.0 <project>` entrypoint also passed using a warmed isolated npm cache and prepared index. This does not establish a fully cold download or a fresh Codex Desktop agent session.
 
 On October 6 the exact published `npx` entrypoint was also tested without a folder, environment root or MCP roots, launched from an unrelated directory. Its first tool call returned `selection_required`; an explicit `project` call selected the prepared fixture, search found the expected symbol, context returned its map, and the runner host opened the returned source. A later call without `project` retained that selection. This is SDK/protocol and runner-host evidence with warmed caches and a pre-indexed fixture, not a native Desktop task.
-
-## Install an exact packed candidate for Codex
-
-For one installation shared by repositories, install the exact tarball into a stable directory, then register that installed entrypoint at user scope:
-
-```powershell
-npm install --prefix 'C:\tools\cbc' --no-save --package-lock=false 'C:\path\to\codebase-context-2.3.0.tgz'
-codex mcp add codebase-context -- node 'C:\tools\cbc\node_modules\codebase-context\dist\index.js'
-```
-
-Replace these example paths and inspect any existing same-name entry before updating it. Keep the installation available. This command changes the CBC registration; it does not refresh a running chat's tool connection. Start a new native Codex session after changing it. In that session, call `get_indexing_status` with the selected repository's absolute path as `project`, verify that `loadedStatusModulePath` points to this installation, then search with the same `project` and read a returned source. Select another repository explicitly when switching; the registration does not need a fixed folder argument.
-
-Use the installed `node_modules\.bin\codebase-context.cmd init --client codex --root C:\path\to\repository --preview` before the first native selection to inspect the repository and eligible files without indexing. Native selection then prepares the index if needed. A config file or a successful index alone is insufficient evidence that the current native session loaded the candidate. An October 15 fresh-agent attempt installed and indexed successfully but its running chat retained the previous server; a separately started native CLI session loaded the intended installation. That receiving check does not establish a cold first-use pass.
-
-For a project-local configuration instead, use the following init workflow.
-
-`init --help` prints the supported flags without prompting. `init --client codex --yes` writes a project-local `.codex/config.toml` and prepares that project's local index. The generated stdio entry invokes the exact `dist/index.js` that ran `init`; it does not resolve `codebase-context` from the npm registry. This keeps a packed candidate from silently launching the older published `2.2.0` package.
-
-Before applying setup, the source candidate accepts `init --client codex --root C:\path\to\project --preview`. It displays the selected repository, a deterministic eligible-file sample, observed skips and project-specific exclusion rules before defaults, without writing configuration or indexing. Review the root first; normal init rescans after confirmation because files and configuration may change. Excluded directories are not enumerated for a total skipped-file count. Preview checks do not establish general monorepo performance.
-
-Normal packing now runs the existing build through `prepack`, so fresh compiled code is required before creating a tarball. Do not use `--ignore-scripts` for candidate delivery: it skips that protection. The local candidate was packed through this build step and installed successfully on Windows. Native-host loading of that exact package and the full regression suite remain unverified.
-
-For a packed-candidate check, install the tarball into the project being configured and run its installed executable from that project:
-
-```powershell
-# Build and pack in the source checkout, then change to the target project.
-pnpm build
-pnpm pack
-Set-Location C:\path\to\project
-npm install --no-save --package-lock=false C:\path\to\codebase-context-2.3.0.tgz
-& .\node_modules\.bin\codebase-context.cmd init --client codex --yes
-```
-
-The project-local install leaves the executable available at `node_modules/codebase-context/dist/index.js`, which the generated config records. If the project install or npm cache is removed, reinstall the same packed tarball and rerun init so the config points to the restored executable. Use `--root C:\path\to\project` only when invoking init from elsewhere; the root is validated and must be a directory.
-
-Setup preserves unrelated TOML settings and refuses to replace a conflicting `codebase-context` entry. It writes only project `.codex/config.toml`; it does not edit global Codex configuration, `AGENTS.md`, project trust, or approval settings. New projects default to model-free indexing; existing projects preserve their successful mode and may require their semantic runtimes. Codex may still ask you to trust the project; accept through Codex's normal project flow, then restart or reopen Codex. A successful write and index do not prove that Codex loaded or queried the server. After a search, have the agent read the cited lines with its normal file reader. CBC returns source locations but does not expose a file-reading tool; a queued editor tab is not evidence that the agent read the source.
-
-Published `2.2.0` does not include these init flags. The recipes above are for a local packed candidate until the matching version is published. A packed setup and local MCP test do not establish fresh native Codex Desktop use or a cold install.
 
 ## Optional fixed-folder setup and CLI preparation
 
@@ -147,7 +109,7 @@ To prepare the index separately with the published CLI, run from the project fol
 npx -y codebase-context@2.2.0 reindex
 ```
 
-Do not use published `2.2.0`'s interactive `init` as the setup route. October 6 isolated checks found that it ignores `--help`, `--client` and `--yes`; its Claude/Codex registration executes `mcp` instead of the client executable, and its HTTP recipes require a separately started server. It can exit zero after registration fails. The unreleased installer above is a separate implementation.
+Do not use published `2.2.0`'s interactive `init` as the setup route. October 6 isolated checks found that it ignores `--help`, `--client` and `--yes`; its Claude/Codex registration executes `mcp` instead of the client executable, and its HTTP recipes require a separately started server. It can exit zero after registration fails. Until the updated multi-tool setup is published, use the manual recipes above.
 
 ## Gemini CLI
 

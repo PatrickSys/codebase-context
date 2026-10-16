@@ -30,7 +30,6 @@ Reopen your tools and approve project trust or the server if asked. The first se
 
 ## Manual client recipes for 2.4.0
 
-
 Claude Code, Codex CLI and OpenCode registration commands were checked again on October 6 without a project argument. The other clients retain their older config-shape evidence; no-folder native agent use is unverified for them. See the dated notes below.
 
 Each client section says how far its earlier Windows check went. Those checks used published `2.2.0` unless another build is named; they do not verify the 2.4.0 commands:
@@ -96,7 +95,7 @@ Equivalent project config:
 [mcp_servers.codebase-context]
 command = "npx"
 args = ["-y", "codebase-context@2.4.0"]
-startup_timeout_sec = 120
+startup_timeout_sec = 300
 ```
 
 **What was checked:** The command ran with an isolated `CODEX_HOME`, wrote `config.toml`, and `codex mcp get` returned the same command and arguments.
@@ -113,7 +112,7 @@ Create or merge `.codex/config.toml` in the project you want to search. Preserve
 [mcp_servers.codebase-context]
 command = "npx"
 args = ["-y", "codebase-context@2.4.0"]
-startup_timeout_sec = 120
+startup_timeout_sec = 300
 ```
 
 Trust the project if asked, restart Codex and start a new task there. Use the first-use prompt above so the agent selects the current repository. The CLI command in the preceding section writes user-level config; this recipe uses a trusted project's config instead.

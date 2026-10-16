@@ -107,7 +107,7 @@ export function generateMcpConfig(client: Client, options: McpConfigOptions = {}
       path: path.join(rootPath, '.codex', 'config.toml'),
       content:
         `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(command)}\n` +
-        `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 120\n`
+        `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 300\n`
     };
   }
   const configPath =

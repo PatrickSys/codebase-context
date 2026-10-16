@@ -91,7 +91,7 @@ describe('generateMcpConfig', () => {
     ]);
   });
 
-  it('Codex gets a project TOML config with a POSIX npx command', () => {
+  it('Codex allows a cold package install before connecting', () => {
     const result = generateMcpConfig('codex', {
       rootPath: projectRoot,
       platform: 'linux',
@@ -102,7 +102,7 @@ describe('generateMcpConfig', () => {
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(projectRoot, '.codex', 'config.toml'));
     expect(result.content).toBe(
-      `[mcp_servers.codebase-context]\ncommand = "npx"\nargs = ["--yes", "codebase-context@9.8.7", ${JSON.stringify(projectRoot)}]\nstartup_timeout_sec = 120\n`
+      `[mcp_servers.codebase-context]\ncommand = "npx"\nargs = ["--yes", "codebase-context@9.8.7", ${JSON.stringify(projectRoot)}]\nstartup_timeout_sec = 300\n`
     );
   });
 

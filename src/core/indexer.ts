@@ -4,6 +4,8 @@
  */
 
 import { randomUUID } from 'crypto';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { glob } from 'glob';
@@ -23,6 +25,7 @@ import {
 import { analyzerRegistry } from './analyzer-registry.js';
 import type { AnalyzerSelectionOptions } from './analyzer-registry.js';
 import { getSupportedExtensions, isBinaryFile, isCodeFile } from '../utils/language-detection.js';
+import { gitEnvironmentWithoutLocalRepositoryContext } from '../utils/git-environment.js';
 import {
   getEmbeddingProvider,
   getConfiguredDimensions,
@@ -42,6 +45,7 @@ import { getFileCommitDates } from '../utils/git-dates.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   EXCLUDED_GLOB_PATTERNS,
+  INDEX_ONLY_EXCLUDED_GLOB_PATTERNS,
   HEALTH_FILENAME,
   INDEX_FORMAT_VERSION,
   INDEXING_STATS_FILENAME,
@@ -58,6 +62,7 @@ import { deriveCodebaseHealth } from '../health/derive.js';
 const STAGING_DIRNAME = '.staging';
 const PREVIOUS_DIRNAME = '.previous';
 const DEFAULT_MAX_CHUNKS = 5000;
+const execFileAsync = promisify(execFile);
 
 import {
   computeFileHashes,
@@ -1091,13 +1096,65 @@ export class CodebaseIndexer {
     }
   }
 
+  private async gitFiles(): Promise<Set<string> | null> {
+    let gitEnvironment: NodeJS.ProcessEnv;
+
+    try {
+      gitEnvironment = gitEnvironmentWithoutLocalRepositoryContext();
+      const { stdout } = await execFileAsync('git', ['rev-parse', '--is-inside-work-tree'], {
+        cwd: this.rootPath,
+        env: { ...gitEnvironment, LC_ALL: 'C' }
+      });
+      if (stdout.trim() !== 'true') return null;
+    } catch (error) {
+      const gitError = error as { code?: string | number; stderr?: string };
+      // Keep the existing root-.gitignore fallback outside Git or without Git installed.
+      if (
+        gitError.code === 'ENOENT' ||
+        (gitError.code === 128 && gitError.stderr?.includes('not a git repository'))
+      )
+        return null;
+      throw error;
+    }
+
+    return new Promise((resolve, reject) => {
+      const git = spawn('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
+        cwd: this.rootPath,
+        env: gitEnvironment,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      const files = new Set<string>();
+      let pending = '';
+      let stderr = '';
+      git.stdout.setEncoding('utf8');
+      git.stdout.on('data', (chunk: string) => {
+        const paths = (pending + chunk).split('\0');
+        pending = paths.pop() ?? '';
+        for (const file of paths) if (file) files.add(file);
+      });
+      git.stderr.setEncoding('utf8');
+      git.stderr.on('data', (chunk: string) => {
+        stderr = (stderr + chunk).slice(-4096);
+      });
+      git.on('error', reject);
+      git.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Git file discovery failed (${code}): ${stderr.trim()}`));
+        } else {
+          resolve(files);
+        }
+      });
+    });
+  }
+
   private async scanFiles(): Promise<string[]> {
     const files: string[] = [];
     const seen = new Set<string>();
 
-    // Read .gitignore if respecting it
+    const gitFiles = this.config.respectGitignore ? await this.gitFiles() : null;
+    // Outside Git, preserve the existing root-only .gitignore behavior.
     let ig: ReturnType<typeof ignore.default> | null = null;
-    if (this.config.respectGitignore) {
+    if (this.config.respectGitignore && !gitFiles) {
       try {
         const gitignorePath = path.join(this.rootPath, '.gitignore');
         const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
@@ -1108,14 +1165,17 @@ export class CodebaseIndexer {
     }
 
     // Scan with glob
-    const includePatterns = this.getIncludePatterns();
-    const excludePatterns = this.config.exclude || [];
+    const excludePatterns = [...INDEX_ONLY_EXCLUDED_GLOB_PATTERNS, ...(this.config.exclude || [])];
 
-    for (const pattern of includePatterns) {
-      const matches = await glob(pattern, {
+    for (const selection of [
+      { patterns: this.getIncludePatterns(), explicit: false },
+      { patterns: this.config.includeExcluded ?? [], explicit: true }
+    ]) {
+      const matches = await glob(selection.patterns, {
         cwd: this.rootPath,
         absolute: true,
-        ignore: excludePatterns,
+        ignore: selection.explicit ? [] : excludePatterns,
+        dot: selection.explicit || gitFiles !== null,
         nodir: true
       });
 
@@ -1124,12 +1184,13 @@ export class CodebaseIndexer {
         if (seen.has(normalizedFile)) {
           continue;
         }
-        seen.add(normalizedFile);
+        const relativePath = path.relative(this.rootPath, file).replace(/\\/g, '/');
+        if (relativePath.startsWith('../') || path.isAbsolute(relativePath)) continue;
 
-        const relativePath = path.relative(this.rootPath, file);
-
-        // Check gitignore
-        if (ig && ig.ignores(relativePath)) {
+        if (
+          !selection.explicit &&
+          ((gitFiles && !gitFiles.has(relativePath)) || (ig && ig.ignores(relativePath)))
+        ) {
           continue;
         }
 
@@ -1149,6 +1210,7 @@ export class CodebaseIndexer {
           continue;
         }
 
+        seen.add(normalizedFile);
         files.push(file);
       }
     }

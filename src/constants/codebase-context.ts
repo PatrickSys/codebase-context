@@ -56,10 +56,12 @@ export const EXCLUDED_GLOB_PATTERNS: readonly string[] = EXCLUDED_DIRECTORY_NAME
   (dir) => `**/${dir}/**`
 );
 
-/** Index-only noise. Watchers must still see files explicitly opted back in. */
+/** Index-only non-source files. Watchers still observe them for live updates. */
 export const INDEX_ONLY_EXCLUDED_GLOB_PATTERNS: readonly string[] = [
   ...['out', '.work', '.agents', '.codex', '.cursor'].map((dir) => `**/${dir}/**`),
   '**/.github/agents/**',
+  '**/.github/FUNDING.yml',
+  '**/.github/ISSUE_TEMPLATE/**',
   '**/*.lock',
   '**/*.lockb',
   '**/package-lock.json',

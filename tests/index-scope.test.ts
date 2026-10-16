@@ -31,7 +31,11 @@ const junk = [
   'bun.lockb',
   'src/bundle.min.js',
   'src/style.min.css',
-  'src/app.js.map'
+  'src/app.js.map',
+  '.github/FUNDING.yml',
+  '.github/ISSUE_TEMPLATE/bug_report.yml',
+  '.github/ISSUE_TEMPLATE/feature_request.yml',
+  '.github/ISSUE_TEMPLATE/friction.yml'
 ];
 
 describe('index source scope', () => {
@@ -55,6 +59,7 @@ describe('index source scope', () => {
     await write('nested/keep.ts');
     await write('tracked-ignored.ts');
     await write('.github/workflows/ci.yml', 'name: ci\n');
+    await write('.releaserc.json', '{"branches":["main"]}\n');
     for (const file of junk) {
       await write(
         file,
@@ -106,13 +111,14 @@ describe('index source scope', () => {
     const { stats, paths } = await indexed();
     expect(paths).toEqual([
       '.github/workflows/ci.yml',
+      '.releaserc.json',
       'fresh.ts',
       'nested/keep.ts',
       'src/app.ts',
       'tracked-ignored.ts'
     ]);
-    expect(stats.totalFiles).toBe(5);
-    expect(stats.indexedFiles).toBe(5);
+    expect(stats.totalFiles).toBe(6);
+    expect(stats.indexedFiles).toBe(6);
   });
 
   it('opts specific excluded or Git-ignored source back in without admitting other junk', async () => {

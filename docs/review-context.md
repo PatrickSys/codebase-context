@@ -4,7 +4,7 @@
 
 It is deliberately **not** an AI reviewer. It does not call an LLM, decide whether code is correct, or post comments. Its job is narrower and testable: compile the changed surface, stable diff signals, related codebase context, and current conventions into a versioned input for a reviewer or evaluation harness.
 
-**2.4.0 setup preview:** use the package command below only after that version is available on npm. To install published 2.2.0, follow the [versioned setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
+**These commands use 2.4.0.** If that version is not available on npm yet, use the published 2.2.0 [setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
 
 ## Why this exists
 

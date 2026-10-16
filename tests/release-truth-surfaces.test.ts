@@ -126,32 +126,42 @@ describe('release truth surfaces', () => {
     );
   });
 
-  it('marks 2.4.0 commands as a setup preview before the first runnable command', () => {
-    const previewNotice = '**2.4.0 setup preview:**';
+  it('keeps 2.4.0 setup guidance accurate before and after publication', () => {
+    const versionNotice = 'These commands use 2.4.0.';
+    const fallbackNotice = 'If that version is not available on npm yet, use the published 2.2.0';
     const currentVersionGuide =
       'https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md';
-    const previewPages = [
+    const setupPages = [
+      [
+        'README.md',
+        'claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0'
+      ],
+      [
+        'docs/client-setup.md',
+        'claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0'
+      ],
       ['docs/capabilities.md', '| **stdio** (default) |'],
       ['docs/cli.md', 'CODEBASE_ROOT=/path/to/repo npx -y codebase-context@2.4.0 status'],
       ['docs/demo.md', 'npx -y codebase-context@2.4.0 reindex'],
       ['docs/review-context.md', 'pnpm build']
     ] as const;
 
-    for (const [path, firstCommand] of previewPages) {
+    for (const [path, firstCommand] of setupPages) {
       const page = readText(path);
-      const noticeIndex = page.indexOf(previewNotice);
+      const noticeIndex = page.indexOf(versionNotice);
       const guideIndex = page.indexOf(currentVersionGuide);
       const commandIndex = page.indexOf(firstCommand);
 
       expect(
         noticeIndex,
-        `${path} should include the current-version fallback`
+        `${path} should explain the current-version fallback`
       ).toBeGreaterThanOrEqual(0);
       expect(guideIndex, `${path} should link the published 2.2.0 setup`).toBeGreaterThan(
         noticeIndex
       );
-      expect(page.slice(noticeIndex, guideIndex)).toContain('available on npm');
-      expect(page.slice(noticeIndex, guideIndex)).toContain('published 2.2.0');
+      expect(page.slice(noticeIndex, guideIndex)).toContain(fallbackNotice);
+      expect(page.slice(noticeIndex, guideIndex)).toContain('[setup guide](');
+      expect(page).not.toContain('**2.4.0 setup preview:**');
       expect(commandIndex, `${path} should retain its first runnable command`).toBeGreaterThan(0);
       expect(noticeIndex, `${path} should qualify commands before they appear`).toBeLessThan(
         commandIndex

@@ -10,7 +10,7 @@
 
 > Output depends on the repo you run it against. The examples below are illustrative (paths, counts, and detected frameworks will vary).
 >
-> **2.4.0 setup preview:** use these commands only after that version is available on npm. To install published 2.2.0, follow the [versioned setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
+> **These commands use 2.4.0.** If that version is not available on npm yet, use the published 2.2.0 [setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
 >
 > These output examples come from an earlier CLI run; they were not captured from `2.4.0` and do not verify an MCP connection.
 >

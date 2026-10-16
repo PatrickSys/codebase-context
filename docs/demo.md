@@ -2,7 +2,7 @@
 
 This walkthrough shows real CLI output captured from the open-source `angular-spotify` repository during a local proof run. That sample checkout is not bundled here.
 
-**2.4.0 setup preview:** use these commands only after that version is available on npm. To install published 2.2.0, follow the [versioned setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
+**These commands use 2.4.0.** If that version is not available on npm yet, use the published 2.2.0 [setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
 
 To try the same CLI flow, use Node.js 22 or newer and open a terminal in the repository you want to inspect. These commands target `codebase-context@2.4.0`; the CLI uses the current directory as the project root. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
 

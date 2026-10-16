@@ -74,7 +74,7 @@ describe('CLI entrypoint runtime', () => {
           cwd: projectRoot,
           env,
           encoding: 'utf8',
-          timeout: 60_000
+          timeout: 10_000
         }
       );
 

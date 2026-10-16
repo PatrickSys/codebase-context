@@ -1,6 +1,8 @@
 # Capabilities Reference
 
-Technical reference for what `codebase-context` ships today. The public product posture is map first, find second: the bounded conventions map is the first-call surface, and search narrows to the right local example after that. For the user-facing overview, see [README.md](../README.md).
+Technical reference for the 2.4.0 setup preview. The public product posture is map first, find second: the bounded conventions map is the first-call surface, and search narrows to the right local example after that. For the user-facing overview, see [README.md](../README.md).
+
+**These commands use 2.4.0.** If that version is not available on npm yet, use the published 2.2.0 [setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
 
 ## Transport Modes
 
@@ -8,8 +10,8 @@ The server supports two transport modes:
 
 | Mode                | Command                                           | MCP endpoint                 |
 | ------------------- | ------------------------------------------------- | ---------------------------- |
-| **stdio** (default) | `npx -y codebase-context@2.2.0`                   | Spawned process stdin/stdout |
-| **HTTP**            | `npx -y codebase-context@2.2.0 --http [--port N]` | `http://127.0.0.1:3100/mcp`  |
+| **stdio** (default) | `npx -y codebase-context@2.4.0`                   | Spawned process stdin/stdout |
+| **HTTP**            | `npx -y codebase-context@2.4.0 --http [--port N]` | `http://127.0.0.1:3100/mcp`  |
 
 HTTP defaults to `127.0.0.1:3100`. Override with `--port`, `CODEBASE_CONTEXT_PORT`, or `server.port` in `~/.codebase-context/config.json`.
 
@@ -21,13 +23,14 @@ Per-project config overrides supported today:
 - `projects[].includeExcluded`: root-relative source globs explicitly restored through built-in exclusions, `excludePatterns` and Git ignores (for example, `[".agents/tools/**/*.ts"]`). Normal `include` patterns narrow the scan and cannot override exclusions. Binary/unsupported files, files over the size limit and paths outside the project remain excluded.
 - `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
 - `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
+- `projects[].parsing.maxChunks`: sets the maximum number of searchable chunks indexed for that project
 
 Copy-pasteable client config templates are shipped in the package:
 
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients
 - `templates/mcp/http/.mcp.json` — HTTP setup for `.mcp.json`-style clients
 
-Use Node.js 22 or newer with the published 2.2.0 commands shown here. For client registration recipes and their verification limits, see the [client setup guide](./client-setup.md).
+Use Node.js 22 or newer with the 2.4.0 commands shown here. For 2.4.0 setup preview recipes and their verification limits, see the [client setup guide](./client-setup.md).
 
 ## CLI Reference
 
@@ -50,15 +53,15 @@ For a command gallery with examples, see `docs/cli.md`.
 | `memory add`           | `--type`, `--category`, `--memory`, `--reason`                                                             | `remember`                             |
 | `memory remove <id>`   | —                                                                                                          | —                                      |
 
-Commands that list `--json` above support raw JSON output. For MCP client registration, follow the [published client setup recipes](./client-setup.md); do not use the broken `init` setup command in published 2.2.0. Errors go to stderr with exit code 1.
+Commands that list `--json` above support raw JSON output. For MCP client registration, follow the [2.4.0 setup preview recipes](./client-setup.md). The existing `init` wizard is interactive and generates HTTP setup; see that guide for its current limitations. Errors go to stderr with exit code 1.
 
 ```bash
 # Quick examples
-npx -y codebase-context@2.2.0 status
-npx -y codebase-context@2.2.0 search --query "auth middleware" --intent edit
-npx -y codebase-context@2.2.0 refs --symbol "UserService" --limit 10
-npx -y codebase-context@2.2.0 cycles --scope src/features
-npx -y codebase-context@2.2.0 reindex --incremental
+npx -y codebase-context@2.4.0 status
+npx -y codebase-context@2.4.0 search --query "auth middleware" --intent edit
+npx -y codebase-context@2.4.0 refs --symbol "UserService" --limit 10
+npx -y codebase-context@2.4.0 cycles --scope src/features
+npx -y codebase-context@2.4.0 reindex --incremental
 ```
 
 ## Tool Surface
@@ -280,6 +283,7 @@ To index selected excluded source, add `"includeExcluded": [".agents/tools/**/*.
 - **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata
 - **React**: function/class components, custom hooks, context usage, memoization, Suspense, ecosystem signal extraction
 - **Next.js**: App Router and Pages Router detection, route/API classification, route paths, `"use client"`, metadata exports
+- **NestJS (opt-in)**: modules, controllers, providers and route handlers, contributed by Aaron Olin. The library indexer accepts `config: { analyzers: { nestjs: { enabled: true } } }`; the CLI/server project configuration does not currently expose analyzer enablement.
 - **Generic**: 30+ have indexing/retrieval coverage including PHP, Ruby, Swift, Scala, Shell, config/markup., 10 languages have full symbol extraction (Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust).
 
 Notes:
@@ -308,6 +312,6 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring 
 
 - **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
 - **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
-- **Published 2.2.0 has dedicated Angular, React, and Next.js analyzers.** NestJS support is in a newer source candidate and is not part of published 2.2.0. Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
+- **The 2.4.0 preview source has dedicated Angular, React, Next.js and NestJS analyzers.** Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
 - **Default embedding model is `bge-small-en-v1.5` (512-token context).** Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

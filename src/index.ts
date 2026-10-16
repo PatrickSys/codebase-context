@@ -93,7 +93,8 @@ const CLI_SUBCOMMANDS = [
   'refs',
   'cycles',
   'init',
-  'map'
+  'map',
+  'help'
 ];
 
 // Check if this module is the entry point.
@@ -108,6 +109,10 @@ const isDirectCliSubcommand =
 
 // Resolve optional bootstrap root with validation handled later in main().
 function resolveRootPath(): string | undefined {
+  if (isDirectRun && directSubcommand === 'help') {
+    return undefined;
+  }
+
   const envPath = process.env.CODEBASE_ROOT;
 
   // Walk argv starting at position 2, skip known flags and their values.

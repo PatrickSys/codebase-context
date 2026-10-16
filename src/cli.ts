@@ -261,7 +261,7 @@ function booleanFlag(flags: Flags, key: string, usage: string): boolean {
 export async function handleCliCommand(argv: string[]): Promise<void> {
   const rawCommand = argv[0];
 
-  if (!rawCommand || rawCommand === '--help') {
+  if (!rawCommand || rawCommand === '--help' || rawCommand === 'help') {
     printUsage();
     return;
   }

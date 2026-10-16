@@ -143,33 +143,71 @@ describe('search_codebase auto-heal', () => {
     }
   });
 
-  it('fires background re-index and returns retry message when IndexCorruptedError is thrown', async () => {
-    const { IndexCorruptedError } = await import('../src/errors/index.js');
+  it.each([
+    [
+      'missing initial index metadata',
+      'Index meta missing or unreadable (rebuild required): ENOENT'
+    ],
+    ['genuine index corruption', 'LanceDB index corrupted: missing vector column']
+  ])(
+    'starts background re-index and returns retry guidance for %s',
+    async (_scenario, errorMessage) => {
+      const { IndexCorruptedError } = await import('../src/errors/index.js');
 
-    searchMocks.search.mockRejectedValueOnce(
-      new IndexCorruptedError('LanceDB index corrupted: missing vector column')
+      searchMocks.search.mockRejectedValueOnce(new IndexCorruptedError(errorMessage));
+
+      const { server } = await import('../src/index.js');
+      const handler = (server as any)._requestHandlers.get('tools/call');
+
+      const response = await handler({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'search_codebase',
+          arguments: {
+            query: 'test'
+          }
+        }
+      });
+
+      const payload = JSON.parse(response.content[0].text);
+      expect(payload.status).toBe('indexing');
+      expect(payload.message).toBe(
+        'Index is unavailable or not ready. Indexing has started. Check indexing status, then retry.'
+      );
+      expect(searchMocks.search).toHaveBeenCalledTimes(1);
+    },
+    15000
+  );
+
+  it('returns status-check guidance without searching while an index build is active', async () => {
+    if (!tempRoot) throw new Error('tempRoot not initialized');
+
+    const { handle } = await import('../src/tools/search-codebase.js');
+    const baseDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
+    const response = await handle(
+      { query: 'search something' },
+      {
+        indexState: { status: 'indexing' },
+        paths: {
+          baseDir,
+          memory: path.join(baseDir, 'memory.json'),
+          intelligence: path.join(baseDir, 'intelligence.json'),
+          health: path.join(baseDir, 'health.json'),
+          keywordIndex: path.join(baseDir, KEYWORD_INDEX_FILENAME),
+          vectorDb: path.join(baseDir, VECTOR_DB_DIRNAME)
+        },
+        rootPath: tempRoot,
+        performIndexing: vi.fn()
+      }
     );
 
-    const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
-
-    const response = await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: {
-          query: 'test'
-        }
-      }
-    });
-
-    const payload = JSON.parse(response.content[0].text);
+    const payload = JSON.parse(response.content?.[0]?.text ?? '{}');
     expect(payload.status).toBe('indexing');
-    expect(payload.message).toContain('retry');
-    expect(searchMocks.search).toHaveBeenCalledTimes(1);
-  }, 15000);
+    expect(payload.message).toBe('Index build in progress. Check indexing status, then retry.');
+    expect(searchMocks.search).not.toHaveBeenCalled();
+  });
 
   it('returns invalid_params when search_codebase query is missing', async () => {
     const { server } = await import('../src/index.js');

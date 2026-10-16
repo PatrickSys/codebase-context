@@ -878,7 +878,7 @@ export async function handle(
         const resultPaths = results.map((r) => r.filePath);
         const impactCandidates = computeImpactCandidates(resultPaths);
 
-        // PREF-02: Compute impact coverage (callers of result files that appear in results)
+        // Compute impact coverage (callers of result files that appear in results)
         const callerFiles = resultPaths.flatMap((p) => {
           const importers: string[] = [];
           for (const [dep, importerList] of reverseImports) {
@@ -993,7 +993,7 @@ export async function handle(
           indexFreshness: computeIndexConfidence()
         });
 
-        // Build clean decision card (PREF-01 to PREF-04)
+        // Build clean decision card
         const decisionCard: DecisionCard = {
           ready: evidenceLock.readyToEdit
         };
@@ -1111,7 +1111,7 @@ export async function handle(
     };
   }
 
-  // Helper: Build scope header for symbol-aware chunks (SEARCH-02)
+  // Helper: Build scope header for symbol-aware chunks
   function buildScopeHeader(metadata: ChunkMetadata): string | null {
     // Try symbolPath first (most reliable for AST-based symbols)
     if (metadata?.symbolPath && Array.isArray(metadata.symbolPath)) {

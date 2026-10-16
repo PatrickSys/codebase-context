@@ -1305,7 +1305,7 @@ export class CodebaseSearcher {
       })
       .sort((a, b) => b.score - a.score);
 
-    // SEARCH-01: Definition first for explicit identifiers, regardless of which
+    // Definition first for explicit identifiers, regardless of which
     // analyzer populated the existing declaration metadata. Coarse component or
     // layer boosts must not move a fuzzy same-suffix mention above that match.
     if (

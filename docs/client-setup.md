@@ -103,9 +103,21 @@ On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a f
 
 ## Interactive setup wizard
 
-Run `npx -y codebase-context@2.4.0 init` from the target project to open the existing interactive wizard. It asks you to choose Claude Code, Cursor, Codex or OpenCode, previews HTTP configuration and asks before applying it. It separately offers to write an instruction block to `CLAUDE.md`, `.cursorrules` or `AGENTS.md` where applicable.
+Run setup from the project you want the client to search:
 
-The wizard does not accept non-interactive client/root flags or prepare an index. Its HTTP configurations need a separately started server. In the current source, Claude/Codex registration attempts to execute `mcp` directly and can report failure while the wizard still exits successfully. Use the direct stdio commands or configuration above for those clients; the wizard is not a verified one-step setup.
+```bash
+# Claude Code
+npx -y codebase-context@2.4.0 init --client claude-code --yes
+
+# Codex
+npx -y codebase-context@2.4.0 init --client codex --yes
+```
+
+Claude Code writes `.mcp.json`; Codex writes `.codex/config.toml`. Both configs start the installed server with the selected project. Setup uses the current folder unless `--root` or `CODEBASE_ROOT` selects another one; `--root` takes priority.
+
+`--yes` writes the config without prompts. Run `init` without flags to choose a client interactively and optionally add project instructions. Cursor and OpenCode still use HTTP and need a separately running server.
+
+Existing settings are kept. If a different Codebase Context entry is already present, setup leaves the file unchanged and reports the conflict. Restart the client after setup and approve the server if asked. The first use builds the code index. Rerun setup if the Codebase Context installation moves, because the config uses its installed location.
 
 ## Optional fixed-folder setup and CLI preparation
 

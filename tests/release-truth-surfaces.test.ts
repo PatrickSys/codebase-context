@@ -175,4 +175,17 @@ describe('release truth surfaces', () => {
     expect(capabilities).not.toContain('what `codebase-context` ships today');
     expect(capabilities).not.toContain('Published 2.4.0 has');
   });
+
+  it('keeps release wording, analyzer claims and setup checks accurate', () => {
+    const capabilities = readText('docs/capabilities.md');
+    const setup = readText('docs/client-setup.md');
+    const beforeFirstClient = setup.slice(0, setup.indexOf('## Claude Code'));
+
+    expect(capabilities).not.toMatch(/\b2\.4\.0 (?:setup )?preview\b/i);
+    expect(`${readme}\n${capabilities}`).not.toMatch(/opt-in NestJS|NestJS \(opt-in\)/i);
+    expect(capabilities).not.toContain('analyzers: { nestjs: { enabled: true } }');
+    expect(capabilities).not.toContain('generates HTTP setup');
+    expect(setup).not.toContain('package still declares Node 18+');
+    expect(beforeFirstClient).toContain('`2.2.0`');
+  });
 });

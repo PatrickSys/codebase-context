@@ -101,11 +101,7 @@ On October 6 the exact published `npx` entrypoint was also tested without a fold
 
 ## Unreleased installer candidate
 
-The next release is expected to support one project-only command from the target project:
-
-The `init --client codex --yes` flow is an unreleased source candidate. Published npm `2.2.0` does not include these flags. Use the published configuration above rather than an `@latest` installer command; candidate verification uses an exact built or installed candidate.
-
-A successful `init --client codex --yes` writes the project-scoped `.codex/config.toml` and prepares the index for that root. If config writing or index preparation fails, setup is incomplete and Codex is not ready to use.
+The source `init` command supports project-scoped stdio setup for Claude Code and Codex. Published npm `2.2.0` does not include these flags.
 
 For candidate verification before publication, build the source checkout and run its absolute `dist/index.js` path from the project you want to configure:
 
@@ -114,14 +110,15 @@ For candidate verification before publication, build the source checkout and run
 npm run build
 
 # In the target project, using the built CLI path
+node C:\path\to\codebase-context\dist\index.js init --client claude-code --yes
 node C:\path\to\codebase-context\dist\index.js init --client codex --yes
 ```
 
-Use `--root C:\path\to\project` when the command is run from elsewhere. Here, `root` means the project folder to configure and index. The candidate writes the project-scoped `<project>/.codex/config.toml`, preserves unrelated Codex settings, prepares the index for that folder, and does not write `AGENTS.md` or global client configuration. After a successful result, trust the project in Codex Desktop if prompted, restart or reopen Codex, start a new task in that project, and ask a small project question. A written config and ready index do not prove that Codex loaded or queried the server.
+The project root resolves in this order: `--root`, `CODEBASE_ROOT`, then the current directory. Claude Code writes `<project>/.mcp.json`; Codex writes `<project>/.codex/config.toml`. Both configs launch the CLI entrypoint used for `init` and pass the resolved project root as its positional argument, so the MCP server starts with that project as its bootstrap root.
 
-Before release, the generated `npx` server command still resolves the published package unless the candidate is installed in the target project's `node_modules`. Our packaged test installs the candidate in a disposable project and checks its file hash. Running the built setup command alone does not prove that Codex will launch that same candidate.
+`--yes` writes only the MCP config. It does not edit `CLAUDE.md` or `AGENTS.md`, write global client settings, or prepare an index. Existing unrelated client settings are preserved; an existing different `codebase-context` entry stops setup for review. Rerun init if the installed package moves, because the generated config points to the exact entrypoint used during setup.
 
-**Checked on 2026-09-15:** the packed candidate installed and indexed an isolated Windows project. A fresh Codex Desktop task then called the actual `search_codebase` MCP tool and located the requested chart component with its source file and lines. The normal Desktop task flow established project trust; no trust-file edits or replacement CLI/SDK search were used for that answer. This covers the small prepared project with shared caches, not a cold-machine install or the published npm package.
+After setup, trust or approve the project server if the client asks, then restart or reopen the client. A written config does not prove that the host loaded the server or that an agent queried it. Prepare the index separately with the same CLI entrypoint's `reindex` command from the project folder when needed.
 
 ## Optional fixed-folder setup and CLI preparation
 

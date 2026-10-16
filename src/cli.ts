@@ -87,7 +87,7 @@ function printUsage(): void {
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
-  console.log('  init                               Interactive setup wizard for AI clients');
+  console.log('  init                               Add this project to installed AI clients');
   console.log('  map [--json] [--pretty]              Conventions map');
   console.log('');
   console.log('Global flags:');

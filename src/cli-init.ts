@@ -1,16 +1,32 @@
 /**
- * Interactive setup wizard for codebase-context.
- * Handles `codebase-context init` — generates MCP config and instruction block
- * for the four first-wave AI clients: Claude Code, Cursor, Codex, OpenCode.
+ * `codebase-context init` writes stdio MCP config for installed AI clients.
+ * `--http` keeps the older wizard, including HTTP config for Cursor and OpenCode.
  *
- * Depends only on Node built-ins and @inquirer/prompts.
- * No imports from the rest of the codebase — keeps this module side-effect-free
- * outside the wizard call and easy to unit test.
+ * Depends on Node built-ins, @inquirer/prompts, and ./init-clients.ts.
  */
 
 import path from 'path';
 import * as fs from 'node:fs/promises';
 import { select, confirm } from '@inquirer/prompts';
+import {
+  STDIO_CLIENT_LABELS,
+  buildWritePlans,
+  clientForTarget,
+  configBackupPath,
+  defaultInstallProbe,
+  detectInstalledClients,
+  parseStdioTarget,
+  renderCodexServerToml,
+  type InstallProbe,
+  type StdioLaunch,
+  type StdioTarget,
+  type StdioWritePlan
+} from './init-clients.js';
+
+export type InitCliDependencies = {
+  probe?: InstallProbe;
+  now?: () => Date;
+};
 
 export type Client = 'claude-code' | 'cursor' | 'codex' | 'opencode';
 
@@ -23,10 +39,6 @@ export type McpConfigOptions = {
 };
 
 type JsonObject = Record<string, unknown>;
-
-function quoteTomlString(value: string): string {
-  return JSON.stringify(value);
-}
 
 export function generateMcpConfig(client: Client, options: McpConfigOptions = {}): McpConfigResult {
   const rootPath = path.resolve(options.rootPath ?? process.cwd());
@@ -75,11 +87,7 @@ export function generateMcpConfig(client: Client, options: McpConfigOptions = {}
       return {
         kind: 'file',
         path: path.join(rootPath, '.codex', 'config.toml'),
-        content:
-          `[mcp_servers.codebase-context]\n` +
-          `command = ${quoteTomlString(nodeExecutable)}\n` +
-          `args = [${stdioArgs.map(quoteTomlString).join(', ')}]\n` +
-          'startup_timeout_sec = 120\n'
+        content: renderCodexServerToml(nodeExecutable, stdioArgs)
       };
     case 'opencode':
       return {
@@ -224,7 +232,8 @@ async function readExistingConfig(filePath: string): Promise<string | null> {
 export async function _buildMergedMcpContent(
   filePath: string,
   generatedContent: string,
-  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode'>
+  client: string,
+  serverKey: 'mcpServers' | 'mcp' | 'servers' = client === 'opencode' ? 'mcp' : 'mcpServers'
 ): Promise<{ content: string; mergedFromExisting: boolean }> {
   const existingText = await readExistingConfig(filePath);
   if (existingText === null) {
@@ -245,7 +254,6 @@ export async function _buildMergedMcpContent(
     throw new Error(`Cannot merge ${client} config at ${filePath}: expected a JSON object.`);
   }
 
-  const serverKey = client === 'opencode' ? 'mcp' : 'mcpServers';
   const existingServersValue = existing[serverKey];
   if (existingServersValue !== undefined && !isJsonObject(existingServersValue)) {
     throw new Error(
@@ -383,12 +391,21 @@ export async function _buildMergedCodexContent(
   };
 }
 
-type InitOptions = {
+type HttpInitOptions = {
+  mode: 'http';
   client?: Client;
   rootPath: string;
   yes: boolean;
-  help: boolean;
 };
+
+type AutoInitOptions = {
+  mode: 'auto';
+  client?: StdioTarget;
+  rootPath: string;
+  yes: boolean;
+};
+
+type InitOptions = { mode: 'help' } | HttpInitOptions | AutoInitOptions;
 
 function parseClient(value: string): Client {
   if (value === 'claude-code' || value === 'cursor' || value === 'codex' || value === 'opencode') {
@@ -399,24 +416,27 @@ function parseClient(value: string): Client {
 
 function parseInitOptions(args: string[]): InitOptions {
   if (args.includes('--help') || args.includes('-h')) {
-    return { rootPath: process.cwd(), yes: false, help: true };
+    return { mode: 'help' };
   }
 
-  let client: Client | undefined;
+  let rawClient: string | undefined;
   let yes = false;
+  let http = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === '--yes' || arg === '-y') {
       yes = true;
+    } else if (arg === '--http') {
+      http = true;
     } else if (arg === '--client') {
       const value = args[index + 1];
       if (!value || value.startsWith('--')) {
         throw new Error('Expected a client after --client.');
       }
-      client = parseClient(value);
+      rawClient = value;
       index++;
     } else if (arg?.startsWith('--client=')) {
-      client = parseClient(arg.slice('--client='.length));
+      rawClient = arg.slice('--client='.length);
     } else if (arg === '--root') {
       index++;
     } else if (arg?.startsWith('--root=')) {
@@ -426,24 +446,38 @@ function parseInitOptions(args: string[]): InitOptions {
     }
   }
 
+  const rootPath = resolveInitRoot(args, process.env.CODEBASE_ROOT, process.cwd());
+  if (http) {
+    return {
+      mode: 'http',
+      ...(rawClient ? { client: parseClient(rawClient) } : {}),
+      rootPath,
+      yes
+    };
+  }
   return {
-    ...(client ? { client } : {}),
-    rootPath: resolveInitRoot(args, process.env.CODEBASE_ROOT, process.cwd()),
-    yes,
-    help: false
+    mode: 'auto',
+    ...(rawClient ? { client: parseStdioTarget(rawClient) } : {}),
+    rootPath,
+    yes
   };
 }
 
 function printInitUsage(): void {
   console.log('codebase-context init [options]');
   console.log('');
-  console.log('Set up MCP config for an AI client.');
+  console.log('Add codebase-context to the AI clients installed on this machine.');
+  console.log('The current folder is the project. Pass --root to choose another folder.');
   console.log('');
   console.log('Options:');
-  console.log('  --client <name>  claude-code, cursor, codex, or opencode');
-  console.log('  --root <path>    Project root (default: CODEBASE_ROOT or cwd)');
-  console.log('  --yes, -y        Write the MCP config without prompts');
+  console.log('  --yes, -y        Write the config without asking');
+  console.log('  --root <path>    Project folder (default: current folder, or CODEBASE_ROOT)');
+  console.log('  --client <name>  Limit setup to one client');
+  console.log('  --http           Older setup wizard (HTTP for Cursor and OpenCode)');
   console.log('  --help, -h       Show this help');
+  console.log('');
+  console.log('Clients: claude-code, claude-desktop, cursor, vscode, windsurf, codex');
+  console.log('With --http: claude-code, cursor, codex, opencode');
 }
 
 function getCurrentCliEntrypoint(): string {
@@ -454,23 +488,160 @@ function getCurrentCliEntrypoint(): string {
   return path.resolve(entrypoint);
 }
 
-export async function handleInitCli(args: string[]): Promise<void> {
-  let options: InitOptions;
+function configContentsMatch(existing: string, next: string, format: 'json' | 'toml'): boolean {
+  if (format === 'toml') {
+    return normalizeTomlNewlines(existing).trim() === normalizeTomlNewlines(next).trim();
+  }
   try {
-    options = parseInitOptions(args);
+    return jsonValuesEqual(JSON.parse(existing) as unknown, JSON.parse(next) as unknown);
+  } catch {
+    return false;
+  }
+}
+
+type StdioApplyResult = {
+  configPath: string;
+  status: 'written' | 'unchanged' | 'conflict';
+  backupPath?: string;
+  message?: string;
+};
+
+async function applyStdioPlan(plan: StdioWritePlan, now: Date): Promise<StdioApplyResult> {
+  const existing = await readExistingConfig(plan.configPath);
+  let merged: { content: string; mergedFromExisting: boolean };
+  try {
+    merged =
+      plan.format === 'toml'
+        ? await _buildMergedCodexContent(plan.configPath, plan.content)
+        : await _buildMergedMcpContent(
+            plan.configPath,
+            plan.content,
+            plan.clients[0]?.id ?? 'client',
+            plan.serverKey ?? 'mcpServers'
+          );
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    printInitUsage();
+    return {
+      configPath: plan.configPath,
+      status: 'conflict',
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+
+  if (existing !== null && configContentsMatch(existing, merged.content, plan.format)) {
+    return { configPath: plan.configPath, status: 'unchanged' };
+  }
+
+  const dir = path.dirname(plan.configPath);
+  await fs.mkdir(dir, { recursive: true });
+  let backupPath: string | undefined;
+  if (existing !== null) {
+    backupPath = configBackupPath(plan.configPath, now);
+    await fs.writeFile(backupPath, existing, 'utf8');
+  }
+  await fs.writeFile(plan.configPath, merged.content, 'utf8');
+  return {
+    configPath: plan.configPath,
+    status: 'written',
+    ...(backupPath ? { backupPath } : {})
+  };
+}
+
+async function ensureProjectRoot(rootPath: string): Promise<void> {
+  try {
+    await fs.access(rootPath);
+  } catch {
+    throw new Error(`Project root does not exist or is not accessible: ${rootPath}`);
+  }
+}
+
+function stdioLaunchFor(rootPath: string): StdioLaunch {
+  return {
+    nodeExecutable: process.execPath,
+    serverEntrypoint: getCurrentCliEntrypoint(),
+    projectRoot: rootPath
+  };
+}
+
+async function runStdioSetup(options: AutoInitOptions, deps: InitCliDependencies): Promise<void> {
+  const probe: InstallProbe = {
+    ...(deps.probe ?? defaultInstallProbe(options.rootPath)),
+    projectRoot: options.rootPath
+  };
+  const clients = options.client
+    ? [clientForTarget(options.client, probe)]
+    : await detectInstalledClients(probe);
+  const plans = buildWritePlans(clients, stdioLaunchFor(options.rootPath));
+
+  if (plans.length === 0) {
+    console.log('No installed AI clients found.');
+    console.log(`Checked for ${STDIO_CLIENT_LABELS.join(', ')}.`);
+    console.log('Install one of them, then run this command again from your project folder.');
+    return;
+  }
+
+  console.log('\nSet up codebase-context for this project\n');
+  console.log(`Project: ${options.rootPath}\n`);
+  console.log('Clients found:');
+  for (const plan of plans) {
+    const names = plan.clients.map((client) => client.label).join(', ');
+    console.log(`  ${names}`);
+    console.log(`  ${plan.configPath}`);
+  }
+  console.log(
+    '\nOther settings in those files are kept. A different codebase-context entry is left unchanged. A backup is saved before each file that changes.\n'
+  );
+
+  const apply = options.yes
+    ? true
+    : await confirm({
+        message: 'Apply these configs?',
+        default: false
+      });
+  if (!apply) {
+    console.log('No files changed.');
+    return;
+  }
+
+  try {
+    await ensureProjectRoot(options.rootPath);
+  } catch (error) {
+    console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
     return;
   }
 
-  if (options.help) {
-    printInitUsage();
-    return;
+  const now = deps.now ?? (() => new Date());
+  let failed = false;
+  for (const plan of plans) {
+    try {
+      const result = await applyStdioPlan(plan, now());
+      if (result.status === 'conflict') {
+        failed = true;
+        console.error(`Skipped: ${result.configPath}`);
+        console.error(result.message ?? 'Existing codebase-context entry was left unchanged.');
+        continue;
+      }
+      if (result.status === 'unchanged') {
+        console.log(`Unchanged: ${result.configPath}`);
+        continue;
+      }
+      if (result.backupPath) console.log(`Backup: ${result.backupPath}`);
+      console.log(`Written: ${result.configPath}`);
+    } catch (error) {
+      failed = true;
+      console.error(
+        `Init failed for ${plan.configPath}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
+
+  if (failed) process.exitCode = 1;
+  else console.log('\nRestart the client and approve the server if it asks.');
+}
+
+async function runHttpWizard(options: HttpInitOptions): Promise<void> {
   if (options.yes && !options.client) {
-    console.error('Error: --yes requires --client.');
+    console.error('Error: --http --yes requires --client.');
     printInitUsage();
     process.exitCode = 1;
     return;
@@ -524,11 +695,7 @@ export async function handleInitCli(args: string[]): Promise<void> {
 
   try {
     if (applyMcp) {
-      try {
-        await fs.access(options.rootPath);
-      } catch {
-        throw new Error(`Project root does not exist or is not accessible: ${options.rootPath}`);
-      }
+      await ensureProjectRoot(options.rootPath);
       const dir = path.dirname(mcpResult.path);
       await fs.mkdir(dir, { recursive: true });
       const mergedConfig =
@@ -563,4 +730,25 @@ export async function handleInitCli(args: string[]): Promise<void> {
       : '  Run `npx codebase-context map` to see your codebase conventions\n' +
         '  Start the HTTP server: npx codebase-context --http\n';
   console.log(`\nNext steps:\n${nextSteps}`);
+}
+
+export async function handleInitCli(args: string[], deps: InitCliDependencies = {}): Promise<void> {
+  let options: InitOptions;
+  try {
+    options = parseInitOptions(args);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    printInitUsage();
+    process.exitCode = 1;
+    return;
+  }
+
+  if (options.mode === 'help') {
+    printInitUsage();
+    return;
+  }
+  if (options.mode === 'http') {
+    return runHttpWizard(options);
+  }
+  return runStdioSetup(options, deps);
 }

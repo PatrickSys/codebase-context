@@ -8,24 +8,31 @@ Codebase Context gives coding agents a map of your repository through MCP, for d
 
 **These commands use 2.4.0.** If that version is not available on npm yet, use the published 2.2.0 [setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
 
-Use Node.js 22 or newer. Choose your coding tool and run its command once; the examples target the 2.4.0 release:
+Use Node.js 22 or newer. From your project folder, run:
 
 ```bash
-# Claude Code
-claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0
-
-# Codex CLI
-codex mcp add codebase-context -- npx -y codebase-context@2.4.0
-
-# OpenCode 1.x (keep the quoted separator on Windows)
-opencode mcp add codebase-context '--' npx -y codebase-context@2.4.0
+npx -y codebase-context@2.4.0 init
 ```
 
-Start a new agent session in your project, then ask:
+The command looks for Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, and Codex (the terminal app and the desktop app). For each one it finds, it adds Codebase Context and points it at the current folder. It asks before it changes anything. To skip the question:
 
-> Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project, wait for indexing if needed, and open the relevant source files.
+```bash
+npx -y codebase-context@2.4.0 init --yes
+```
 
-Replace `[feature]` with something you want to find. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model.
+Your other settings stay in place. If a file already has a different Codebase Context setup, that file is left unchanged. A backup is saved next to any file that does change. Restart the app after setup.
+
+Claude Code, Cursor, VS Code, and Codex are configured in this project. Claude Desktop and Windsurf use their own settings file, still pointed at this folder.
+
+Start a new session in the project, then ask the agent to find a feature and open the relevant source files. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model.
+
+The older question-and-answer setup, including a local web connection for Cursor and OpenCode, is still available:
+
+```bash
+npx -y codebase-context@2.4.0 init --http
+```
+
+Manual steps for other tools are in the [client setup guide](./docs/client-setup.md).
 
 ### New in 2.4.0
 
@@ -36,33 +43,6 @@ Replace `[feature]` with something you want to find. The first run downloads a l
 Known limits: [Intel Mac indexing crash (#68)](https://github.com/PatrickSys/codebase-context/issues/68), [custom OpenAI endpoints (#70)](https://github.com/PatrickSys/codebase-context/issues/70) and [Ollama (#71)](https://github.com/PatrickSys/codebase-context/issues/71) remain open.
 
 The existing [benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) reports 25.7% expected-file recovery versus jCodeMunch's 27.1% in a fixed retrieval comparison; it does not establish a winner or coding quality.
-
-For Codex Desktop, create or merge `.codex/config.toml` in the project you want to search:
-
-```toml
-[mcp_servers.codebase-context]
-command = "npx"
-args = ["-y", "codebase-context@2.4.0"]
-startup_timeout_sec = 120
-```
-
-Trust the project if asked, restart Codex, and start a new task there. Use the prompt above. Config placement alone does not establish successful first use; this no-folder recipe has not been accepted in a fresh native Desktop task.
-
-Other clients use their own setup commands:
-
-| Client                      | Shortest current setup                                                       |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context@2.4.0` |
-| Cursor                      | Add `.cursor/mcp.json`                                                       |
-| VS Code with GitHub Copilot | Add `.vscode/mcp.json`                                                       |
-| GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context@2.4.0` |
-| Windsurf                    | Add `~/.codeium/windsurf/mcp_config.json`                                    |
-
-Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration and the interactive setup wizard's limitations.
-
-The [client setup guide](./docs/client-setup.md) has the exact commands and config for every client, plus what was checked locally and what still relies on official instructions.
-
-The default connection is `stdio` (standard input/output): your client starts the server when it needs it. HTTP is an advanced, client-dependent option; verify the setup guide and client support before relying on it.
 
 ## What your agent gets
 

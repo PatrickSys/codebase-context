@@ -117,7 +117,7 @@ Claude Code writes `.mcp.json`; Codex writes `.codex/config.toml`. Both configs 
 
 `--yes` writes the config without prompts. Run `init` without flags to choose a client interactively and optionally add project instructions. Cursor and OpenCode still use HTTP and need a separately running server.
 
-Existing settings are kept. If a different Codebase Context entry is already present, setup leaves the file unchanged and reports the conflict. Restart the client after setup and approve the server if asked. The first use builds the code index. Rerun setup if the Codebase Context installation moves, because the config uses its installed location.
+Existing settings are kept. If a different Codebase Context entry is already present, setup leaves the file unchanged and reports the conflict. If the Codebase Context installation moves, remove only its existing entry from the client config. Keep the other settings, then run setup again. Restart the client after setup and approve the server if asked. The first use builds the code index.
 
 ## Optional fixed-folder setup and CLI preparation
 
@@ -129,7 +129,7 @@ To prepare the index separately, run from the project folder:
 npx -y codebase-context@2.4.0 reindex
 ```
 
-The interactive wizard limitations described above are still present in the 2.4.0 source. A successful wizard exit alone does not establish working client registration.
+A successful setup run writes the config but does not confirm that the client connected.
 
 ## Gemini CLI
 

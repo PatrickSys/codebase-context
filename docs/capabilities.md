@@ -1,8 +1,8 @@
 # Capabilities Reference
 
-Technical reference for Codebase Context 2.4.0. Start with the repository map, then search for relevant code. For an overview, see [README.md](../README.md).
+Technical reference for the current Codebase Context npm release and the upcoming 2.4.0 source. Start with the repository map, then search for relevant code. For an overview, see [README.md](../README.md).
 
-**These commands use 2.4.0.** If that version is not available on npm yet, use the published 2.2.0 [setup guide](https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md).
+Commands use the current npm release. Features marked as planned for 2.4.0 are not yet available from npm; the current published version is 2.2.0.
 
 ## Transport Modes
 
@@ -10,8 +10,8 @@ The server supports two transport modes:
 
 | Mode                | Command                                           | MCP endpoint                 |
 | ------------------- | ------------------------------------------------- | ---------------------------- |
-| **stdio** (default) | `npx -y codebase-context@2.4.0`                   | Spawned process stdin/stdout |
-| **HTTP**            | `npx -y codebase-context@2.4.0 --http [--port N]` | `http://127.0.0.1:3100/mcp`  |
+| **stdio** (default) | `npx -y codebase-context`                   | Spawned process stdin/stdout |
+| **HTTP**            | `npx -y codebase-context --http [--port N]` | `http://127.0.0.1:3100/mcp`  |
 
 HTTP defaults to `127.0.0.1:3100`. Override with `--port`, `CODEBASE_CONTEXT_PORT`, or `server.port` in `~/.codebase-context/config.json`.
 
@@ -29,7 +29,7 @@ Copy-pasteable client config templates are shipped in the package:
 - `templates/mcp/stdio/.mcp.json` — stdio setup for `.mcp.json`-style clients
 - `templates/mcp/http/.mcp.json` — HTTP setup for `.mcp.json`-style clients
 
-Use Node.js 22 or newer with the 2.4.0 commands shown here. For setup commands and what was checked, see the [client setup guide](./client-setup.md).
+Use Node.js 22 or newer with the commands shown here. For setup commands and what was checked, see the [client setup guide](./client-setup.md).
 
 ## CLI Reference
 
@@ -56,11 +56,11 @@ Commands that list `--json` above support raw JSON output. Follow the [client se
 
 ```bash
 # Quick examples
-npx -y codebase-context@2.4.0 status
-npx -y codebase-context@2.4.0 search --query "auth middleware" --intent edit
-npx -y codebase-context@2.4.0 refs --symbol "UserService" --limit 10
-npx -y codebase-context@2.4.0 cycles --scope src/features
-npx -y codebase-context@2.4.0 reindex --incremental
+npx -y codebase-context status
+npx -y codebase-context search --query "auth middleware" --intent edit
+npx -y codebase-context refs --symbol "UserService" --limit 10
+npx -y codebase-context cycles --scope src/features
+npx -y codebase-context reindex --incremental
 ```
 
 ## Tool Surface
@@ -305,6 +305,6 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring 
 
 - **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
 - **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
-- **Version 2.4.0 has dedicated Angular, React, Next.js and NestJS analyzers.** Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
+- **Planned for unpublished 2.4.0:** dedicated Angular, React, Next.js and NestJS analyzers. Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
 - **Default embedding model is `bge-small-en-v1.5` (512-token context).** Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

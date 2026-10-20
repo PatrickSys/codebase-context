@@ -141,13 +141,34 @@ describe('release truth surfaces', () => {
       const page = readOptionalText(path);
       if (!page) return [];
       return [...page.matchAll(/codebase-context@(\d+\.\d+\.\d+)/g)]
-        .filter((match) => match[1] !== publishedVersion)
+        .filter((match) => {
+          const version = match[1];
+          if (version === publishedVersion) {
+            return false;
+          }
+          if (
+            version === '2.4.0' &&
+            (path === 'docs/review-context.md' || path === 'docs/client-setup.md')
+          ) {
+            const index = match.index ?? 0;
+            const surroundingText = page.slice(
+              Math.max(0, index - 300),
+              Math.min(page.length, index + 300)
+            );
+            if (/requires\s+(?:the\s+unpublished\s+)?2\.4\.0/i.test(surroundingText)) {
+              return false;
+            }
+          }
+          return true;
+        })
         .map((match) => `${path}: ${match[0]}`);
     });
 
     expect(pinnedCommands).toEqual([]);
     expect(readText('README.md')).toContain('npx -y codebase-context');
     expect(readText('docs/client-setup.md')).toContain('npx -y codebase-context');
+    expect(readText('docs/client-setup.md')).toContain('codebase-context@2.4.0 init');
+    expect(readText('docs/review-context.md')).toContain('--package=codebase-context@2.4.0');
   });
 
   it('does not describe the unpublished 2.4.0 preview as current or published', () => {

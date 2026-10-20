@@ -103,19 +103,21 @@ On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a f
 
 ## Interactive setup wizard
 
+> **Requires 2.4.0 (not yet published)**: The non-interactive `--client` and `--yes` flags are not available in published 2.2.0 (which runs an interactive HTTP wizard). These commands require the unpublished 2.4.0 release and will not work with the current npm release.
+
 Run setup from the project you want the client to search:
 
 ```bash
-# Claude Code
-npx -y codebase-context init --client claude-code --yes
+# Claude Code (requires 2.4.0, not yet published)
+npx -y codebase-context@2.4.0 init --client claude-code --yes
 
-# Codex
-npx -y codebase-context init --client codex --yes
+# Codex (requires 2.4.0, not yet published)
+npx -y codebase-context@2.4.0 init --client codex --yes
 ```
 
 Claude Code writes `.mcp.json`; Codex writes `.codex/config.toml`. Both configs start the installed server with the selected project. Setup uses the current folder unless `--root` or `CODEBASE_ROOT` selects another one; `--root` takes priority.
 
-`--yes` writes the config without prompts. Run `init` without flags to choose a client interactively and optionally add project instructions. Cursor and OpenCode still use HTTP and need a separately running server.
+`--yes` writes the config without prompts. In 2.2.0, running `init` without flags starts the older interactive wizard. Cursor and OpenCode still use HTTP and need a separately running server.
 
 Existing settings are kept. If a different Codebase Context entry is already present, setup leaves the file unchanged and reports the conflict. Restart the client after setup and approve the server if asked. The first use builds the code index. Rerun setup if the Codebase Context installation moves, because the config uses its installed location.
 

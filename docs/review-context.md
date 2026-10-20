@@ -4,7 +4,7 @@
 
 It is deliberately **not** an AI reviewer. It does not call an LLM, decide whether code is correct, or post comments. Its job is narrower and testable: compile the changed surface, stable diff signals, related codebase context, and current conventions into a versioned input for a reviewer or evaluation harness.
 
-These commands use the current npm release through the unpinned package name.
+The packaged review CLI requires the unpublished 2.4.0 release (the `codebase-context-review` executable does not exist in published 2.2.0); until then, use the source-build command shown below.
 
 ## Why this exists
 
@@ -25,16 +25,16 @@ pnpm build
 node dist/review-bin.js --base origin/main --head HEAD
 ```
 
-After package publication, the package also exposes:
+Requires 2.4.0 (not yet published): after package publication, the package also exposes:
 
 ```bash
-npm exec --yes --package=codebase-context -- codebase-context-review --base origin/main --head HEAD
+npm exec --yes --package=codebase-context@2.4.0 -- codebase-context-review --base origin/main --head HEAD
 ```
 
-Use `--json` for the complete machine-readable packet:
+Use `--json` for the complete machine-readable packet (requires 2.4.0, not yet published):
 
 ```bash
-npm exec --yes --package=codebase-context -- codebase-context-review \
+npm exec --yes --package=codebase-context@2.4.0 -- codebase-context-review \
   --base origin/main \
   --head HEAD \
   --max-queries 8 \

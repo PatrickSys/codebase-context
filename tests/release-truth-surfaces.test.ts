@@ -126,47 +126,49 @@ describe('release truth surfaces', () => {
     );
   });
 
-  it('keeps 2.4.0 setup guidance accurate before and after publication', () => {
-    const versionNotice = 'These commands use 2.4.0.';
-    const fallbackNotice = 'If that version is not available on npm yet, use the published 2.2.0';
-    const currentVersionGuide =
-      'https://github.com/PatrickSys/codebase-context/blob/10ba0a635ff73cd5c5b011ffd5b31e7ed4656c65/docs/client-setup.md';
-    const setupPages = [
-      [
-        'README.md',
-        'claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0'
-      ],
-      [
-        'docs/client-setup.md',
-        'claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context@2.4.0'
-      ],
-      ['docs/capabilities.md', '| **stdio** (default) |'],
-      ['docs/cli.md', 'CODEBASE_ROOT=/path/to/repo npx -y codebase-context@2.4.0 status'],
-      ['docs/demo.md', 'npx -y codebase-context@2.4.0 reindex'],
-      ['docs/review-context.md', 'pnpm build']
-    ] as const;
+  it('keeps pinned install commands on the published npm version', () => {
+    const publishedVersion = '2.2.0';
+    const userFacingDocs = [
+      'README.md',
+      'docs/capabilities.md',
+      'docs/cli.md',
+      'docs/client-setup.md',
+      'docs/demo.md',
+      'docs/review-context.md',
+      'docs/templates.md'
+    ];
+    const pinnedCommands = userFacingDocs.flatMap((path) => {
+      const page = readOptionalText(path);
+      if (!page) return [];
+      return [...page.matchAll(/codebase-context@(\d+\.\d+\.\d+)/g)]
+        .filter((match) => {
+          const version = match[1];
+          if (version === publishedVersion) {
+            return false;
+          }
+          if (
+            version === '2.4.0' &&
+            (path === 'docs/review-context.md' || path === 'docs/client-setup.md')
+          ) {
+            const index = match.index ?? 0;
+            const surroundingText = page.slice(
+              Math.max(0, index - 300),
+              Math.min(page.length, index + 300)
+            );
+            if (/requires\s+(?:the\s+unpublished\s+)?2\.4\.0/i.test(surroundingText)) {
+              return false;
+            }
+          }
+          return true;
+        })
+        .map((match) => `${path}: ${match[0]}`);
+    });
 
-    for (const [path, firstCommand] of setupPages) {
-      const page = readText(path);
-      const noticeIndex = page.indexOf(versionNotice);
-      const guideIndex = page.indexOf(currentVersionGuide);
-      const commandIndex = page.indexOf(firstCommand);
-
-      expect(
-        noticeIndex,
-        `${path} should explain the current-version fallback`
-      ).toBeGreaterThanOrEqual(0);
-      expect(guideIndex, `${path} should link the published 2.2.0 setup`).toBeGreaterThan(
-        noticeIndex
-      );
-      expect(page.slice(noticeIndex, guideIndex)).toContain(fallbackNotice);
-      expect(page.slice(noticeIndex, guideIndex)).toContain('[setup guide](');
-      expect(page).not.toContain('**2.4.0 setup preview:**');
-      expect(commandIndex, `${path} should retain its first runnable command`).toBeGreaterThan(0);
-      expect(noticeIndex, `${path} should qualify commands before they appear`).toBeLessThan(
-        commandIndex
-      );
-    }
+    expect(pinnedCommands).toEqual([]);
+    expect(readText('README.md')).toContain('npx -y codebase-context');
+    expect(readText('docs/client-setup.md')).toContain('npx -y codebase-context');
+    expect(readText('docs/client-setup.md')).toContain('codebase-context@2.4.0 init');
+    expect(readText('docs/review-context.md')).toContain('--package=codebase-context@2.4.0');
   });
 
   it('does not describe the unpublished 2.4.0 preview as current or published', () => {

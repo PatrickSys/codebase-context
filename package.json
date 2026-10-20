@@ -1,6 +1,6 @@
 {
   "name": "codebase-context",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Bounded conventions map and local-pattern discovery for AI coding agents. Local-first MCP server with AST-backed hybrid search.",
   "type": "module",
   "main": "./dist/lib.js",

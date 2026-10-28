@@ -36,7 +36,7 @@ function manifest(receiptPaths: string[] = []): FeatureContextManifest {
     attachments: [
       {
         requirementId: 'CART-17',
-        source: { path: 'requirements/checkout.yaml', locator: 'requirements[2]' },
+        source: { path: 'requirements/checkout.yaml', locator: 'claims[CART-17]' },
         appliesTo: [
           { path: 'src/cart.ts', symbol: 'CartComponent' },
           { path: 'src/cart-template.ts' }
@@ -52,7 +52,11 @@ async function createFixture(
   rootPath: string,
   options: { outcome?: 'passed' | 'failed' | 'skipped' } = {}
 ) {
-  await writeFile(rootPath, 'requirements/checkout.yaml', 'id: CART-17\ntext: checkout succeeds\n');
+  await writeFile(
+    rootPath,
+    'requirements/checkout.yaml',
+    'claims:\n  - id: CART-17\n    text: checkout succeeds\n'
+  );
   await writeFile(rootPath, 'src/cart.ts', 'export class CartComponent {}\n');
   await writeFile(rootPath, 'src/cart-template.ts', '<button>Checkout</button>\n');
   await writeFile(rootPath, 'src/shared-store.ts', 'export class SharedStore {}\n');
@@ -173,6 +177,158 @@ describe('feature context core', () => {
     });
     expect(sharedService.matches).toHaveLength(0);
   });
+
+  it('rejects a requirement ID that is absent from its source collection', async () => {
+    const fixture = await createFixture(rootPath);
+    await writeFile(rootPath, 'requirements/checkout.yaml', 'claims:\n  - id: CART-17\n');
+    const value = manifest();
+    value.attachments[0]!.requirementId = 'CART-DOES-NOT-EXIST';
+    value.attachments[0]!.source.locator = 'claims[CART-DOES-NOT-EXIST]';
+    const text = JSON.stringify(value);
+    await writeFile(rootPath, fixture.manifestPath, text);
+    const index = await compileFeatureContexts({
+      rootPath,
+      manifestFiles: [{ path: fixture.manifestPath, text }],
+      receiptFiles: [],
+      indexedSymbols: fixture.indexedSymbols,
+      codeCommit: COMMIT,
+      codeIsClean: true,
+      ignoredPaths: []
+    });
+    const reply = await queryFeatureContext({
+      rootPath,
+      index,
+      target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+      currentGit: { commit: COMMIT, isClean: true }
+    });
+    expect(reply.matches[0]?.source).toMatchObject({ status: 'invalid', current: false });
+    expect(reply.matches[0]?.diagnostics.map((item) => item.code)).toContain(
+      'invalid-source-locator'
+    );
+    expect(reply.counts.resolved).toBe(0);
+  });
+
+  it.each([
+    ['duplicate IDs', 'claims:\n  - id: CART-17\n  - id: CART-17\n', 'claims[CART-17]'],
+    ['ID only in a comment', 'claims: []\n# id: CART-17\n', 'claims[CART-17]'],
+    ['ID in a different collection', 'claims: []\nother:\n  - id: CART-17\n', 'claims[CART-17]'],
+    ['mismatched ID', 'claims:\n  - id: CART-18\n', 'claims[CART-18]'],
+    ['malformed YAML', 'claims: [\n', 'claims[CART-17]']
+  ])('rejects %s in a source locator', async (_name, source, locator) => {
+    const fixture = await createFixture(rootPath);
+    await writeFile(rootPath, 'requirements/checkout.yaml', source);
+    const value = manifest();
+    value.attachments[0]!.source.locator = locator;
+    const text = JSON.stringify(value);
+    await writeFile(rootPath, fixture.manifestPath, text);
+    const index = await compileFeatureContexts({
+      rootPath,
+      manifestFiles: [{ path: fixture.manifestPath, text }],
+      receiptFiles: [],
+      indexedSymbols: fixture.indexedSymbols,
+      codeCommit: COMMIT,
+      codeIsClean: true,
+      ignoredPaths: []
+    });
+    const reply = await queryFeatureContext({
+      rootPath,
+      index,
+      target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+      currentGit: { commit: COMMIT, isClean: true }
+    });
+    expect(reply.matches[0]?.source).toMatchObject({ status: 'invalid', current: false });
+    expect(reply.matches[0]?.diagnostics.map((item) => item.code)).toContain(
+      'invalid-source-locator'
+    );
+  });
+
+  it('marks an edited target body stale before refresh', async () => {
+    const fixture = await createFixture(rootPath);
+    await writeFile(rootPath, 'src/cart.ts', 'export class CartComponent { total = 0; }\n');
+    const reply = await queryFeatureContext({
+      rootPath,
+      index: fixture.index,
+      target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+      currentGit: { commit: COMMIT, isClean: true }
+    });
+    expect(reply.matches[0]?.appliesTo[0]?.current).toBe(false);
+    expect(reply.matches[0]?.diagnostics.map((item) => item.code)).toContain('stale-target');
+  });
+
+  it.each([
+    ['valid JSON', '{"claims":[{"id":"CART-17"}]}', 'resolved', true],
+    ['YAML in a JSON file', 'claims:\n  - id: CART-17\n', 'invalid', false]
+  ])('checks %s using its actual file format', async (_name, source, status, current) => {
+    const fixture = await createFixture(rootPath);
+    await writeFile(rootPath, 'requirements/checkout.json', source);
+    const value = manifest();
+    value.attachments[0]!.source.path = 'requirements/checkout.json';
+    const text = JSON.stringify(value);
+    await writeFile(rootPath, fixture.manifestPath, text);
+    const index = await compileFeatureContexts({
+      rootPath,
+      manifestFiles: [{ path: fixture.manifestPath, text }],
+      receiptFiles: [],
+      indexedSymbols: fixture.indexedSymbols,
+      codeCommit: COMMIT,
+      codeIsClean: true,
+      ignoredPaths: []
+    });
+    const reply = await queryFeatureContext({
+      rootPath,
+      index,
+      target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+      currentGit: { commit: COMMIT, isClean: true }
+    });
+    expect(reply.matches[0]?.source).toMatchObject({ status, current });
+  });
+
+  it.each(['move', 'delete'] as const)(
+    'retains the missing queried target and diagnostic after %s and refresh within the budget',
+    async (operation) => {
+      const fixture = await createFixture(rootPath);
+      if (operation === 'move')
+        await fs.rename(path.join(rootPath, 'src/cart.ts'), path.join(rootPath, 'src/moved.ts'));
+      else await fs.unlink(path.join(rootPath, 'src/cart.ts'));
+      const text = await fs.readFile(path.join(rootPath, fixture.manifestPath), 'utf8');
+      const index = await compileFeatureContexts({
+        rootPath,
+        manifestFiles: [{ path: fixture.manifestPath, text }],
+        receiptFiles: [{ path: fixture.receiptPath, text: JSON.stringify(fixture.receipt) }],
+        indexedSymbols: fixture.indexedSymbols,
+        codeCommit: COMMIT,
+        codeIsClean: true,
+        ignoredPaths: []
+      });
+      const attachment = index.attachments[0]!;
+      attachment.diagnostics.push(
+        ...Array.from({ length: 12 }, () => ({
+          code: 'missing-receipt' as const,
+          path: 'test-results/checkout.receipt.json',
+          message: 'Receipt is unavailable'
+        }))
+      );
+      const reply = await queryFeatureContext({
+        rootPath,
+        index,
+        target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+        currentGit: { commit: COMMIT, isClean: true }
+      });
+      expect(reply.matches).toHaveLength(1);
+      expect(reply.matches[0]?.appliesTo).toContainEqual(
+        expect.objectContaining({
+          target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+          status: 'missing',
+          current: false
+        })
+      );
+      expect(reply.matches[0]?.diagnostics.map((item) => item.code)).toContain('missing-target');
+      expect(reply.counts.resolved).toBe(0);
+      expect(reply.counts.omitted).toBe(0);
+      expect(reply.counts.omittedDiagnostics).toBeGreaterThan(0);
+      expect(Math.ceil(JSON.stringify(reply).length / 3)).toBeLessThanOrEqual(900);
+    }
+  );
 
   it('marks evidence stale when any referenced bytes change after indexing', async () => {
     const { index } = await createFixture(rootPath);
@@ -540,5 +696,96 @@ describe('feature context core', () => {
     expect(reply.diagnostics.some((entry) => entry.code === 'diagnostics-truncated')).toBe(true);
     expect(reply.counts.omittedDiagnostics).toBeGreaterThan(0);
     expect(Math.ceil(JSON.stringify(reply).length / 3)).toBeLessThanOrEqual(900);
+  });
+
+  it('retains a matching attachment when large global diagnostics exceed the response budget', async () => {
+    const fixture = await createFixture(rootPath);
+    const index = {
+      ...fixture.index,
+      diagnostics: Array.from({ length: 5 }, () => ({
+        code: 'invalid-manifest' as const,
+        path: `${'a'.repeat(250)}/${'b'.repeat(250)}`,
+        message: 'x'.repeat(160)
+      }))
+    };
+    const reply = await queryFeatureContext({
+      rootPath,
+      index,
+      target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+      currentGit: { commit: COMMIT, isClean: true }
+    });
+    expect(reply.matches).toHaveLength(1);
+    expect(reply.matches[0]?.appliesTo[0]?.status).toBe('resolved');
+    expect(reply.counts.omitted).toBe(0);
+    expect(reply.counts.omittedDiagnostics).toBeGreaterThan(0);
+    expect(Math.ceil(JSON.stringify(reply).length / 3)).toBeLessThanOrEqual(900);
+  });
+
+  it('retains the diagnostic for the queried symbol when several share a file', async () => {
+    const fixture = await createFixture(rootPath);
+    const attachment = fixture.index.attachments[0]!;
+    attachment.appliesTo = ['OtherA', 'OtherB', 'CartComponent'].map((name) => ({
+      target: { path: 'src/cart.ts', symbol: name },
+      status: 'unsupported' as const,
+      sha256: attachment.appliesTo[0]!.sha256
+    }));
+    attachment.diagnostics = ['OtherA', 'OtherB', 'CartComponent'].map((name) => ({
+      code: 'unsupported-symbol' as const,
+      path: 'src/cart.ts',
+      message: `No unique supported source declaration could be established for ${name}`
+    }));
+    attachment.diagnostics.push(
+      ...Array.from({ length: 12 }, () => ({
+        code: 'missing-receipt' as const,
+        path: 'test-results/checkout.receipt.json',
+        message: 'Receipt is unavailable'
+      }))
+    );
+    const reply = await queryFeatureContext({
+      rootPath,
+      index: fixture.index,
+      target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+      currentGit: { commit: COMMIT, isClean: true }
+    });
+    expect(reply.matches[0]?.appliesTo[0]?.target.symbol).toBe('CartComponent');
+    expect(reply.matches[0]?.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'unsupported-symbol',
+        message: 'No unique supported source declaration could be established for CartComponent'
+      })
+    );
+  });
+
+  it('retains a stale target diagnostic even when its invalid source also changes', async () => {
+    const fixture = await createFixture(rootPath);
+    await writeFile(rootPath, 'requirements/checkout.yaml', 'claims: []\n');
+    const text = await fs.readFile(path.join(rootPath, fixture.manifestPath), 'utf8');
+    const index = await compileFeatureContexts({
+      rootPath,
+      manifestFiles: [{ path: fixture.manifestPath, text }],
+      receiptFiles: [],
+      indexedSymbols: fixture.indexedSymbols,
+      codeCommit: COMMIT,
+      codeIsClean: true,
+      ignoredPaths: []
+    });
+    await writeFile(rootPath, 'requirements/checkout.yaml', 'claims: []\n# changed\n');
+    await fs.unlink(path.join(rootPath, 'src/cart.ts'));
+    index.attachments[0]!.diagnostics.push(
+      ...Array.from({ length: 12 }, () => ({
+        code: 'missing-receipt' as const,
+        path: fixture.receiptPath,
+        message: 'Receipt is unavailable'
+      }))
+    );
+    const reply = await queryFeatureContext({
+      rootPath,
+      index,
+      target: { path: 'src/cart.ts', symbol: 'CartComponent' },
+      currentGit: { commit: COMMIT, isClean: true }
+    });
+    expect(reply.matches).toHaveLength(1);
+    expect(reply.matches[0]?.appliesTo[0]?.current).toBe(false);
+    expect(reply.matches[0]?.diagnostics.map((item) => item.code)).toContain('stale-target');
   });
 });

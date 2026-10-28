@@ -128,8 +128,8 @@ reply includes `status: "success"`, the resolved `rootPath`, `matches`, exact co
 `diagnostics`. Each matching attachment includes its requirement ID, source path and locator,
 explicit targets, declared tests, and any recorded evidence. Target resolution is reported as
 `resolved`, `missing`, `ambiguous`, or `unsupported`; source, target, and test records also report
-whether their indexed bytes still match. Large replies omit whole matches or diagnostics and include
-exact omission counts and summary diagnostics.
+whether their indexed bytes still match. Large replies may compact an attachment around the queried
+target or omit whole matches; omission counts and diagnostics disclose what was left out.
 The same compact JSON is the human-inspection surface; `source.locator`, target status, `fresh`,
 and plain-language diagnostic messages are not duplicated in a second prose rendering.
 
@@ -169,9 +169,12 @@ indexing finds no changed vector rows. A missing or older feature-context projec
 }
 ```
 
-The requirement source may be Markdown, YAML, or another text file, but CBC treats it as opaque:
-it hashes the exact bytes and returns the path plus locator. It does not parse the locator, resolve the
-requirement ID from the source file, or verify that the claim is semantically correct. `appliesTo`
+For YAML and JSON sources, CBC validates locators of the form `collection[ID]` against exactly one
+object with that ID in the named top-level array. The ID must also match `requirementId`; missing,
+duplicate, malformed, and mismatched records are `invalid`. Other source formats and locator forms
+are `unsupported`, not verified. The source status and byte freshness are separate; a changed source
+requires reindexing. Validation establishes that the declared record exists, not that its claim is
+semantically correct. `appliesTo`
 is the authority for scope. Links are direct only: imports, template references, service injection,
 and other discovered relationships do not propagate a requirement to another file or symbol. A
 file-level target applies to that file; optional `symbol` narrows it to an indexed exact symbol.

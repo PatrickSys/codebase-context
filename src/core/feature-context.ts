@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import ignore from 'ignore';
+import { load as parseYaml } from 'js-yaml';
 import { z } from 'zod';
 import { isPathWithin } from '../utils/project-discovery.js';
 import { MAX_TREE_SITTER_PARSE_BYTES } from '../utils/tree-sitter.js';
@@ -116,6 +117,8 @@ export const ContextDiagnosticCodeSchema = z.enum([
   'manifest-not-found',
   'ignored-manifest',
   'missing-source',
+  'invalid-source-locator',
+  'unsupported-source-locator',
   'missing-target',
   'ambiguous-target',
   'unsupported-symbol',
@@ -201,6 +204,7 @@ const CompiledAttachmentSchema = z
       .object({
         path: RelativePathSchema,
         locator: z.string().min(1).max(240),
+        status: z.enum(['resolved', 'invalid', 'unsupported', 'missing']).optional(),
         sha256: z
           .string()
           .regex(/^[a-fA-F0-9]{64}$/)
@@ -267,6 +271,7 @@ const ReplyAttachmentSchema = z
       .object({
         path: RelativePathSchema,
         locator: z.string().min(1).max(240),
+        status: z.enum(['resolved', 'invalid', 'unsupported', 'missing']),
         sha256: z
           .string()
           .regex(/^[a-fA-F0-9]{64}$/)
@@ -279,7 +284,15 @@ const ReplyAttachmentSchema = z
       .array(z.object({ test: DeclaredTestSchema, current: z.boolean() }).strict())
       .max(64),
     recordedEvidence: z.array(ReplyEvidenceSchema).max(32),
-    diagnostics: z.array(ContextDiagnosticSchema).max(500)
+    diagnostics: z.array(ContextDiagnosticSchema).max(500),
+    omitted: z
+      .object({
+        appliesTo: z.number().int().nonnegative(),
+        declaredTests: z.number().int().nonnegative(),
+        recordedEvidence: z.number().int().nonnegative()
+      })
+      .strict()
+      .optional()
   })
   .strict();
 
@@ -334,6 +347,36 @@ function sha256(value: Buffer | string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function validateSourceLocator(
+  source: FeatureAttachment['source'],
+  requirementId: string,
+  bytes: Buffer
+): 'resolved' | 'invalid' | 'unsupported' {
+  const locator = /^([A-Za-z_][\w-]*)\[([^\[\]]+)\]$/.exec(source.locator);
+  if (!locator || !/\.(?:yaml|yml|json)$/i.test(source.path)) return 'unsupported';
+  const [, collection, id] = locator;
+  if (id !== requirementId || !collection) return 'invalid';
+  try {
+    const text = bytes.toString('utf8');
+    if (/\.json$/i.test(source.path)) JSON.parse(text) as unknown;
+    const parsed = parseYaml(text);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return 'invalid';
+    const entries: unknown = (parsed as Record<string, unknown>)[collection];
+    if (!Array.isArray(entries)) return 'invalid';
+    return entries.filter(
+      (entry: unknown) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        !Array.isArray(entry) &&
+        (entry as Record<string, unknown>).id === id
+    ).length === 1
+      ? 'resolved'
+      : 'invalid';
+  } catch {
+    return 'invalid';
+  }
+}
+
 function isWithin(rootPath: string, candidatePath: string): boolean {
   return isPathWithin(rootPath, candidatePath);
 }
@@ -349,6 +392,27 @@ function diagnostic(
       : `${message.slice(0, MAX_DIAGNOSTIC_MESSAGE_CHARS - 3)}...`;
   const safePath = relativePath ? normalizeContextPath(relativePath) : undefined;
   return { code, message: safeMessage, ...(safePath ? { path: safePath } : {}) };
+}
+
+function targetStatusDiagnostic(
+  target: FeatureTarget,
+  status: 'resolved' | 'missing' | 'ambiguous' | 'unsupported'
+): ContextDiagnostic | undefined {
+  if (status === 'unsupported' && target.symbol)
+    return diagnostic(
+      'unsupported-symbol',
+      `No unique supported source declaration could be established for ${target.symbol}`,
+      target.path
+    );
+  if (status === 'ambiguous')
+    return diagnostic(
+      'ambiguous-target',
+      `Multiple source ranges match ${target.symbol ?? target.path}`,
+      target.path
+    );
+  if (status === 'missing')
+    return diagnostic('missing-target', `Target file is missing: ${target.path}`, target.path);
+  return undefined;
 }
 
 function normalizeContextPath(value: string): string | undefined {
@@ -660,6 +724,21 @@ export async function compileFeatureContexts(
         );
       }
       const sourceHash = sourceFile.status === 'found' ? sha256(sourceFile.bytes) : undefined;
+      const sourceStatus =
+        sourceFile.status === 'found'
+          ? validateSourceLocator(attachment.source, attachment.requirementId, sourceFile.bytes)
+          : 'missing';
+      if (sourceStatus === 'invalid' || sourceStatus === 'unsupported') {
+        attachmentDiagnostics.push(
+          diagnostic(
+            sourceStatus === 'invalid' ? 'invalid-source-locator' : 'unsupported-source-locator',
+            sourceStatus === 'invalid'
+              ? 'Requirement locator does not identify exactly one matching source ID'
+              : 'Requirement locator or source format cannot be validated',
+            attachment.source.path
+          )
+        );
+      }
       const appliesTo = [] as FeatureContextIndex['attachments'][number]['appliesTo'];
       for (const target of attachment.appliesTo) {
         const targetFile = await resolveContainedFile(rootRealPath, target.path, {
@@ -692,27 +771,8 @@ export async function compileFeatureContexts(
           target.symbol ? ambiguousSymbolKeys.has(`${target.path}\0${target.symbol}`) : false,
           target.symbol ? unresolvedSymbolBindings.has(`${target.path}\0${target.symbol}`) : false
         );
-        if (target.symbol && compiled.status === 'unsupported') {
-          attachmentDiagnostics.push(
-            diagnostic(
-              'unsupported-symbol',
-              `No unique supported source declaration could be established for ${target.symbol}`,
-              target.path
-            )
-          );
-        } else if (compiled.status === 'ambiguous') {
-          attachmentDiagnostics.push(
-            diagnostic(
-              'ambiguous-target',
-              `Multiple source ranges match ${target.symbol ?? target.path}`,
-              target.path
-            )
-          );
-        } else if (compiled.status === 'missing') {
-          attachmentDiagnostics.push(
-            diagnostic('missing-target', `Target file is missing: ${target.path}`, target.path)
-          );
-        }
+        const targetDiagnostic = targetStatusDiagnostic(target, compiled.status);
+        if (targetDiagnostic) attachmentDiagnostics.push(targetDiagnostic);
         const targetDigest =
           targetFile.status === 'digested'
             ? targetFile.sha256
@@ -884,7 +944,11 @@ export async function compileFeatureContexts(
         manifestPath,
         manifestSha256: manifestHash,
         requirementId: attachment.requirementId,
-        source: { ...attachment.source, ...(sourceHash ? { sha256: sourceHash } : {}) },
+        source: {
+          ...attachment.source,
+          status: sourceStatus,
+          ...(sourceHash ? { sha256: sourceHash } : {})
+        },
         appliesTo,
         declaredTests,
         recordedEvidence,
@@ -957,8 +1021,18 @@ async function revalidateAttachment(
   const sourceDigest = attachment.source.sha256
     ? await currentFileDigest(rootRealPath, attachment.source.path)
     : undefined;
-  const sourceCurrent = Boolean(sourceDigest && sourceDigest === attachment.source.sha256);
-  if (!sourceCurrent)
+  const sourceBytesCurrent = Boolean(sourceDigest && sourceDigest === attachment.source.sha256);
+  const sourceStatus = attachment.source.status ?? 'unsupported';
+  const sourceCurrent = manifestCurrent && sourceBytesCurrent && sourceStatus === 'resolved';
+  if (!attachment.source.status)
+    diagnostics.push(
+      diagnostic(
+        'unsupported-source-locator',
+        'Source locator was not validated; refresh the index',
+        attachment.source.path
+      )
+    );
+  if (!sourceBytesCurrent)
     diagnostics.push(
       diagnostic(
         'stale-source',
@@ -1126,6 +1200,7 @@ async function revalidateAttachment(
     source: {
       path: attachment.source.path,
       locator: attachment.source.locator,
+      status: sourceStatus,
       ...(attachment.source.sha256 ? { sha256: attachment.source.sha256 } : {}),
       current: sourceCurrent
     },
@@ -1185,7 +1260,6 @@ export async function queryFeatureContext(
     diagnostics.length +
     matches.reduce((count, item) => count + countAttachmentDiagnostics(item), 0);
   const globalVisible = diagnostics.slice(0, MAX_DIAGNOSTICS_IN_REPLY - 1);
-  const globalOmitted = diagnostics.length - globalVisible.length;
   const makeReply = (retained: FeatureContextReply['matches']): FeatureContextReply => {
     const omitted = total - retained.length;
     const visibleNestedDiagnostics = retained.reduce(
@@ -1197,6 +1271,7 @@ export async function queryFeatureContext(
       totalDiagnosticCount - globalVisible.length - visibleNestedDiagnostics
     );
     const replyDiagnostics = [...globalVisible];
+    const globalOmitted = diagnostics.length - globalVisible.length;
     if (globalOmitted > 0) {
       replyDiagnostics.push(
         diagnostic(
@@ -1219,13 +1294,21 @@ export async function queryFeatureContext(
       matches: retained,
       counts: {
         matches: total,
-        resolved: matches.filter((item) => item.appliesTo.some((ref) => ref.status === 'resolved'))
-          .length,
+        resolved: matches.filter(
+          (item) =>
+            item.source.current &&
+            item.appliesTo.some(
+              (ref) => targetMatches(ref.target, target) && ref.status === 'resolved' && ref.current
+            )
+        ).length,
         diagnostics: totalDiagnosticCount,
         omitted,
         omittedDiagnostics
       },
-      truncated: omitted > 0 || omittedDiagnostics > 0,
+      truncated:
+        omitted > 0 ||
+        omittedDiagnostics > 0 ||
+        retained.some((item) => item.omitted !== undefined),
       diagnostics: replyDiagnostics
     };
   };
@@ -1234,7 +1317,64 @@ export async function queryFeatureContext(
   for (const match of matches) {
     if (retained.length >= 100) continue;
     const candidate = makeReply([...retained, match]);
-    if (estimateTokens(candidate) <= tokenLimit) retained.push(match);
+    if (estimateTokens(candidate) <= tokenLimit) {
+      retained.push(match);
+      continue;
+    }
+    const targetRefs = match.appliesTo.filter((ref) => targetMatches(ref.target, target));
+    const selected = targetRefs.find((ref) => ref.target.symbol === target.symbol) ?? targetRefs[0];
+    if (!selected) continue;
+    const selectedDiagnostic = targetStatusDiagnostic(selected.target, selected.status);
+    const important = match.diagnostics.filter(
+      (entry) =>
+        (entry.path === target.path &&
+          [
+            'missing-target',
+            'stale-target',
+            'ambiguous-target',
+            'unsupported-symbol',
+            'path-outside-root'
+          ].includes(entry.code) &&
+          (!['unsupported-symbol', 'ambiguous-target'].includes(entry.code) ||
+            (entry.code === selectedDiagnostic?.code &&
+              entry.message === selectedDiagnostic.message))) ||
+        (entry.path === match.source.path &&
+          [
+            'invalid-source-locator',
+            'unsupported-source-locator',
+            'missing-source',
+            'stale-source',
+            'path-outside-root'
+          ].includes(entry.code))
+    );
+    const targetDiagnostics = important.filter((entry) => entry.path === target.path);
+    const sourceDiagnostics = important.filter((entry) => entry.path !== target.path);
+    const compact = {
+      ...match,
+      appliesTo: [selected],
+      declaredTests: [],
+      recordedEvidence: [],
+      diagnostics: [
+        ...targetDiagnostics.slice(0, 1),
+        ...sourceDiagnostics.slice(0, 1),
+        ...targetDiagnostics.slice(1),
+        ...sourceDiagnostics.slice(1)
+      ].slice(0, 2),
+      omitted: {
+        appliesTo: match.appliesTo.length - 1,
+        declaredTests: match.declaredTests.length,
+        recordedEvidence: match.recordedEvidence.length
+      }
+    };
+    while (
+      estimateTokens(makeReply([...retained, compact])) > tokenLimit &&
+      globalVisible.length > 0
+    ) {
+      globalVisible.pop();
+    }
+    if (estimateTokens(makeReply([...retained, compact])) <= tokenLimit) retained.push(compact);
   }
+  while (estimateTokens(makeReply(retained)) > tokenLimit && globalVisible.length > 0)
+    globalVisible.pop();
   return FeatureContextReplySchema.parse(makeReply(retained));
 }

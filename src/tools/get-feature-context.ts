@@ -161,12 +161,31 @@ export async function handle(
     }
 
     const currentGit = await readCurrentGitIdentity(ctx.rootPath);
+    const warning = !currentGit.commit
+      ? 'Current Git identity could not be established; recorded evidence cannot be fresh.'
+      : !currentGit.isClean
+        ? 'The current working tree is dirty; recorded evidence cannot be treated as fresh.'
+        : undefined;
+    const envelope = {
+      status: 'success',
+      rootPath: ctx.rootPath,
+      ...(warning ? { warning } : {}),
+      project: ctx.project ?? {
+        project: ctx.rootPath,
+        rootPath: ctx.rootPath,
+        label: ctx.rootPath,
+        active: false,
+        source: 'root',
+        indexStatus: 'ready'
+      }
+    };
+    const envelopeTokens = Math.ceil(JSON.stringify(envelope).length / 3);
     const result = await queryFeatureContext({
       rootPath: ctx.rootPath,
       index: indexResult.data,
       target,
       currentGit,
-      tokenLimit: RESPONSE_TOKEN_LIMIT
+      tokenLimit: Math.max(100, RESPONSE_TOKEN_LIMIT - envelopeTokens)
     });
 
     return response({
@@ -175,17 +194,7 @@ export async function handle(
       // paths are relative to this root, never to the MCP client's working directory.
       rootPath: ctx.rootPath,
       ...result,
-      ...(!currentGit.commit
-        ? {
-            warning:
-              'Current Git identity could not be established; recorded evidence cannot be fresh.'
-          }
-        : !currentGit.isClean
-          ? {
-              warning:
-                'The current working tree is dirty; recorded evidence cannot be treated as fresh.'
-            }
-          : {})
+      ...(warning ? { warning } : {})
     });
   } catch (error) {
     return response(

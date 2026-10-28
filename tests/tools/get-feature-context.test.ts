@@ -140,9 +140,10 @@ describe('get_feature_context MCP tool', () => {
           rootPath,
           target: { path: 'src/cart.ts', symbol: 'submitOrder' },
           currentGit: expect.objectContaining({ commit: expect.any(String), isClean: true }),
-          tokenLimit: 900
+          tokenLimit: expect.any(Number)
         })
       );
+      expect(queryFeatureContextMock.mock.calls[0]?.[0].tokenLimit).toBeLessThan(900);
     } finally {
       await fs.rm(rootPath, { recursive: true, force: true });
     }

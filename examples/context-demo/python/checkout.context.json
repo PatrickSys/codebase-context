@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "attachments": [{
+    "requirementId": "CART-01",
+    "source": { "path": "examples/context-demo/context/requirements.yaml", "locator": "claims[CART-01]" },
+    "appliesTo": [{ "path": "examples/context-demo/python/checkout.py", "symbol": "checkout_total" }]
+  }]
+}

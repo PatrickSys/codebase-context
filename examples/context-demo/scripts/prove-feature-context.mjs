@@ -36,12 +36,21 @@ try {
   const sidecar = JSON.parse(await readFile(path.join(root, '.codebase-context/relationships.json'), 'utf8'));
   print('revision', { gitHead: revision, indexedCommit: sidecar.featureContexts.code.commit });
   print('requirement_source', (await readFile(path.join(root, 'examples/context-demo/context/requirements.yaml'), 'utf8')).split(/\r?\n/).slice(0, 6).join('\n'));
-  print('typescript_before', await call(target));
-  print('python_symbol', await call({ path: pyPath, symbol: 'checkout_total' }));
+  const before = await call(target);
+  print('typescript_before', before);
+  const py = await call({ path: pyPath, symbol: 'checkout_total' });
+  print('python_symbol', py);
+  const matched = (reply, symbol) => reply.matches.flatMap((m) => m.appliesTo).find((t) => t.target.symbol === symbol);
+  const ts = matched(before, target.symbol);
+  if (sidecar.featureContexts.code.commit !== revision || ts?.status !== 'resolved' || !ts.current || ts.identity?.name !== target.symbol || !ts.identity.startLine || !ts.identity.endLine || matched(py, 'checkout_total')?.status !== 'unsupported') throw new Error('Baseline proof expectations failed');
   await writeFile(path.join(root, tsPath), expected.replace('export class CheckoutComponent', 'export class RenamedCheckoutComponent'));
-  print('typescript_changed_without_refresh', await call(target));
+  const stale = await call(target);
+  print('typescript_changed_without_refresh', stale);
+  if (matched(stale, target.symbol)?.current !== false) throw new Error('Changed target was not marked stale');
   await index();
-  print('typescript_changed_after_refresh', await call(target));
+  const refreshed = await call(target);
+  print('typescript_changed_after_refresh', refreshed);
+  if (matched(refreshed, target.symbol)?.status !== 'unsupported') throw new Error('Removed symbol was not reported unsupported');
 } finally {
   await writeFile(path.join(root, tsPath), original);
   await index();

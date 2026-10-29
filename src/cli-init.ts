@@ -17,7 +17,14 @@ export type Client = 'claude-code' | 'cursor' | 'codex' | 'opencode';
 
 export type McpConfigResult =
   | { kind: 'file'; path: string; content: string }
-  | { kind: 'command'; args: string[] };
+  | { kind: 'command'; executable: string; args: string[] };
+
+type McpCommandConfig = Extract<McpConfigResult, { kind: 'command' }>;
+type McpCommandRunner = (
+  executable: string,
+  args: string[],
+  options: { stdio: 'inherit' }
+) => unknown;
 
 type JsonObject = Record<string, unknown>;
 
@@ -26,7 +33,18 @@ export function generateMcpConfig(client: Client): McpConfigResult {
     case 'claude-code':
       return {
         kind: 'command',
-        args: ['mcp', 'add', '--transport', 'http', 'codebase-context', 'http://127.0.0.1:3100/mcp']
+        executable: 'claude',
+        args: [
+          'mcp',
+          'add',
+          '--scope',
+          'project',
+          'codebase-context',
+          '--',
+          'npx',
+          '-y',
+          'codebase-context'
+        ]
       };
     case 'cursor':
       return {
@@ -36,8 +54,8 @@ export function generateMcpConfig(client: Client): McpConfigResult {
           {
             mcpServers: {
               'codebase-context': {
-                type: 'http',
-                url: 'http://127.0.0.1:3100/mcp'
+                command: 'npx',
+                args: ['-y', 'codebase-context']
               }
             }
           },
@@ -48,7 +66,8 @@ export function generateMcpConfig(client: Client): McpConfigResult {
     case 'codex':
       return {
         kind: 'command',
-        args: ['mcp', 'add', 'codebase-context', 'http://127.0.0.1:3100/mcp']
+        executable: 'codex',
+        args: ['mcp', 'add', 'codebase-context', '--', 'npx', '-y', 'codebase-context']
       };
     case 'opencode':
       return {
@@ -59,8 +78,10 @@ export function generateMcpConfig(client: Client): McpConfigResult {
             $schema: 'https://opencode.ai/config.json',
             mcp: {
               'codebase-context': {
-                type: 'remote',
-                url: 'http://127.0.0.1:3100/mcp'
+                type: 'local',
+                command: ['npx', '-y', 'codebase-context'],
+                enabled: true,
+                timeout: 120000
               }
             }
           },
@@ -69,6 +90,13 @@ export function generateMcpConfig(client: Client): McpConfigResult {
         )
       };
   }
+}
+
+export function _executeMcpCommand(
+  config: McpCommandConfig,
+  runner: McpCommandRunner = (executable, args, options) => execFileSync(executable, args, options)
+): void {
+  runner(config.executable, config.args, { stdio: 'inherit' });
 }
 
 export function generateInstructionBlock(): string {
@@ -212,7 +240,7 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
     }
     console.log(`File: ${mcpResult.path}\n${mcpResult.content}`);
   } else {
-    console.log(`Command to run: ${mcpResult.args[0]} ${mcpResult.args.slice(1).join(' ')}`);
+    console.log(`Command to run: ${mcpResult.executable} ${mcpResult.args.join(' ')}`);
   }
 
   const applyMcp = await confirm({
@@ -263,12 +291,11 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
       }
       console.log(`Written: ${mcpResult.path}`);
     } else {
-      const [cmd, ...rest] = mcpResult.args;
       try {
-        execFileSync(cmd, rest, { stdio: 'inherit' });
+        _executeMcpCommand(mcpResult);
       } catch {
         console.log(
-          `Could not run '${cmd}' automatically. Run it yourself:\n  ${cmd} ${rest.join(' ')}`
+          `Could not run '${mcpResult.executable}' automatically. Run it yourself:\n  ${mcpResult.executable} ${mcpResult.args.join(' ')}`
         );
       }
     }
@@ -286,6 +313,7 @@ export async function handleInitCli(_argv: string[]): Promise<void> {
   console.log(
     '\nNext steps:\n' +
       '  Run `npx codebase-context map` to see your codebase conventions\n' +
-      '  Start the HTTP server: npx codebase-context --http\n'
+      '  Your AI client will start codebase-context when it needs it\n' +
+      '  Optional shared HTTP server: npx codebase-context --http\n'
   );
 }

@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -122,4 +130,74 @@ describe('CLI entrypoint runtime', () => {
       rmSync(tempDirectory, { recursive: true, force: true });
     }
   }, 120_000);
+
+  it('registers once for the user from two repos without indexing either or changing unrelated settings', () => {
+    const sandbox = mkdtempSync(join(tmpdir(), 'cbc-user-init-'));
+    const userHome = join(sandbox, 'user config');
+    const configPath = join(userHome, 'config.toml');
+    const settings =
+      '# keep this comment\nmodel = "owner-model"\n[windows]\nsandbox = "unelevated"\n';
+    const repos = [join(sandbox, 'repo one'), join(sandbox, 'repo two')];
+    mkdirSync(userHome);
+    writeFileSync(configPath, settings);
+    try {
+      let firstConfig: string | undefined;
+      for (const repo of repos) {
+        mkdirSync(repo);
+        writeFileSync(join(repo, 'package.json'), '{"private":true}');
+        const result = spawnSync(
+          process.execPath,
+          [
+            '--import',
+            import.meta.resolve('tsx'),
+            entrypoint,
+            'init',
+            '--client',
+            'codex',
+            '--yes'
+          ],
+          {
+            cwd: repo,
+            env: {
+              ...process.env,
+              CODEX_HOME: userHome,
+              CODEBASE_ROOT: join(sandbox, 'missing inherited root')
+            },
+            encoding: 'utf8',
+            timeout: 30_000
+          }
+        );
+        expect(result.status, result.stderr).toBe(0);
+        const content = readFileSync(configPath, 'utf8');
+        expect(content.startsWith(settings)).toBe(true);
+        expect(content).toContain('env = { CODEBASE_ROOT = "" }');
+        expect(content).not.toContain('cwd =');
+        expect(content).not.toContain(repo);
+        expect(existsSync(join(repo, '.codex'))).toBe(false);
+        expect(existsSync(join(repo, '.codebase-context'))).toBe(false);
+        expect(existsSync(join(repo, 'AGENTS.md'))).toBe(false);
+        expect(result.stdout).toContain('No repository was indexed during setup');
+        if (firstConfig !== undefined) expect(content).toBe(firstConfig);
+        firstConfig = content;
+      }
+
+      const disabled = `${firstConfig}enabled = false\n`;
+      writeFileSync(configPath, disabled);
+      const refused = spawnSync(
+        process.execPath,
+        ['--import', import.meta.resolve('tsx'), entrypoint, 'init', '--client', 'codex', '--yes'],
+        {
+          cwd: repos[0],
+          env: { ...process.env, CODEX_HOME: userHome, CODEBASE_ROOT: '' },
+          encoding: 'utf8',
+          timeout: 30_000
+        }
+      );
+      expect(refused.status).toBe(1);
+      expect(refused.stderr).toContain('disabled');
+      expect(readFileSync(configPath, 'utf8')).toBe(disabled);
+    } finally {
+      rmSync(sandbox, { recursive: true, force: true });
+    }
+  }, 90_000);
 });

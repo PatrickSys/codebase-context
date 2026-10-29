@@ -57,7 +57,7 @@ describe('generateMcpConfig', () => {
   });
 
   it('codex returns project-scoped stdio config for the selected root', () => {
-    const result = generateMcpConfig('codex');
+    const result = generateMcpConfig('codex', process.cwd(), 'project');
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toContain(path.join('.codex', 'config.toml'));
@@ -70,7 +70,7 @@ describe('generateMcpConfig', () => {
 
   it('Codex setup targets this installed CLI through project-scoped stdio config', () => {
     const root = path.resolve('project with spaces');
-    const result = generateMcpConfig('codex', root);
+    const result = generateMcpConfig('codex', root, 'project');
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(root, '.codex', 'config.toml'));
@@ -80,6 +80,20 @@ describe('generateMcpConfig', () => {
     expect(result.content).not.toContain('http://');
     expect(result.content).not.toContain('codebase-context@2.2.0');
     expect(result.content).toContain(JSON.stringify(root));
+  });
+
+  it('user-scoped Codex config registers this executable without selecting a repository', () => {
+    const result = generateMcpConfig('codex', path.resolve('unrelated project'), 'user');
+    if (result.kind !== 'file') throw new Error('expected file config');
+    expect(result.path).toBe(
+      path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), '.codex'), 'config.toml')
+    );
+    expect(result.content).toContain(
+      `args = [${JSON.stringify(path.resolve(process.argv[1] ?? ''))}]`
+    );
+    expect(result.content).toContain('env = { CODEBASE_ROOT = "" }');
+    expect(result.content).not.toContain('cwd =');
+    expect(result.content).not.toContain('unrelated project');
   });
 
   it('opencode returns a file at opencode.json with remote type', () => {
@@ -143,9 +157,12 @@ describe('Codex global config alias protection', () => {
       const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-      await handleInitCli(['--client', 'codex', '--yes', '--root', projectRoot], {
-        prepareIndex: async () => ({ status: 'ready' })
-      });
+      await handleInitCli(
+        ['--client', 'codex', '--scope', 'project', '--yes', '--root', projectRoot],
+        {
+          prepareIndex: async () => ({ status: 'ready' })
+        }
+      );
 
       expect(process.exitCode).toBe(1);
       expect(errors.mock.calls.flat().join('\n')).toMatch(/global config/i);
@@ -195,6 +212,25 @@ describe('non-interactive init arguments', () => {
     expect(errors.mock.calls.flat().join('\n')).toContain('requires a value');
     expect(errors.mock.calls.flat().join('\n')).toContain('--yes requires --client');
     process.exitCode = previousExitCode;
+    errors.mockRestore();
+  });
+
+  it('rejects contradictory scope/root and unsupported scope arguments before writing', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const oldExitCode = process.exitCode;
+    vi.mocked(fsMod.writeFile).mockClear();
+    for (const argv of [
+      ['--client', 'codex', '--scope', 'user', '--root', 'repo', '--yes'],
+      ['--client', 'codex', '--scope', 'unknown', '--yes'],
+      ['--client', 'cursor', '--scope', 'user', '--yes'],
+      ['--client', 'codex', '--scope']
+    ]) {
+      process.exitCode = 0;
+      await handleInitCli(argv);
+      expect(process.exitCode).toBe(1);
+    }
+    expect(fsMod.writeFile).not.toHaveBeenCalled();
+    process.exitCode = oldExitCode;
     errors.mockRestore();
   });
 });

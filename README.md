@@ -12,14 +12,15 @@ Codebase Context gives an agent a local view of that information through code se
 
 ### Unreleased source candidate
 
-This branch adds model-free indexing for new projects and noninteractive Codex setup. These changes are not in npm `2.2.0`. To try an exact locally packed candidate on Node 22:
+This branch adds model-free indexing for new projects and noninteractive Codex setup. These changes are not in npm `2.2.0`. Register an exact locally packed candidate once for Codex, on Node 22 or newer:
 
 ```bash
-npm install --save-dev /absolute/path/codebase-context-2.3.0.tgz
-npx --no-install codebase-context init --client codex --yes --root .
+npx --yes --package /absolute/path/codebase-context-2.3.0.tgz codebase-context init --client codex --yes
 ```
 
-`init --help` does not prompt. The installer preserves unrelated project config, rejects conflicting or disabled CBC entries, and points Codex at the installed Node executable and package entrypoint. Keep that installation available; removing its directory or clearing an `npx` cache used for setup can invalidate the saved path. Trust/reopen the project and approve tool calls if your client requires it. A written config and ready index do not establish native agent use.
+Codex setup defaults to a user-level STDIO server shared across repositories, with no fixed repository argument. The agent supplies the current repository through `project`; setup does not index its launch directory or write into that repository. Use `--scope project` for project-only setup and index preparation, or `--root <directory>` to select that scope explicitly.
+
+`init --help` does not prompt. The installer preserves unrelated settings, rejects conflicting or disabled CBC entries, and points Codex at the installed Node executable and package entrypoint. Keep that installation available; removing its directory or clearing an `npx` cache used for setup can invalidate the saved path. Restart/reopen Codex and approve tool calls if required. Setup preserves project trust and approval settings; a written configuration does not establish native agent use.
 
 New indexes use keywords, symbols, and structural analysis without embedding or reranker models. Existing indexes retain their successful mode. Semantic mode requires optional runtimes: install `@huggingface/transformers@^4.2.0` and `@lancedb/lancedb@^0.4.0` alongside the CBC installation, then run `npx --no-install codebase-context reindex --embeddings`. Installing them only in a separately selected source folder does not repair another CBC installation. Use `--no-embeddings` for a full model-free rebuild; omitting both preserves the successful mode. Local semantic models may download on opt-in. Missing runtimes produce an actionable error before index replacement.
 
@@ -64,7 +65,7 @@ Other clients use their own setup commands:
 | Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context@2.2.0` |
 | Cursor                      | Add `.cursor/mcp.json`                                                       |
 | VS Code with GitHub Copilot | Add `.vscode/mcp.json`                                                       |
-| GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context@2.2.0` |
+| GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context@2.2.0`          |
 | Windsurf                    | Add `~/.codeium/windsurf/mcp_config.json`                                    |
 
 Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration, verification limits and the unreleased installer. Published `2.2.0`'s interactive `init` has registration bugs; use the commands above.

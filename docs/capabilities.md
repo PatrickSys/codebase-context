@@ -61,6 +61,8 @@ For a command gallery with examples, see `docs/cli.md`.
 
 Commands that list `--json` above support raw JSON output. For MCP client registration, follow the [published client setup recipes](./client-setup.md); do not use the broken `init` setup command in published 2.2.0. Errors go to stderr with exit code 1.
 
+The unreleased source installer defaults Codex to a user-level rootless STDIO registration, shared across repositories. It does not index a repository during user setup. `--scope project` or `--root <directory>` retains project-only configuration and index preparation. Both scopes preserve unrelated settings and host trust/approval controls. Project selection remains the existing MCP `project`/roots/session contract; setup does not infer a repository from the package location.
+
 ```bash
 # Quick examples
 npx -y codebase-context@2.2.0 status

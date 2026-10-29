@@ -84,7 +84,9 @@ startup_timeout_sec = 120
 
 ## Codex Desktop: published 2.2.0
 
-Create or merge `.codex/config.toml` in the project you want to search. Preserve any existing settings:
+Register the server once with the user command in the preceding section. You do not need a server entry for every repository. Start a fresh Desktop task and let the agent pass the current repository's absolute path as `project`.
+
+For a project-only registration, create or merge `.codex/config.toml` in that project. Preserve any existing settings:
 
 ```toml
 [mcp_servers.codebase-context]
@@ -93,7 +95,7 @@ args = ["-y", "codebase-context@2.2.0"]
 startup_timeout_sec = 120
 ```
 
-Trust the project if asked, restart Codex and start a new task there. Use the first-use prompt above so the agent selects the current repository. The CLI command in the preceding section writes user-level config; this recipe uses a trusted project's config instead.
+Trust the project if asked, restart Codex and start a new task there. Use the first-use prompt above so the agent selects the current repository. User registration is shared by Codex CLI and Desktop; project config is an optional override, not a multi-repository installation requirement. Neither registration changes Codex trust or tool approvals.
 
 **Verification boundary:** isolated Windows CLI and SDK/MCP checks on October 5 indexed a six-file fixture with published `2.2.0`, selected its project, retrieved context and found a source that the host could open. The exact `npx -y codebase-context@2.2.0 <project>` entrypoint also passed using a warmed isolated npm cache and prepared index. This does not establish a fully cold download or a fresh Codex Desktop agent session. The September Desktop session below used a packed candidate; keep it separate from published-package acceptance.
 
@@ -101,9 +103,21 @@ On October 6 the exact published `npx` entrypoint was also tested without a fold
 
 ## Install an exact packed candidate for Codex
 
-`init --help` prints the supported flags without prompting. `init --client codex --yes` writes a project-local `.codex/config.toml` and prepares that project's local index. The generated stdio entry invokes the exact `dist/index.js` that ran `init`; it does not resolve `codebase-context` from the npm registry. This keeps a packed candidate from silently launching the older published `2.2.0` package.
+The local setup candidate defaults to one **user-level, rootless STDIO registration** for Codex. Run setup once from any directory:
 
-For a packed-candidate check, install the tarball into the project being configured and run its installed executable from that project:
+```powershell
+npx --yes --package "C:\path\to\codebase-context-2.3.0.tgz" codebase-context init --client codex --yes
+```
+
+This writes the CBC entry to `CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is unset. The entry invokes the exact installed package that ran setup, with no repository argument or working directory. Its `CODEBASE_ROOT` environment override is empty, so an inherited bootstrap root cannot pin it to an old repository. Keep that package installation/cache available; rerun setup after moving or updating it. A conflicting existing CBC entry is reported and preserved, never silently replaced.
+
+Setup does not index the launch directory, create project configuration, or edit `AGENTS.md`. Restart/reopen Codex, then use CBC in any repository by passing its current absolute path as `project`. MCP roots and the existing project/session routing still apply; registration does not grant filesystem access or bypass host approval. When the host provides no active-project context, the agent must supply `project` rather than ask the owner to configure another server.
+
+`--scope user` makes the default explicit. For project-only setup, use `--scope project`; this retains the existing index-preparation flow. `--root <directory>` also selects project scope for compatibility and cannot be combined with `--scope user`. `init --help` prints these flags without prompting.
+
+The generated stdio entry invokes the installed CLI that ran `init`; it does not resolve another CBC version from the npm registry. This keeps a packed candidate from silently launching the older published `2.2.0` package.
+
+For an optional project-only packed-candidate check, install the tarball into the project being configured and run its installed executable from that project:
 
 ```powershell
 # Build and pack in the source checkout, then change to the target project.
@@ -111,12 +125,12 @@ pnpm build
 pnpm pack
 Set-Location C:\path\to\project
 npm install --no-save --package-lock=false C:\path\to\codebase-context-2.3.0.tgz
-& .\node_modules\.bin\codebase-context.cmd init --client codex --yes
+& .\node_modules\.bin\codebase-context.cmd init --client codex --scope project --yes
 ```
 
 The project-local install leaves the executable available at `node_modules/codebase-context/dist/index.js`, which the generated config records. If the project install or npm cache is removed, reinstall the same packed tarball and rerun init so the config points to the restored executable. Use `--root C:\path\to\project` only when invoking init from elsewhere; the root is validated and must be a directory.
 
-Setup preserves unrelated TOML settings and refuses to replace a conflicting `codebase-context` entry. It writes only project `.codex/config.toml`; it does not edit global Codex configuration, `AGENTS.md`, project trust, or approval settings. New projects default to model-free indexing; existing projects preserve their successful mode and may require their semantic runtimes. Codex may still ask you to trust the project; accept through Codex's normal project flow, then restart or reopen Codex. A successful write and index do not prove that Codex loaded or queried the server.
+Both setup scopes preserve unrelated TOML settings and refuse conflicting, disabled or linked CBC configuration. Project scope writes only project `.codex/config.toml`; user scope writes only the CBC server entry in user config. Neither changes `AGENTS.md`, project trust, or approval settings. Project indexing defaults to model-free for new indexes and preserves an existing successful mode. Codex may still ask you to trust a project; use its normal project flow. A successful setup does not prove Codex loaded or queried the server.
 
 Published `2.2.0` does not include these init flags. The recipes above are for a local packed candidate until the matching version is published. A packed setup and local MCP test do not establish fresh native Codex Desktop use or a cold install.
 

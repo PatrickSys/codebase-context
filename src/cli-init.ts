@@ -8,6 +8,7 @@ import select from '@inquirer/select';
 import confirm from '@inquirer/confirm';
 
 export type Client = 'claude-code' | 'cursor' | 'codex' | 'opencode';
+export type InitScope = 'user' | 'project';
 
 export type McpConfigResult =
   | { kind: 'file'; path: string; content: string }
@@ -29,7 +30,11 @@ function resolveRoot(rootPath?: string): string {
   return path.resolve(rootPath ?? process.env.CODEBASE_ROOT ?? process.cwd());
 }
 
-export function generateMcpConfig(client: Client, rootPath = resolveRoot()): McpConfigResult {
+export function generateMcpConfig(
+  client: Client,
+  rootPath = resolveRoot(),
+  scope: InitScope = 'user'
+): McpConfigResult {
   switch (client) {
     case 'claude-code':
       return {
@@ -55,9 +60,14 @@ export function generateMcpConfig(client: Client, rootPath = resolveRoot()): Mcp
       const content =
         '[mcp_servers.codebase-context]\n' +
         `command = ${JSON.stringify(process.execPath)}\n` +
-        `cwd = ${JSON.stringify(root)}\n` +
-        `args = [${JSON.stringify(executable)}, ${JSON.stringify(root)}]\n`;
-      return { kind: 'file', path: path.join(root, '.codex', 'config.toml'), content };
+        (scope === 'user'
+          ? `args = [${JSON.stringify(executable)}]\nenv = { CODEBASE_ROOT = "" }\n`
+          : `cwd = ${JSON.stringify(root)}\nargs = [${JSON.stringify(executable)}, ${JSON.stringify(root)}]\n`);
+      const configDirectory =
+        scope === 'user'
+          ? path.resolve(process.env.CODEX_HOME || path.join(homedir(), '.codex'))
+          : path.join(root, '.codex');
+      return { kind: 'file', path: path.join(configDirectory, 'config.toml'), content };
     }
     case 'opencode':
       return {
@@ -160,11 +170,13 @@ export async function _buildMergedMcpContent(
 function parseInitArgs(argv: string[]): {
   client?: Client;
   rootPath?: string;
+  scope?: InitScope;
   yes: boolean;
   help: boolean;
 } {
   let client: Client | undefined;
   let rootPath: string | undefined;
+  let scope: InitScope | undefined;
   let yes = false;
   let help = false;
   for (let index = 0; index < argv.length; index++) {
@@ -177,11 +189,15 @@ function parseInitArgs(argv: string[]): {
       yes = true;
       continue;
     }
-    if (arg === '--client' || arg === '--root') {
+    if (arg === '--client' || arg === '--root' || arg === '--scope') {
       const value = argv[++index];
       if (!value || value.startsWith('--')) throw new Error(`${arg} requires a value`);
       if (arg === '--root') rootPath = value;
-      else if (
+      else if (arg === '--scope') {
+        if (value !== 'user' && value !== 'project')
+          throw new Error('Unknown scope. Choose user or project.');
+        scope = value;
+      } else if (
         value === 'claude-code' ||
         value === 'cursor' ||
         value === 'codex' ||
@@ -200,14 +216,19 @@ function parseInitArgs(argv: string[]): {
   if (yes && !client) throw new Error('--yes requires --client for non-interactive init');
   if (rootPath && client && client !== 'codex')
     throw new Error('--root is supported only for --client codex');
-  return { client, rootPath, yes, help };
+  if (scope && client && client !== 'codex')
+    throw new Error('--scope is supported only for --client codex');
+  if (scope === 'user' && rootPath)
+    throw new Error('--root selects project scope and cannot be combined with --scope user');
+  return { client, rootPath, scope, yes, help };
 }
 
 export function printInitHelp(): void {
   console.log('codebase-context init [options]');
   console.log('  --help, -h                 Show init help without starting prompts');
   console.log('  --client <name>            claude-code | cursor | codex | opencode');
-  console.log('  --root <directory>         Project root (Codex only)');
+  console.log('  --scope <user|project>     Codex scope (default: user, available across repos)');
+  console.log('  --root <directory>         Select project scope and root (Codex only)');
   console.log('  --yes, --non-interactive   Apply without prompts; requires --client');
 }
 
@@ -257,7 +278,11 @@ export function _mergeCodexMcpContent(
   };
 }
 
-async function writeCodexConfig(filePath: string, content: string): Promise<void> {
+async function writeCodexConfig(
+  filePath: string,
+  content: string,
+  scope: InitScope
+): Promise<void> {
   const directory = path.dirname(filePath);
   const globalConfigs = [path.join(homedir(), '.codex', 'config.toml')];
   if (process.env.CODEX_HOME) globalConfigs.push(path.join(process.env.CODEX_HOME, 'config.toml'));
@@ -266,6 +291,7 @@ async function writeCodexConfig(filePath: string, content: string): Promise<void
   );
   const normalizedConfig = normalizeComparablePath(canonicalPaths[0] ?? path.resolve(filePath));
   if (
+    scope === 'project' &&
     canonicalPaths
       .slice(1)
       .some((globalConfig) => normalizeComparablePath(globalConfig) === normalizedConfig)
@@ -360,15 +386,6 @@ export async function handleInitCli(argv: string[], options: InitOptions = {}): 
     return;
   }
 
-  let root: string;
-  try {
-    root = await resolveProjectRoot(resolveRoot(options.rootPath ?? args.rootPath));
-  } catch (error) {
-    console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
-    return;
-  }
-
   console.log('\nSet up codebase-context for your AI client\n');
   const client =
     args.client ??
@@ -386,7 +403,23 @@ export async function handleInitCli(argv: string[], options: InitOptions = {}): 
     process.exitCode = 1;
     return;
   }
-  const config = generateMcpConfig(client, root);
+  if (args.scope && client !== 'codex') {
+    console.error('Init failed: --scope is supported only for --client codex.');
+    process.exitCode = 1;
+    return;
+  }
+  const scope = args.scope ?? (args.rootPath || options.rootPath ? 'project' : 'user');
+  let root = resolveRoot(options.rootPath ?? args.rootPath);
+  if (client !== 'codex' || scope === 'project') {
+    try {
+      root = await resolveProjectRoot(root);
+    } catch (error) {
+      console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+  const config = generateMcpConfig(client, root, scope);
   console.log('\n--- MCP Config Preview ---');
   if (config.kind === 'file') console.log(`File: ${config.path}\n${config.content}`);
   else console.log(`Command to run: ${config.executable} ${config.args.join(' ')}`);
@@ -403,7 +436,7 @@ export async function handleInitCli(argv: string[], options: InitOptions = {}): 
   if (!apply) return;
   try {
     if (config.kind === 'file' && client === 'codex')
-      await writeCodexConfig(config.path, config.content);
+      await writeCodexConfig(config.path, config.content, scope);
     else if (config.kind === 'file') {
       const merged = await _buildMergedMcpContent(
         config.path,
@@ -419,7 +452,18 @@ export async function handleInitCli(argv: string[], options: InitOptions = {}): 
     return;
   }
   if (applyInstruction && instructionPath) await _appendInstructionBlock(instructionPath);
-  if (client === 'codex') {
+  if (client === 'codex' && scope === 'user') {
+    console.log(
+      `Registered Codebase Context for all Codex projects: ${config.kind === 'file' ? config.path : ''}`
+    );
+    console.log(
+      'Restart/reopen Codex. The agent selects the current repository with the project tool parameter.'
+    );
+    console.log(
+      'No repository was indexed during setup. Codex still controls trust and tool approval.'
+    );
+    console.log('Keep this installed package available; rerun init after moving or updating it.');
+  } else if (client === 'codex') {
     let indexed: InitIndexResult;
     try {
       indexed = options.prepareIndex

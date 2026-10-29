@@ -53,10 +53,13 @@ The local candidate CLI supports deterministic help and noninteractive Codex set
 ```powershell
 codebase-context init --help
 codebase-context init --client codex --yes
+codebase-context init --client codex --scope project --yes
 codebase-context init --client codex --yes --root "C:\path\to\project"
 ```
 
-`--yes` requires `--client`. `--root` is Codex-only and must name an existing directory. Codex setup writes project `.codex/config.toml`, preserving unrelated TOML and rejecting conflicting server settings, then prepares the local index. Its stdio command points to the exact installed CLI entrypoint used for setup. Setup does not change global Codex configuration, project trust, or approval settings. See the [packed-candidate recipe](./client-setup.md#install-an-exact-packed-candidate-for-codex) before using an unreleased build.
+`--yes` requires `--client`. Codex setup defaults to user scope: it registers one rootless STDIO server in `CODEX_HOME/config.toml` (or `~/.codex/config.toml`) for use across repositories. It preserves unrelated TOML and refuses conflicting server settings. It does not index the launch directory or write project files. The agent selects its current repository with the MCP `project` parameter.
+
+`--scope project` writes project `.codex/config.toml` and prepares the local index. `--root` is Codex-only, must name an existing directory, and selects project scope; combining it with `--scope user` is rejected. Both scopes invoke the exact installed CLI entrypoint, preserve project trust and approval settings, and leave `AGENTS.md` untouched. See the [packed-candidate recipe](./client-setup.md#install-an-exact-packed-candidate-for-codex) before using an unreleased build.
 
 ---
 

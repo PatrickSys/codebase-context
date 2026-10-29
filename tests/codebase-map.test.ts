@@ -84,15 +84,19 @@ async function removeTempMapProject(rootPath: string): Promise<void> {
 }
 
 function runMapCli(args: string[], rootPath: string) {
-  return spawnSync(process.execPath, ['--no-deprecation', '--import', 'tsx', ENTRYPOINT, 'map', ...args], {
-    cwd: CURRENT_REPO_ROOT,
-    env: {
-      ...process.env,
-      CODEBASE_ROOT: rootPath
-    },
-    encoding: 'utf8',
-    timeout: 120_000
-  });
+  return spawnSync(
+    process.execPath,
+    ['--no-deprecation', '--import', 'tsx', ENTRYPOINT, 'map', ...args],
+    {
+      cwd: CURRENT_REPO_ROOT,
+      env: {
+        ...process.env,
+        CODEBASE_ROOT: rootPath
+      },
+      encoding: 'utf8',
+      timeout: 120_000
+    }
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +200,21 @@ describe('buildCodebaseMap', () => {
     expect(map.graphStats).toEqual({ files: 0, edges: 0, avgDependencies: 0 });
     // Should still have a fallback next call
     expect(map.suggestedNextCalls.length).toBeGreaterThan(0);
+  });
+
+  it('counts indexed files when recorded stats say zero', async () => {
+    const rootPath = await createTempMapProject({
+      chunks: [
+        {
+          relativePath: 'src/server.ts',
+          content: 'export const port = 3000;',
+          metadata: {}
+        } as CodeChunk
+      ],
+      graph: { stats: { files: 0, edges: 0, avgDependencies: 0 } }
+    });
+    const map = await buildCodebaseMap(createProjectState(rootPath));
+    expect(map.graphStats.files).toBe(1);
   });
 
   it('caps suggested next calls at 3', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, rm, access, readFile } from 'fs/promises';
+import { mkdtemp, rm, access, readFile, writeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { handleMapCli } from '../src/cli-map.js';
@@ -55,6 +55,22 @@ describe('handleMapCli --export', () => {
       await access(path.join(tmpDir, 'CODEBASE_MAP.md'));
       const content = await readFile(path.join(tmpDir, 'CODEBASE_MAP.md'), 'utf-8');
       expect(content).toContain('# Codebase Map');
+    } finally {
+      if (original === undefined) delete process.env.CODEBASE_ROOT;
+      else process.env.CODEBASE_ROOT = original;
+    }
+  });
+
+  it('indexes a project that has no index before printing the map', async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), 'cli-map-index-'));
+    await writeFile(path.join(tmpDir, 'server.ts'), 'export const port = 3000;\n', 'utf-8');
+    const original = process.env.CODEBASE_ROOT;
+    process.env.CODEBASE_ROOT = tmpDir;
+    try {
+      await handleMapCli(['--export']);
+      await access(path.join(tmpDir, '.codebase-context', 'index.json'));
+      const content = await readFile(path.join(tmpDir, 'CODEBASE_MAP.md'), 'utf-8');
+      expect(content).toMatch(/Files: [1-9]/);
     } finally {
       if (original === undefined) delete process.env.CODEBASE_ROOT;
       else process.env.CODEBASE_ROOT = original;

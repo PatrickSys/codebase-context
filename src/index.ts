@@ -84,7 +84,7 @@ let mcpRuntimeReady = false;
 let mcpRuntimePromise: Promise<void> | undefined;
 
 // Flags that are NOT project paths — skip them when resolving the bootstrap root.
-const KNOWN_FLAGS = new Set(['--http', '--port', '--help', '--embeddings', '--no-embeddings']);
+const KNOWN_FLAGS = new Set(['--http', '--port', '--help', '--embeddings', '--no-embeddings', '--version', '-v']);
 const CLI_SUBCOMMANDS = [
   'memory',
   'search',
@@ -119,7 +119,10 @@ const directSubcommand = process.argv[2];
 const isDirectCliSubcommand =
   isDirectRun &&
   typeof directSubcommand === 'string' &&
-  (CLI_SUBCOMMANDS.includes(directSubcommand) || directSubcommand === '--help');
+  (CLI_SUBCOMMANDS.includes(directSubcommand) ||
+    directSubcommand === '--help' ||
+    directSubcommand === '--version' ||
+    directSubcommand === '-v');
 
 if (
   !isDirectCliSubcommand &&
@@ -2082,7 +2085,10 @@ if (!isDirectCliSubcommand) {
 
 if (isDirectRun) {
   const subcommand = process.argv[2];
-  if (CLI_SUBCOMMANDS.includes(subcommand) || subcommand === '--help') {
+  if (subcommand === '--version' || subcommand === '-v') {
+    console.log(PKG_VERSION);
+    process.exit(0);
+  } else if (CLI_SUBCOMMANDS.includes(subcommand) || subcommand === '--help') {
     handleCliCommand(process.argv.slice(2)).catch((error) => {
       console.error('Error:', error instanceof Error ? error.message : String(error));
       process.exit(1);

@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import path from 'path';
-import { readFileSync } from 'node:fs';
-
-const { version: packageVersion } = JSON.parse(
-  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
-) as { version: string };
 
 // Mock node:fs/promises at the top level so Vitest can hoist it correctly.
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -37,15 +32,24 @@ import {
 
 // --- generateMcpConfig ---
 
+const nodeExecutable = path.resolve('C:/Program Files/nodejs/node.exe');
+const cacheEntrypoint = path.resolve(
+  'C:/npm-cache/_npx/hash/node_modules/codebase-context/dist/index.js'
+);
+
+function savedLaunch(rootPath: string) {
+  return {
+    rootPath,
+    nodeExecutable,
+    serverEntrypoint: cacheEntrypoint
+  };
+}
+
 describe('generateMcpConfig', () => {
   const projectRoot = path.resolve('C:/projects/Example Project');
 
-  it('generates a version-pinned npx.cmd launch for Claude Code on Windows', () => {
-    const result = generateMcpConfig('claude-code', {
-      rootPath: projectRoot,
-      platform: 'win32',
-      packageVersion: '9.8.7'
-    });
+  it('saves the npx cache path for Claude Code', () => {
+    const result = generateMcpConfig('claude-code', savedLaunch(projectRoot));
 
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
@@ -53,15 +57,15 @@ describe('generateMcpConfig', () => {
     expect(JSON.parse(result.content)).toEqual({
       mcpServers: {
         'codebase-context': {
-          command: 'npx.cmd',
-          args: ['--yes', 'codebase-context@9.8.7', projectRoot]
+          command: nodeExecutable,
+          args: [cacheEntrypoint, projectRoot]
         }
       }
     });
   });
 
-  it('Cursor gets a project stdio config', () => {
-    const result = generateMcpConfig('cursor', { rootPath: projectRoot, platform: 'linux' });
+  it('Cursor gets a project stdio config that saves the npx cache path', () => {
+    const result = generateMcpConfig('cursor', savedLaunch(projectRoot));
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(projectRoot, '.cursor', 'mcp.json'));
@@ -70,44 +74,36 @@ describe('generateMcpConfig', () => {
     };
     expect(parsed.mcpServers['codebase-context']).toEqual({
       type: 'stdio',
-      command: 'npx',
-      args: ['--yes', `codebase-context@${packageVersion}`, projectRoot]
+      command: nodeExecutable,
+      args: [cacheEntrypoint, projectRoot]
     });
   });
 
-  it('defaults to a pinned npx launch using the current platform', () => {
+  it('defaults to the current Node binary and the running package file', () => {
     const result = generateMcpConfig('claude-code', { rootPath: projectRoot });
     if (result.kind !== 'file') throw new Error('expected file config');
     const parsed = JSON.parse(result.content) as {
       mcpServers: { 'codebase-context': { command: string; args: string[] } };
     };
     const server = parsed.mcpServers['codebase-context'];
-    const windows = process.platform === 'win32';
-    expect(server.command).toBe(windows ? 'npx.cmd' : 'npx');
-    expect(server.args).toEqual([
-      '--yes',
-      expect.stringMatching(/^codebase-context@\d+\.\d+\.\d+/),
-      projectRoot
-    ]);
+    expect(server.command).toBe(path.resolve(process.execPath));
+    expect(server.args?.[0]).toBe(path.resolve(process.argv[1] ?? ''));
+    expect(server.args?.[1]).toBe(projectRoot);
   });
 
-  it('Codex allows a cold package install before connecting', () => {
-    const result = generateMcpConfig('codex', {
-      rootPath: projectRoot,
-      platform: 'linux',
-      packageVersion: '9.8.7'
-    });
+  it('Codex saves the node binary and the npx cache path', () => {
+    const result = generateMcpConfig('codex', savedLaunch(projectRoot));
 
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(projectRoot, '.codex', 'config.toml'));
     expect(result.content).toBe(
-      `[mcp_servers.codebase-context]\ncommand = "npx"\nargs = ["--yes", "codebase-context@9.8.7", ${JSON.stringify(projectRoot)}]\nstartup_timeout_sec = 300\n`
+      `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(nodeExecutable)}\nargs = [${JSON.stringify(cacheEntrypoint)}, ${JSON.stringify(projectRoot)}]\nstartup_timeout_sec = 120\n`
     );
   });
 
-  it('OpenCode uses a local stdio command array', () => {
-    const result = generateMcpConfig('opencode', { rootPath: projectRoot, platform: 'linux' });
+  it('OpenCode uses a local command that saves the npx cache path', () => {
+    const result = generateMcpConfig('opencode', savedLaunch(projectRoot));
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(projectRoot, 'opencode.json'));
@@ -116,7 +112,7 @@ describe('generateMcpConfig', () => {
     };
     expect(parsed.mcp['codebase-context']).toEqual({
       type: 'local',
-      command: ['npx', '--yes', `codebase-context@${packageVersion}`, projectRoot]
+      command: [nodeExecutable, cacheEntrypoint, projectRoot]
     });
   });
 });
@@ -183,7 +179,10 @@ describe('_buildMergedMcpContent', () => {
       type: 'http',
       url: 'http://127.0.0.1:4000/mcp'
     });
-    expect(parsed.mcpServers['codebase-context']).toMatchObject({ type: 'stdio', command: 'npx' });
+    expect(parsed.mcpServers['codebase-context']).toMatchObject({
+      type: 'stdio',
+      command: path.resolve(process.execPath)
+    });
   });
 
   it('preserves existing Claude Code mcpServers entries and adds codebase-context', async () => {
@@ -196,10 +195,10 @@ describe('_buildMergedMcpContent', () => {
       }) as unknown as Buffer
     );
 
-    const generated = generateMcpConfig('claude-code', {
-      rootPath: path.resolve('C:/projects/app'),
-      platform: 'win32'
-    });
+    const generated = generateMcpConfig(
+      'claude-code',
+      savedLaunch(path.resolve('C:/projects/app'))
+    );
     if (generated.kind !== 'file') throw new Error('expected file config');
 
     const merged = await _buildMergedMcpContent(
@@ -220,8 +219,8 @@ describe('_buildMergedMcpContent', () => {
       args: ['server.js']
     });
     expect(parsed.mcpServers['codebase-context']).toEqual({
-      command: 'npx.cmd',
-      args: ['--yes', `codebase-context@${packageVersion}`, path.resolve('C:/projects/app')]
+      command: nodeExecutable,
+      args: [cacheEntrypoint, path.resolve('C:/projects/app')]
     });
   });
 
@@ -298,11 +297,7 @@ describe('_buildMergedMcpContent', () => {
         }
       }) as unknown as Buffer
     );
-    const generated = generateMcpConfig('claude-code', {
-      rootPath: newRoot,
-      platform: 'win32',
-      packageVersion: '9.8.7'
-    });
+    const generated = generateMcpConfig('claude-code', savedLaunch(newRoot));
     if (generated.kind !== 'file') throw new Error('expected file config');
 
     const merged = await _buildMergedMcpContent(
@@ -316,8 +311,8 @@ describe('_buildMergedMcpContent', () => {
     };
     expect(parsed.customSetting).toBe(true);
     expect(parsed.mcpServers['codebase-context']).toEqual({
-      command: 'npx.cmd',
-      args: ['--yes', 'codebase-context@9.8.7', newRoot],
+      command: nodeExecutable,
+      args: [cacheEntrypoint, newRoot],
       customTimeout: 8
     });
   });
@@ -336,11 +331,7 @@ describe('_buildMergedMcpContent', () => {
         }
       }) as unknown as Buffer
     );
-    const generated = generateMcpConfig('claude-code', {
-      rootPath: newRoot,
-      platform: 'linux',
-      packageVersion: '9.8.7'
-    });
+    const generated = generateMcpConfig('claude-code', savedLaunch(newRoot));
     if (generated.kind !== 'file') throw new Error('expected file config');
 
     const merged = await _buildMergedMcpContent(
@@ -352,8 +343,8 @@ describe('_buildMergedMcpContent', () => {
       mcpServers: { 'codebase-context': { command: string; args: string[]; customLabel: string } };
     };
     expect(parsed.mcpServers['codebase-context']).toEqual({
-      command: 'npx',
-      args: ['--yes', 'codebase-context@9.8.7', newRoot],
+      command: nodeExecutable,
+      args: [cacheEntrypoint, newRoot],
       customLabel: 'preserve'
     });
   });
@@ -655,7 +646,15 @@ describe('handleInitCli', () => {
   });
 
   it('shows help without prompting or writing files', async () => {
-    await handleInitCli(['--help']);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await handleInitCli(['--help']);
+      expect(log.mock.calls.flat().join('\n')).toContain(
+        'codex mcp add codebase-context -- npx -y codebase-context'
+      );
+    } finally {
+      log.mockRestore();
+    }
 
     expect(checkbox).not.toHaveBeenCalled();
     expect(writeFileMock).not.toHaveBeenCalled();
@@ -770,18 +769,14 @@ describe('_buildMergedCodexContent', () => {
       'startup_timeout_sec = 75\n' +
       'custom_label = "keep me"\n';
     readFileMock.mockResolvedValue(existing as unknown as Buffer);
-    const generated = generateMcpConfig('codex', {
-      rootPath: newRoot,
-      platform: 'win32',
-      packageVersion: '9.8.7'
-    });
+    const generated = generateMcpConfig('codex', savedLaunch(newRoot));
     if (generated.kind !== 'file') throw new Error('expected file config');
 
     const merged = await _buildMergedCodexContent(generated.path, generated.content);
 
-    expect(merged.content).toContain('command = "npx.cmd"');
+    expect(merged.content).toContain(`command = ${JSON.stringify(nodeExecutable)}`);
     expect(merged.content).toContain(
-      `args = ["--yes", "codebase-context@9.8.7", ${JSON.stringify(newRoot)}]`
+      `args = [${JSON.stringify(cacheEntrypoint)}, ${JSON.stringify(newRoot)}]`
     );
     expect(merged.content).toContain('startup_timeout_sec = 75');
     expect(merged.content).toContain('custom_label = "keep me"');

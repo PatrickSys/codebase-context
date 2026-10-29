@@ -234,8 +234,20 @@ export async function buildCodebaseMap(
   }));
 
   // --- Graph stats ---
+  // Prefer recorded stats. When they are missing or say 0 files but the index
+  // already has files, count those files so the map does not report an empty project.
+  const countedFiles = new Set<string>([
+    ...Object.keys(graph.imports ?? {}),
+    ...Object.keys(graph.importedBy ?? {}),
+    ...chunks.flatMap((chunk) =>
+      typeof chunk.relativePath === 'string' && chunk.relativePath.length > 0
+        ? [chunk.relativePath]
+        : []
+    )
+  ]).size;
+  const recordedFiles = statsSource.files ?? 0;
   const graphStats = {
-    files: statsSource.files ?? 0,
+    files: recordedFiles > 0 ? recordedFiles : countedFiles,
     edges: statsSource.edges ?? 0,
     avgDependencies: statsSource.avgDependencies ?? 0
   };

@@ -13,7 +13,6 @@ import * as fs from 'node:fs/promises';
 import { checkbox } from '@inquirer/prompts';
 import { homedir } from 'node:os';
 import { constants } from 'node:fs';
-import { createRequire } from 'node:module';
 
 export type Client = (typeof CLIENTS)[number]['id'];
 
@@ -21,15 +20,16 @@ export type McpConfigResult = { kind: 'file'; path: string; content: string };
 
 export type McpConfigOptions = {
   rootPath?: string;
-  platform?: NodeJS.Platform;
-  packageVersion?: string;
+  /** Node binary written into the client config. Defaults to the current process. */
+  nodeExecutable?: string;
+  /**
+   * Package entrypoint written into the client config.
+   * When init runs through npx this is the file inside the npx cache.
+   */
+  serverEntrypoint?: string;
 };
 
 type JsonObject = Record<string, unknown>;
-
-const { version: packageVersion } = createRequire(import.meta.url)('../package.json') as {
-  version: string;
-};
 
 export const CLIENTS = [
   { id: 'claude-code', name: 'Claude Code', executable: 'claude', directory: '.claude' },
@@ -95,19 +95,32 @@ export async function detectClients(
   return detected;
 }
 
+function resolveServerEntrypoint(explicit?: string): string {
+  if (explicit) return path.resolve(explicit);
+  const entrypoint = process.argv[1];
+  if (!entrypoint) {
+    throw new Error('Cannot locate the codebase-context CLI entrypoint.');
+  }
+  return path.resolve(entrypoint);
+}
+
+/**
+ * Launch command saved for every client: the Node binary that ran init, the
+ * package entrypoint (the npx cache path when init itself was started with npx),
+ * and the project folder. Clients then start that file directly.
+ */
 export function generateMcpConfig(client: Client, options: McpConfigOptions = {}): McpConfigResult {
   const rootPath = path.resolve(options.rootPath ?? process.cwd());
-  const version = options.packageVersion ?? packageVersion;
-  const windows = (options.platform ?? process.platform) === 'win32';
-  const command = windows ? 'npx.cmd' : 'npx';
-  const args = ['--yes', `codebase-context@${version}`, rootPath];
+  const nodeExecutable = path.resolve(options.nodeExecutable ?? process.execPath);
+  const serverEntrypoint = resolveServerEntrypoint(options.serverEntrypoint);
+  const args = [serverEntrypoint, rootPath];
   if (client === 'codex') {
     return {
       kind: 'file',
       path: path.join(rootPath, '.codex', 'config.toml'),
       content:
-        `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(command)}\n` +
-        `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 300\n`
+        `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(nodeExecutable)}\n` +
+        `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 120\n`
     };
   }
   const configPath =
@@ -123,13 +136,15 @@ export function generateMcpConfig(client: Client, options: McpConfigOptions = {}
       client === 'opencode'
         ? {
             $schema: 'https://opencode.ai/config.json',
-            mcp: { 'codebase-context': { type: 'local', command: [command, ...args] } }
+            mcp: {
+              'codebase-context': { type: 'local', command: [nodeExecutable, ...args] }
+            }
           }
         : {
             mcpServers: {
               'codebase-context': {
                 ...(client === 'cursor' ? { type: 'stdio' } : {}),
-                command,
+                command: nodeExecutable,
                 args
               }
             }
@@ -207,8 +222,21 @@ function isAbsolutePath(value: string): boolean {
   return path.posix.isAbsolute(value) || path.win32.isAbsolute(value);
 }
 
-/** Recognize only CBC-specific launch shapes written by init. */
-function isGeneratedLaunch(command: unknown, args: unknown): boolean {
+function samePath(left: string, right: string): boolean {
+  const normalize = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  return normalize(left) === normalize(right);
+}
+
+function isNpxCacheEntrypoint(value: string): boolean {
+  return /[\\/]node_modules[\\/]codebase-context[\\/]dist[\\/]index\.js$/.test(value);
+}
+
+/**
+ * Recognize only CBC-specific launch shapes written by init.
+ * A node launch counts when it points at the npx cache copy of this package,
+ * or at the entrypoint this run is about to save.
+ */
+function isGeneratedLaunch(command: unknown, args: unknown, entrypoint?: string): boolean {
   if (
     typeof command !== 'string' ||
     !Array.isArray(args) ||
@@ -217,20 +245,31 @@ function isGeneratedLaunch(command: unknown, args: unknown): boolean {
     return false;
   const executable = path.basename(command.replace(/\\/g, '/')).toLowerCase();
   if (executable === 'node' || executable === 'node.exe') {
+    const script = args[0] ?? '';
     return (
       args.length === 2 &&
-      /[\\/]node_modules[\\/]codebase-context[\\/]dist[\\/]index\.js$/.test(args[0]) &&
-      isAbsolutePath(args[0]) &&
-      isAbsolutePath(args[1])
+      isAbsolutePath(script) &&
+      isAbsolutePath(args[1] ?? '') &&
+      (isNpxCacheEntrypoint(script) || (entrypoint !== undefined && samePath(script, entrypoint)))
     );
   }
   const launch = command === 'npx' || command === 'npx.cmd' ? args : [];
   return (
     launch.length === 3 &&
     (launch[0] === '--yes' || launch[0] === '-y') &&
-    /^codebase-context@\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(launch[1]) &&
-    isAbsolutePath(launch[2])
+    /^codebase-context@\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(launch[1] ?? '') &&
+    isAbsolutePath(launch[2] ?? '')
   );
+}
+
+function generatedEntrypoint(generated: unknown, client: Client): string | undefined {
+  if (!isJsonObject(generated)) return undefined;
+  if (client === 'opencode' && Array.isArray(generated.command)) {
+    return typeof generated.command[1] === 'string' ? generated.command[1] : undefined;
+  }
+  return Array.isArray(generated.args) && typeof generated.args[0] === 'string'
+    ? generated.args[0]
+    : undefined;
 }
 
 function mergeGeneratedServer(existing: unknown, generated: unknown, client: Client): unknown {
@@ -241,7 +280,7 @@ function mergeGeneratedServer(existing: unknown, generated: unknown, client: Cli
   const args = local && Array.isArray(existing.command) ? existing.command.slice(1) : existing.args;
   if (
     (existing.type !== undefined && existing.type !== (local ? 'local' : 'stdio')) ||
-    !isGeneratedLaunch(command, args)
+    !isGeneratedLaunch(command, args, generatedEntrypoint(generated, client))
   )
     return null;
   return {
@@ -377,7 +416,14 @@ export async function _buildMergedCodexContent(
       section.match(/^[ \t]*args[ \t]*=/gm)?.length === 1
     ) {
       try {
-        if (isGeneratedLaunch(JSON.parse(oldCommand[2]), JSON.parse(oldArgs[2]))) {
+        const generatedArgs: unknown = JSON.parse(newArgs[2]);
+        const generatedEntrypoint =
+          Array.isArray(generatedArgs) && typeof generatedArgs[0] === 'string'
+            ? generatedArgs[0]
+            : undefined;
+        if (
+          isGeneratedLaunch(JSON.parse(oldCommand[2]), JSON.parse(oldArgs[2]), generatedEntrypoint)
+        ) {
           if (
             jsonValuesEqual(JSON.parse(oldCommand[2]), JSON.parse(newCommand[2])) &&
             jsonValuesEqual(JSON.parse(oldArgs[2]), JSON.parse(newArgs[2]))
@@ -504,6 +550,10 @@ function printInitUsage(): void {
   console.log(
     'Detect and configure coding tools together. With a terminal, Space toggles and Enter applies.'
   );
+  console.log(
+    'Each config saves this Node binary and the package file from the npx cache, plus the project folder.'
+  );
+  console.log('Codex setup line: codex mcp add codebase-context -- npx -y codebase-context');
   console.log(
     '  --client <name>  Choose a tool (repeatable): ' +
       CLIENTS.map((client) => client.id).join(', ')

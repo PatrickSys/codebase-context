@@ -18,6 +18,9 @@ export function isTestArtifactPath(filePath: string): boolean {
   );
 }
 
+const LOW_CONFIDENCE_HINT =
+  'Low confidence: this search is not evidence that the code is missing. Try one concrete symbol, file, or route, or call get_symbol_references.';
+
 export function assessSearchQuality(
   query: string,
   results: SearchResult[]
@@ -28,7 +31,7 @@ export function assessSearchQuality(
       confidence: 0,
       signals: ['no results returned'],
       nextSteps: [
-        'Try a narrower query with one concrete symbol, route, or file hint.',
+        LOW_CONFIDENCE_HINT,
         'Apply search filters (framework/language/componentType/layer).',
         'Use get_symbol_references to find where a specific symbol is used across the codebase.'
       ]
@@ -74,7 +77,7 @@ export function assessSearchQuality(
     signals,
     ...(lowConfidence && {
       nextSteps: [
-        'Add one or two concrete symbols, routes, or file hints to the query.',
+        LOW_CONFIDENCE_HINT,
         'Apply filters (framework/language/componentType/layer) to narrow candidates.',
         'Use get_symbol_references when the question is about where a symbol or function is used.'
       ]

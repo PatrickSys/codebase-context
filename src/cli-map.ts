@@ -19,7 +19,9 @@ import {
   MEMORY_FILENAME
 } from './constants/codebase-context.js';
 import { createProjectState } from './project-state.js';
+import { CodebaseIndexer } from './core/indexer.js';
 import { buildCodebaseMap, renderMapMarkdown, renderMapPretty } from './core/codebase-map.js';
+import { loadProjectConfig } from './server/config.js';
 import type { IndexState } from './tools/types.js';
 
 function resolveMapRootPath(): string {
@@ -39,6 +41,29 @@ function printMapUsage(): void {
   console.log('  --help    Show this help');
   console.log('');
   console.log('Default output is markdown (pipeable).');
+}
+
+async function ensureProjectIndex(rootPath: string, keywordIndex: string): Promise<void> {
+  try {
+    await fs.access(keywordIndex);
+    return;
+  } catch {
+    // A missing index is why `map` used to report 0 files on a fresh project.
+  }
+
+  console.error(`Indexing ${rootPath} before building the map.`);
+  const projectConfig = await loadProjectConfig(rootPath);
+  const indexer = new CodebaseIndexer({
+    rootPath,
+    config: {
+      skipEmbedding: true,
+      ...(projectConfig?.parsing ? { parsing: projectConfig.parsing } : {})
+    }
+  });
+  const stats = await indexer.index();
+  console.error(
+    `Indexed ${stats.indexedFiles} files for the map. Run \`reindex\` to add local embeddings.`
+  );
 }
 
 export async function handleMapCli(args: string[]): Promise<void> {
@@ -65,12 +90,14 @@ export async function handleMapCli(args: string[]): Promise<void> {
     vectorDb: path.join(baseDir, VECTOR_DB_DIRNAME)
   };
 
+  await ensureProjectIndex(rootPath, paths.keywordIndex);
+
   let indexExists = false;
   try {
     await fs.access(paths.keywordIndex);
     indexExists = true;
   } catch {
-    // no index yet
+    // Indexing did not produce a keyword index. The map degrades to an empty project.
   }
 
   const indexState: IndexState = { status: indexExists ? 'ready' : 'idle' };

@@ -26,7 +26,7 @@ describe('assessSearchQuality', () => {
     expect(quality.status).toBe('low_confidence');
     expect(quality.confidence).toBe(0);
     expect(quality.signals).toContain('no results returned');
-    expect(quality.nextSteps?.length).toBeGreaterThan(0);
+    expect(quality.nextSteps?.[0]).toMatch(/not evidence that the code is missing/i);
   });
 
   it('flags test-artifact dominance for non-testing queries', () => {

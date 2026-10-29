@@ -146,7 +146,7 @@ describe('Auto-refresh E2E', () => {
       expect(updatedContent).toContain('UPDATED_TOKEN');
       expect(incrementalRuns).toBeGreaterThan(0);
     } finally {
-      stopWatcher();
+      await stopWatcher();
     }
   }, 20000);
 });

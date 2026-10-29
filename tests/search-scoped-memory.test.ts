@@ -16,6 +16,13 @@ vi.mock('../src/core/search.js', async () => {
     async search(query: string, limit: number, filters?: unknown) {
       return searchMocks.search(query, limit, filters);
     }
+
+    async searchWithCoverage(query: string, limit: number, filters?: unknown) {
+      return {
+        results: await this.search(query, limit, filters),
+        sourceCoverage: { status: 'current', checkedFiles: 0, skippedFiles: 0 }
+      };
+    }
   }
 
   return { CodebaseSearcher };

@@ -8,6 +8,7 @@ import type { Connection, Table } from '@lancedb/lancedb';
 import { VectorStorageProvider, CodeChunkWithEmbedding, VectorSearchResult } from './types.js';
 import { CodeChunk, SearchFilters } from '../types/index.js';
 import { IndexCorruptedError } from '../errors/index.js';
+import { assertOptionalDependency } from '../utils/optional-dependency.js';
 
 interface LanceDBRecord {
   id: string;
@@ -48,6 +49,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     options?: { expectExisting?: boolean; expectedDimensions?: number }
   ): Promise<void> {
     if (this.initialized) return;
+    assertOptionalDependency('@lancedb/lancedb', '^0.4.0');
 
     try {
       this.storagePath = storagePath;

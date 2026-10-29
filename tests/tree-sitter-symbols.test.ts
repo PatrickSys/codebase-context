@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { GenericAnalyzer } from '../src/analyzers/generic/index';
-import { extractTreeSitterSymbols, supportsTreeSitter } from '../src/utils/tree-sitter';
+import structuralFixture from './fixtures/structural-context-regressions.json';
+import {
+  extractTreeSitterSymbols,
+  findIdentifierOccurrences,
+  supportsTreeSitter
+} from '../src/utils/tree-sitter';
 
 describe('Tree-sitter symbol extraction', () => {
   it('extracts TypeScript symbols including function variables', async () => {
@@ -80,4 +85,70 @@ describe('Tree-sitter symbol extraction', () => {
   it('reports unsupported language grammars', () => {
     expect(supportsTreeSitter('markdown')).toBe(false);
   });
+
+  it('matches complete dollar, underscore, and Unicode identifiers in parsed code', async () => {
+    const source = [
+      'const alpha = $alpha;',
+      'const alphaSuffix = 1;',
+      'const _alpha = 2;',
+      'const προβολή = alpha;',
+      '// alpha and $alpha are comments',
+      'const message = "alpha $alpha";'
+    ].join('\n');
+
+    const alpha = await findIdentifierOccurrences(source, 'typescript', 'alpha');
+    const dollar = await findIdentifierOccurrences(source, 'typescript', '$alpha');
+    const unicode = await findIdentifierOccurrences(source, 'typescript', 'προβολή');
+
+    expect(alpha?.map((occurrence) => occurrence.line)).toEqual([1, 4]);
+    expect(dollar?.map((occurrence) => occurrence.line)).toEqual([1]);
+    expect(unicode?.map((occurrence) => occurrence.line)).toEqual([4]);
+  });
+});
+
+describe('frozen structural source facts', () => {
+  it('does not connect static ancestors across a dynamic method or field boundary', async () => {
+    const cases = [
+      'class C { [name](){ const inner=()=>run(); } }',
+      'class C { [name]=()=>{ const inner=()=>run(); }; }'
+    ];
+    for (const source of cases) {
+      const parsed = await extractTreeSitterSymbols(source, 'javascript');
+      expect(parsed).not.toBeNull();
+      const inner = parsed!.symbols.find((symbol) => symbol.name === 'inner') as
+        | (NonNullable<typeof parsed>['symbols'][number] & { symbolPath?: string[] })
+        | undefined;
+      expect(inner).toBeDefined();
+      expect(inner!.symbolPath).toEqual(['inner']);
+    }
+  });
+
+  for (const fixture of structuralFixture.cases) {
+    it(`preserves exact static ownership and implementation: ${fixture.id}`, async () => {
+      const extracted = await extractTreeSitterSymbols(fixture.source, fixture.language);
+      expect(extracted).not.toBeNull();
+      for (const fact of fixture.sourceSymbols) {
+        if ('scopeOnly' in fact && fact.scopeOnly) {
+          expect(extracted!.symbols.some((symbol) => symbol.name.includes('[actionName]'))).toBe(
+            false
+          );
+          continue;
+        }
+        const symbol = extracted!.symbols.find((candidate) => {
+          const sourceSymbol = candidate as typeof candidate & { symbolPath?: string[] };
+          return JSON.stringify(sourceSymbol.symbolPath) === JSON.stringify(fact.ownerChain);
+        });
+        expect(symbol, `${fixture.id}: ${fact.ownerChain.join(' > ')}`).toBeDefined();
+        for (const marker of fact.bodyMarkers) expect(symbol!.content).toContain(marker);
+        if ('forbiddenSiblingBodyMarkers' in fact) {
+          for (const marker of fact.forbiddenSiblingBodyMarkers ?? []) {
+            expect(symbol!.content).not.toContain(marker);
+          }
+        }
+        expect(fixture.source).toContain(symbol!.content);
+        expect(symbol!.startLine).toBeGreaterThanOrEqual(1);
+        expect(symbol!.endLine).toBeLessThanOrEqual(fixture.source.split('\n').length);
+      }
+    });
+  }
 });

@@ -6,7 +6,8 @@ import { readIndexMeta, validateIndexArtifacts } from '../src/core/index-meta.js
 import {
   CODEBASE_CONTEXT_DIRNAME,
   RELATIONSHIPS_FILENAME,
-  INDEX_META_FILENAME
+  INDEX_META_FILENAME,
+  INDEX_FORMAT_VERSION
 } from '../src/constants/codebase-context.js';
 
 async function createTempDir(): Promise<string> {
@@ -74,7 +75,7 @@ describe('Relationship Sidecar', () => {
     expect(relationships.header).toBeDefined();
     expect(relationships.header.buildId).toBeDefined();
     expect(typeof relationships.header.buildId).toBe('string');
-    expect(relationships.header.formatVersion).toBe(1);
+    expect(relationships.header.formatVersion).toBe(INDEX_FORMAT_VERSION);
     expect(relationships.generatedAt).toBeDefined();
     expect(relationships.graph).toBeDefined();
     expect(typeof relationships.graph.imports).toBe('object');
@@ -189,7 +190,7 @@ describe('Relationship Sidecar', () => {
     const relationships = JSON.parse(raw);
 
     expect(relationships.header).toBeDefined();
-    expect(relationships.header.formatVersion).toBe(1);
+    expect(relationships.header.formatVersion).toBe(INDEX_FORMAT_VERSION);
     expect(relationships.graph).toBeDefined();
     expect(relationships.symbols).toBeDefined();
     expect(relationships.stats).toBeDefined();

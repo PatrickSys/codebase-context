@@ -3,16 +3,14 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { ToolContext, ToolResponse, DecisionCard } from './types.js';
 import { CodebaseSearcher } from '../core/search.js';
-import type { SearchIntentProfile } from '../core/search.js';
+import type { SearchIntentProfile, SearchSourceCoverage } from '../core/search.js';
 import type {
   SearchResult,
   IntelligenceData,
   PatternsData,
-  IntelligenceGoldenFile,
   ChunkMetadata
 } from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
-import type { EvidenceLock } from '../preflight/evidence-lock.js';
 import { shouldIncludePatternConflictCategory } from '../preflight/query-scope.js';
 import {
   isComplementaryPatternConflict,
@@ -21,7 +19,7 @@ import {
 import { assessSearchQuality } from '../core/search-quality.js';
 import { getRerankerStatus } from '../core/reranker.js';
 import { IndexCorruptedError } from '../errors/index.js';
-import { formatMemoryScopeText, readMemoriesFile, withConfidence } from '../memory/store.js';
+import { readMemoriesFile, withConfidence } from '../memory/store.js';
 import type { MemoryWithConfidence } from '../memory/store.js';
 import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../health/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
@@ -104,7 +102,7 @@ export const definition: Tool = {
       includeSnippets: {
         type: 'boolean',
         description:
-          'Include code snippets in results (default: false). If you need code, prefer read_file instead.',
+          'Include code snippets in results (default: false). Open returned paths with your host file reader; CBC does not expose a file-reading tool.',
         default: false
       },
       filters: {
@@ -214,14 +212,17 @@ export async function handle(
 
   const searcher = new CodebaseSearcher(ctx.rootPath);
   let results: SearchResult[];
+  let sourceCoverage: SearchSourceCoverage;
   const searchProfile = (
     intent && ['explore', 'edit', 'refactor', 'migrate'].includes(intent) ? intent : 'explore'
   ) as SearchIntentProfile;
 
   try {
-    results = await searcher.search(queryStr, limit || 5, filters, {
+    const outcome = await searcher.searchWithCoverage(queryStr, limit || 5, filters, {
       profile: searchProfile
     });
+    results = outcome.results;
+    sourceCoverage = outcome.sourceCoverage;
   } catch (error) {
     if (error instanceof IndexCorruptedError) {
       console.error('[Auto-Heal] Index corrupted. Triggering background re-index...');
@@ -244,6 +245,34 @@ export async function handle(
       };
     }
     throw error;
+  }
+
+  if (sourceCoverage.status === 'no_fresh_results') {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: finalizeSearchPayloadText(
+            {
+              status: 'no_fresh_results',
+              message: sourceCoverage.candidateRetrievalFailed
+                ? 'No fresh results in the inspected candidates. Semantic refill failed; retry or refresh the index.'
+                : sourceCoverage.candidateBudgetExhausted
+                  ? 'No fresh results in the bounded candidate window. Some candidates remain uninspected; refresh the index or narrow the query and retry.'
+                  : 'No fresh results: nominated sources changed or could not be read. Refresh the index and retry.',
+              sourceCoverage,
+              searchQuality: { status: 'low_confidence', confidence: 0 },
+              budget: { mode: mode === 'full' ? 'full' : 'compact', resultCount: 0 },
+              ...(searchProfile !== 'explore' && {
+                preflight: { ready: false, reason: sourceCoverage.refreshAction }
+              }),
+              results: []
+            },
+            { mode: mode === 'full' ? 'full' : 'compact', pretty: true, transportAware: true }
+          )
+        }
+      ]
+    };
   }
 
   // Load memories for keyword matching, enriched with confidence
@@ -337,6 +366,38 @@ export async function handle(
       .filter((value): value is string => value !== null)
   );
 
+  function canonicalRootRelativePath(filePath: string): string | undefined {
+    if (!filePath || path.isAbsolute(filePath)) return undefined;
+    const normalized = filePath.replace(/\\/g, '/');
+    const parts = normalized.split('/');
+    if (
+      /^[a-z]:/i.test(parts[0]) ||
+      parts.some((part) => part === '' || part === '.' || part === '..')
+    ) {
+      return undefined;
+    }
+    return normalized;
+  }
+
+  function hasGroundedCanonicalExample(candidate: {
+    canonicalExample?: { file: string; snippet?: string };
+  }): boolean {
+    const example = candidate.canonicalExample;
+    const examplePath = example && canonicalRootRelativePath(example.file);
+    const snippet = example?.snippet;
+    if (!examplePath || !snippet?.trim()) return false;
+
+    const matches = results.filter((result) => {
+      const resultPath = canonicalRootRelativePath(normalizeGraphPath(result.filePath));
+      return resultPath === examplePath;
+    });
+    return matches.length === 1 && matches[0].snippet.includes(snippet);
+  }
+
+  function isPatternInQueryScope(category: string): boolean {
+    return shouldIncludePatternConflictCategory(category, queryStr);
+  }
+
   function getMemoryScopeBoost(memory: MemoryWithConfidence): number {
     if (!memory.scope || memory.scope.kind === 'global') return 0;
 
@@ -355,10 +416,13 @@ export async function handle(
     return 0;
   }
 
+  function getMemoryText(memory: MemoryWithConfidence): string {
+    return `${memory.memory} ${memory.reason}`.toLowerCase();
+  }
+
   function getMemoryTextMatchCount(memory: MemoryWithConfidence): number {
-    const haystack =
-      `${memory.memory} ${memory.reason} ${formatMemoryScopeText(memory.scope)}`.toLowerCase();
-    return queryTerms.filter((term) => haystack.includes(term)).length;
+    const text = getMemoryText(memory);
+    return queryTerms.filter((term) => text.includes(term)).length;
   }
 
   function formatMemoryForOutput(memory: MemoryWithConfidence): string {
@@ -629,7 +693,7 @@ export async function handle(
     if (terms.length === 0) return [];
     return memories
       .filter((m) => {
-        const text = `${m.memory} ${m.reason} ${formatMemoryScopeText(m.scope)}`.toLowerCase();
+        const text = getMemoryText(m);
         const matchCount = terms.filter((t) => text.includes(t)).length;
         return (matchCount >= 2 || getMemoryScopeBoost(m) >= 2) && m.effectiveConfidence >= 0.5;
       })
@@ -683,55 +747,35 @@ export async function handle(
   function buildPatternSummary(): string | undefined {
     const patterns = intelligence?.patterns;
     if (!patterns) return undefined;
-    const entries = Object.values(patterns)
-      .filter((data) => Boolean(data.primary))
+    const entries = Object.entries(patterns)
+      .filter(([category, data]) =>
+        Boolean(
+          data.primary &&
+          isPatternInQueryScope(category) &&
+          hasGroundedCanonicalExample(data.primary)
+        )
+      )
       .slice(0, 3)
-      .map((data) => {
+      .map(([, data]) => {
         const p = data.primary!;
         return `${p.name} (${p.frequency}, ${p.trend ?? 'Stable'})`;
       });
     return entries.length > 0 ? entries.join(', ') : undefined;
   }
 
-  // Return the golden file path most relevant to the given search results, using directory
-  // overlap as a query-aware proximity signal. Falls back to goldenFiles[0] when no overlap.
-  // Track B: use cross-encoder reranker to score golden files against the query for stronger
-  // relevance — deferred to avoid reranker latency on compact mode in v2.
+  // A repository-wide example is not evidence for this query. Recommend it only
+  // when search independently returned the same file, preserving result order.
   function getBestExample(topResults: Array<{ filePath: string }>): string | undefined {
     const goldenFiles = intelligence?.goldenFiles;
-    if (!goldenFiles?.length) return undefined;
-    if (!topResults?.length) return goldenFiles[0].file;
-
-    // Extract directory paths from top-5 results
-    const resultDirs = topResults.slice(0, 5).map((r) => path.dirname(r.filePath));
-
-    let bestFile = goldenFiles[0];
-    let bestScore = -1;
-
-    for (const gf of goldenFiles) {
-      const gfParts = path.dirname(gf.file).split(path.sep).filter(Boolean);
-      let maxShared = 0;
-
-      for (const resDir of resultDirs) {
-        const resParts = resDir.split(path.sep).filter(Boolean);
-        let shared = 0;
-        const minLen = Math.min(gfParts.length, resParts.length);
-        for (let i = 0; i < minLen; i++) {
-          if (gfParts[i] === resParts[i]) shared++;
-          else break;
-        }
-        if (shared > maxShared) maxShared = shared;
-      }
-
-      // Use golden file score as tie-breaker
-      const score = maxShared * 1000 + (gf.score ?? 0);
-      if (score > bestScore) {
-        bestScore = score;
-        bestFile = gf;
-      }
+    if (!goldenFiles?.length || !topResults.length) return undefined;
+    const examples = new Map(
+      goldenFiles.map((file) => [path.resolve(ctx.rootPath, file.file), file.file])
+    );
+    for (const result of topResults.slice(0, 5)) {
+      const example = examples.get(path.resolve(ctx.rootPath, result.filePath));
+      if (example) return example;
     }
-
-    return bestFile.file;
+    return undefined;
   }
 
   // Build up to 2 dynamic next-hop suggestions (compact mode)
@@ -740,73 +784,29 @@ export async function handle(
     sq: { status: string }
   ): Array<{ tool: string; args?: Record<string, string>; why: string }> {
     const hops: Array<{ tool: string; args?: Record<string, string>; why: string }> = [];
+    // Only advertise tools this MCP server actually supplies. Source reads belong
+    // to the host; returned result paths already identify what to open there.
     if (compactResults.length > 0) {
-      hops.push({
-        tool: 'read_file',
-        args: { path: compactResults[0].filePath },
-        why: 'Read the top match for implementation details'
-      });
-    }
-    if (sq.status === 'low_confidence') {
-      hops.push({ tool: 'get_team_patterns', why: 'Review pattern guidance — confidence is low' });
-    } else if (hops.length < 2) {
-      hops.push({ tool: 'get_team_patterns', why: 'Review team patterns and best examples' });
+      const relativeFile = path.relative(ctx.rootPath, compactResults[0].filePath);
+      if (
+        !path.isAbsolute(relativeFile) &&
+        relativeFile !== '..' &&
+        !relativeFile.startsWith(`..${path.sep}`)
+      ) {
+        hops.push({
+          tool: 'get_code_relationships',
+          args: { file: relativeFile.replace(/\\/g, '/'), direction: 'outgoing' },
+          why:
+            sq.status === 'low_confidence'
+              ? 'Follow current import evidence while continuing source discovery'
+              : 'Follow verified imports to related implementation files'
+        });
+      }
     }
     return hops.slice(0, 2);
   }
 
   const searchQuality = assessSearchQuality(queryStr, results);
-
-  // Always-on edit preflight (lite): do not require intent and keep payload small.
-  let editPreflight:
-    | { mode: string; riskLevel: string; confidence: string; evidenceLock: EvidenceLock }
-    | undefined = undefined;
-  if (intelligence && (!intent || intent === 'explore')) {
-    try {
-      const resultPaths = results.map((r) => r.filePath);
-      const impactCandidates = computeImpactCandidates(resultPaths);
-
-      // Use existing pattern intelligence for evidenceLock scoring, but keep the output payload lite.
-      const preferredPatternsForEvidence: Array<{ pattern: string; example?: string }> = [];
-      const patterns: PatternsData = intelligence.patterns || {};
-      for (const [_, data] of Object.entries(patterns)) {
-        if (data.primary) {
-          const p = data.primary;
-          if (p.trend === 'Rising' || p.trend === 'Stable') {
-            preferredPatternsForEvidence.push({
-              pattern: p.name,
-              ...(p.canonicalExample && { example: p.canonicalExample.file })
-            });
-          }
-        }
-      }
-
-      let riskLevel: 'low' | 'medium' | 'high' = 'low';
-      if (impactCandidates.length > 10) {
-        riskLevel = 'high';
-      } else if (impactCandidates.length > 3) {
-        riskLevel = 'medium';
-      }
-
-      editPreflight = {
-        mode: 'lite',
-        riskLevel,
-        confidence: computeIndexConfidence(),
-        evidenceLock: buildEvidenceLock({
-          results,
-          preferredPatterns: preferredPatternsForEvidence.slice(0, 5),
-          relatedMemories,
-          failureWarnings: [],
-          patternConflicts: [],
-          searchQualityStatus: searchQuality.status
-          // Note: indexFreshness intentionally omitted — explore intent is for navigation,
-          // not mutation; freshness gating does not apply.
-        })
-      };
-    } catch {
-      // editPreflight is best-effort - never fail search over it
-    }
-  }
 
   // Compose preflight card for edit/refactor/migrate intents
   let preflight: DecisionCard | undefined = undefined;
@@ -840,7 +840,11 @@ export async function handle(
           // Primary pattern = preferred if Rising or Stable
           if (data.primary) {
             const p = data.primary;
-            if (p.trend === 'Rising' || p.trend === 'Stable') {
+            if (
+              (p.trend === 'Rising' || p.trend === 'Stable') &&
+              isPatternInQueryScope(category) &&
+              hasGroundedCanonicalExample(p)
+            ) {
               preferredPatternsList.push({
                 pattern: p.name,
                 category,
@@ -854,7 +858,11 @@ export async function handle(
           // Also-detected patterns that are Declining = avoid
           if (data.alsoDetected) {
             for (const alt of data.alsoDetected) {
-              if (alt.trend === 'Declining') {
+              if (
+                alt.trend === 'Declining' &&
+                isPatternInQueryScope(category) &&
+                hasGroundedCanonicalExample(alt)
+              ) {
                 avoidPatternsList.push({
                   pattern: alt.name,
                   category,
@@ -871,7 +879,7 @@ export async function handle(
         const resultPaths = results.map((r) => r.filePath);
         const impactCandidates = computeImpactCandidates(resultPaths);
 
-        // PREF-02: Compute impact coverage (callers of result files that appear in results)
+        // Compute impact coverage (callers of result files that appear in results)
         const callerFiles = resultPaths.flatMap((p) => {
           const importers: string[] = [];
           for (const [dep, importerList] of reverseImports) {
@@ -929,14 +937,6 @@ export async function handle(
           riskLevel = 'medium';
         }
 
-        // --- Golden files (exemplar code) ---
-        const goldenFiles = (intelligence.goldenFiles ?? [])
-          .slice(0, 3)
-          .map((g: IntelligenceGoldenFile) => ({
-            file: g.file,
-            score: g.score
-          }));
-
         // --- Confidence (index freshness) ---
         // TODO: Review this confidence calculation
         //const confidence = computeIndexConfidence();
@@ -965,9 +965,11 @@ export async function handle(
           if (shouldSkipLegacyTestingFrameworkCategory(cat, patterns)) continue;
           if (!shouldIncludePatternConflictCategory(cat, queryStr)) continue;
           if (!data.primary || !data.alsoDetected?.length) continue;
+          if (!hasGroundedCanonicalExample(data.primary)) continue;
           const primaryFreq = parseFloat(data.primary.frequency) || 100;
           if (primaryFreq >= 80) continue;
           for (const alt of data.alsoDetected) {
+            if (!hasGroundedCanonicalExample(alt)) continue;
             const altFreq = parseFloat(alt.frequency) || 0;
             if (altFreq >= 20) {
               if (isComplementaryPatternConflict(cat, data.primary.name, alt.name)) continue;
@@ -992,7 +994,7 @@ export async function handle(
           indexFreshness: computeIndexConfidence()
         });
 
-        // Build clean decision card (PREF-01 to PREF-04)
+        // Build clean decision card
         const decisionCard: DecisionCard = {
           ready: evidenceLock.readyToEdit
         };
@@ -1015,13 +1017,15 @@ export async function handle(
           decisionCard.warnings = [...(decisionCard.warnings ?? []), ...freshnessGaps];
         }
 
-        // Add patterns (do/avoid, capped at 3 each, with adoption %)
-        const doPatterns = preferredPatternsForOutput
-          .slice(0, 3)
-          .map((p) => `${p.pattern} — ${p.adoption ? `${p.adoption} adoption` : ''}`);
-        const avoidPatterns = avoidPatternsForOutput
-          .slice(0, 3)
-          .map((p) => `${p.pattern} — ${p.adoption ? `${p.adoption} adoption` : ''} (declining)`);
+        // Pattern advice is actionable only when search itself did not abstain.
+        const suppressPatternAdvice =
+          evidenceLock.status === 'block' || searchQuality.status === 'low_confidence';
+        const doPatterns = suppressPatternAdvice
+          ? []
+          : preferredPatternsForOutput.slice(0, 3).map((p) => p.pattern);
+        const avoidPatterns = suppressPatternAdvice
+          ? []
+          : avoidPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} (declining)`);
         if (doPatterns.length > 0 || avoidPatterns.length > 0) {
           decisionCard.patterns = {
             ...(doPatterns.length > 0 && { do: doPatterns }),
@@ -1092,22 +1096,23 @@ export async function handle(
     }
   }
 
-  // For edit/refactor/migrate: return clean decision card.
-  // For explore or lite-only: return lightweight { ready, reason }.
+  // Discovery returns retrieval quality and source coverage; mutation intents get edit readiness.
   let preflightPayload: { ready: boolean; reason?: string } | Record<string, unknown> | undefined;
   if (preflight) {
     // preflight is already a clean decision card (DecisionCard type)
     preflightPayload = preflight;
-  } else if (editPreflight) {
-    // Lite preflight for explore intent
-    const el = editPreflight.evidenceLock;
+  }
+  if (sourceCoverage.status === 'partial' && preflightIntents.includes(searchProfile)) {
     preflightPayload = {
-      ready: el?.readyToEdit ?? false,
-      ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
+      ...preflightPayload,
+      ready: false,
+      abstain: true,
+      reason: sourceCoverage.refreshAction,
+      nextAction: sourceCoverage.refreshAction
     };
   }
 
-  // Helper: Build scope header for symbol-aware chunks (SEARCH-02)
+  // Helper: Build scope header for symbol-aware chunks
   function buildScopeHeader(metadata: ChunkMetadata): string | null {
     // Try symbolPath first (most reliable for AST-based symbols)
     if (metadata?.symbolPath && Array.isArray(metadata.symbolPath)) {
@@ -1169,24 +1174,34 @@ export async function handle(
     ...(rerankerStatus === 'unavailable' && { rerankerStatus: 'unavailable' })
   };
 
-  type SearchResponsePayload = {
-    status: 'success';
-    searchQuality: typeof searchQualityBlock & {
-      tokenEstimate?: number;
-      warning?: string;
-    };
-    budget: { mode: 'compact' | 'full'; resultCount: number };
-    preflight?: typeof preflightPayload;
-    patternSummary?: string;
-    bestExample?: string;
-    nextHops?: Array<{ tool: string; why: string; args?: Record<string, string> }>;
-    results: Array<Record<string, unknown>>;
-    totalResults?: number;
-    relatedMemories?: string[];
-  };
-
   // Compact mode (default): bounded response with light graph context
   const isCompact = mode !== 'full';
+
+  function buildSignaturePreview(snippet: string | undefined): string | undefined {
+    if (!snippet) return undefined;
+
+    const lines = snippet.replace(/^\r?\n+/, '').split('\n');
+    const previewTerms = [...new Set(queryTerms.filter((term) => term.length > 3))];
+    const strongestMatch = lines
+      .map((line, index) => ({
+        index,
+        matches: previewTerms.filter((term) => line.toLowerCase().includes(term)).length
+      }))
+      .filter((entry) => entry.matches > 0)
+      .sort((a, b) => b.matches - a.matches || a.index - b.index)[0];
+
+    let previewLines = lines.slice(0, 3);
+    if (strongestMatch) {
+      const windowLength = Math.min(3, lines.length);
+      const windowStart = Math.max(
+        0,
+        Math.min(strongestMatch.index - 1, lines.length - windowLength)
+      );
+      previewLines = lines.slice(windowStart, windowStart + windowLength);
+    }
+
+    return previewLines.join('\n').trim() || undefined;
+  }
 
   if (isCompact) {
     const compactResults = results.slice(0, 6);
@@ -1197,6 +1212,7 @@ export async function handle(
     const payloadText = finalizeSearchPayloadText(
       {
         status: 'success',
+        ...(sourceCoverage.status === 'partial' && { sourceCoverage }),
         searchQuality: searchQualityBlock,
         budget: { mode: 'compact', resultCount: compactResults.length },
         ...(preflightPayload && { preflight: preflightPayload }),
@@ -1208,15 +1224,7 @@ export async function handle(
           const topExports = getTopExports(r.filePath);
           const scope = buildScopeHeader(r.metadata);
           const health = getResultHealth(r.filePath);
-          // First 3 lines of chunk content as a lightweight signature preview
-          const signaturePreview = r.snippet
-            ? r.snippet
-                .replace(/^\r?\n+/, '')
-                .split('\n')
-                .slice(0, 3)
-                .join('\n')
-                .trim() || undefined
-            : undefined;
+          const signaturePreview = buildSignaturePreview(r.snippet);
           return {
             file: `${r.filePath}:${r.startLine}-${r.endLine}`,
             summary: r.summary,
@@ -1259,6 +1267,7 @@ export async function handle(
   const payloadText = finalizeSearchPayloadText(
     {
       status: 'success',
+      ...(sourceCoverage.status === 'partial' && { sourceCoverage }),
       searchQuality: searchQualityBlock,
       budget: { mode: 'full', resultCount: results.length },
       ...(preflightPayload && { preflight: preflightPayload }),

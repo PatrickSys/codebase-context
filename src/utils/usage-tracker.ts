@@ -625,6 +625,184 @@ export interface UnusedExport {
 export interface ImportEdgeDetail {
   line?: number;
   importedSymbols?: string[];
+  /** Source declarations that produced this adjacency. Legacy details have no proof and stay unverified. */
+  sources?: ImportEdgeSource[];
+}
+
+export type GraphRelationKind = 'import' | 'reexport';
+
+export interface ImportEdgeSource {
+  line: number;
+  specifier: string;
+  kind: GraphRelationKind;
+  sourceFingerprint: string;
+  targetFingerprint: string;
+}
+
+export interface UnresolvedImportEdge {
+  from: string;
+  kind: GraphRelationKind;
+  source: ImportEdgeSource;
+  reason: 'external' | 'not-found' | 'outside-root' | 'unsupported-alias';
+}
+
+export interface FileGraphEdge {
+  from: string;
+  to: string;
+  kind: GraphRelationKind;
+  source: ImportEdgeSource;
+  verified: boolean;
+}
+
+export interface FileGraphTraversal {
+  paths: Array<{ nodes: string[]; edges: FileGraphEdge[] }>;
+  unresolved: UnresolvedImportEdge[];
+  truncated: boolean;
+}
+
+interface TraversableFileGraph {
+  imports?: Record<string, string[]>;
+  importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
+  unresolvedEdges?: UnresolvedImportEdge[];
+}
+
+interface FileGraphTraversalOptions {
+  direction: 'outgoing' | 'incoming';
+  maxHops: 1 | 2 | 3;
+  maxNodes?: number;
+  maxPaths?: number;
+  /** Candidate edge attempts and unresolved diagnostics share this work budget. */
+  maxInspections?: number;
+}
+
+interface CheckedFileGraphTraversal extends FileGraphTraversal {
+  rejectedEdges: FileGraphEdge[];
+  inspectionLimited: boolean;
+}
+
+/** A shared BFS lets asynchronous freshness checks run before a path consumes output limits. */
+function* fileGraphTraversal(
+  graph: TraversableFileGraph,
+  start: string,
+  options: FileGraphTraversalOptions
+): Generator<FileGraphEdge, CheckedFileGraphTraversal, boolean> {
+  const imports = graph.imports ?? {};
+  const incoming = new Map<string, string[]>();
+  if (options.direction === 'incoming') {
+    // The sidecar stores forward adjacency only. Build its reverse lookup once, without source IO.
+    for (const [from, targets] of Object.entries(imports)) {
+      for (const to of targets) {
+        const importers = incoming.get(to);
+        if (importers) importers.push(from);
+        else incoming.set(to, [from]);
+      }
+    }
+  }
+  const neighbors = function* (node: string): Generator<FileGraphEdge> {
+    const targets =
+      options.direction === 'outgoing' ? (imports[node] ?? []) : (incoming.get(node) ?? []);
+    for (const neighbor of targets) {
+      const from = options.direction === 'outgoing' ? node : neighbor;
+      const to = options.direction === 'outgoing' ? neighbor : node;
+      const detail = graph.importDetails?.[from]?.[to];
+      const sources = detail?.sources ?? [];
+      if (sources.length > 0) {
+        for (const source of sources) yield { from, to, kind: source.kind, source, verified: true };
+      } else {
+        yield {
+          from,
+          to,
+          kind: 'import',
+          verified: false,
+          source: {
+            line: detail?.line ?? 1,
+            specifier: '',
+            kind: 'import',
+            sourceFingerprint: '',
+            targetFingerprint: ''
+          }
+        };
+      }
+    }
+  };
+
+  const maxNodes = Math.max(1, Math.min(500, options.maxNodes ?? 100));
+  const maxPaths = Math.max(1, Math.min(500, options.maxPaths ?? 200));
+  const maxInspections = Math.max(1, Math.min(10000, options.maxInspections ?? 1000));
+  const visitedNodes = new Set([start]);
+  const queue: Array<{ nodes: string[]; edges: FileGraphEdge[] }> = [{ nodes: [start], edges: [] }];
+  const paths: FileGraphTraversal['paths'] = [];
+  const rejectedEdges: FileGraphEdge[] = [];
+  let truncated = false;
+  let inspections = 0;
+  let inspectionLimited = false;
+  traversal: for (let cursor = 0; cursor < queue.length; cursor++) {
+    const current = queue[cursor]!;
+    if (current.edges.length >= options.maxHops) continue;
+    for (const edge of neighbors(current.nodes[current.nodes.length - 1]!)) {
+      if (inspections >= maxInspections) {
+        truncated = inspectionLimited = true;
+        break traversal;
+      }
+      inspections++;
+      const next = options.direction === 'outgoing' ? edge.to : edge.from;
+      if (current.nodes.includes(next)) continue;
+      if (paths.length >= maxPaths) {
+        truncated = true;
+        break traversal;
+      }
+      if (!(yield edge)) {
+        rejectedEdges.push(edge);
+        continue;
+      }
+      if (!visitedNodes.has(next) && visitedNodes.size >= maxNodes) {
+        truncated = true;
+        continue;
+      }
+      visitedNodes.add(next);
+      const nextPath = {
+        nodes: [...current.nodes, next],
+        edges: [...current.edges, edge]
+      };
+      paths.push(nextPath);
+      queue.push(nextPath);
+    }
+  }
+  const unresolved: UnresolvedImportEdge[] = [];
+  for (const edge of graph.unresolvedEdges ?? []) {
+    if (!visitedNodes.has(edge.from)) continue;
+    if (inspections >= maxInspections) {
+      truncated = inspectionLimited = true;
+      break;
+    }
+    inspections++;
+    unresolved.push(edge);
+  }
+  return { paths, unresolved, truncated, rejectedEdges, inspectionLimited };
+}
+
+export function traverseFileGraph(
+  graph: TraversableFileGraph,
+  start: string,
+  options: FileGraphTraversalOptions
+): FileGraphTraversal {
+  const traversal = fileGraphTraversal(graph, start, options);
+  let step = traversal.next();
+  while (!step.done) step = traversal.next(true);
+  const { paths, unresolved, truncated } = step.value;
+  return { paths, unresolved, truncated };
+}
+
+export async function traverseFileGraphWithVerification(
+  graph: TraversableFileGraph,
+  start: string,
+  options: FileGraphTraversalOptions,
+  acceptEdge: (edge: FileGraphEdge) => Promise<boolean>
+): Promise<CheckedFileGraphTraversal> {
+  const traversal = fileGraphTraversal(graph, start, options);
+  let step = traversal.next();
+  while (!step.done) step = traversal.next(await acceptEdge(step.value));
+  return step.value;
 }
 
 export class InternalFileGraph {
@@ -636,6 +814,7 @@ export class InternalFileGraph {
   private importedSymbols: Map<string, Set<string>> = new Map();
   // Map: fromFile -> toFile -> edge details (line/symbols)
   private importDetails: Map<string, Map<string, ImportEdgeDetail>> = new Map();
+  private unresolvedEdges: UnresolvedImportEdge[] = [];
   // Root path for relative path conversion
   private rootPath: string;
 
@@ -674,7 +853,8 @@ export class InternalFileGraph {
     importingFile: string,
     importedFile: string,
     line?: number,
-    importedSymbols?: string[]
+    importedSymbols?: string[],
+    sourceProof?: Omit<ImportEdgeSource, 'line'>
   ): void {
     const fromFile = this.normalizePath(importingFile);
     const toFile = this.normalizePath(importedFile);
@@ -694,7 +874,7 @@ export class InternalFileGraph {
         ? importedSymbols.filter((sym) => sym !== '*' && sym !== 'default')
         : [];
 
-    if (normalizedLine || normalizedSymbols.length > 0) {
+    if (normalizedLine || normalizedSymbols.length > 0 || sourceProof) {
       if (!this.importDetails.has(fromFile)) {
         this.importDetails.set(fromFile, new Map());
       }
@@ -710,9 +890,31 @@ export class InternalFileGraph {
       for (const sym of normalizedSymbols) mergedSymbolsSet.add(sym);
       const mergedSymbols = Array.from(mergedSymbolsSet);
 
+      const sources = existing.sources ? [...existing.sources] : [];
+      if (sourceProof && normalizedLine) {
+        const nextSource: ImportEdgeSource = { ...sourceProof, line: normalizedLine };
+        if (
+          !sources.some(
+            (source) =>
+              source.line === nextSource.line &&
+              source.specifier === nextSource.specifier &&
+              source.kind === nextSource.kind
+          )
+        ) {
+          sources.push(nextSource);
+        }
+      }
+
       detailsForFrom.set(toFile, {
         ...(mergedLine ? { line: mergedLine } : {}),
-        ...(mergedSymbols.length > 0 ? { importedSymbols: mergedSymbols.sort() } : {})
+        ...(mergedSymbols.length > 0 ? { importedSymbols: mergedSymbols.sort() } : {}),
+        ...(sources.length > 0
+          ? {
+              sources: sources.sort(
+                (a, b) => a.line - b.line || a.specifier.localeCompare(b.specifier)
+              )
+            }
+          : {})
       });
     }
 
@@ -724,6 +926,30 @@ export class InternalFileGraph {
       for (const sym of normalizedSymbols) {
         this.importedSymbols.get(toFile)!.add(sym);
       }
+    }
+  }
+
+  trackUnresolved(
+    importingFile: string,
+    source: ImportEdgeSource,
+    reason: UnresolvedImportEdge['reason'],
+    kind: GraphRelationKind = source.kind
+  ): void {
+    const edge: UnresolvedImportEdge = {
+      from: this.normalizePath(importingFile),
+      kind,
+      source,
+      reason
+    };
+    if (
+      !this.unresolvedEdges.some(
+        (existing) =>
+          existing.from === edge.from &&
+          existing.source.line === edge.source.line &&
+          existing.source.specifier === edge.source.specifier
+      )
+    ) {
+      this.unresolvedEdges.push(edge);
     }
   }
 
@@ -865,6 +1091,7 @@ export class InternalFileGraph {
     imports: Record<string, string[]>;
     exports: Record<string, FileExport[]>;
     importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
+    unresolvedEdges?: UnresolvedImportEdge[];
     stats: { files: number; edges: number; avgDependencies: number };
   } {
     const imports: Record<string, string[]> = {};
@@ -894,6 +1121,7 @@ export class InternalFileGraph {
       imports,
       exports,
       ...(Object.keys(importDetails).length > 0 ? { importDetails } : {}),
+      ...(this.unresolvedEdges.length > 0 ? { unresolvedEdges: this.unresolvedEdges } : {}),
       stats: this.getStats()
     };
   }
@@ -906,6 +1134,7 @@ export class InternalFileGraph {
       imports?: Record<string, string[]>;
       exports?: Record<string, FileExport[]>;
       importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
+      unresolvedEdges?: UnresolvedImportEdge[];
     },
     rootPath: string
   ): InternalFileGraph {
@@ -943,6 +1172,11 @@ export class InternalFileGraph {
         }
       }
     }
+
+    graph.unresolvedEdges = (data.unresolvedEdges ?? []).map((edge) => ({
+      ...edge,
+      from: graph.normalizePath(edge.from)
+    }));
 
     return graph;
   }

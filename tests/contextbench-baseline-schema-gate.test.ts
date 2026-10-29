@@ -44,22 +44,13 @@ function childEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return { ...env, ...overrides };
 }
 
-function ignoreWindowsTempCleanupRace(error: unknown): void {
-  const code = (error as NodeJS.ErrnoException).code;
-  if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code ?? '')) throw error;
-}
-
 function cleanupSessionRoot(sessionRoot: string): void {
-  try {
-    rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-      recursive: true,
-      force: true,
-      maxRetries: 10,
-      retryDelay: 200
-    });
-  } catch (error) {
-    ignoreWindowsTempCleanupRace(error);
-  }
+  rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 200
+  });
 }
 
 function normalizeFilesystemPath(filePath: string): string {
@@ -815,14 +806,8 @@ describe('ContextBench Phase 40 schema gate', () => {
         expect.arrayContaining(['base_commit_mismatch', 'problem_statement_hash_mismatch'])
       );
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(missingSessionRoot)))), {
-        recursive: true,
-        force: true
-      });
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(wrongCommitSessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(missingSessionRoot);
+      cleanupSessionRoot(wrongCommitSessionRoot);
       rmSync(payloadDir, { recursive: true, force: true });
       rmSync(wrongCommitRepo, { recursive: true, force: true });
     }

@@ -27,6 +27,12 @@ vi.mock('../src/core/search.js', async () => {
     async search(query: string, limit: number, filters?: unknown, options?: unknown) {
       return searchMocks.search(query, limit, filters, options);
     }
+    async searchWithCoverage(query: string, limit: number, filters?: unknown, options?: unknown) {
+      return {
+        results: await this.search(query, limit, filters, options),
+        sourceCoverage: { status: 'current', checkedFiles: 0, skippedFiles: 0 }
+      };
+    }
   }
 
   return { CodebaseSearcher };
@@ -207,7 +213,7 @@ describe('index versioning migration (MIGR-01)', () => {
 
   afterEach(async () => {
     const { clearProjects } = await import('../src/project-state.js');
-    clearProjects();
+    await clearProjects();
 
     if (originalArgv) process.argv = originalArgv;
     if (originalEnvRoot === undefined) delete process.env.CODEBASE_ROOT;
@@ -425,7 +431,7 @@ describe('index-consuming allowlist enforcement', () => {
 
   afterEach(async () => {
     const { clearProjects } = await import('../src/project-state.js');
-    clearProjects();
+    await clearProjects();
 
     if (originalArgv) process.argv = originalArgv;
     if (originalEnvRoot === undefined) delete process.env.CODEBASE_ROOT;
@@ -481,7 +487,8 @@ describe('index-consuming allowlist enforcement', () => {
       }
     }));
 
-    vi.doMock('../src/core/index-meta.js', () => ({
+    vi.doMock('../src/core/index-meta.js', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../src/core/index-meta.js')>()),
       readIndexMeta,
       validateIndexArtifacts
     }));

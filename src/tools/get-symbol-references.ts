@@ -1,11 +1,12 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext, ToolResponse } from './types.js';
-import { findSymbolReferences } from '../core/symbol-references.js';
+import { findSymbolReferences, type SymbolReferencesResult } from '../core/symbol-references.js';
+import { IndexCorruptedError } from '../errors/index.js';
 
 export const definition: Tool = {
   name: 'get_symbol_references',
   description:
-    'Find concrete references to a symbol in indexed chunks. Returns total usageCount and top usage snippets.',
+    'Find current-source references across the files recorded by the last successful index. Returns observed usageCount, bounded snippets, parser confidence, and coverage.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -51,7 +52,29 @@ export async function handle(
     };
   }
 
-  const result = await findSymbolReferences(ctx.rootPath, normalizedSymbol, normalizedLimit);
+  let result: SymbolReferencesResult;
+  try {
+    result = await findSymbolReferences(ctx.rootPath, normalizedSymbol, normalizedLimit);
+  } catch (error) {
+    if (!(error instanceof IndexCorruptedError)) throw error;
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              status: 'error',
+              symbol: normalizedSymbol,
+              message: error.message
+            },
+            null,
+            2
+          )
+        }
+      ],
+      isError: true
+    };
+  }
 
   if (result.status === 'error') {
     return {
@@ -68,7 +91,8 @@ export async function handle(
             2
           )
         }
-      ]
+      ],
+      isError: true
     };
   }
 
@@ -83,7 +107,8 @@ export async function handle(
             usageCount: result.usageCount,
             usages: result.usages,
             confidence: result.confidence,
-            isComplete: result.isComplete
+            isComplete: result.isComplete,
+            coverage: result.coverage
           },
           null,
           2

@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "purpose": "General JavaScript and TypeScript source facts for structural ownership, bounded source witnesses, and source-versus-synthetic-context regressions. This is a human-checkable regression fixture, not a retrieval-ranking benchmark.",
+  "ownerChainDefinition": "Each sourceSymbols entry names the exact static lexical route in source from its outer named declaration/property through the executable leaf. Static string keys use their decoded key. For an unresolved dynamic computed key, the route may stop at the nearest established owner; scopeOnly marks that route as context and does not claim that owner declares the callback. Dynamic computed keys are omitted from the route and listed in unresolvedNames. bodyMarkers belong to that entry's implementation body; forbiddenSiblingBodyMarkers are source markers owned by another listed sibling.",
+  "cases": [
+    {
+      "id": "nested-object-static-owner-chain",
+      "language": "typescript",
+      "source": "const services = { billing: { reconcile: async (invoice: Invoice) => { return persistInvoice(invoice); } } };",
+      "sourceSymbols": [{ "ownerChain": ["services", "billing", "reconcile"], "bodyMarkers": ["persistInvoice(invoice)"] }]
+    },
+    {
+      "id": "same-leaf-name-under-distinct-owners",
+      "language": "javascript",
+      "source": "const billing = {\n  refresh: () => billingCache.reload()\n};\nconst catalog = {\n  refresh: () => catalogCache.reload()\n};",
+      "sourceSymbols": [
+        { "ownerChain": ["billing", "refresh"], "bodyMarkers": ["billingCache.reload()"], "forbiddenSiblingBodyMarkers": ["catalogCache.reload()"] },
+        { "ownerChain": ["catalog", "refresh"], "bodyMarkers": ["catalogCache.reload()"], "forbiddenSiblingBodyMarkers": ["billingCache.reload()"] }
+      ]
+    },
+    {
+      "id": "sibling-body-isolation",
+      "language": "typescript",
+      "source": "const jobs = {\n  export: { run: () => writeArchive() },\n  import: { run: () => readArchive() }\n};",
+      "sourceSymbols": [
+        { "ownerChain": ["jobs", "export", "run"], "bodyMarkers": ["writeArchive()"], "forbiddenSiblingBodyMarkers": ["readArchive()"] },
+        { "ownerChain": ["jobs", "import", "run"], "bodyMarkers": ["readArchive()"], "forbiddenSiblingBodyMarkers": ["writeArchive()"] }
+      ]
+    },
+    {
+      "id": "same-line-property-callback-bodies-stay-distinct",
+      "language": "javascript",
+      "source": "const operations = { archive: { run: () => writeArchiveFile() }, restore: { run: () => readArchiveFile() } };",
+      "sourceSymbols": [
+        { "ownerChain": ["operations", "archive", "run"], "bodyMarkers": ["writeArchiveFile()"], "forbiddenSiblingBodyMarkers": ["readArchiveFile()"] },
+        { "ownerChain": ["operations", "restore", "run"], "bodyMarkers": ["readArchiveFile()"], "forbiddenSiblingBodyMarkers": ["writeArchiveFile()"] }
+      ]
+    },
+    {
+      "id": "static-string-computed-property",
+      "language": "javascript",
+      "source": "const actions = { [\"sync-now\"]: () => syncRemote() };",
+      "sourceSymbols": [{ "ownerChain": ["actions", "sync-now"], "bodyMarkers": ["syncRemote()"] }],
+      "unresolvedNames": []
+    },
+    {
+      "id": "dynamic-computed-property-name-remains-unresolved",
+      "language": "typescript",
+      "source": "const actions = { [actionName]: () => runAction() };",
+      "sourceSymbols": [{ "ownerChain": ["actions"], "scopeOnly": true, "bodyMarkers": ["runAction()"] }],
+      "unresolvedNames": ["actions[actionName]"]
+    },
+    {
+      "id": "property-arrow-callback-body",
+      "language": "typescript",
+      "source": "const listeners = { onMessage: (message: Message) => { recordMessage(message); acknowledge(message.id); } };",
+      "sourceSymbols": [{ "ownerChain": ["listeners", "onMessage"], "bodyMarkers": ["recordMessage(message)", "acknowledge(message.id)"] }]
+    },
+    {
+      "id": "class-method-with-property-callback",
+      "language": "typescript",
+      "source": "class QueueWorker { start() { const hooks = { onReady: () => openQueue() }; return hooks; } }",
+      "sourceSymbols": [{ "ownerChain": ["QueueWorker", "start", "hooks", "onReady"], "bodyMarkers": ["openQueue()"] }]
+    },
+    {
+      "id": "class-method-sibling-isolation",
+      "language": "javascript",
+      "source": "class Cache {\n  load() { return readDisk(); }\n  save() { return writeDisk(); }\n}",
+      "sourceSymbols": [
+        { "ownerChain": ["Cache", "load"], "bodyMarkers": ["readDisk()"], "forbiddenSiblingBodyMarkers": ["writeDisk()"] },
+        { "ownerChain": ["Cache", "save"], "bodyMarkers": ["writeDisk()"], "forbiddenSiblingBodyMarkers": ["readDisk()"] }
+      ]
+    },
+    {
+      "id": "standalone-function-declaration",
+      "language": "typescript",
+      "source": "export function normalizeRecord(record: RecordInput): RecordOutput { return mapRecord(record); }",
+      "sourceSymbols": [{ "ownerChain": ["normalizeRecord"], "bodyMarkers": ["mapRecord(record)"] }]
+    },
+    {
+      "id": "standalone-function-expression",
+      "language": "javascript",
+      "source": "const calculateTotal = function (items) { return sumPrices(items); };",
+      "sourceSymbols": [{ "ownerChain": ["calculateTotal"], "bodyMarkers": ["sumPrices(items)"] }]
+    },
+    {
+      "id": "class-and-function-compatible-source-facts",
+      "language": "typescript",
+      "source": "class Ledger {\n  close() { flushEntries(); }\n}\nfunction openLedger() { return createLedger(); }",
+      "sourceSymbols": [
+        { "ownerChain": ["Ledger", "close"], "bodyMarkers": ["flushEntries()"] },
+        { "ownerChain": ["openLedger"], "bodyMarkers": ["createLedger()"] }
+      ]
+    },
+    {
+      "id": "nested-static-property-chain-three-levels",
+      "language": "javascript",
+      "source": "const app = { api: { reports: { build: () => assembleReport() } } };",
+      "sourceSymbols": [{ "ownerChain": ["app", "api", "reports", "build"], "bodyMarkers": ["assembleReport()"] }]
+    },
+    {
+      "id": "static-computed-key-inside-nested-owner",
+      "language": "typescript",
+      "source": "const routes = { admin: { [\"user-list\"]: () => fetchUsers() } };",
+      "sourceSymbols": [{ "ownerChain": ["routes", "admin", "user-list"], "bodyMarkers": ["fetchUsers()"] }],
+      "unresolvedNames": []
+    },
+    {
+      "id": "nested-container-retains-distinct-bounded-witness-markers",
+      "language": "javascript",
+      "source": "const pipeline = {\n  ingest: { run: () => { validateInput(); decodePayload(); persistPayload(); } },\n  report: { run: () => renderSummary() }\n};",
+      "sourceSymbols": [
+        { "ownerChain": ["pipeline", "ingest", "run"], "bodyMarkers": ["validateInput()", "decodePayload()", "persistPayload()"], "boundedWitnessMarkers": ["validateInput()", "persistPayload()"], "forbiddenSiblingBodyMarkers": ["renderSummary()"] },
+        { "ownerChain": ["pipeline", "report", "run"], "bodyMarkers": ["renderSummary()"], "boundedWitnessMarkers": ["renderSummary()"], "forbiddenSiblingBodyMarkers": ["validateInput()", "decodePayload()", "persistPayload()"] }
+      ]
+    },
+    {
+      "id": "method-body-has-interior-witness-and-sibling-control",
+      "language": "typescript",
+      "source": "class Importer {\n  importRows(rows: Row[]) {\n    beginImport();\n    const normalized = normalizeRows(rows);\n    const checked = checkRows(normalized);\n    const saved = saveRows(checked);\n    finishImport(saved);\n  }\n  exportRows() { return writeRows(); }\n}",
+      "sourceSymbols": [
+        { "ownerChain": ["Importer", "importRows"], "bodyMarkers": ["beginImport()", "normalizeRows(rows)", "checkRows(normalized)", "saveRows(checked)", "finishImport(saved)"], "boundedWitnessMarkers": ["beginImport()", "checkRows(normalized)", "finishImport(saved)"], "forbiddenSiblingBodyMarkers": ["writeRows()"] },
+        { "ownerChain": ["Importer", "exportRows"], "bodyMarkers": ["writeRows()"], "boundedWitnessMarkers": ["writeRows()"], "forbiddenSiblingBodyMarkers": ["beginImport()", "normalizeRows(rows)", "checkRows(normalized)", "saveRows(checked)", "finishImport(saved)"] }
+      ]
+    },
+    {
+      "id": "same-method-name-in-separate-classes",
+      "language": "typescript",
+      "source": "class LocalStore {\n  clear() { clearLocalFiles(); }\n}\nclass RemoteStore {\n  clear() { clearRemoteFiles(); }\n}",
+      "sourceSymbols": [
+        { "ownerChain": ["LocalStore", "clear"], "bodyMarkers": ["clearLocalFiles()"], "forbiddenSiblingBodyMarkers": ["clearRemoteFiles()"] },
+        { "ownerChain": ["RemoteStore", "clear"], "bodyMarkers": ["clearRemoteFiles()"], "forbiddenSiblingBodyMarkers": ["clearLocalFiles()"] }
+      ]
+    },
+    {
+      "id": "type-declaration-is-not-function-body",
+      "language": "typescript",
+      "source": "type RowMapper = (row: Row) => MappedRow;\nfunction mapRow(row: Row): MappedRow { return convertRow(row); }",
+      "sourceSymbols": [{ "ownerChain": ["mapRow"], "bodyMarkers": ["convertRow(row)"] }],
+      "supportingOnlyMarkers": ["type RowMapper = (row: Row) => MappedRow"]
+    },
+    {
+      "id": "test-companion-midchunk-line-is-supporting-context",
+      "language": "typescript",
+      "source": "describe(\"invoice parser\", () => {\n  it(\"keeps the account id\", () => {\n    const parsed = parseInvoice(fixture);\n    expect(parsed.accountId).toBe(\"acct-7\");\n  });\n});",
+      "sourceSymbols": [],
+      "supportingOnlyMarkers": ["expect(parsed.accountId).toBe(\"acct-7\")"]
+    },
+    {
+      "id": "declaration-companion-midchunk-line-is-supporting-context",
+      "language": "typescript",
+      "source": "export interface InvoiceParser {\n  parse(source: string): Invoice;\n}\nexport function parseInvoice(source: string): Invoice { return decodeInvoice(source); }",
+      "sourceSymbols": [{ "ownerChain": ["parseInvoice"], "bodyMarkers": ["decodeInvoice(source)"] }],
+      "supportingOnlyMarkers": ["parse(source: string): Invoice"]
+    },
+    {
+      "id": "scope-label-text-is-not-source-body-evidence",
+      "language": "javascript",
+      "source": "const workers = {\n  email: { send: () => deliverEmail() },\n  sms: { send: () => deliverText() }\n};",
+      "sourceSymbols": [
+        { "ownerChain": ["workers", "email", "send"], "bodyMarkers": ["deliverEmail()"], "forbiddenSiblingBodyMarkers": ["deliverText()"] },
+        { "ownerChain": ["workers", "sms", "send"], "bodyMarkers": ["deliverText()"], "forbiddenSiblingBodyMarkers": ["deliverEmail()"] }
+      ],
+      "syntheticLabelsAbsentFromSource": ["workers > email > send", "workers > sms > send"]
+    },
+    {
+      "id": "overlapping-name-words-do-not-cross-attribute-sibling-body",
+      "language": "typescript",
+      "source": "const tasks = {\n  syncUsers: { run: () => uploadUsers() },\n  syncTeams: { run: () => uploadTeams() }\n};",
+      "sourceSymbols": [
+        { "ownerChain": ["tasks", "syncUsers", "run"], "bodyMarkers": ["uploadUsers()"], "forbiddenSiblingBodyMarkers": ["uploadTeams()"] },
+        { "ownerChain": ["tasks", "syncTeams", "run"], "bodyMarkers": ["uploadTeams()"], "forbiddenSiblingBodyMarkers": ["uploadUsers()"] }
+      ]
+    }
+  ]
+}

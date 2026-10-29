@@ -82,12 +82,14 @@ function printUsage(): void {
   console.log('         [--limit <n>] [--lang <l>] [--framework <f>] [--layer <l>]');
   console.log('  metadata                           Project structure, frameworks, deps');
   console.log('  status                             Index state and progress');
-  console.log('  reindex [--incremental] [--reason <r>]  Re-index the codebase');
+  console.log('  reindex [--incremental] [--embeddings|--no-embeddings]  Re-index the codebase');
   console.log('  style-guide [--query <q>] [--category <c>]  Style guide rules');
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
-  console.log('  init                               Interactive setup wizard for AI clients');
+  console.log(
+    '  init [--client <name>] [--yes]     Set up a native client (init --help for options)'
+  );
   console.log('  map [--json] [--pretty]              Conventions map');
   console.log('');
   console.log('Global flags:');
@@ -129,7 +131,11 @@ async function initToolContext(): Promise<ToolContext> {
     status: indexExists ? 'ready' : 'idle'
   };
 
-  const performIndexing = async (incrementalOnly?: boolean, reason?: string): Promise<void> => {
+  const performIndexing = async (
+    incrementalOnly?: boolean,
+    reason?: string,
+    skipEmbedding?: boolean
+  ): Promise<void> => {
     indexState.status = 'indexing';
     const mode = incrementalOnly ? 'incremental' : 'full';
     console.error(`Indexing (${mode})${reason ? ` — ${reason}` : ''}: ${rootPath}`);
@@ -138,7 +144,12 @@ async function initToolContext(): Promise<ToolContext> {
       let lastLoggedProgress = { phase: '', percentage: -1 };
       const indexer = new CodebaseIndexer({
         rootPath,
-        ...(projectConfig?.parsing ? { config: { parsing: projectConfig.parsing } } : {}),
+        config: {
+          ...(projectConfig?.parsing ? { parsing: projectConfig.parsing } : {}),
+          ...((skipEmbedding ?? projectConfig?.skipEmbedding) !== undefined
+            ? { skipEmbedding: skipEmbedding ?? projectConfig?.skipEmbedding }
+            : {})
+        },
         incrementalOnly,
         onProgress: (progress) => {
           const shouldLog =
@@ -167,6 +178,7 @@ async function initToolContext(): Promise<ToolContext> {
       indexState.status = 'error';
       indexState.error = error instanceof Error ? error.message : String(error);
       console.error('Indexing failed:', indexState.error);
+      throw error;
     }
   };
 
@@ -282,6 +294,11 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
     return handleMapCli(argv.slice(1));
   }
 
+  if (argv.slice(1).includes('--help')) {
+    printUsage();
+    return;
+  }
+
   const useJson = argv.includes('--json');
 
   const flags = parseFlags(argv);
@@ -359,10 +376,23 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
       break;
     }
     case 'reindex': {
-      const usage = 'codebase-context reindex [--incremental] [--reason <r>]';
+      const usage =
+        'codebase-context reindex [--incremental] [--reason <r>] [--embeddings|--no-embeddings]';
       const reason = optionalStringFlag(flags, 'reason', usage);
       const incremental = booleanFlag(flags, 'incremental', usage);
-      await ctx.performIndexing(incremental, reason);
+      if ('embeddings' in flags && 'no-embeddings' in flags) {
+        exitWithError(
+          `Error: --embeddings and --no-embeddings are mutually exclusive\nUsage: ${usage}`
+        );
+      }
+      for (const modeFlag of ['embeddings', 'no-embeddings']) {
+        if (modeFlag in flags && flags[modeFlag] !== true) {
+          exitWithError(`Error: --${modeFlag} takes no value\nUsage: ${usage}`);
+        }
+      }
+      const skipEmbedding =
+        'no-embeddings' in flags ? true : 'embeddings' in flags ? false : undefined;
+      await ctx.performIndexing(incremental, reason, skipEmbedding);
       const statusResult = await dispatchTool('get_indexing_status', {}, ctx);
       formatJson(extractText(statusResult), useJson, 'status', ctx.rootPath);
       return;

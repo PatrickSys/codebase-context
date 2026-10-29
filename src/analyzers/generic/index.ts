@@ -8,6 +8,7 @@ import path from 'path';
 import type { TSESTree } from '@typescript-eslint/typescript-estree';
 import {
   FrameworkAnalyzer,
+  AnalysisOptions,
   AnalysisResult,
   CodebaseMetadata,
   CodeChunk,
@@ -99,7 +100,11 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     return this.supportedExtensions.includes(ext);
   }
 
-  async analyze(filePath: string, content: string): Promise<AnalysisResult> {
+  async analyze(
+    filePath: string,
+    content: string,
+    options?: AnalysisOptions
+  ): Promise<AnalysisResult> {
     const language = detectLanguage(filePath);
     const relativePath = path.relative(process.cwd(), filePath);
 
@@ -173,7 +178,8 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
           filePath,
           language,
           framework: 'generic',
-          componentType: 'module'
+          componentType: 'module',
+          includeScopePrefix: options?.includeScopePrefix
         });
         // Enrich AST chunks with the correct relativePath
         for (const chunk of chunks) {
@@ -362,7 +368,9 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
               if (s.type === 'ImportDefaultSpecifier') return 'default';
               if (s.type === 'ImportNamespaceSpecifier') return '*';
               const specifier = s as TSESTree.ImportSpecifier;
-              return specifier.imported.name || specifier.local.name;
+              return specifier.imported.type === 'Identifier'
+                ? specifier.imported.name
+                : specifier.imported.value;
             }),
             isDefault: node.specifiers.some(
               (s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'
@@ -440,7 +448,8 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
             for (const spec of node.specifiers) {
               if (spec.type === 'ExportSpecifier') {
                 exports.push({
-                  name: spec.exported.name,
+                  name:
+                    spec.exported.type === 'Identifier' ? spec.exported.name : spec.exported.value,
                   isDefault: false,
                   type: 'named'
                 });

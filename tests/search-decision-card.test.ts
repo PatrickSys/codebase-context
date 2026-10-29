@@ -263,7 +263,7 @@ export class ProfileService {
     }
   }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
-  it('intent="explore" returns lightweight preflight', async () => {
+  it('intent="explore" omits edit readiness', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
     const { server } = await import('../src/index.js');
@@ -284,14 +284,7 @@ export class ProfileService {
 
     const content = response.content[0];
     const parsed = JSON.parse(content.text) as SearchToolPayload;
-    const preflight = parsed.preflight;
-
-    // For explore intent, preflight should be lite: { ready, reason? }
-    if (preflight) {
-      expect(preflight.ready).toBeDefined();
-      expect(typeof preflight.ready).toBe('boolean');
-      // Should NOT have full decision card fields for explore
-    }
+    expect(parsed.preflight).toBeUndefined();
   }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
   it('includes snippet field when includeSnippets=true', async () => {

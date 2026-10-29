@@ -5,7 +5,7 @@
  * Provides codebase indexing and semantic search capabilities
  */
 
-import { promises as fs } from 'fs';
+import { promises as fs, realpathSync } from 'fs';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -47,6 +47,7 @@ import {
 } from './utils/project-discovery.js';
 import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
 import { TOOLS, dispatchTool, type ToolContext, type ToolResponse } from './tools/index.js';
+import { finalizeRelationshipPayload } from './tools/get-code-relationships.js';
 import { finalizeSearchPayloadText } from './tools/search-payload-budget.js';
 import type { ProjectDescriptor, ToolPaths } from './tools/types.js';
 import {
@@ -57,6 +58,8 @@ import {
   makeLegacyPaths,
   normalizeRootKey,
   removeProject,
+  stopProjectWatcher,
+  stopAllProjectWatchers,
   type ProjectRuntimeOverrides,
   type ProjectState
 } from './project-state.js';
@@ -81,7 +84,7 @@ let mcpRuntimeReady = false;
 let mcpRuntimePromise: Promise<void> | undefined;
 
 // Flags that are NOT project paths — skip them when resolving the bootstrap root.
-const KNOWN_FLAGS = new Set(['--http', '--port', '--help']);
+const KNOWN_FLAGS = new Set(['--http', '--port', '--help', '--embeddings', '--no-embeddings']);
 const CLI_SUBCOMMANDS = [
   'memory',
   'search',
@@ -97,15 +100,40 @@ const CLI_SUBCOMMANDS = [
   'help'
 ];
 
-// Check if this module is the entry point.
+function canonicalEntrypointPath(filePath: string | undefined): string | undefined {
+  if (!filePath) return undefined;
+  try {
+    const canonicalPath = path.normalize(realpathSync(filePath));
+    return process.platform === 'win32' ? canonicalPath.toLowerCase() : canonicalPath;
+  } catch {
+    return undefined;
+  }
+}
+
+// Resolve symlink launchers while keeping imports and unrelated index files inert.
+const moduleEntrypointPath = canonicalEntrypointPath(fileURLToPath(import.meta.url));
+const processEntrypointPath = canonicalEntrypointPath(process.argv[1]);
 const isDirectRun =
-  process.argv[1]?.replace(/\\/g, '/').endsWith('index.js') ||
-  process.argv[1]?.replace(/\\/g, '/').endsWith('index.ts');
+  moduleEntrypointPath !== undefined && moduleEntrypointPath === processEntrypointPath;
 const directSubcommand = process.argv[2];
 const isDirectCliSubcommand =
   isDirectRun &&
   typeof directSubcommand === 'string' &&
   (CLI_SUBCOMMANDS.includes(directSubcommand) || directSubcommand === '--help');
+
+if (
+  !isDirectCliSubcommand &&
+  process.argv.includes('--embeddings') &&
+  process.argv.includes('--no-embeddings')
+) {
+  console.error('Choose either --embeddings or --no-embeddings, not both.');
+  process.exit(1);
+}
+const bootstrapSkipEmbedding = process.argv.includes('--no-embeddings')
+  ? true
+  : process.argv.includes('--embeddings')
+    ? false
+    : undefined;
 
 // Resolve optional bootstrap root with validation handled later in main().
 function resolveRootPath(): string | undefined {
@@ -159,9 +187,7 @@ const stdioIdleTimeoutEnv = Number.parseInt(
   10
 );
 const STDIO_IDLE_TIMEOUT_MS =
-  Number.isFinite(stdioIdleTimeoutEnv) && stdioIdleTimeoutEnv >= 0
-    ? stdioIdleTimeoutEnv
-    : 10 * 60 * 1000;
+  Number.isFinite(stdioIdleTimeoutEnv) && stdioIdleTimeoutEnv >= 0 ? stdioIdleTimeoutEnv : 0;
 let noteSessionActivity: () => void = () => undefined;
 let beginTrackedSessionWork: () => void = () => undefined;
 let endTrackedSessionWork: () => void = () => undefined;
@@ -212,7 +238,14 @@ type ProjectResolution =
   | { ok: true; project: ProjectState }
   | { ok: false; response: ToolResponse };
 
-function finalizeJsonTextPayload(payload: Record<string, unknown>): string {
+export function finalizeJsonTextPayload(
+  payload: Record<string, unknown>,
+  relationshipResponse = false
+): string {
+  if (relationshipResponse) {
+    return finalizeRelationshipPayload(payload);
+  }
+
   const mode =
     typeof payload.budget === 'object' &&
     payload.budget !== null &&
@@ -435,7 +468,10 @@ function setActiveProject(rootPath: string): void {
   rememberProjectPath(resolvedRootPath);
 }
 
-function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>): void {
+async function syncKnownRoots(
+  rootEntries: Array<{ rootPath: string; label?: string }>
+): Promise<void> {
+  const watcherClosures: Promise<void>[] = [];
   const nextRoots = new Map<string, { rootPath: string; label?: string }>();
   const normalizedRoots =
     rootEntries.length > 0 ? rootEntries : primaryRootPath ? [{ rootPath: primaryRootPath }] : [];
@@ -457,7 +493,7 @@ function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>
 
   for (const [rootKey, existingRoot] of knownRoots.entries()) {
     if (!nextRoots.has(rootKey)) {
-      removeProject(existingRoot.rootPath);
+      watcherClosures.push(removeProject(existingRoot.rootPath));
       forgetProjectPath(existingRoot.rootPath);
     }
   }
@@ -467,7 +503,7 @@ function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>
       isPathWithin(knownRoot.rootPath, project.rootPath)
     );
     if (!stillAllowed) {
-      removeProject(project.rootPath);
+      watcherClosures.push(removeProject(project.rootPath));
       forgetProjectPath(project.rootPath);
     }
   }
@@ -484,6 +520,7 @@ function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>
       activeProjectKey = undefined;
     }
   }
+  await Promise.all(watcherClosures);
 }
 
 function parseProjectSelector(value: unknown): string | undefined {
@@ -623,7 +660,8 @@ function createToolContext(project: ProjectState): ToolContext {
     paths: project.paths,
     rootPath: project.rootPath,
     project: buildProjectDescriptor(project.rootPath),
-    performIndexing: (incrementalOnly?: boolean) => performIndexing(project, incrementalOnly),
+    performIndexing: (incrementalOnly, _reason, skipEmbedding) =>
+      performIndexing(project, incrementalOnly, skipEmbedding),
     listProjects: () => listProjectDescriptors(),
     getActiveProject: () => getActiveProjectDescriptor()
   };
@@ -648,6 +686,7 @@ if (primaryRootPath) {
 export const INDEX_CONSUMING_TOOL_NAMES = [
   'search_codebase',
   'get_symbol_references',
+  'get_code_relationships',
   'detect_circular_dependencies',
   'get_team_patterns',
   'get_codebase_metadata',
@@ -667,12 +706,28 @@ export type IndexSignal = {
   reason?: string;
 };
 
-async function requireValidIndex(rootPath: string, paths: ToolPaths): Promise<IndexSignal> {
-  const meta = await readIndexMeta(rootPath);
-  await validateIndexArtifacts(rootPath, meta);
+async function requireValidIndex(project: ProjectState): Promise<IndexSignal> {
+  const meta = await readIndexMeta(project.rootPath);
+  await validateIndexArtifacts(project.rootPath, meta);
+
+  const requestedSkipEmbedding = project.runtimeOverrides.skipEmbedding ?? bootstrapSkipEmbedding;
+  if (
+    requestedSkipEmbedding !== undefined &&
+    (meta.artifacts.vectorDb.embeddingEnabled ?? true) !== !requestedSkipEmbedding
+  ) {
+    const reason = `Index embedding mode differs from explicit configuration; rebuilding ${project.rootPath}`;
+    console.error(`[Index] ${reason}`);
+    void performIndexing(project);
+    return {
+      status: 'indexing',
+      confidence: 'low',
+      action: 'rebuild-started',
+      reason
+    };
+  }
 
   // Optional artifact presence informs confidence.
-  const hasIntelligence = await fileExists(paths.intelligence);
+  const hasIntelligence = await fileExists(project.paths.intelligence);
 
   return {
     status: 'ready',
@@ -693,7 +748,7 @@ async function ensureValidIndexOrAutoHeal(project: ProjectState): Promise<IndexS
   }
 
   try {
-    return await requireValidIndex(project.rootPath, project.paths);
+    return await requireValidIndex(project);
   } catch (error) {
     if (error instanceof IndexCorruptedError) {
       const reason = error.message;
@@ -1090,11 +1145,14 @@ export function registerHandlers(target: Server): void {
             const parsed = JSON.parse(result.content[0].text);
             result.content[0] = {
               type: 'text',
-              text: finalizeJsonTextPayload({
-                ...parsed,
-                index: indexSignal,
-                project: buildProjectDescriptor(project.rootPath)
-              })
+              text: finalizeJsonTextPayload(
+                {
+                  ...parsed,
+                  index: indexSignal,
+                  project: buildProjectDescriptor(project.rootPath)
+                },
+                name === 'get_code_relationships'
+              )
             };
           } catch {
             /* response wasn't JSON, skip injection */
@@ -1104,10 +1162,13 @@ export function registerHandlers(target: Server): void {
             const parsed = JSON.parse(result.content[0].text);
             result.content[0] = {
               type: 'text',
-              text: finalizeJsonTextPayload({
-                ...parsed,
-                project: buildProjectDescriptor(project.rootPath)
-              })
+              text: finalizeJsonTextPayload(
+                {
+                  ...parsed,
+                  project: buildProjectDescriptor(project.rootPath)
+                },
+                name === 'get_code_relationships'
+              )
             };
           } catch {
             /* response wasn't JSON, skip injection */
@@ -1253,21 +1314,19 @@ async function performIndexingOnce(
     let lastLoggedProgress = { phase: '', percentage: -1 };
     const indexer = new CodebaseIndexer({
       rootPath: project.rootPath,
-      ...(project.runtimeOverrides.extraExcludePatterns?.length
-        ? {
-            config: {
-              exclude: [
-                ...EXCLUDED_GLOB_PATTERNS,
-                ...project.runtimeOverrides.extraExcludePatterns
-              ],
-              ...(project.runtimeOverrides.maxChunks
-                ? { parsing: { maxChunks: project.runtimeOverrides.maxChunks } }
-                : {})
+      config: {
+        ...(project.runtimeOverrides.extraExcludePatterns?.length
+          ? {
+              exclude: [...EXCLUDED_GLOB_PATTERNS, ...project.runtimeOverrides.extraExcludePatterns]
             }
-          }
-        : project.runtimeOverrides.maxChunks
-          ? { config: { parsing: { maxChunks: project.runtimeOverrides.maxChunks } } }
           : {}),
+        ...(project.runtimeOverrides.maxChunks
+          ? { parsing: { maxChunks: project.runtimeOverrides.maxChunks } }
+          : {}),
+        ...((project.runtimeOverrides.skipEmbedding ?? bootstrapSkipEmbedding) !== undefined
+          ? { skipEmbedding: project.runtimeOverrides.skipEmbedding ?? bootstrapSkipEmbedding }
+          : {})
+      },
       ...(project.runtimeOverrides.preferredAnalyzer ||
       project.runtimeOverrides.extraSourceExtensions?.length
         ? {
@@ -1322,10 +1381,24 @@ async function performIndexingOnce(
   }
 }
 
-async function performIndexing(project: ProjectState, incrementalOnly?: boolean): Promise<void> {
+async function performIndexing(
+  project: ProjectState,
+  incrementalOnly?: boolean,
+  skipEmbedding?: boolean
+): Promise<void> {
+  const previousSkipEmbedding = project.runtimeOverrides.skipEmbedding;
+  if (skipEmbedding !== undefined) project.runtimeOverrides.skipEmbedding = skipEmbedding;
   let nextMode = incrementalOnly;
   for (;;) {
     await performIndexingOnce(project, nextMode);
+
+    if (project.indexState.status === 'error' && skipEmbedding !== undefined) {
+      if (previousSkipEmbedding === undefined) {
+        delete project.runtimeOverrides.skipEmbedding;
+      } else {
+        project.runtimeOverrides.skipEmbedding = previousSkipEmbedding;
+      }
+    }
 
     const shouldRunQueuedRefresh = project.autoRefresh.consumeQueuedRefresh(
       project.indexState.status
@@ -1402,10 +1475,10 @@ async function refreshKnownRootsFromClient(): Promise<void> {
     );
 
     clientRootsEnabled = fileRoots.length > 0;
-    syncKnownRoots(fileRoots);
+    await syncKnownRoots(fileRoots);
   } catch {
     clientRootsEnabled = false;
-    syncKnownRoots(primaryRootPath ? [{ rootPath: primaryRootPath }] : []);
+    await syncKnownRoots(primaryRootPath ? [{ rootPath: primaryRootPath }] : []);
   }
 
   await refreshDiscoveredProjectsForKnownRoots();
@@ -1560,10 +1633,18 @@ async function ensureProjectInitialized(project: ProjectState): Promise<void> {
   await project.initPromise;
 }
 
-function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
+async function ensureProjectWatcher(project: ProjectState, debounceMs: number): Promise<void> {
   if (project.stopWatcher) {
     touchProject(project.rootPath);
     return;
+  }
+
+  if (project.watcherClosePromise) {
+    await project.watcherClosePromise;
+    if (project.stopWatcher) {
+      touchProject(project.rootPath);
+      return;
+    }
   }
 
   project.stopWatcher = startFileWatcher({
@@ -1607,8 +1688,7 @@ function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
 
   const projectToEvict = evictionCandidates[0];
   if (projectToEvict?.stopWatcher) {
-    projectToEvict.stopWatcher();
-    delete projectToEvict.stopWatcher;
+    await stopProjectWatcher(projectToEvict);
   }
 }
 
@@ -1623,7 +1703,7 @@ async function initProject(
   touchProject(project.rootPath);
 
   if (options.enableWatcher) {
-    ensureProjectWatcher(project, debounceMs);
+    await ensureProjectWatcher(project, debounceMs);
   }
 }
 
@@ -1646,6 +1726,10 @@ function normalizeRuntimeExtensions(extensions?: string[]): string[] | undefined
 
 function buildProjectRuntimeOverrides(projectConfig: ProjectConfig): ProjectRuntimeOverrides {
   const runtimeOverrides: ProjectRuntimeOverrides = {};
+
+  if ((bootstrapSkipEmbedding ?? projectConfig.skipEmbedding) !== undefined) {
+    runtimeOverrides.skipEmbedding = bootstrapSkipEmbedding ?? projectConfig.skipEmbedding;
+  }
 
   if (projectConfig.excludePatterns?.length) {
     runtimeOverrides.extraExcludePatterns = [...projectConfig.excludePatterns];
@@ -1759,12 +1843,6 @@ async function main() {
 
   // ── Cleanup guards (normal MCP lifecycle) ──────────────────────────────────
   let shuttingDown = false;
-  const stopAllWatchers = () => {
-    for (const project of getAllProjects()) {
-      project.stopWatcher?.();
-    }
-  };
-
   let idleTimer: NodeJS.Timeout | undefined;
   let activeSessionWork = 0;
   let mcpClientInitialized = false;
@@ -1782,8 +1860,13 @@ async function main() {
     }
     shuttingDown = true;
     clearIdleTimer();
-    stopAllWatchers();
-    process.exit(code);
+    void stopAllProjectWatchers().then(
+      () => process.exit(code),
+      (error: unknown) => {
+        console.error('[file-watcher] Shutdown cleanup failed:', error);
+        process.exit(code);
+      }
+    );
   };
 
   const scheduleIdleShutdown = () => {
@@ -1817,7 +1900,11 @@ async function main() {
     scheduleIdleShutdown();
   };
 
-  process.once('exit', stopAllWatchers);
+  process.once('exit', () => {
+    void stopAllProjectWatchers().catch((error: unknown) => {
+      console.error('[file-watcher] Exit cleanup failed:', error);
+    });
+  });
   process.once('SIGINT', () => {
     shutdown(0);
   });
@@ -1950,22 +2037,32 @@ async function startHttp(explicitPort?: number): Promise<void> {
   });
 
   // Register cleanup — no parent death guard or stdin listeners in HTTP mode
-  const stopAllWatchers = () => {
-    for (const project of getAllProjects()) {
-      project.stopWatcher?.();
-    }
-  };
-
   const shutdown = async () => {
     console.error('[HTTP] Shutting down...');
-    stopAllWatchers();
+    await stopAllProjectWatchers();
     await handle.close();
     process.exit(0);
   };
 
-  process.once('SIGINT', () => void shutdown());
-  process.once('SIGTERM', () => void shutdown());
-  process.once('exit', stopAllWatchers);
+  process.once(
+    'SIGINT',
+    () =>
+      void shutdown().catch((error: unknown) => {
+        console.error('[HTTP] Shutdown failed:', error);
+      })
+  );
+  process.once(
+    'SIGTERM',
+    () =>
+      void shutdown().catch((error: unknown) => {
+        console.error('[HTTP] Shutdown failed:', error);
+      })
+  );
+  process.once('exit', () => {
+    void stopAllProjectWatchers().catch((error: unknown) => {
+      console.error('[file-watcher] Exit cleanup failed:', error);
+    });
+  });
 
   // If a bootstrap root was provided, auto-init it
   if (primaryRootPath) {

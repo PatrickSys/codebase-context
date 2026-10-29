@@ -116,6 +116,7 @@ export interface ReviewSearchResult {
   sourceFiles: string[];
   searchQuality?: SearchQuality;
   preflight?: SearchResponse['preflight'];
+  sourceCoverage?: SearchResponse['sourceCoverage'];
   results: ReviewRelatedResult[];
   error?: string;
 }
@@ -398,8 +399,12 @@ export async function buildReviewContextPacket(
         sourceFiles: reviewQuery.sourceFiles,
         searchQuality: response.searchQuality,
         ...(response.preflight ? { preflight: response.preflight } : {}),
+        ...(response.sourceCoverage ? { sourceCoverage: response.sourceCoverage } : {}),
         results: response.results.slice(0, maxResultsPerQuery).map(compactSearchResult)
       });
+      if (response.sourceCoverage && response.sourceCoverage.status !== 'current') {
+        warnings.push(`Search source coverage is incomplete for query: ${reviewQuery.query}`);
+      }
     } catch (error) {
       searches.push({
         query: reviewQuery.query,

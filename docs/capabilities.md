@@ -20,6 +20,7 @@ Config-registered project roots (from `~/.codebase-context/config.json`) are loa
 Per-project config overrides supported today:
 
 - `projects[].excludePatterns`: merged with the built-in exclusion set for that project at index time
+- `projects[].includeExcluded`: root-relative source globs explicitly restored through built-in exclusions, `excludePatterns` and Git ignores (for example, `[".agents/tools/**/*.ts"]`). Normal `include` patterns narrow the scan and cannot override exclusions. Binary/unsupported files, files over the size limit and paths outside the project remain excluded.
 - `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
 - `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
 - `projects[].parsing.maxChunks`: sets the maximum number of searchable chunks indexed for that project (requires 2.4.0, not yet published)
@@ -261,6 +262,12 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 - Surface locations: `search_codebase` results (as `relatedMemories`), `get_team_patterns` responses, preflight analysis
 
 ## Indexing
+
+Inside a Git worktree, indexing uses `git ls-files -co --exclude-standard`: tracked files and untracked files that are not ignored remain eligible, including nested `.gitignore`, `.git/info/exclude` and Git's global excludes. Tracked files stay eligible even if a later ignore rule matches them. Outside Git (or without Git installed), the existing root `.gitignore` behavior remains. Library callers can set `respectGitignore: false` to disable Git filtering.
+
+The index additionally skips `out`, `.work`, `.agents`, `.codex`, `.cursor`, `.github/agents`, lockfiles (`*.lock`, `*.lockb`, `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `packages.lock.json`), minified JavaScript/CSS and source maps. These new filters apply only to indexing, preserving file-watcher and project-discovery behavior. This lets watchers observe explicitly restored source in those directories. Previously excluded directories such as `coverage` still require a manual `reindex` after edits when opted in.
+
+To index selected excluded source, add `"includeExcluded": [".agents/tools/**/*.ts"]` to that project's entry in `~/.codebase-context/config.json` (with its absolute `root`). Both MCP indexing and CLI `reindex` use it. Library callers pass the same array as `config.includeExcluded` to `CodebaseIndexer`. Use narrow globs: these files become searchable even when Git ignores them. Run a full `reindex` after changing selection settings to remove previously indexed junk.
 
 - Initial: full scan → chunking (50 lines, 0 overlap) → embedding → vector DB (LanceDB) + keyword index (Fuse.js)
 - Incremental: SHA-256 manifest diffing, selective embed/delete, full intelligence regeneration

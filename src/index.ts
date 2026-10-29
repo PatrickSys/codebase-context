@@ -1253,21 +1253,19 @@ async function performIndexingOnce(
     let lastLoggedProgress = { phase: '', percentage: -1 };
     const indexer = new CodebaseIndexer({
       rootPath: project.rootPath,
-      ...(project.runtimeOverrides.extraExcludePatterns?.length
-        ? {
-            config: {
-              exclude: [
-                ...EXCLUDED_GLOB_PATTERNS,
-                ...project.runtimeOverrides.extraExcludePatterns
-              ],
-              ...(project.runtimeOverrides.maxChunks
-                ? { parsing: { maxChunks: project.runtimeOverrides.maxChunks } }
-                : {})
+      config: {
+        ...(project.runtimeOverrides.extraExcludePatterns?.length
+          ? {
+              exclude: [...EXCLUDED_GLOB_PATTERNS, ...project.runtimeOverrides.extraExcludePatterns]
             }
-          }
-        : project.runtimeOverrides.maxChunks
-          ? { config: { parsing: { maxChunks: project.runtimeOverrides.maxChunks } } }
           : {}),
+        ...(project.runtimeOverrides.includeExcluded?.length
+          ? { includeExcluded: project.runtimeOverrides.includeExcluded }
+          : {}),
+        ...(project.runtimeOverrides.maxChunks
+          ? { parsing: { maxChunks: project.runtimeOverrides.maxChunks } }
+          : {})
+      },
       ...(project.runtimeOverrides.preferredAnalyzer ||
       project.runtimeOverrides.extraSourceExtensions?.length
         ? {
@@ -1649,6 +1647,9 @@ function buildProjectRuntimeOverrides(projectConfig: ProjectConfig): ProjectRunt
 
   if (projectConfig.excludePatterns?.length) {
     runtimeOverrides.extraExcludePatterns = [...projectConfig.excludePatterns];
+  }
+  if (projectConfig.includeExcluded?.length) {
+    runtimeOverrides.includeExcluded = [...projectConfig.includeExcluded];
   }
 
   if (projectConfig.parsing?.maxChunks) {

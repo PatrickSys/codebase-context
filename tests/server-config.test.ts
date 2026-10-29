@@ -114,7 +114,11 @@ describe('loadServerConfig', () => {
     const projB = path.join(os.tmpdir(), 'ccc-test-proj-b');
     const config = JSON.stringify({
       projects: [
-        { root: projA, excludePatterns: ['**/dist/**'] },
+        {
+          root: projA,
+          excludePatterns: ['**/dist/**'],
+          includeExcluded: [' .agents/source.ts ', '', 17]
+        },
         { root: projB }
       ],
       server: { port: 5199, host: '0.0.0.0' }
@@ -126,6 +130,7 @@ describe('loadServerConfig', () => {
       expect(result!.projects).toHaveLength(2);
       expect(result!.projects![0].root).toBe(path.resolve(projA));
       expect(result!.projects![0].excludePatterns).toEqual(['**/dist/**']);
+      expect(result!.projects![0].includeExcluded).toEqual(['.agents/source.ts']);
       expect(result!.projects![1].root).toBe(path.resolve(projB));
       expect(result!.server?.port).toBe(5199);
       expect(result!.server?.host).toBe('0.0.0.0');

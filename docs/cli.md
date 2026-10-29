@@ -36,7 +36,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 
 ## Commands
 
-- `map` — conventions map: architecture layers, patterns, golden files
+- `map` — conventions map: architecture layers, patterns, golden files. Builds a file index first when the project does not have one, so a fresh checkout does not report 0 files
 - `metadata` — tech stack overview
 - `patterns` — team conventions + adoption/trends
 - `search --query <q>` — ranked results; add `--intent edit` for a preflight card
@@ -46,13 +46,14 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
-- MCP client registration — use the recipes in the [client setup guide](./client-setup.md); `init` is an interactive HTTP setup wizard with the limitations described there
+- MCP client registration — `init` detects Claude Code, Codex, Cursor, and OpenCode and configures the selected tools together. See the [client setup guide](./client-setup.md). Codex setup line: `codex mcp add codebase-context -- npx -y codebase-context`
+- `--version` — print the installed package version
 
 ---
 
 ## First use
 
-Run these CLI commands from the project root. Build or refresh the local index first; the first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Then inspect the conventions map and search for the code you need:
+Run these CLI commands from the project root. `map` indexes the project files when no index exists yet. `reindex` builds or refreshes the full index, including local embeddings; the first embedding run downloads a local model. Time depends on repository size, CPU and model.
 
 ```bash
 npx -y codebase-context reindex
@@ -69,7 +70,7 @@ npx -y codebase-context reindex
 npx -y codebase-context map
 ```
 
-The conventions map - run this first on an unfamiliar repo. It shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example.
+The conventions map - run this first on an unfamiliar repo. If the project has no index, `map` builds the file index before it prints, so the file count is not stuck at 0. It shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example. That automatic index skips embeddings; run `reindex` when you want semantic search.
 
 Example output (truncated):
 
@@ -147,6 +148,8 @@ Example output (truncated):
 npx -y codebase-context reindex
 npx -y codebase-context search --query "file watcher" --intent edit --limit 3
 ```
+
+A low-confidence result includes a hint. The hint means the matches are weak. It is not a finding that the code is absent.
 
 Example output (truncated):
 

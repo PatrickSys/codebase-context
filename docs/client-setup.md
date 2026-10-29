@@ -103,23 +103,26 @@ On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a f
 
 ## Interactive setup wizard
 
-> **Requires 2.4.0 (not yet published)**: The non-interactive `--client` and `--yes` flags are not available in published 2.2.0 (which runs an interactive HTTP wizard). These commands require the unpublished 2.4.0 release and will not work with the current npm release.
+> **Requires 2.4.0 (not yet published)**: One `init` command detects Claude Code, Codex, Cursor, and OpenCode and configures them together. Published 2.2.0 still runs an older interactive wizard. These commands require the unpublished 2.4.0 release and will not work with the current npm release.
 
-Run setup from the project you want the client to search:
+Run setup from the project you want the clients to search:
 
 ```bash
-# Claude Code (requires 2.4.0, not yet published)
-npx -y codebase-context@2.4.0 init --client claude-code --yes
-
-# Codex (requires 2.4.0, not yet published)
-npx -y codebase-context@2.4.0 init --client codex --yes
+# requires the unpublished 2.4.0
+npx -y codebase-context@2.4.0 init --yes
 ```
 
-Claude Code writes `.mcp.json`; Codex writes `.codex/config.toml`. Both configs start the installed server with the selected project. Setup uses the current folder unless `--root` or `CODEBASE_ROOT` selects another one; `--root` takes priority.
+That writes `.mcp.json` for Claude Code, `.codex/config.toml` for Codex, `.cursor/mcp.json` for Cursor, and `opencode.json` for OpenCode. Each file saves the Node binary that ran `init` and the package file from the npx cache, plus the project folder. The client starts that file directly and does not look up `npx` again.
 
-`--yes` writes the config without prompts. In 2.2.0, running `init` without flags starts the older interactive wizard. Cursor and OpenCode still use HTTP and need a separately running server.
+Codex setup line, including for the published package:
 
-Existing settings are kept. If a different Codebase Context entry is already present, setup leaves the file unchanged and reports the conflict. Restart the client after setup and approve the server if asked. The first use builds the code index. Rerun setup if the Codebase Context installation moves, because the config uses its installed location.
+```bash
+codex mcp add codebase-context -- npx -y codebase-context
+```
+
+Repeat `--client` to choose tools, for example `--client claude-code --client codex`. `--root` selects another folder and takes priority over `CODEBASE_ROOT`. With a terminal and without `--yes`, detected tools start checked.
+
+`--yes` writes the config without prompts. Existing settings are kept. A recognized generated launch is updated when you rerun setup, including when the npx cache path moves. A different Codebase Context entry is left unchanged and reported. Restart the client after setup and approve the server if asked. `map` builds the file index when one is missing.
 
 ## Optional fixed-folder setup and CLI preparation
 
@@ -131,7 +134,7 @@ To prepare the index separately, run from the project folder:
 npx -y codebase-context reindex
 ```
 
-The interactive wizard limitations described above are still present in the current source. A successful wizard exit alone does not establish working client registration.
+A successful setup exit alone does not establish working client registration.
 
 ## Gemini CLI
 

@@ -12,12 +12,16 @@ Use Node.js 22 or newer. These commands use the current npm release of Codebase 
 # Claude Code
 claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context
 
-# Codex CLI
+# Codex CLI (this is the Codex setup line)
 codex mcp add codebase-context -- npx -y codebase-context
 
 # OpenCode 1.x (keep the quoted separator on Windows)
 opencode mcp add codebase-context '--' npx -y codebase-context
 ```
+
+`npx -y codebase-context --version` prints the installed package version. `npx -y codebase-context map` builds a file index when the project does not have one, then prints the map. A low-confidence search includes a hint: the matches are weak, and that is not a finding that the code is absent.
+
+This repository's `init` command detects Claude Code, Codex, Cursor, and OpenCode and writes a project config for each selected tool. The saved launch is the Node binary and the package file from the npx cache. That command is in this source and is not part of published 2.2.0. Until it is published, use the copy-paste lines above. The [client setup guide](./docs/client-setup.md) marks the unpublished command.
 
 Start a new agent session in your project, then ask:
 

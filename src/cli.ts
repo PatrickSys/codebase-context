@@ -88,7 +88,7 @@ function printUsage(): void {
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
   console.log(
-    '  init [--client <name>] [--yes]     Set up a native client (init --help for options)'
+    '  init [--client <name>] [--yes]     Detect and configure coding tools (init --help for options)'
   );
   console.log('  map [--json] [--pretty]              Conventions map');
   console.log('');

@@ -75,7 +75,16 @@ Open each `get_symbol_references` usage `file` relative to the selected
 `project.rootPath`, using its one-based `line`. Reference locations are derived
 from files in that project, including when an older index stored paths relative
 to a different launch directory. Missing source files are not returned as
-openable references.
+openable references. When no reference parser is available, text matches use
+the current source file rather than cached chunks; those matches may include
+comments and strings.
+`search_codebase` result `file` fields use `path:startLine-endLine`, with the
+path relative to the selected `project.rootPath` in compact and full modes.
+Its suggested `read_file` path uses the same root. Search omits matched files
+that no longer exist or resolve outside that project. These checks establish
+the source location; snippets and line ranges still come from the index, so
+refresh after changing source before relying on their contents. Filtering stale
+matches can return fewer results than the requested limit.
 Rebuild an older index with `reindex` if map or health output still contains
 paths from a previous launch directory; those views read persisted metadata.
 

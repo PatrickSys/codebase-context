@@ -14,6 +14,7 @@ import { isTestingRelatedQuery } from '../preflight/query-scope.js';
 import { assessSearchQuality } from './search-quality.js';
 import { rerank, getRerankerStatus } from './reranker.js';
 import { type IndexMeta, readIndexMeta, validateIndexArtifacts } from './index-meta.js';
+import { resolveChunkLocation } from './symbol-references.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -1004,6 +1005,16 @@ export class CodebaseSearcher {
         }
       }
     }
+
+    // Apply the same source boundary as symbol references before exposing results.
+    // A reused index can still contain deleted files or paths from another project.
+    const sourceLocations = await Promise.all(
+      bestResults.map((result) => resolveChunkLocation(this.rootPath, result))
+    );
+    bestResults = bestResults.flatMap((result, index) => {
+      const location = sourceLocations[index];
+      return location ? [{ ...result, filePath: location.absolutePath }] : [];
+    });
 
     // Stage-2: cross-encoder reranking when top scores are ambiguous
     if (enableReranker) {

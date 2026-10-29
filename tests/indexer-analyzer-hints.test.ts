@@ -77,6 +77,44 @@ describe('Indexer analyzer hints', () => {
     expect(chunks.some((chunk) => chunk.filePath.endsWith('widget.sfc'))).toBe(true);
   });
 
+  it('uses current source lines when a reused index has no supported reference parser', async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'indexer-current-reference-lines-'));
+    const sourcePath = path.join(tempDir, 'widget.sfc');
+    const originalSource = [
+      'export function staleToken() {',
+      '  return "ok";',
+      '}',
+      'staleToken();'
+    ].join('\n');
+    await fs.writeFile(sourcePath, originalSource, 'utf-8');
+    const indexer = new CodebaseIndexer({
+      rootPath: tempDir,
+      config: { skipEmbedding: true },
+      projectOptions: { preferredAnalyzer: 'generic', extraFileExtensions: ['.sfc'] }
+    });
+    await indexer.index();
+    const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexedBytes = await fs.readFile(indexPath);
+
+    const movedSource = `// Newly inserted header\n\n${originalSource}`;
+    await fs.writeFile(sourcePath, movedSource, 'utf-8');
+    const moved = await findSymbolReferences(tempDir, 'staleToken', 10);
+    expect(moved.status).toBe('success');
+    if (moved.status !== 'success') throw new Error(moved.message);
+    expect(moved.usageCount).toBe(2);
+    expect(moved.usages.map((usage) => usage.line)).toEqual([3, 6]);
+    for (const usage of moved.usages) {
+      expect(usage.file).toBe('widget.sfc');
+      const openedSource = await fs.readFile(path.join(tempDir, usage.file), 'utf-8');
+      expect(openedSource.split('\n')[usage.line - 1]).toContain('staleToken');
+    }
+
+    await fs.writeFile(sourcePath, 'export function replacement() { return "new"; }\n');
+    const removed = await findSymbolReferences(tempDir, 'staleToken', 10);
+    expect(removed).toMatchObject({ status: 'success', usageCount: 0, usages: [] });
+    expect(await fs.readFile(indexPath)).toEqual(indexedBytes);
+  });
+
   it('stores and returns exact project-relative source paths across launch roots and index reuse', async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'indexer-paths-'));
     const monorepoRoot = path.join(tempDir, 'evidence', 'repo with spaces');

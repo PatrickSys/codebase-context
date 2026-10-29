@@ -2,6 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import type { CodeChunk } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
 
+// Ranking fixtures are intentionally in-memory; actual file boundaries are
+// exercised with a real index in search-source-locations.test.ts.
+vi.mock('../src/core/symbol-references.js', () => ({
+  resolveChunkLocation: async (_root: string, chunk: { filePath: string }) => ({
+    absolutePath: chunk.filePath,
+    relativePath: chunk.filePath
+  })
+}));
+
 function createChunk(id: string, filePath: string, content: string): CodeChunk {
   return {
     id,
@@ -153,9 +162,7 @@ describe('CodebaseSearcher retrieval strategy', () => {
           semantic: new Map([
             ['impl', { chunk: implChunk, ranks: [{ rank: 0, weight: semWeight }] }]
           ]),
-          keyword: new Map([
-            ['impl', { chunk: implChunk, ranks: [{ rank: 0, weight: kwWeight }] }]
-          ])
+          keyword: new Map([['impl', { chunk: implChunk, ranks: [{ rank: 0, weight: kwWeight }] }]])
         };
       }
     );

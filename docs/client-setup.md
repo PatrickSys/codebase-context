@@ -11,6 +11,11 @@ the setup wizard in this source candidate, build it first:
 pnpm build && node dist/index.js init
 ```
 
+For a local packed candidate, `npm pack` rebuilds the runtime through `prepack`.
+Keep scripts enabled, record the source commit and tarball hash, and inspect the
+packed `package.json` and `dist` files before using it as evidence. A local
+`2.3.0` candidate is not evidence that the same version is published to npm.
+
 Choose **stdio** unless you specifically need several clients to share one
 server. The wizard puts the current repository's absolute path in the stdio
 registration. It registers the Node executable and server entrypoint from the

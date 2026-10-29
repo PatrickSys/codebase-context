@@ -25,6 +25,7 @@ import { formatMemoryScopeText, readMemoriesFile, withConfidence } from '../memo
 import type { MemoryWithConfidence } from '../memory/store.js';
 import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../health/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
+import { isPathWithin } from '../utils/project-discovery.js';
 import type { FileExport } from '../utils/usage-tracker.js';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
 import { finalizeSearchPayloadText } from './search-payload-budget.js';
@@ -311,7 +312,7 @@ export async function handle(
     const normalized = filePath.replace(/\\/g, '/');
     if (path.isAbsolute(filePath)) {
       const rel = path.relative(ctx.rootPath, filePath).replace(/\\/g, '/');
-      if (rel && !rel.startsWith('..')) {
+      if (rel && isPathWithin(ctx.rootPath, filePath)) {
         return rel;
       }
     }
@@ -742,7 +743,7 @@ export async function handle(
     if (compactResults.length > 0) {
       hops.push({
         tool: 'read_file',
-        args: { path: compactResults[0].filePath },
+        args: { path: normalizeGraphPath(compactResults[0].filePath) },
         why: 'Read the top match for implementation details'
       });
     }
@@ -1132,10 +1133,7 @@ export async function handle(
   }
 
   function formatSnippetFallbackHeader(filePath: string, startLine: number): string {
-    const rel = path.relative(ctx.rootPath, filePath).replace(/\\/g, '/');
-    const displayPath =
-      rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : path.basename(filePath);
-    return `${displayPath}:${startLine}`;
+    return `${normalizeGraphPath(filePath)}:${startLine}`;
   }
 
   function enrichSnippetWithScope(
@@ -1217,7 +1215,7 @@ export async function handle(
                 .trim() || undefined
             : undefined;
           return {
-            file: `${r.filePath}:${r.startLine}-${r.endLine}`,
+            file: `${normalizeGraphPath(r.filePath)}:${r.startLine}-${r.endLine}`,
             summary: r.summary,
             score: Math.round(r.score * 100) / 100,
             ...(r.relevanceReason && { relevanceReason: r.relevanceReason }),
@@ -1273,7 +1271,7 @@ export async function handle(
         const chunkExports = r.exports?.slice(0, 5);
 
         return {
-          file: `${r.filePath}:${r.startLine}-${r.endLine}`,
+          file: `${normalizeGraphPath(r.filePath)}:${r.startLine}-${r.endLine}`,
           summary: r.summary,
           score: Math.round(r.score * 100) / 100,
           ...(r.relevanceReason && { relevanceReason: r.relevanceReason }),

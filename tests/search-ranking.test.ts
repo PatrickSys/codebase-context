@@ -2,6 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import type { CodeChunk } from '../src/types/index.js';
 import { CodebaseSearcher } from '../src/core/search.js';
 
+// Keep scoring tests independent of the filesystem. Source-location behavior
+// has actual-index coverage in search-source-locations.test.ts.
+vi.mock('../src/core/symbol-references.js', () => ({
+  resolveChunkLocation: async (_root: string, chunk: { filePath: string }) => ({
+    absolutePath: chunk.filePath,
+    relativePath: chunk.filePath
+  })
+}));
+
 function createChunk(id: string, filePath: string, content: string): CodeChunk {
   return {
     id,

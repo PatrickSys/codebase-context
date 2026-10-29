@@ -291,7 +291,9 @@ describe('get_symbol_references MCP tool', () => {
     expect(response.isError).toBe(true);
     const payload = JSON.parse(response.content[0].text) as { status: string; message: string };
     expect(payload.status).toBe('error');
-    expect(payload.message).toMatch(/full reindex.*codebase-context reindex without --incremental/i);
+    expect(payload.message).toMatch(
+      /full reindex.*codebase-context reindex without --incremental/i
+    );
   });
 
   it('excludes comment and string matches when file exists and Tree-sitter is supported', async () => {

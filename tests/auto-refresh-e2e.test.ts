@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -31,12 +32,10 @@ function getKeywordChunks(raw: unknown): Array<Record<string, unknown>> {
 }
 
 async function readIndexedContent(rootPath: string): Promise<string> {
-  const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+  const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
   const raw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as unknown;
   const chunks = getKeywordChunks(raw);
-  return chunks
-    .map((chunk) => (typeof chunk.content === 'string' ? chunk.content : ''))
-    .join('\n');
+  return chunks.map((chunk) => (typeof chunk.content === 'string' ? chunk.content : '')).join('\n');
 }
 
 async function waitFor(
@@ -69,7 +68,10 @@ describe('Auto-refresh E2E', () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-refresh-e2e-'));
     await fs.mkdir(path.join(tempDir, 'src'), { recursive: true });
     await fs.writeFile(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'watch-test' }));
-    await fs.writeFile(path.join(tempDir, 'src', 'app.ts'), 'export const token = "INITIAL_TOKEN";\n');
+    await fs.writeFile(
+      path.join(tempDir, 'src', 'app.ts'),
+      'export const token = "INITIAL_TOKEN";\n'
+    );
   });
 
   afterEach(async () => {
@@ -131,7 +133,10 @@ describe('Auto-refresh E2E', () => {
 
     try {
       await watcherReady;
-      await fs.writeFile(path.join(tempDir, 'src', 'app.ts'), 'export const token = "UPDATED_TOKEN";\n');
+      await fs.writeFile(
+        path.join(tempDir, 'src', 'app.ts'),
+        'export const token = "UPDATED_TOKEN";\n'
+      );
 
       await waitFor(
         async () => {

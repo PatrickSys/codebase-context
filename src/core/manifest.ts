@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from './index-generation.js';
 /**
  * File hash manifest for incremental indexing.
  * Tracks SHA-256 hashes of indexed files to detect changes between runs.
@@ -90,7 +91,7 @@ export async function readReferenceManifest(
   rootPath: string,
   meta: IndexMeta
 ): Promise<FileManifest> {
-  if (meta.artifacts.manifest?.path !== MANIFEST_FILENAME) {
+  if (!meta.artifacts.manifest?.path) {
     throw fullReindexError('Reference manifest path is missing or invalid.');
   }
 
@@ -109,7 +110,7 @@ export async function readReferenceManifest(
     throw fullReindexError('Reference manifest directory resolves outside the selected project.');
   }
 
-  const expectedManifestPath = path.join(realContext, MANIFEST_FILENAME);
+  const expectedManifestPath = await resolveIndexArtifact(rootPath, MANIFEST_FILENAME, meta);
   let realManifestPath: string;
   try {
     realManifestPath = await fs.realpath(expectedManifestPath);

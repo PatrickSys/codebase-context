@@ -1,3 +1,4 @@
+import { resolveIndexArtifact, withAvailableIndexSnapshot } from '../../core/index-generation.js';
 /**
  * Angular Analyzer - Comprehensive Angular-specific code analysis
  * Understands components, services, directives, pipes, modules, guards, interceptors, etc.
@@ -867,6 +868,10 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
   }
 
   async detectCodebaseMetadata(rootPath: string): Promise<CodebaseMetadata> {
+    return withAvailableIndexSnapshot(rootPath, () => this.detectPinnedMetadata(rootPath));
+  }
+
+  private async detectPinnedMetadata(rootPath: string): Promise<CodebaseMetadata> {
     const metadata: CodebaseMetadata = {
       name: path.basename(rootPath),
       rootPath,
@@ -997,7 +1002,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
     // Calculate statistics from existing index if available
     try {
-      const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
       const indexContent = await fs.readFile(indexPath, 'utf-8');
       const parsed = JSON.parse(indexContent) as unknown;
 

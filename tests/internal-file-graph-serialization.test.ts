@@ -18,13 +18,17 @@ describe('InternalFileGraph serialization', () => {
       sourceFingerprint: 'source-sha256',
       targetFingerprint: 'target-sha256'
     });
-    graph.trackUnresolved(importingFile, {
-      line: 18,
-      specifier: './missing',
-      kind: 'import',
-      sourceFingerprint: 'source-sha256',
-      targetFingerprint: ''
-    }, 'not-found');
+    graph.trackUnresolved(
+      importingFile,
+      {
+        line: 18,
+        specifier: './missing',
+        kind: 'import',
+        sourceFingerprint: 'source-sha256',
+        targetFingerprint: ''
+      },
+      'not-found'
+    );
 
     const json = graph.toJSON();
     expect(json.importDetails).toBeDefined();
@@ -33,12 +37,16 @@ describe('InternalFileGraph serialization', () => {
     const restoredJson = restored.toJSON();
     expect(restoredJson.importDetails).toEqual(json.importDetails);
     expect(restoredJson.unresolvedEdges).toEqual(json.unresolvedEdges);
-    expect(restoredJson.importDetails?.['src/importer.ts']?.['src/exported.ts']?.sources?.[0]).toMatchObject({
-      specifier: './exported', kind: 'reexport', sourceFingerprint: 'source-sha256', targetFingerprint: 'target-sha256'
+    expect(
+      restoredJson.importDetails?.['src/importer.ts']?.['src/exported.ts']?.sources?.[0]
+    ).toMatchObject({
+      specifier: './exported',
+      kind: 'reexport',
+      sourceFingerprint: 'source-sha256',
+      targetFingerprint: 'target-sha256'
     });
 
     const unused = restored.findUnusedExports();
     expect(unused.length).toBe(0);
   });
 });
-

@@ -108,7 +108,8 @@ describe('search_codebase compact/full mode', () => {
           toolVersion: 'test',
           artifacts: {
             keywordIndex: { path: KEYWORD_INDEX_FILENAME },
-            vectorDb: { path: VECTOR_DB_DIRNAME, provider: 'lancedb' },
+            // This keyword-only fixture has no semantic table.
+            vectorDb: { path: VECTOR_DB_DIRNAME, provider: 'lancedb', embeddingEnabled: false },
             intelligence: { path: INTELLIGENCE_FILENAME }
           }
         },
@@ -551,9 +552,7 @@ describe('search_codebase compact/full mode', () => {
       ]
     }
   ])('compact previews retain query-relevant source lines for $id', async (testCase) => {
-    const fixtureCase = structuralContextFixture.cases.find(
-      (entry) => entry.id === testCase.id
-    );
+    const fixtureCase = structuralContextFixture.cases.find((entry) => entry.id === testCase.id);
     if (!fixtureCase) throw new Error(`Missing structural fixture case: ${testCase.id}`);
     const marker = fixtureCase.supportingOnlyMarkers?.[0];
     if (!marker) throw new Error(`Missing supporting source marker: ${testCase.id}`);

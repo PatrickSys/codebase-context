@@ -10,11 +10,18 @@ import {
   INDEX_META_VERSION,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
-  MEMORY_FILENAME,
   RELATIONSHIPS_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 import { IndexCorruptedError } from '../errors/index.js';
+import {
+  currentIndexSnapshot,
+  inspectIndexDiskState,
+  indexUnavailableForOperation,
+  resolveIndexArtifact,
+  validateIndexArtifactTree,
+  withIndexSnapshot
+} from './index-generation.js';
 
 export const ArtifactHeaderSchema = z.object({
   buildId: z.string().min(1),
@@ -101,7 +108,9 @@ export const IndexMetaSchema = z.object({
         .object({
           path: z.string().min(1)
         })
-        .optional()
+        .optional(),
+      indexingStats: z.object({ path: z.string().min(1) }).optional(),
+      relationships: z.object({ path: z.string().min(1) }).optional()
     })
     .passthrough()
 });
@@ -189,8 +198,17 @@ function asIndexCorrupted(message: string, error: unknown): IndexCorruptedError 
 }
 
 export async function readIndexMeta(rootDir: string): Promise<IndexMeta> {
+  const snapshot = currentIndexSnapshot(rootDir);
+  if (snapshot) return snapshot.meta;
+  if (indexUnavailableForOperation(rootDir))
+    throw new IndexCorruptedError(
+      'Index meta was unavailable at the start of this operation. Rebuild required.'
+    );
   const metaPath = path.join(rootDir, CODEBASE_CONTEXT_DIRNAME, INDEX_META_FILENAME);
+  return readIndexMetaFromFile(metaPath);
+}
 
+export async function readIndexMetaFromFile(metaPath: string): Promise<IndexMeta> {
   let parsed: unknown;
   try {
     const raw = await fs.readFile(metaPath, 'utf-8');
@@ -233,51 +251,37 @@ export async function resolveSkipEmbedding(
     return explicitChoice;
   }
 
-  try {
-    const meta = await readIndexMeta(rootDir);
-    // Metadata written before the mode field describes a semantic index.
-    return meta.artifacts.vectorDb.embeddingEnabled === false;
-  } catch (metaError) {
-    const contextDir = path.join(rootDir, CODEBASE_CONTEXT_DIRNAME);
-    // A valid older index may retain a trustworthy mode despite requiring a migration.
-    try {
-      const raw = await fs.readFile(path.join(contextDir, INDEX_META_FILENAME), 'utf8');
-      const legacy = IndexMetaSchema.safeParse(JSON.parse(raw));
-      if (
-        legacy.success &&
-        legacy.data.metaVersion <= INDEX_META_VERSION &&
-        legacy.data.formatVersion <= INDEX_FORMAT_VERSION
-      ) {
-        return legacy.data.artifacts.vectorDb.embeddingEnabled === false;
-      }
-    } catch {
-      // Malformed metadata cannot establish a safe automatic mode.
+  const state = await inspectIndexDiskState(rootDir);
+  switch (state.kind) {
+    case 'fresh':
+    case 'incomplete-first-build':
+      return true;
+    case 'committed':
+      return state.mode === 'keyword';
+    case 'legacy':
+      if (state.mode !== 'unknown') return state.mode === 'keyword';
+      break;
+    case 'recoverable-unpublished':
+    case 'unknown':
+      break;
+    default: {
+      const exhaustive: never = state;
+      return exhaustive;
     }
-
-    let entries: string[];
-    try {
-      entries = await fs.readdir(contextDir);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true;
-      throw asIndexCorrupted('Cannot recover embedding mode (rebuild required)', error);
-    }
-    if (entries.every((entry) => entry === MEMORY_FILENAME)) return true;
-    throw asIndexCorrupted(
-      'Cannot recover embedding mode (rebuild required). Select --no-embeddings or --embeddings explicitly',
-      metaError
-    );
   }
+  throw new IndexCorruptedError(
+    'Cannot recover embedding mode safely. Preserved index data needs explicit recovery; select --embeddings or --no-embeddings after backing up any recoverable generations. Capacity may require relocating an operator-selected backup outside .codebase-context.'
+  );
 }
 
 export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): Promise<void> {
-  const contextDir = path.join(rootDir, CODEBASE_CONTEXT_DIRNAME);
-
-  const keywordPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
-  const vectorDir = path.join(contextDir, VECTOR_DB_DIRNAME);
+  const keywordPath = await resolveIndexArtifact(rootDir, KEYWORD_INDEX_FILENAME, meta);
+  const vectorDir = await resolveIndexArtifact(rootDir, VECTOR_DB_DIRNAME, meta);
   const vectorBuildPath = path.join(vectorDir, 'index-build.json');
 
   await requireFile(keywordPath, 'Keyword index');
   await requireDirectory(vectorDir, 'Vector DB directory');
+  await validateIndexArtifactTree(rootDir, vectorDir);
   await requireFile(vectorBuildPath, 'Vector DB build marker');
 
   // Keyword index header (required)
@@ -317,7 +321,7 @@ export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): 
   }
 
   // Optional intelligence artifact: validate if present, but do not require.
-  const intelligencePath = path.join(contextDir, INTELLIGENCE_FILENAME);
+  const intelligencePath = await resolveIndexArtifact(rootDir, INTELLIGENCE_FILENAME, meta);
   if (await pathExists(intelligencePath)) {
     try {
       const raw = await fs.readFile(intelligencePath, 'utf-8');
@@ -347,7 +351,7 @@ export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): 
   }
 
   // Optional relationships sidecar: validate if present, but do not require.
-  const relationshipsPath = path.join(contextDir, RELATIONSHIPS_FILENAME);
+  const relationshipsPath = await resolveIndexArtifact(rootDir, RELATIONSHIPS_FILENAME, meta);
   if (await pathExists(relationshipsPath)) {
     try {
       const raw = await fs.readFile(relationshipsPath, 'utf-8');
@@ -377,7 +381,7 @@ export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): 
   }
 
   // Optional health sidecar: validate if present, but do not require.
-  const healthPath = path.join(contextDir, HEALTH_FILENAME);
+  const healthPath = await resolveIndexArtifact(rootDir, HEALTH_FILENAME, meta);
   if (await pathExists(healthPath)) {
     try {
       const raw = await fs.readFile(healthPath, 'utf-8');
@@ -404,5 +408,18 @@ export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): 
       if (error instanceof IndexCorruptedError) throw error;
       throw asIndexCorrupted('Health sidecar corrupted (rebuild required)', error);
     }
+  }
+}
+
+/** A refresh may serve the last complete build, including after a failed refresh. */
+export async function hasCommittedIndex(root: string): Promise<boolean> {
+  try {
+    return await withIndexSnapshot(root, async () => {
+      const meta = await readIndexMeta(root);
+      await validateIndexArtifacts(root, meta);
+      return true;
+    });
+  } catch {
+    return false;
   }
 }

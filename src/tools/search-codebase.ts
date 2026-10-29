@@ -1,3 +1,5 @@
+import { hasCommittedIndex } from '../core/index-meta.js';
+import { withToolIndexSnapshot } from './index-snapshot.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -142,6 +144,13 @@ export async function handle(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolResponse> {
+  return withToolIndexSnapshot(ctx, (pinned) => handlePinned(args, pinned));
+}
+
+async function handlePinned(
+  args: Record<string, unknown>,
+  ctx: ToolContext
+): Promise<ToolResponse> {
   const { query, limit, filters, intent, includeSnippets, mode } = args as {
     query?: unknown;
     limit?: number;
@@ -173,7 +182,7 @@ export async function handle(
     };
   }
 
-  if (ctx.indexState.status === 'indexing') {
+  if (ctx.indexState.status === 'indexing' && !(await hasCommittedIndex(ctx.rootPath))) {
     return {
       content: [
         {
@@ -192,7 +201,7 @@ export async function handle(
     };
   }
 
-  if (ctx.indexState.status === 'error') {
+  if (ctx.indexState.status === 'error' && !(await hasCommittedIndex(ctx.rootPath))) {
     return {
       content: [
         {

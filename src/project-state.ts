@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from './core/index-generation.js';
 import path from 'path';
 import {
   CODEBASE_CONTEXT_DIRNAME,
@@ -44,6 +45,17 @@ export function makePaths(rootPath: string): ToolPaths {
     keywordIndex: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
     vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
   };
+}
+
+export async function resolveProjectPaths(rootPath: string): Promise<ToolPaths> {
+  const legacy = makePaths(rootPath);
+  const [intelligence, health, keywordIndex, vectorDb] = await Promise.all([
+    resolveIndexArtifact(rootPath, INTELLIGENCE_FILENAME),
+    resolveIndexArtifact(rootPath, HEALTH_FILENAME),
+    resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME),
+    resolveIndexArtifact(rootPath, VECTOR_DB_DIRNAME)
+  ]);
+  return { ...legacy, intelligence, health, keywordIndex, vectorDb };
 }
 
 export function makeLegacyPaths(rootPath: string) {

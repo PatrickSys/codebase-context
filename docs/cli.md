@@ -36,7 +36,7 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 
 ## Commands
 
-- `map` — conventions map: architecture layers, patterns, golden files. Builds a file index first when the project does not have one, so a fresh checkout does not report 0 files
+- `map` — conventions map: architecture layers, patterns, golden files
 - `metadata` — tech stack overview
 - `patterns` — team conventions + adoption/trends
 - `search --query <q>` — ranked results; add `--intent edit` for a preflight card
@@ -46,10 +46,9 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
-- MCP client registration — `init` detects Claude Code, Codex, Cursor, and OpenCode and configures the selected tools together. See the [client setup guide](./client-setup.md). Codex setup line: `codex mcp add codebase-context -- npx -y codebase-context`
-- `--version` — print the installed package version
+- MCP client registration — use the recipes in the [client setup guide](./client-setup.md). Published 2.2.0 has the older interactive HTTP wizard; the four-client wizard below requires the unreleased candidate.
 
-## `init`
+## `init` in the unreleased candidate
 
 `init` detects Claude Code, Codex, Cursor and OpenCode, then configures the selected tools together. In a terminal, detected tools start selected; use Space to change the selection and Enter to apply it. Without a terminal, it configures all detected tools.
 
@@ -60,13 +59,15 @@ codebase-context init --yes
 codebase-context init --client codex --client cursor --root "C:\path\to\project"
 ```
 
-Use repeatable `--client` options to choose tools explicitly. `--yes` configures every detected tool when no clients are named. `--root` selects another repository; otherwise `CODEBASE_ROOT` or the current directory is used. Setup writes client registrations but does not build an index or change agent instructions. The first search creates the index. The multi-tool flow is not in published npm `2.2.0` yet; see the [main setup guide](../README.md#set-up-your-coding-tools) for its publication status and the [client setup guide](./client-setup.md) for current manual recipes.
+Use repeatable `--client` options to choose tools explicitly. `--yes` configures every detected tool when no clients are named. `--root` selects another repository; otherwise `CODEBASE_ROOT` or the current directory is used. Setup writes client registrations but does not build an index or change agent instructions. The first search creates the index. The multi-tool flow is not in published npm `2.2.0` yet; see the [main setup guide](../README.md#set-up-your-ai-client) for its publication status and the [client setup guide](./client-setup.md) for current manual recipes.
+
+The built candidate also supports `--version` and builds a missing index when you run `map`. New indexes use keyword search without a model download; `reindex --embeddings` explicitly enables local semantic search. Preview, reindex, and map apply the same project exclusions and analyzer hints. A low-confidence search result means the matches are weak; it does not establish that code is absent.
 
 ---
 
 ## First use
 
-Run these CLI commands from the project root. `map` indexes the project files when no index exists yet. `reindex` builds or refreshes the full index, including local embeddings; the first embedding run downloads a local model. Time depends on repository size, CPU and model.
+Run these CLI commands from the project root. Build or refresh the local index first; the first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Then inspect the conventions map and search for the code you need:
 
 ```bash
 npx -y codebase-context reindex
@@ -83,7 +84,7 @@ npx -y codebase-context reindex
 npx -y codebase-context map
 ```
 
-The conventions map - run this first on an unfamiliar repo. If the project has no index, `map` builds the file index before it prints, so the file count is not stuck at 0. It shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example. That automatic index skips embeddings; run `reindex` when you want semantic search.
+The conventions map - run this first on an unfamiliar repo. It shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example.
 
 Example output (truncated):
 
@@ -161,8 +162,6 @@ Example output (truncated):
 npx -y codebase-context reindex
 npx -y codebase-context search --query "file watcher" --intent edit --limit 3
 ```
-
-A low-confidence result includes a hint. The hint means the matches are weak. It is not a finding that the code is absent.
 
 Example output (truncated):
 

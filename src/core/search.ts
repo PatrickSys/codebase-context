@@ -1,3 +1,8 @@
+import {
+  withAvailableIndexSnapshot,
+  currentIndexSnapshot,
+  resolveIndexArtifact
+} from './index-generation.js';
 /**
  * Hybrid search combining semantic vector search with keyword matching
  */
@@ -6,7 +11,12 @@ import Fuse, { type FuseResult, type IFuseOptions } from 'fuse.js';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { CodeChunk, SearchResult, SearchFilters, IntelligenceData } from '../types/index.js';
-import { EmbeddingProvider, EmbeddingConfig, getEmbeddingProvider } from '../embeddings/index.js';
+import {
+  EmbeddingProvider,
+  EmbeddingConfig,
+  getEmbeddingProvider,
+  parseEmbeddingProviderName
+} from '../embeddings/index.js';
 import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import { IndexCorruptedError, OptionalDependencyError } from '../errors/index.js';
@@ -217,32 +227,85 @@ export class CodebaseSearcher {
     this.storagePath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME);
   }
 
+  private operationTail: Promise<void> = Promise.resolve();
+
+  private async runOperation<T>(operation: () => Promise<T>): Promise<T> {
+    const preceding = this.operationTail;
+    let release: () => void = () => undefined;
+    this.operationTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await preceding;
+    try {
+      return await withAvailableIndexSnapshot(this.rootPath, async () => {
+        const snapshot = currentIndexSnapshot(this.rootPath);
+        if (snapshot) this.rootPath = snapshot.realRoot;
+        if (snapshot && snapshot.meta.buildId !== this.indexMeta?.buildId) {
+          this.initialized = false;
+          this.embeddingProvider = null;
+          this.storageProvider = null;
+          this.chunks = [];
+          this.fuseIndex = null;
+          this.patternIntelligence = null;
+          this.importCentrality = null;
+          this.indexedImports.clear();
+        }
+        if (
+          this.initialized &&
+          this.indexMeta?.artifacts.vectorDb.embeddingEnabled !== false &&
+          !this.storageProvider &&
+          this.indexMeta
+        ) {
+          // Reopening follows the same fail-closed/keyword-fallback policy as first use.
+          try {
+            await this.initializeSemanticProviders();
+          } catch (error) {
+            if (error instanceof OptionalDependencyError || error instanceof IndexCorruptedError)
+              throw error;
+            console.warn('Partial initialization (keyword search only):', error);
+          }
+        }
+        try {
+          return await operation();
+        } finally {
+          const storage = this.storageProvider;
+          if (storage?.close) {
+            this.storageProvider = null;
+            try {
+              await storage.close();
+            } catch (error) {
+              console.warn('Search completed; native handle cleanup failed:', error);
+            }
+          }
+        }
+      });
+    } finally {
+      release();
+    }
+  }
+
   async initialize(): Promise<void> {
+    return this.runOperation(() => this.initializePinned());
+  }
+
+  private async initializePinned(): Promise<void> {
     if (this.initialized) return;
 
     try {
       // Fail closed on version mismatch/corruption before serving any results.
       this.indexMeta = await readIndexMeta(this.rootPath);
       await validateIndexArtifacts(this.rootPath, this.indexMeta);
+      this.storagePath = await resolveIndexArtifact(
+        this.rootPath,
+        VECTOR_DB_DIRNAME,
+        this.indexMeta
+      );
 
       await this.loadKeywordIndex();
       await this.loadSourceManifest();
       await this.loadPatternIntelligence();
 
-      // Use the embedding config the index was built with, not the current env-var defaults.
-      // This ensures query vectors are in the same space as stored vectors.
-      // Legacy indexes (no embeddingProvider stored) fall back to env-var defaults.
-      if (this.indexMeta.artifacts.vectorDb.embeddingEnabled !== false) {
-        const storedProvider = this.indexMeta.artifacts.vectorDb.embeddingProvider;
-        const storedModel = this.indexMeta.artifacts.vectorDb.embeddingModel;
-        const embeddingConfig: Partial<EmbeddingConfig> = storedProvider
-          ? { provider: storedProvider as EmbeddingConfig['provider'], model: storedModel }
-          : {};
-        this.embeddingProvider = await getEmbeddingProvider(embeddingConfig);
-        this.storageProvider = await getStorageProvider({
-          path: this.storagePath
-        });
-      }
+      await this.initializeSemanticProviders();
 
       this.initialized = true;
     } catch (error) {
@@ -255,6 +318,26 @@ export class CodebaseSearcher {
       console.warn('Partial initialization (keyword search only):', error);
       this.initialized = true;
     }
+  }
+
+  private async initializeSemanticProviders(): Promise<void> {
+    const stored = this.indexMeta?.artifacts.vectorDb;
+    if (!stored || stored.embeddingEnabled === false) return;
+    const provider = parseEmbeddingProviderName(stored.embeddingProvider);
+    if (stored.embeddingProvider && !provider)
+      throw new IndexCorruptedError('Recorded embedding provider is invalid. Rebuild required.');
+    const embeddingConfig: Partial<EmbeddingConfig> = provider
+      ? { provider, model: stored.embeddingModel }
+      : {};
+    // Assign the pair only after both are ready. A new model cannot inherit an old
+    // query provider when initialization falls back to keyword search.
+    const embedding = await getEmbeddingProvider(embeddingConfig);
+    const storage = await getStorageProvider(
+      { path: this.storagePath },
+      { expectExisting: this.chunks.length > 0 }
+    );
+    this.embeddingProvider = embedding;
+    this.storageProvider = storage;
   }
 
   private getIndexedSourcePath(chunk: CodeChunk): string {
@@ -291,7 +374,7 @@ export class CodebaseSearcher {
 
   private async loadSourceManifest(): Promise<void> {
     const manifest = await readManifest(
-      path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME)
+      await resolveIndexArtifact(this.rootPath, MANIFEST_FILENAME, this.indexMeta ?? undefined)
     );
     if (!manifest?.files || Array.isArray(manifest.files)) {
       throw new IndexCorruptedError(
@@ -313,7 +396,10 @@ export class CodebaseSearcher {
     if (!this.sourceManifest) {
       throw new IndexCorruptedError('Source manifest is unavailable. Full rebuild required.');
     }
-    validation.realRootPath ??= fs.realpath(this.rootPath).catch(() => {
+    const snapshot = currentIndexSnapshot(this.rootPath);
+    validation.realRootPath ??= (
+      snapshot ? Promise.resolve(snapshot.realRoot) : fs.realpath(this.rootPath)
+    ).catch(() => {
       throw new IndexCorruptedError('Selected project is unavailable. Full rebuild required.');
     });
     const realRootPath = await validation.realRootPath;
@@ -401,7 +487,11 @@ export class CodebaseSearcher {
 
   private async loadKeywordIndex(): Promise<void> {
     try {
-      const indexPath = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const indexPath = await resolveIndexArtifact(
+        this.rootPath,
+        KEYWORD_INDEX_FILENAME,
+        this.indexMeta ?? undefined
+      );
       const content = await fs.readFile(indexPath, 'utf-8');
       const parsed = JSON.parse(content) as unknown;
 
@@ -439,10 +529,10 @@ export class CodebaseSearcher {
   private async loadPatternIntelligence(): Promise<void> {
     this.indexedImports.clear();
     try {
-      const intelligencePath = path.join(
+      const intelligencePath = await resolveIndexArtifact(
         this.rootPath,
-        CODEBASE_CONTEXT_DIRNAME,
-        INTELLIGENCE_FILENAME
+        INTELLIGENCE_FILENAME,
+        this.indexMeta ?? undefined
       );
       const content = await fs.readFile(intelligencePath, 'utf-8');
       const intelligence = JSON.parse(content) as IntelligenceData;
@@ -1523,8 +1613,17 @@ export class CodebaseSearcher {
     filters?: SearchFilters,
     options: SearchOptions = DEFAULT_SEARCH_OPTIONS
   ): Promise<SearchOutcome> {
+    return this.runOperation(() => this.searchPinned(query, limit, filters, options));
+  }
+
+  private async searchPinned(
+    query: string,
+    limit: number,
+    filters: SearchFilters | undefined,
+    options: SearchOptions
+  ): Promise<SearchOutcome> {
     if (!this.initialized) {
-      await this.initialize();
+      await this.initializePinned();
     }
 
     const merged = {
@@ -1916,10 +2015,10 @@ export class CodebaseSearcher {
   }
 
   async getChunkCount(): Promise<number> {
-    if (this.storageProvider) {
-      return await this.storageProvider.count();
-    }
-    return this.chunks.length;
+    return this.runOperation(async () => {
+      if (!this.initialized) await this.initializePinned();
+      return this.storageProvider ? this.storageProvider.count() : this.chunks.length;
+    });
   }
 
   isReady(): boolean {

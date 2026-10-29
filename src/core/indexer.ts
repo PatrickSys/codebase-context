@@ -6,6 +6,7 @@
 import { createHash, randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { IndexCorruptedError } from '../errors/index.js';
 import { glob } from 'glob';
 import ignore from 'ignore';
 import {
@@ -67,8 +68,6 @@ import {
   loadTsconfigCompilerOptions
 } from '../utils/internal-source-resolver.js';
 
-const STAGING_DIRNAME = '.staging';
-const PREVIOUS_DIRNAME = '.previous';
 const DEFAULT_MAX_CHUNKS = 5000;
 
 class SourceSnapshotChangedError extends Error {}
@@ -82,7 +81,24 @@ import {
   type FileManifest,
   type ManifestDiff
 } from './manifest.js';
-import { readIndexMeta, checkEmbeddingMismatch, resolveSkipEmbedding } from './index-meta.js';
+import {
+  readIndexMeta,
+  readIndexMetaFromFile,
+  checkEmbeddingMismatch,
+  resolveSkipEmbedding,
+  validateIndexArtifacts
+} from './index-meta.js';
+import {
+  withIndexWriter,
+  withIndexSnapshot,
+  inspectIndexDiskState,
+  permitsFirstBuild,
+  prepareIndexGeneration,
+  publishIndexGeneration,
+  resolveIndexArtifact,
+  copyIndexVectors,
+  withAvailableIndexSnapshot
+} from './index-generation.js';
 
 let cachedToolVersion: string | null = null;
 
@@ -104,126 +120,6 @@ async function getToolVersion(): Promise<string> {
   return cachedToolVersion;
 }
 
-/**
- * Perform a Windows-safe atomic swap of staging artifacts into active location.
- * Strategy: move current active to .previous, then rename staging to active.
- * If staging rename fails, restore from .previous.
- */
-async function atomicSwapStagingToActive(
-  contextDir: string,
-  stagingDir: string,
-  buildId: string
-): Promise<void> {
-  const previousDir = path.join(contextDir, PREVIOUS_DIRNAME);
-  const activeMetaPath = path.join(contextDir, INDEX_META_FILENAME);
-  const activeIndexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
-  const activeIntelligencePath = path.join(contextDir, INTELLIGENCE_FILENAME);
-  const activeVectorDir = path.join(contextDir, VECTOR_DB_DIRNAME);
-  const activeManifestPath = path.join(contextDir, MANIFEST_FILENAME);
-  const activeStatsPath = path.join(contextDir, INDEXING_STATS_FILENAME);
-  const activeRelationshipsPath = path.join(contextDir, RELATIONSHIPS_FILENAME);
-  const activeHealthPath = path.join(contextDir, HEALTH_FILENAME);
-
-  const stagingMetaPath = path.join(stagingDir, INDEX_META_FILENAME);
-  const stagingIndexPath = path.join(stagingDir, KEYWORD_INDEX_FILENAME);
-  const stagingIntelligencePath = path.join(stagingDir, INTELLIGENCE_FILENAME);
-  const stagingVectorDir = path.join(stagingDir, VECTOR_DB_DIRNAME);
-  const stagingManifestPath = path.join(stagingDir, MANIFEST_FILENAME);
-  const stagingStatsPath = path.join(stagingDir, INDEXING_STATS_FILENAME);
-  const stagingRelationshipsPath = path.join(stagingDir, RELATIONSHIPS_FILENAME);
-  const stagingHealthPath = path.join(stagingDir, HEALTH_FILENAME);
-
-  // Step 1: Create .previous directory and move current active there
-  await fs.mkdir(previousDir, { recursive: true });
-
-  const moveIfExists = async (src: string, dest: string): Promise<void> => {
-    try {
-      await fs.rename(src, dest);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== 'ENOENT') {
-        // File doesn't exist is OK, other errors are problems
-        throw error;
-      }
-    }
-  };
-
-  const moveDirIfExists = async (src: string, dest: string): Promise<void> => {
-    try {
-      const stat = await fs.stat(src);
-      if (stat.isDirectory()) {
-        await fs.rename(src, dest);
-      }
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== 'ENOENT') {
-        throw error;
-      }
-    }
-  };
-
-  // Move active artifacts to .previous
-  await moveIfExists(activeMetaPath, path.join(previousDir, INDEX_META_FILENAME));
-  await moveIfExists(activeIndexPath, path.join(previousDir, KEYWORD_INDEX_FILENAME));
-  await moveIfExists(activeIntelligencePath, path.join(previousDir, INTELLIGENCE_FILENAME));
-  await moveIfExists(activeManifestPath, path.join(previousDir, MANIFEST_FILENAME));
-  await moveIfExists(activeStatsPath, path.join(previousDir, INDEXING_STATS_FILENAME));
-  await moveIfExists(activeRelationshipsPath, path.join(previousDir, RELATIONSHIPS_FILENAME));
-  await moveIfExists(activeHealthPath, path.join(previousDir, HEALTH_FILENAME));
-  await moveDirIfExists(activeVectorDir, path.join(previousDir, VECTOR_DB_DIRNAME));
-
-  // Step 2: Move staging artifacts to active location
-  try {
-    await moveIfExists(stagingMetaPath, activeMetaPath);
-    await moveIfExists(stagingIndexPath, activeIndexPath);
-    await moveIfExists(stagingIntelligencePath, activeIntelligencePath);
-    await moveIfExists(stagingManifestPath, activeManifestPath);
-    await moveIfExists(stagingStatsPath, activeStatsPath);
-    await moveIfExists(stagingRelationshipsPath, activeRelationshipsPath);
-    await moveIfExists(stagingHealthPath, activeHealthPath);
-    await moveDirIfExists(stagingVectorDir, activeVectorDir);
-
-    // Step 3: Clean up .previous and staging directories
-    await cleanupDirectory(previousDir);
-    await cleanupDirectory(stagingDir);
-
-    // Also clean up the parent .staging/ directory if empty
-    const stagingBase = path.join(contextDir, STAGING_DIRNAME);
-    try {
-      const remaining = await fs.readdir(stagingBase);
-      if (remaining.length === 0) {
-        await fs.rmdir(stagingBase);
-      }
-    } catch {
-      // Directory doesn't exist or not empty - ignore
-    }
-
-    console.error(`Atomic swap complete: build ${buildId} now active`);
-  } catch (swapError) {
-    console.error('Atomic swap failed, attempting rollback:', swapError);
-
-    // Attempt rollback: restore from .previous
-    try {
-      await moveIfExists(path.join(previousDir, INDEX_META_FILENAME), activeMetaPath);
-      await moveIfExists(path.join(previousDir, KEYWORD_INDEX_FILENAME), activeIndexPath);
-      await moveIfExists(path.join(previousDir, INTELLIGENCE_FILENAME), activeIntelligencePath);
-      await moveIfExists(path.join(previousDir, MANIFEST_FILENAME), activeManifestPath);
-      await moveIfExists(path.join(previousDir, INDEXING_STATS_FILENAME), activeStatsPath);
-      await moveIfExists(path.join(previousDir, RELATIONSHIPS_FILENAME), activeRelationshipsPath);
-      await moveIfExists(path.join(previousDir, HEALTH_FILENAME), activeHealthPath);
-      await moveDirIfExists(path.join(previousDir, VECTOR_DB_DIRNAME), activeVectorDir);
-      console.error('Rollback successful');
-    } catch (rollbackError) {
-      console.error('Rollback also failed:', rollbackError);
-    }
-
-    throw swapError;
-  }
-}
-
-/**
- * Best-effort cleanup of a directory and its contents.
- */
 async function cleanupDirectory(dirPath: string): Promise<void> {
   try {
     await fs.rm(dirPath, { recursive: true, force: true });
@@ -238,6 +134,8 @@ export interface IndexerOptions {
   projectOptions?: AnalyzerSelectionOptions;
   onProgress?: (progress: IndexingProgress) => void;
   incrementalOnly?: boolean;
+  /** Recheck first-use eligibility after writer admission; never replace a newly published index. */
+  firstBuildOnly?: boolean;
 }
 
 interface PersistedIndexingStats {
@@ -327,10 +225,12 @@ export class CodebaseIndexer {
   private progress: IndexingProgress;
   private onProgressCallback?: (progress: IndexingProgress) => void;
   private incrementalOnly: boolean;
+  private readonly firstBuildOnly: boolean;
   private readonly explicitSkipEmbedding?: boolean;
 
   constructor(options: IndexerOptions) {
     this.rootPath = path.resolve(options.rootPath);
+    this.firstBuildOnly = options.firstBuildOnly ?? false;
     this.config = this.mergeConfig(options.config);
     this.explicitSkipEmbedding = options.config?.skipEmbedding;
     this.projectOptions = {
@@ -507,6 +407,10 @@ export class CodebaseIndexer {
   }
 
   async index(): Promise<IndexingStats> {
+    return withIndexWriter(this.rootPath, () => this.indexLocked());
+  }
+
+  private async indexLocked(): Promise<IndexingStats> {
     const startTime = Date.now();
     const stats: IndexingStats = {
       totalFiles: 0,
@@ -535,6 +439,21 @@ export class CodebaseIndexer {
     let stagingDir: string | null = null;
 
     try {
+      if (this.firstBuildOnly) {
+        const state = await inspectIndexDiskState(this.rootPath);
+        if (state.kind === 'committed' || state.kind === 'legacy') {
+          await withIndexSnapshot(this.rootPath, async () => {
+            await validateIndexArtifacts(this.rootPath, await readIndexMeta(this.rootPath));
+          });
+          stats.duration = Date.now() - startTime;
+          stats.completedAt = new Date();
+          return stats;
+        }
+        if (!permitsFirstBuild(state))
+          throw new IndexCorruptedError(
+            'Existing index data needs explicit recovery before map can build a first index.'
+          );
+      }
       this.config.skipEmbedding = await resolveSkipEmbedding(
         this.rootPath,
         this.explicitSkipEmbedding
@@ -579,8 +498,14 @@ export class CodebaseIndexer {
 
       // Phase 1b: Incremental diff (if incremental mode)
       const contextDir = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME);
-      const manifestPath = path.join(contextDir, MANIFEST_FILENAME);
-      const indexingStatsPath = path.join(contextDir, INDEXING_STATS_FILENAME);
+      const baselineMeta = await readIndexMeta(this.rootPath).catch(() => null);
+      const baselineDirectory = baselineMeta
+        ? path.dirname(
+            await resolveIndexArtifact(this.rootPath, KEYWORD_INDEX_FILENAME, baselineMeta)
+          )
+        : contextDir;
+      const manifestPath = path.join(baselineDirectory, MANIFEST_FILENAME);
+      const indexingStatsPath = path.join(baselineDirectory, INDEXING_STATS_FILENAME);
       let diff: ManifestDiff | null = null;
       let currentHashes: Record<string, string> | null = null;
       let previousManifest: FileManifest | null = null;
@@ -670,7 +595,7 @@ export class CodebaseIndexer {
             }
 
             try {
-              const existingIndexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
+              const existingIndexPath = path.join(baselineDirectory, KEYWORD_INDEX_FILENAME);
               const existing = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8')) as unknown;
               const existingObj = existing as { chunks?: unknown };
               const existingChunks: unknown = Array.isArray(existing)
@@ -1097,60 +1022,61 @@ export class CodebaseIndexer {
       // Phase 4: Storing
       this.updateProgress('storing', 75);
 
-      // For full rebuilds, use staging directory for atomic swap
-      // For incremental, write directly to active location
-      const isFullRebuild = !diff;
-      let activeContextDir = contextDir;
-
-      if (isFullRebuild) {
-        // Create staging directory for atomic swap
-        const stagingBase = path.join(contextDir, STAGING_DIRNAME);
-        stagingDir = path.join(stagingBase, buildId);
-        await fs.mkdir(stagingDir, { recursive: true });
-        activeContextDir = stagingDir;
-        console.error(`Full rebuild: writing to staging ${stagingDir}`);
+      // Both full and incremental builds write a new, unpublished generation.
+      stagingDir = await prepareIndexGeneration(this.rootPath, buildId);
+      const generationDirectory = stagingDir;
+      if (diff && !this.config.skipEmbedding) {
+        // The published baseline is immutable and has no writer handles. A physical
+        // copy preserves unchanged vectors without sharing writable Lance files.
+        await copyIndexVectors(
+          this.rootPath,
+          path.join(baselineDirectory, VECTOR_DB_DIRNAME),
+          path.join(generationDirectory, VECTOR_DB_DIRNAME)
+        );
       }
 
-      await fs.mkdir(activeContextDir, { recursive: true });
-
       if (!this.config.skipEmbedding) {
-        const storagePath = path.join(activeContextDir, VECTOR_DB_DIRNAME);
+        const storagePath = path.join(generationDirectory, VECTOR_DB_DIRNAME);
         const storageProvider = await getStorageProvider(
           { path: storagePath },
           diff ? { expectedDimensions: getConfiguredDimensions(this.config.embedding) } : undefined
         );
 
-        if (diff) {
-          // Incremental: delete old chunks for changed + deleted files, then add new
-          const filesToDelete = [...diff.changed, ...diff.deleted].map((rel) =>
-            path.join(this.rootPath, rel).replace(/\\/g, '/')
-          );
-          // Also try with OS-native separators for matching
-          const filePathsForDelete = [...diff.changed, ...diff.deleted].map((rel) =>
-            path.resolve(this.rootPath, rel)
-          );
-          const allDeletePaths = [...new Set([...filesToDelete, ...filePathsForDelete])];
+        try {
+          if (diff) {
+            // Incremental: delete old chunks for changed + deleted files, then add new
+            const filesToDelete = [...diff.changed, ...diff.deleted].map((rel) =>
+              path.join(this.rootPath, rel).replace(/\\/g, '/')
+            );
+            // Also try with OS-native separators for matching
+            const filePathsForDelete = [...diff.changed, ...diff.deleted].map((rel) =>
+              path.resolve(this.rootPath, rel)
+            );
+            const allDeletePaths = [...new Set([...filesToDelete, ...filePathsForDelete])];
 
-          if (allDeletePaths.length > 0) {
-            await storageProvider.deleteByFilePaths(allDeletePaths);
-          }
-          if (chunksWithEmbeddings.length > 0) {
+            if (allDeletePaths.length > 0) {
+              await storageProvider.deleteByFilePaths(allDeletePaths);
+            }
+            if (chunksWithEmbeddings.length > 0) {
+              await storageProvider.store(chunksWithEmbeddings);
+            }
+            console.error(
+              `Incremental store: deleted chunks for ${diff.changed.length + diff.deleted.length} files, ` +
+                `added ${chunksWithEmbeddings.length} new chunks`
+            );
+          } else {
+            // Full rebuild: store to staging (no clear - fresh directory)
+            console.error(`Storing ${chunksToEmbed.length} chunks to staging...`);
             await storageProvider.store(chunksWithEmbeddings);
           }
-          console.error(
-            `Incremental store: deleted chunks for ${diff.changed.length + diff.deleted.length} files, ` +
-              `added ${chunksWithEmbeddings.length} new chunks`
-          );
-        } else {
-          // Full rebuild: store to staging (no clear - fresh directory)
-          console.error(`Storing ${chunksToEmbed.length} chunks to staging...`);
-          await storageProvider.store(chunksWithEmbeddings);
+        } finally {
+          await storageProvider.close?.();
         }
       }
 
       // Vector DB build marker (required for version gating)
       // Write after semantic store step so marker reflects the latest DB state.
-      const vectorDir = path.join(activeContextDir, VECTOR_DB_DIRNAME);
+      const vectorDir = path.join(generationDirectory, VECTOR_DB_DIRNAME);
       await fs.mkdir(vectorDir, { recursive: true });
       await fs.writeFile(
         path.join(vectorDir, 'index-build.json'),
@@ -1158,7 +1084,7 @@ export class CodebaseIndexer {
       );
 
       // Keyword index always uses ALL chunks (full regen)
-      const indexPath = path.join(activeContextDir, KEYWORD_INDEX_FILENAME);
+      const indexPath = path.join(generationDirectory, KEYWORD_INDEX_FILENAME);
       // Memory safety: cap keyword index too
       const keywordChunks =
         allChunks.length > maxChunks ? allChunks.slice(0, maxChunks) : allChunks;
@@ -1171,7 +1097,7 @@ export class CodebaseIndexer {
       );
 
       // Save library usage and pattern stats (always full regen)
-      const intelligencePath = path.join(activeContextDir, INTELLIGENCE_FILENAME);
+      const intelligencePath = path.join(generationDirectory, INTELLIGENCE_FILENAME);
       const libraryStats = libraryTracker.getStats();
 
       if (tsconfigPaths && Object.keys(tsconfigPaths).length > 0) {
@@ -1197,7 +1123,7 @@ export class CodebaseIndexer {
       await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));
 
       // Write relationships sidecar (versioned, for fast lookup)
-      const relationshipsPath = path.join(activeContextDir, RELATIONSHIPS_FILENAME);
+      const relationshipsPath = path.join(generationDirectory, RELATIONSHIPS_FILENAME);
       const graphData = internalFileGraph.toJSON();
 
       // Build reverse import map (importedBy)
@@ -1243,7 +1169,7 @@ export class CodebaseIndexer {
       };
       await fs.writeFile(relationshipsPath, JSON.stringify(relationships, null, 2));
 
-      const healthPath = path.join(activeContextDir, HEALTH_FILENAME);
+      const healthPath = path.join(generationDirectory, HEALTH_FILENAME);
       const health = deriveCodebaseHealth({
         buildId,
         formatVersion: INDEX_FORMAT_VERSION,
@@ -1254,8 +1180,8 @@ export class CodebaseIndexer {
       await fs.writeFile(healthPath, JSON.stringify(health, null, 2));
 
       // Write manifest (both full and incremental)
-      // For full rebuild, write to staging; for incremental, write to active
-      const activeManifestPath = path.join(activeContextDir, MANIFEST_FILENAME);
+      // Full and incremental builds both write an immutable staged generation.
+      const activeManifestPath = path.join(generationDirectory, MANIFEST_FILENAME);
       const analyzedHashes = Object.fromEntries(analyzedManifestHashes);
       const manifest: FileManifest = {
         version: 1,
@@ -1271,11 +1197,11 @@ export class CodebaseIndexer {
         totalFiles: stats.totalFiles,
         generatedAt
       };
-      const activeIndexingStatsPath = path.join(activeContextDir, INDEXING_STATS_FILENAME);
+      const activeIndexingStatsPath = path.join(generationDirectory, INDEXING_STATS_FILENAME);
       await fs.writeFile(activeIndexingStatsPath, JSON.stringify(persistedStats, null, 2));
 
-      // Index meta (authoritative) — write last so readers never observe meta pointing to missing artifacts.
-      const metaPath = path.join(activeContextDir, INDEX_META_FILENAME);
+      // Complete the staged generation metadata before the separate root-pointer publication.
+      const metaPath = path.join(generationDirectory, INDEX_META_FILENAME);
       await fs.writeFile(
         metaPath,
         JSON.stringify(
@@ -1306,11 +1232,11 @@ export class CodebaseIndexer {
         )
       );
 
-      // Atomic swap for full rebuilds: move staging into active location
-      if (isFullRebuild && stagingDir) {
-        console.error('Performing atomic swap of staging to active...');
-        await atomicSwapStagingToActive(contextDir, stagingDir, buildId);
-      }
+      const generationMeta = await readIndexMetaFromFile(metaPath);
+      // Once publication starts, only retention may remove the generation. Even a
+      // post-commit housekeeping fault must not enter the staging rollback path.
+      stagingDir = null;
+      await publishIndexGeneration(this.rootPath, generationMeta);
 
       // Phase 5: Complete
       this.updateProgress('complete', 100);
@@ -1445,6 +1371,10 @@ export class CodebaseIndexer {
   }
 
   async detectMetadata(): Promise<CodebaseMetadata> {
+    return withAvailableIndexSnapshot(this.rootPath, () => this.detectPinnedMetadata());
+  }
+
+  private async detectPinnedMetadata(): Promise<CodebaseMetadata> {
     // Get all registered analyzers (sorted by priority, highest first)
     const analyzers = analyzerRegistry.getAll();
 
@@ -1508,11 +1438,7 @@ export class CodebaseIndexer {
 
     // Load intelligence data if available
     try {
-      const intelligencePath = path.join(
-        this.rootPath,
-        CODEBASE_CONTEXT_DIRNAME,
-        INTELLIGENCE_FILENAME
-      );
+      const intelligencePath = await resolveIndexArtifact(this.rootPath, INTELLIGENCE_FILENAME);
       const intelligenceContent = await fs.readFile(intelligencePath, 'utf-8');
       const intelligence = JSON.parse(intelligenceContent) as IntelligenceData;
 

@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from './core/index-generation.js';
 /**
  * CLI subcommands for codebase-context.
  * Memory list/add/remove — vendor-neutral access without any AI agent.
@@ -6,14 +7,8 @@
 
 import path from 'path';
 import { promises as fs } from 'fs';
-import {
-  CODEBASE_CONTEXT_DIRNAME,
-  MEMORY_FILENAME,
-  INTELLIGENCE_FILENAME,
-  HEALTH_FILENAME,
-  KEYWORD_INDEX_FILENAME,
-  VECTOR_DB_DIRNAME
-} from './constants/codebase-context.js';
+import { KEYWORD_INDEX_FILENAME } from './constants/codebase-context.js';
+import { makePaths } from './project-state.js';
 import { CodebaseIndexer } from './core/indexer.js';
 import { dispatchTool } from './tools/index.js';
 import type { ToolContext } from './tools/index.js';
@@ -30,6 +25,7 @@ export { handleMemoryCli } from './cli-memory.js';
 import { handleInitCli } from './cli-init.js';
 import { handleMapCli } from './cli-map.js';
 import { loadProjectConfig } from './server/config.js';
+import { cliProjectOptions } from './cli-project-options.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
@@ -87,7 +83,7 @@ function printUsage(): void {
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
-  console.log('  init                               Set up detected AI clients for this project');
+  console.log('  init [--client <name>] [--yes]     Detect and configure coding tools');
   console.log('  map [--json] [--pretty]              Conventions map (indexes first if needed)');
   console.log('');
   console.log('Global flags:');
@@ -112,18 +108,11 @@ async function initToolContext(): Promise<ToolContext> {
   const rootPath = resolveCliRootPath();
   const projectConfig = await loadProjectConfig(rootPath);
 
-  const paths = {
-    baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
-    memory: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
-    intelligence: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
-    health: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, HEALTH_FILENAME),
-    keywordIndex: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
-    vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
-  };
+  const paths = makePaths(rootPath);
 
   let indexExists = false;
   try {
-    await fs.access(paths.keywordIndex);
+    await fs.access(await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME));
     indexExists = true;
   } catch {
     // no index on disk
@@ -146,12 +135,7 @@ async function initToolContext(): Promise<ToolContext> {
       let lastLoggedProgress = { phase: '', percentage: -1 };
       const indexer = new CodebaseIndexer({
         rootPath,
-        config: {
-          ...(projectConfig?.parsing ? { parsing: projectConfig.parsing } : {}),
-          ...((skipEmbedding ?? projectConfig?.skipEmbedding) !== undefined
-            ? { skipEmbedding: skipEmbedding ?? projectConfig?.skipEmbedding }
-            : {})
-        },
+        ...cliProjectOptions(projectConfig, skipEmbedding ?? projectConfig?.skipEmbedding),
         incrementalOnly,
         onProgress: (progress) => {
           const shouldLog =

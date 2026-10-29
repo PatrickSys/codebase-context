@@ -143,6 +143,7 @@
     "glob": "^10.3.10",
     "hono": "^4.12.12",
     "ignore": "^5.3.1",
+    "smol-toml": "1.9.1",
     "typescript": "^5.3.3",
     "uuid": "^14.0.0",
     "web-tree-sitter": "^0.25.10",
@@ -161,9 +162,9 @@
     }
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@huggingface/transformers": "^4.2.0",
     "@lancedb/lancedb": "^0.4.0",
-    "@eslint/js": "^9.39.2",
     "@types/glob": "^8.1.0",
     "@types/node": "^20.11.24",
     "@types/uuid": "^9.0.8",

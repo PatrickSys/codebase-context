@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
 import { writeFileSync } from 'node:fs';
@@ -71,7 +72,7 @@ describe('persisted embedding mode', () => {
       HEALTH_FILENAME,
       MANIFEST_FILENAME
     ]) {
-      const artifactPath = path.join(contextDir, filename);
+      const artifactPath = await resolveIndexArtifact(legacyRoot, filename, meta);
       const artifact = JSON.parse(await fs.readFile(artifactPath, 'utf8')) as {
         header: { formatVersion: number };
       };
@@ -79,7 +80,10 @@ describe('persisted embedding mode', () => {
       await fs.writeFile(artifactPath, JSON.stringify(artifact));
     }
     await fs.writeFile(
-      path.join(contextDir, VECTOR_DB_DIRNAME, 'index-build.json'),
+      path.join(
+        await resolveIndexArtifact(legacyRoot, VECTOR_DB_DIRNAME, meta),
+        'index-build.json'
+      ),
       JSON.stringify({ buildId: meta.buildId, formatVersion })
     );
     return meta;
@@ -137,7 +141,7 @@ describe('persisted embedding mode', () => {
     rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-mode-corrupt-'));
     const contextDir = path.join(rootPath, '.codebase-context');
     await fs.mkdir(contextDir);
-    await fs.writeFile(path.join(contextDir, 'index.json'), '{}');
+    await fs.writeFile(await resolveIndexArtifact(path.dirname(contextDir), 'index.json'), '{}');
     await expect(resolveSkipEmbedding(rootPath)).rejects.toThrow(/Cannot recover embedding mode/);
     await expect(resolveSkipEmbedding(rootPath, true)).resolves.toBe(true);
   });
@@ -178,19 +182,19 @@ describe('persisted embedding mode', () => {
   it('initializes keyword search without embedding or vector storage in model-free mode', async () => {
     rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-search-model-free-'));
     const contextDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
-    const vectorDir = path.join(contextDir, VECTOR_DB_DIRNAME);
+    const vectorDir = await resolveIndexArtifact(path.dirname(contextDir), VECTOR_DB_DIRNAME);
     const buildId = 'model-free-build';
     await fs.mkdir(vectorDir, { recursive: true });
     await fs.writeFile(
-      path.join(contextDir, KEYWORD_INDEX_FILENAME),
+      await resolveIndexArtifact(path.dirname(contextDir), KEYWORD_INDEX_FILENAME),
       JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks: [] })
     );
     await fs.writeFile(
-      path.join(contextDir, INTELLIGENCE_FILENAME),
+      await resolveIndexArtifact(path.dirname(contextDir), INTELLIGENCE_FILENAME),
       JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, patterns: {} })
     );
     await fs.writeFile(
-      path.join(contextDir, MANIFEST_FILENAME),
+      await resolveIndexArtifact(path.dirname(contextDir), MANIFEST_FILENAME),
       JSON.stringify({ version: 1, generatedAt: new Date().toISOString(), files: {} })
     );
     await fs.writeFile(
@@ -244,7 +248,7 @@ describe('persisted embedding mode', () => {
     expect(embeddingRuntimeAssert).not.toHaveBeenCalled();
     expect(storageRuntimeAssert).not.toHaveBeenCalled();
     expect(embeddingInit).not.toHaveBeenCalled();
-    const indexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
+    const indexPath = await resolveIndexArtifact(path.dirname(contextDir), KEYWORD_INDEX_FILENAME);
     const initialIndex = await fs.readFile(indexPath, 'utf8');
     expect(initialIndex).toContain('original source');
 
@@ -256,7 +260,10 @@ describe('persisted embedding mode', () => {
       await fs.readFile(path.join(contextDir, INDEX_META_FILENAME), 'utf8')
     ) as { artifacts: { vectorDb: { embeddingEnabled: boolean } } };
     expect(secondMeta.artifacts.vectorDb.embeddingEnabled).toBe(false);
-    const rebuiltIndex = await fs.readFile(indexPath, 'utf8');
+    const rebuiltIndex = await fs.readFile(
+      await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME),
+      'utf8'
+    );
     expect(rebuiltIndex).toContain('updated source');
     expect(rebuiltIndex).not.toContain('original source');
     expect(embeddingInit).not.toHaveBeenCalled();
@@ -273,10 +280,7 @@ describe('persisted embedding mode', () => {
     await fs.writeFile(path.join(rootPath, 'consume.js'), commented);
     await new CodebaseIndexer({ rootPath }).index();
     const persisted = JSON.parse(
-      await fs.readFile(
-        path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
-        'utf8'
-      )
+      await fs.readFile(await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME), 'utf8')
     ) as { chunks: CodeChunk[] };
     for (const fact of fixture!.sourceSymbols) {
       const own = persisted.chunks.filter(
@@ -306,10 +310,7 @@ describe('persisted embedding mode', () => {
     await fs.writeFile(path.join(rootPath, 'handlers.js'), source);
     await new CodebaseIndexer({ rootPath }).index();
     const persisted = JSON.parse(
-      await fs.readFile(
-        path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
-        'utf8'
-      )
+      await fs.readFile(await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME), 'utf8')
     ) as { chunks: CodeChunk[] };
     for (const fact of [
       {
@@ -365,10 +366,10 @@ describe('persisted embedding mode', () => {
       await new CodebaseIndexer({ rootPath }).index();
       const contextDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
       const metaPath = path.join(contextDir, INDEX_META_FILENAME);
-      await retainLegacyFormat(rootPath, formatVersion);
+      const legacyMeta = await retainLegacyFormat(rootPath, formatVersion);
       const originalMeta = await fs.readFile(metaPath, 'utf8');
       const originalIndex = await fs.readFile(
-        path.join(contextDir, KEYWORD_INDEX_FILENAME),
+        await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME, legacyMeta),
         'utf8'
       );
       await expect(resolveSkipEmbedding(rootPath)).resolves.toBe(true);
@@ -384,9 +385,12 @@ describe('persisted embedding mode', () => {
         }).index()
       ).rejects.toBe(unavailable);
       expect(await fs.readFile(metaPath, 'utf8')).toBe(originalMeta);
-      expect(await fs.readFile(path.join(contextDir, KEYWORD_INDEX_FILENAME), 'utf8')).toBe(
-        originalIndex
-      );
+      expect(
+        await fs.readFile(
+          await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME, legacyMeta),
+          'utf8'
+        )
+      ).toBe(originalIndex);
     },
     60000
   );
@@ -401,9 +405,9 @@ describe('persisted embedding mode', () => {
 
     const indexer = new CodebaseIndexer({ rootPath, config: { skipEmbedding: false } });
     await expect(indexer.index()).rejects.toBe(missingRuntime);
-    await expect(fs.access(path.join(rootPath, CODEBASE_CONTEXT_DIRNAME))).rejects.toMatchObject({
-      code: 'ENOENT'
-    });
+    // Writer coordination exists before baseline reads; no index artifact is created.
+    expect(await fs.readdir(path.join(rootPath, CODEBASE_CONTEXT_DIRNAME))).toEqual(['.writers']);
+    expect(await fs.readdir(path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, '.writers'))).toEqual([]);
     expect(storageRuntimeAssert).not.toHaveBeenCalled();
   });
 
@@ -428,7 +432,7 @@ describe('persisted embedding mode', () => {
       spy.mockRestore();
     }
     const manifest = JSON.parse(
-      await fs.readFile(path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME), 'utf8')
+      await fs.readFile(await resolveIndexArtifact(rootPath, MANIFEST_FILENAME), 'utf8')
     ) as { files: Record<string, string> };
     const expected = (await import('node:crypto'))
       .createHash('sha256')

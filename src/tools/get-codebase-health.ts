@@ -1,3 +1,4 @@
+import { withToolIndexSnapshot } from './index-snapshot.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext, ToolResponse } from './types.js';
 import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../health/store.js';
@@ -28,6 +29,13 @@ export const definition: Tool = {
 };
 
 export async function handle(
+  args: Record<string, unknown>,
+  ctx: ToolContext
+): Promise<ToolResponse> {
+  return withToolIndexSnapshot(ctx, (pinned) => handlePinned(args, pinned));
+}
+
+async function handlePinned(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolResponse> {

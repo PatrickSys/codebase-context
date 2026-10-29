@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
@@ -146,7 +147,7 @@ describe('search source-path validity', () => {
         'export function support() { return quartzBeacon(); }\n'
       );
       await indexProject(rootPath);
-      const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
       const indexBefore = await fs.readFile(indexPath, 'utf8');
       if (drift === 'changed') await fs.writeFile(topPath, 'export const changed = true;\n');
       if (drift === 'deleted') await fs.rm(topPath);
@@ -234,7 +235,7 @@ describe('search source-path validity', () => {
     const rootPath = path.join(tempRoot, 'injected source');
     await createSourceFile(rootPath, 'src/quartzBeacon.ts', 'export const quartzBeacon = true;\n');
     await indexProject(rootPath);
-    const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
     const index = JSON.parse(await fs.readFile(indexPath, 'utf8')) as { chunks: CodeChunk[] };
     await createSourceFile(
       rootPath,
@@ -281,92 +282,96 @@ describe('search source-path validity', () => {
   it.each(['compact', 'full'] as const)(
     'replenishes current candidates while retaining mutation gates in %s mode',
     async (mode) => {
-    const rootPath = path.join(tempRoot, 'one stale source many chunks');
-    const sourcePath = path.join(rootPath, 'src/quartzBeacon.ts');
-    const supportPath = path.join(rootPath, 'src/support.ts');
-    const source =
-      Array.from(
-        { length: 100 },
-        (_, n) =>
-          `export function quartzBeacon${n}() {\n${Array.from(
-            { length: 30 },
-            (_, m) => `  const helper${m} = "quartzBeacon";`
-          ).join('\n')}\n  return "quartzBeacon";\n}`
-      ).join('\n') + '\n';
-    await createSourceFile(rootPath, 'src/quartzBeacon.ts', source);
-    await createSourceFile(
-      rootPath,
-      'src/support.ts',
-      'export function support() { return quartzBeacon0(); }\n'
-    );
-    await indexProject(rootPath);
-    const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
-    const indexBefore = await fs.readFile(indexPath, 'utf8');
-    const index = JSON.parse(indexBefore) as { chunks: CodeChunk[] };
-    expect(
-      index.chunks.filter((chunk) => chunk.relativePath === 'src/quartzBeacon.ts').length
-    ).toBeGreaterThan(30);
-    const readSpy = vi.spyOn(fs, 'readFile');
-    const realPathSpy = vi.spyOn(fs, 'realpath');
-    try {
-      const fresh = await new CodebaseSearcher(rootPath).searchWithCoverage(
-        'quartzBeacon',
-        1,
-        undefined,
-        KEYWORD_ONLY_OPTIONS
+      const rootPath = path.join(tempRoot, 'one stale source many chunks');
+      const sourcePath = path.join(rootPath, 'src/quartzBeacon.ts');
+      const supportPath = path.join(rootPath, 'src/support.ts');
+      const source =
+        Array.from(
+          { length: 100 },
+          (_, n) =>
+            `export function quartzBeacon${n}() {\n${Array.from(
+              { length: 30 },
+              (_, m) => `  const helper${m} = "quartzBeacon";`
+            ).join('\n')}\n  return "quartzBeacon";\n}`
+        ).join('\n') + '\n';
+      await createSourceFile(rootPath, 'src/quartzBeacon.ts', source);
+      await createSourceFile(
+        rootPath,
+        'src/support.ts',
+        'export function support() { return quartzBeacon0(); }\n'
       );
-      expect(fresh.results).toHaveLength(1);
-      expect(fresh.sourceCoverage).toEqual({ status: 'current', checkedFiles: 1, skippedFiles: 0 });
-      await fs.writeFile(sourcePath, 'export const changed = true;\n');
-      for (const limit of [1, 5]) {
-        readSpy.mockClear();
-        realPathSpy.mockClear();
-        const result = await new CodebaseSearcher(rootPath).searchWithCoverage(
+      await indexProject(rootPath);
+      const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
+      const indexBefore = await fs.readFile(indexPath, 'utf8');
+      const index = JSON.parse(indexBefore) as { chunks: CodeChunk[] };
+      expect(
+        index.chunks.filter((chunk) => chunk.relativePath === 'src/quartzBeacon.ts').length
+      ).toBeGreaterThan(30);
+      const readSpy = vi.spyOn(fs, 'readFile');
+      const realPathSpy = vi.spyOn(fs, 'realpath');
+      try {
+        const fresh = await new CodebaseSearcher(rootPath).searchWithCoverage(
           'quartzBeacon',
-          limit,
+          1,
           undefined,
           KEYWORD_ONLY_OPTIONS
         );
-        await expectSearchResultsOpenInsideRoot(rootPath, result.results, 'src/support.ts');
-        expect(result.results.length).toBeLessThanOrEqual(limit);
-        expect(result.sourceCoverage).toMatchObject({
-          status: 'partial',
-          checkedFiles: 2,
-          skippedFiles: 1
+        expect(fresh.results).toHaveLength(1);
+        expect(fresh.sourceCoverage).toEqual({
+          status: 'current',
+          checkedFiles: 1,
+          skippedFiles: 0
         });
-        expect(result.sourceCoverage.candidateBudgetExhausted).toBeUndefined();
-        const reads = readSpy.mock.calls.map(([file]) => path.resolve(String(file)));
-        expect(reads.filter((file) => file === sourcePath)).toHaveLength(1);
-        // The assertion helper opens the returned file once as a host would.
-        expect(reads.filter((file) => file === supportPath)).toHaveLength(2);
-        expect(
-          realPathSpy.mock.calls.filter(([file]) => path.resolve(String(file)) === rootPath)
-        ).toHaveLength(1);
+        await fs.writeFile(sourcePath, 'export const changed = true;\n');
+        for (const limit of [1, 5]) {
+          readSpy.mockClear();
+          realPathSpy.mockClear();
+          const result = await new CodebaseSearcher(rootPath).searchWithCoverage(
+            'quartzBeacon',
+            limit,
+            undefined,
+            KEYWORD_ONLY_OPTIONS
+          );
+          await expectSearchResultsOpenInsideRoot(rootPath, result.results, 'src/support.ts');
+          expect(result.results.length).toBeLessThanOrEqual(limit);
+          expect(result.sourceCoverage).toMatchObject({
+            status: 'partial',
+            checkedFiles: 2,
+            skippedFiles: 1
+          });
+          expect(result.sourceCoverage.candidateBudgetExhausted).toBeUndefined();
+          const reads = readSpy.mock.calls.map(([file]) => path.resolve(String(file)));
+          expect(reads.filter((file) => file === sourcePath)).toHaveLength(1);
+          // The assertion helper opens the returned file once as a host would.
+          expect(reads.filter((file) => file === supportPath)).toHaveLength(2);
+          expect(
+            realPathSpy.mock.calls.filter(([file]) => path.resolve(String(file)) === rootPath)
+          ).toHaveLength(1);
+        }
+        const ctx = searchContext(rootPath);
+        const response = await searchCodebase({ query: 'quartzBeacon', limit: 1, mode }, ctx);
+        const payload = JSON.parse(response.content![0].text) as SearchResponse;
+        expect(payload.status).toBe('success');
+        expect(payload.results).toHaveLength(1);
+        expect(payload.results[0].file).toContain('support.ts:');
+        expect(payload.sourceCoverage?.status).toBe('partial');
+        expect(payload.preflight).toBeUndefined();
+        for (const intent of ['edit', 'refactor', 'migrate'] as const) {
+          const guarded = await searchCodebase(
+            { query: 'quartzBeacon', limit: 1, mode, intent },
+            ctx
+          );
+          const guardedPayload = JSON.parse(guarded.content![0].text) as SearchResponse;
+          expect(guardedPayload.sourceCoverage?.status).toBe('partial');
+          expect(guardedPayload.preflight?.ready).toBe(false);
+          expect(guardedPayload.preflight?.nextAction).toMatch(/refresh/i);
+        }
+        expect(ctx.performIndexing).not.toHaveBeenCalled();
+        expect(await fs.readFile(indexPath, 'utf8')).toBe(indexBefore);
+      } finally {
+        readSpy.mockRestore();
+        realPathSpy.mockRestore();
       }
-      const ctx = searchContext(rootPath);
-      const response = await searchCodebase({ query: 'quartzBeacon', limit: 1, mode }, ctx);
-      const payload = JSON.parse(response.content![0].text) as SearchResponse;
-      expect(payload.status).toBe('success');
-      expect(payload.results).toHaveLength(1);
-      expect(payload.results[0].file).toContain('support.ts:');
-      expect(payload.sourceCoverage?.status).toBe('partial');
-      expect(payload.preflight).toBeUndefined();
-      for (const intent of ['edit', 'refactor', 'migrate'] as const) {
-        const guarded = await searchCodebase(
-          { query: 'quartzBeacon', limit: 1, mode, intent },
-          ctx
-        );
-        const guardedPayload = JSON.parse(guarded.content![0].text) as SearchResponse;
-        expect(guardedPayload.sourceCoverage?.status).toBe('partial');
-        expect(guardedPayload.preflight?.ready).toBe(false);
-        expect(guardedPayload.preflight?.nextAction).toMatch(/refresh/i);
-      }
-      expect(ctx.performIndexing).not.toHaveBeenCalled();
-      expect(await fs.readFile(indexPath, 'utf8')).toBe(indexBefore);
-    } finally {
-      readSpy.mockRestore();
-      realPathSpy.mockRestore();
-    }
     }
   );
 
@@ -428,7 +433,7 @@ describe('search source-path validity', () => {
       KEYWORD_ONLY_OPTIONS
     );
     expect(path.basename(before[0].filePath)).toBe('quartzBeacon.ts');
-    const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
     const index = JSON.parse(await fs.readFile(indexPath, 'utf8')) as { chunks: CodeChunk[] };
     for (const chunk of index.chunks.filter((chunk) => chunk.relativePath === 'src/support.ts')) {
       chunk.endLine = 99999;
@@ -463,7 +468,7 @@ describe('search source-path validity', () => {
     try {
       await indexProject(rootPath);
 
-      const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
       const initialIndex = JSON.parse(await fs.readFile(indexPath, 'utf8')) as {
         chunks: Array<{
           content: string;
@@ -564,7 +569,7 @@ describe('search source-path validity', () => {
       await indexProject(independentRootPath);
       const independentIndex = JSON.parse(
         await fs.readFile(
-          path.join(independentRootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
+          await resolveIndexArtifact(independentRootPath, KEYWORD_INDEX_FILENAME),
           'utf8'
         )
       ) as { chunks: Array<{ relativePath: string }> };
@@ -633,7 +638,7 @@ describe('search source-path validity', () => {
       'export function quartzBeacon(): string {\r\n  return "current source";\r\n}\r\nquartzBeacon();\r\n'
     );
     await indexProject(rootPath);
-    const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
     const index = JSON.parse(await fs.readFile(indexPath, 'utf8')) as {
       chunks: Array<{ content: string }>;
     };
@@ -745,7 +750,7 @@ describe('search source-path validity', () => {
         'export function quartzBeacon() { return 1; }\n'
       );
       await indexProject(rootPath);
-      const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
       const index = JSON.parse(await fs.readFile(indexPath, 'utf8')) as {
         chunks: Array<{ startLine: number; endLine: number }>;
       };
@@ -841,7 +846,7 @@ describe('search source-path validity', () => {
       'export function quartzBeacon() {\n  return "source";\n}\nquartzBeacon();\n'
     );
     await indexProject(rootPath);
-    await fs.rm(path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME));
+    await fs.rm(await resolveIndexArtifact(rootPath, MANIFEST_FILENAME));
 
     await expect(
       new CodebaseSearcher(rootPath).search('quartzBeacon', 5, undefined, KEYWORD_ONLY_OPTIONS)
@@ -872,7 +877,7 @@ describe('search source-path validity', () => {
     );
     await indexProject(rootPath);
 
-    const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
     const parsedIndex = JSON.parse(await fs.readFile(indexPath, 'utf8')) as {
       header: { buildId: string; formatVersion: number };
       chunks: Array<{ content: string; filePath: string; relativePath: string }>;

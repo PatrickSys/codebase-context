@@ -373,7 +373,7 @@ describe('multi-project routing', () => {
     }
   });
 
-  it('reports status-check guidance when an index build is already running', async () => {
+  it('reports status-check guidance during an initial uncommitted build', async () => {
     const { server } = await import('../src/index.js');
     const { getOrCreateProject } = await import('../src/project-state.js');
     const handler = (server as unknown as TestServer)._requestHandlers.get('tools/call');
@@ -382,6 +382,7 @@ describe('multi-project routing', () => {
     const project = getOrCreateProject(primaryRoot);
     const originalStatus = project.indexState.status;
     project.indexState.status = 'indexing';
+    await fs.rm(path.join(primaryRoot, CODEBASE_CONTEXT_DIRNAME, INDEX_META_FILENAME));
     try {
       const response = await callTool(handler, 20, 'search_codebase', {
         query: 'feature',

@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -203,9 +204,10 @@ describe('search_codebase auto-heal', () => {
     15000
   );
 
-  it('returns status-check guidance without searching while an index build is active', async () => {
+  it('returns status-check guidance without searching during an initial uncommitted build', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');
 
+    await fs.rm(path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME, INDEX_META_FILENAME));
     const { handle } = await import('../src/tools/search-codebase.js');
     const baseDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
     const response = await handle(
@@ -215,10 +217,10 @@ describe('search_codebase auto-heal', () => {
         paths: {
           baseDir,
           memory: path.join(baseDir, 'memory.json'),
-          intelligence: path.join(baseDir, 'intelligence.json'),
-          health: path.join(baseDir, 'health.json'),
-          keywordIndex: path.join(baseDir, KEYWORD_INDEX_FILENAME),
-          vectorDb: path.join(baseDir, VECTOR_DB_DIRNAME)
+          intelligence: await resolveIndexArtifact(path.dirname(baseDir), 'intelligence.json'),
+          health: await resolveIndexArtifact(path.dirname(baseDir), 'health.json'),
+          keywordIndex: await resolveIndexArtifact(path.dirname(baseDir), KEYWORD_INDEX_FILENAME),
+          vectorDb: await resolveIndexArtifact(path.dirname(baseDir), VECTOR_DB_DIRNAME)
         },
         rootPath: tempRoot,
         performIndexing: vi.fn()

@@ -174,207 +174,231 @@ export class ProfileService {
     }
   }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
 
-  it('intent="edit" with multiple results returns full decision card with ready field', async () => {
-    if (!tempRoot) throw new Error('tempRoot not initialized');
+  it(
+    'intent="edit" with multiple results returns full decision card with ready field',
+    async () => {
+      if (!tempRoot) throw new Error('tempRoot not initialized');
 
-    const { server } = await import('../src/index.js');
-    const handler = getToolCallHandler(server);
+      const { server } = await import('../src/index.js');
+      const handler = getToolCallHandler(server);
 
-    const response = await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: {
-          query: 'getToken',
-          intent: 'edit'
+      const response = await handler({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'search_codebase',
+          arguments: {
+            query: 'getToken',
+            intent: 'edit'
+          }
         }
+      });
+
+      expect(response.content).toBeDefined();
+      expect(response.content.length).toBeGreaterThan(0);
+      const content = response.content[0];
+      expect(content.type).toBe('text');
+
+      const parsed = JSON.parse(content.text) as SearchToolPayload;
+      expect(parsed.results).toBeDefined();
+      expect(parsed.results.length).toBeGreaterThan(0);
+
+      const preflight = parsed.preflight;
+      expect(preflight).toBeDefined();
+      if (!preflight) {
+        throw new Error('Expected preflight payload for edit intent');
       }
-    });
+      expect(preflight.ready).toBeDefined();
+      expect(typeof preflight.ready).toBe('boolean');
+    },
+    SLOW_WINDOWS_TEST_TIMEOUT_MS
+  );
 
-    expect(response.content).toBeDefined();
-    expect(response.content.length).toBeGreaterThan(0);
-    const content = response.content[0];
-    expect(content.type).toBe('text');
+  it(
+    'decision card has all expected fields when returned',
+    async () => {
+      if (!tempRoot) throw new Error('tempRoot not initialized');
 
-    const parsed = JSON.parse(content.text) as SearchToolPayload;
-    expect(parsed.results).toBeDefined();
-    expect(parsed.results.length).toBeGreaterThan(0);
+      const { server } = await import('../src/index.js');
+      const handler = getToolCallHandler(server);
 
-    const preflight = parsed.preflight;
-    expect(preflight).toBeDefined();
-    if (!preflight) {
-      throw new Error('Expected preflight payload for edit intent');
-    }
-    expect(preflight.ready).toBeDefined();
-    expect(typeof preflight.ready).toBe('boolean');
-  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
-
-  it('decision card has all expected fields when returned', async () => {
-    if (!tempRoot) throw new Error('tempRoot not initialized');
-
-    const { server } = await import('../src/index.js');
-    const handler = getToolCallHandler(server);
-
-    const response = await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: {
-          query: 'AuthService',
-          intent: 'edit'
+      const response = await handler({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'search_codebase',
+          arguments: {
+            query: 'AuthService',
+            intent: 'edit'
+          }
         }
+      });
+
+      const content = response.content[0];
+      const parsed = JSON.parse(content.text) as SearchToolPayload;
+      const preflight = parsed.preflight;
+      expect(preflight).toBeDefined();
+      if (!preflight) {
+        throw new Error('Expected preflight payload for edit intent');
       }
-    });
 
-    const content = response.content[0];
-    const parsed = JSON.parse(content.text) as SearchToolPayload;
-    const preflight = parsed.preflight;
-    expect(preflight).toBeDefined();
-    if (!preflight) {
-      throw new Error('Expected preflight payload for edit intent');
-    }
+      // preflight should have ready as minimum
+      expect(preflight.ready).toBeDefined();
+      expect(typeof preflight.ready).toBe('boolean');
 
-    // preflight should have ready as minimum
-    expect(preflight.ready).toBeDefined();
-    expect(typeof preflight.ready).toBe('boolean');
+      // Optional fields can be present
+      if (preflight.nextAction) {
+        expect(typeof preflight.nextAction).toBe('string');
+      }
+      if (preflight.patterns) {
+        expect(typeof preflight.patterns).toBe('object');
+      }
+      if (preflight.warnings) {
+        expect(Array.isArray(preflight.warnings)).toBe(true);
+      }
+      if (preflight.bestExample) {
+        expect(typeof preflight.bestExample).toBe('string');
+      }
+      if (preflight.impact) {
+        expect(typeof preflight.impact).toBe('object');
+      }
+      if (preflight.whatWouldHelp) {
+        expect(Array.isArray(preflight.whatWouldHelp)).toBe(true);
+      }
+    },
+    SLOW_WINDOWS_TEST_TIMEOUT_MS
+  );
 
-    // Optional fields can be present
-    if (preflight.nextAction) {
-      expect(typeof preflight.nextAction).toBe('string');
-    }
-    if (preflight.patterns) {
-      expect(typeof preflight.patterns).toBe('object');
-    }
-    if (preflight.warnings) {
-      expect(Array.isArray(preflight.warnings)).toBe(true);
-    }
-    if (preflight.bestExample) {
-      expect(typeof preflight.bestExample).toBe('string');
-    }
-    if (preflight.impact) {
-      expect(typeof preflight.impact).toBe('object');
-    }
-    if (preflight.whatWouldHelp) {
-      expect(Array.isArray(preflight.whatWouldHelp)).toBe(true);
-    }
-  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
+  it(
+    'intent="explore" omits edit readiness',
+    async () => {
+      if (!tempRoot) throw new Error('tempRoot not initialized');
 
-  it('intent="explore" omits edit readiness', async () => {
-    if (!tempRoot) throw new Error('tempRoot not initialized');
+      const { server } = await import('../src/index.js');
+      const handler = getToolCallHandler(server);
 
-    const { server } = await import('../src/index.js');
-    const handler = getToolCallHandler(server);
-
-    const response = await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: {
-          query: 'AuthService',
-          intent: 'explore'
+      const response = await handler({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'search_codebase',
+          arguments: {
+            query: 'AuthService',
+            intent: 'explore'
+          }
         }
-      }
-    });
+      });
 
-    const content = response.content[0];
-    const parsed = JSON.parse(content.text) as SearchToolPayload;
-    expect(parsed.preflight).toBeUndefined();
-  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
+      const content = response.content[0];
+      const parsed = JSON.parse(content.text) as SearchToolPayload;
+      expect(parsed.preflight).toBeUndefined();
+    },
+    SLOW_WINDOWS_TEST_TIMEOUT_MS
+  );
 
-  it('includes snippet field when includeSnippets=true', async () => {
-    if (!tempRoot) throw new Error('tempRoot not initialized');
+  it(
+    'includes snippet field when includeSnippets=true',
+    async () => {
+      if (!tempRoot) throw new Error('tempRoot not initialized');
 
-    const { server } = await import('../src/index.js');
-    const handler = getToolCallHandler(server);
+      const { server } = await import('../src/index.js');
+      const handler = getToolCallHandler(server);
 
-    const response = await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: {
-          query: 'getToken',
-          mode: 'full',
-          includeSnippets: true
+      const response = await handler({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'search_codebase',
+          arguments: {
+            query: 'getToken',
+            mode: 'full',
+            includeSnippets: true
+          }
         }
-      }
-    });
+      });
 
-    const content = response.content[0];
-    const parsed = JSON.parse(content.text) as SearchToolPayload;
+      const content = response.content[0];
+      const parsed = JSON.parse(content.text) as SearchToolPayload;
 
-    expect(parsed.results).toBeDefined();
-    expect(parsed.results.length).toBeGreaterThan(0);
+      expect(parsed.results).toBeDefined();
+      expect(parsed.results.length).toBeGreaterThan(0);
 
-    // At least some results should have a snippet
-    const withSnippets = parsed.results.filter((result) => result.snippet);
-    expect(withSnippets.length).toBeGreaterThan(0);
-  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
+      // At least some results should have a snippet
+      const withSnippets = parsed.results.filter((result) => result.snippet);
+      expect(withSnippets.length).toBeGreaterThan(0);
+    },
+    SLOW_WINDOWS_TEST_TIMEOUT_MS
+  );
 
-  it('does not include snippet field when includeSnippets=false', async () => {
-    if (!tempRoot) throw new Error('tempRoot not initialized');
+  it(
+    'does not include snippet field when includeSnippets=false',
+    async () => {
+      if (!tempRoot) throw new Error('tempRoot not initialized');
 
-    const { server } = await import('../src/index.js');
-    const handler = getToolCallHandler(server);
+      const { server } = await import('../src/index.js');
+      const handler = getToolCallHandler(server);
 
-    const response = await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: {
-          query: 'getToken',
-          includeSnippets: false
+      const response = await handler({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'search_codebase',
+          arguments: {
+            query: 'getToken',
+            includeSnippets: false
+          }
         }
-      }
-    });
+      });
 
-    const content = response.content[0];
-    const parsed = JSON.parse(content.text) as SearchToolPayload;
+      const content = response.content[0];
+      const parsed = JSON.parse(content.text) as SearchToolPayload;
 
-    expect(parsed.results).toBeDefined();
-    // All results should not have snippet field
-    parsed.results.forEach((result) => {
-      expect(result.snippet).toBeUndefined();
-    });
-  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
+      expect(parsed.results).toBeDefined();
+      // All results should not have snippet field
+      parsed.results.forEach((result) => {
+        expect(result.snippet).toBeUndefined();
+      });
+    },
+    SLOW_WINDOWS_TEST_TIMEOUT_MS
+  );
 
-  it('scope header starts snippet when includeSnippets=true', async () => {
-    if (!tempRoot) throw new Error('tempRoot not initialized');
+  it(
+    'scope header starts snippet when includeSnippets=true',
+    async () => {
+      if (!tempRoot) throw new Error('tempRoot not initialized');
 
-    const { server } = await import('../src/index.js');
-    const handler = getToolCallHandler(server);
+      const { server } = await import('../src/index.js');
+      const handler = getToolCallHandler(server);
 
-    const response = await handler({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'search_codebase',
-        arguments: {
-          query: 'getToken',
-          mode: 'full',
-          includeSnippets: true
+      const response = await handler({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'search_codebase',
+          arguments: {
+            query: 'getToken',
+            mode: 'full',
+            includeSnippets: true
+          }
         }
+      });
+
+      const content = response.content[0];
+      const parsed = JSON.parse(content.text) as SearchToolPayload;
+
+      const withSnippet = parsed.results.find((result) => result.snippet);
+      if (withSnippet && withSnippet.snippet) {
+        // Scope header should be a comment line
+        const firstLine = withSnippet.snippet.split('\n')[0].trim();
+        expect(firstLine).toMatch(/^\/\//);
       }
-    });
-
-    const content = response.content[0];
-    const parsed = JSON.parse(content.text) as SearchToolPayload;
-
-    const withSnippet = parsed.results.find((result) => result.snippet);
-    if (withSnippet && withSnippet.snippet) {
-      // Scope header should be a comment line
-      const firstLine = withSnippet.snippet.split('\n')[0].trim();
-      expect(firstLine).toMatch(/^\/\//);
-    }
-  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
+    },
+    SLOW_WINDOWS_TEST_TIMEOUT_MS
+  );
 });

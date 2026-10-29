@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { CodebaseIndexer, selectFilesForIndex } from '../src/core/indexer.js';
 import { handleCliCommand } from '../src/cli.js';
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 
 describe('index preview enumeration', () => {
   let root: string;
@@ -12,6 +13,54 @@ describe('index preview enumeration', () => {
   afterEach(async () => {
     if (root) await fs.rm(root, { recursive: true, force: true });
   });
+
+  it.each(['reindex', 'map'])(
+    'applies configured exclusions and analyzer hints to the actual CLI %s index',
+    async (command) => {
+      root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-cli-project-options-'));
+      await fs.mkdir(path.join(root, 'src'));
+      await fs.mkdir(path.join(root, 'private'));
+      await fs.writeFile(path.join(root, 'src', 'keep.customcode'), 'export const keep = 1;');
+      await fs.writeFile(path.join(root, 'private', 'secret.ts'), 'export const secret = 1;');
+      const configPath = path.join(root, 'server-config.json');
+      await fs.writeFile(
+        configPath,
+        JSON.stringify({
+          projects: [
+            {
+              root,
+              excludePatterns: ['**/private/**'],
+              analyzerHints: { analyzer: 'generic', extensions: ['.customcode'] }
+            }
+          ]
+        })
+      );
+      const previousConfig = process.env.CODEBASE_CONTEXT_CONFIG_PATH;
+      const previousRoot = process.env.CODEBASE_ROOT;
+      const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      process.env.CODEBASE_CONTEXT_CONFIG_PATH = configPath;
+      process.env.CODEBASE_ROOT = root;
+      try {
+        await handleCliCommand(
+          command === 'reindex' ? ['reindex', '--no-embeddings'] : ['map', '--json']
+        );
+        const artifact: { chunks: Array<{ relativePath: string }> } = JSON.parse(
+          await fs.readFile(await resolveIndexArtifact(root, 'index.json'), 'utf8')
+        );
+        const paths = artifact.chunks.map((chunk) => chunk.relativePath);
+        expect({
+          privateIncluded: paths.includes('private/secret.ts'),
+          customIncluded: paths.includes('src/keep.customcode')
+        }).toEqual({ privateIncluded: false, customIncluded: true });
+      } finally {
+        output.mockRestore();
+        if (previousConfig === undefined) delete process.env.CODEBASE_CONTEXT_CONFIG_PATH;
+        else process.env.CODEBASE_CONTEXT_CONFIG_PATH = previousConfig;
+        if (previousRoot === undefined) delete process.env.CODEBASE_ROOT;
+        else process.env.CODEBASE_ROOT = previousRoot;
+      }
+    }
+  );
 
   it('reports only files the indexer will select and explains observed skips', async () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'indexer-preview-'));

@@ -19,7 +19,7 @@ codex mcp add codebase-context -- npx -y codebase-context
 opencode mcp add codebase-context '--' npx -y codebase-context
 ```
 
-`npx -y codebase-context --version` prints the installed package version. `npx -y codebase-context map` builds a file index when the project does not have one, then prints the map. A low-confidence search includes a hint: the matches are weak, and that is not a finding that the code is absent.
+In the unreleased candidate, `--version` prints the installed package version and `map` builds a missing index before printing the map. A low-confidence search includes a hint that weak matches do not establish that code is absent. These additions require the built candidate; the unpinned commands above install published 2.2.0.
 
 This repository's `init` command detects Claude Code, Codex, Cursor, and OpenCode and writes a project config for each selected tool. The saved launch is the Node binary and the package file from the npx cache. That command is in this source and is not part of published 2.2.0. Until it is published, use the copy-paste lines above. The [client setup guide](./docs/client-setup.md) marks the unpublished command.
 
@@ -30,6 +30,8 @@ Start a new agent session in your project, then ask:
 Replace `[feature]` with something you want to find. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model.
 
 ### Planned for 2.4.0 (not yet published)
+
+The unreleased source candidate starts new indexes without a model download. Semantic embeddings are optional; existing indexes keep their recorded mode. Its setup wizard can configure Claude Code, Codex, Cursor and OpenCode using the Node binary and package file that ran setup. These changes are not in the current npm release.
 
 - NestJS support from community contributor Aaron Olin. See the [analyzer details](./docs/capabilities.md#analyzers).
 - Better React/Next.js detection and a fix for reranker passage scoring.

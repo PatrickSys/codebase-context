@@ -1,15 +1,20 @@
+import { cliProjectOptions } from './cli-project-options.js';
+import { CodebaseIndexer } from './core/indexer.js';
+import { loadProjectConfig } from './server/config.js';
 /**
  * Interactive setup wizard for codebase-context.
  * Handles `codebase-context init` — detects clients and merges project MCP configs
  * for the four first-wave AI clients: Claude Code, Cursor, Codex, OpenCode.
  *
- * Depends only on Node built-ins and @inquirer/prompts.
- * No imports from the rest of the codebase — keeps this module side-effect-free
- * outside the wizard call and easy to unit test.
+ * Config writes run only after all selected registrations pass preflight.
+ * File previews share the indexer's selection rules and project configuration.
  */
 
 import path from 'path';
-import * as fs from 'node:fs/promises';
+import { parse as parseToml } from 'smol-toml';
+import { isDeepStrictEqual } from 'node:util';
+import { promises as fs } from 'node:fs';
+import { atomicWrite } from './utils/atomic-write.js';
 import { checkbox } from '@inquirer/prompts';
 import { homedir } from 'node:os';
 import { constants } from 'node:fs';
@@ -359,150 +364,95 @@ function normalizeTomlNewlines(value: string): string {
   return value.replace(/\r\n/g, '\n');
 }
 
-function tomlKeyPattern(key: string): string {
-  return `(?:${key}|"${key}"|'${key}')`;
-}
-
-/**
- * Merges the generated Codex launch, preserving unrelated settings and custom entries.
- */
+/** Merge only launch values after parsing; candidate byte edits must preserve every other value. */
 export async function _buildMergedCodexContent(
   filePath: string,
   generatedContent: string
 ): Promise<{ content: string; mergedFromExisting: boolean }> {
   const existing = await readExistingConfig(filePath);
-  if (existing === null) {
-    return { content: generatedContent, mergedFromExisting: false };
+  if (existing === null) return { content: generatedContent, mergedFromExisting: false };
+  const parse = (text: string) => parseToml(text, { integersAsBigInt: 'asNeeded' });
+  const original = parse(existing);
+  const generated = parse(generatedContent);
+  const generatedServers = generated.mcp_servers;
+  const servers = original.mcp_servers;
+  if (!isJsonObject(generatedServers) || !isJsonObject(generatedServers['codebase-context']))
+    throw new Error('Generated Codex configuration has no server entry.');
+  const desired = generatedServers['codebase-context'];
+  const current = isJsonObject(servers) ? servers['codebase-context'] : undefined;
+  const conflict = () =>
+    new Error(
+      `Cannot merge Codex config at ${filePath}: it already contains a different codebase-context configuration.`
+    );
+  if (current === undefined) {
+    const newline = existing.includes('\r\n') ? '\r\n' : '\n';
+    const addition = normalizeTomlNewlines(generatedContent).trim().replace(/\n/g, newline);
+    const content = `${existing}${existing.endsWith(newline) ? newline : newline + newline}${addition}${newline}`;
+    if (servers === undefined) original.mcp_servers = generatedServers;
+    else if (isJsonObject(servers)) servers['codebase-context'] = desired;
+    else throw conflict();
+    if (!isDeepStrictEqual(parse(content), original)) throw conflict();
+    return { content, mergedFromExisting: true };
   }
-
-  const normalizedExisting = normalizeTomlNewlines(existing);
-  const normalizedGenerated = normalizeTomlNewlines(generatedContent).trim();
-  const mcpServersKey = tomlKeyPattern('mcp_servers');
-  const codebaseContextKey = tomlKeyPattern('codebase-context');
-  const entryHeader = new RegExp(
-    `^\\s*\\[{1,2}\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}(?:\\s*\\.\\s*[^\\]]+)?\\s*\\]{1,2}\\s*(?:#.*)?$`,
+  if (!isJsonObject(current) || !isJsonObject(servers) || 'url' in current) throw conflict();
+  if (
+    isDeepStrictEqual(current.command, desired.command) &&
+    isDeepStrictEqual(current.args, desired.args)
+  )
+    return { content: existing, mergedFromExisting: true };
+  const entrypoint =
+    Array.isArray(desired.args) && typeof desired.args[0] === 'string'
+      ? desired.args[0]
+      : undefined;
+  if (!isGeneratedLaunch(current.command, current.args, entrypoint)) throw conflict();
+  const expected = parse(existing);
+  const expectedServers = expected.mcp_servers;
+  if (!isJsonObject(expectedServers) || !isJsonObject(expectedServers['codebase-context']))
+    throw conflict();
+  expectedServers['codebase-context'].command = desired.command;
+  expectedServers['codebase-context'].args = desired.args;
+  const key = (name: string) => `(?:${name}|"${name}"|'${name}')`;
+  const headers = new RegExp(
+    `^[ \t]*\\[[ \t]*${key('mcp_servers')}[ \t]*\\.[ \t]*${key('codebase-context')}[ \t]*\\][ \t]*(?:#.*)?$`,
     'gm'
   );
-  const existingEntry = entryHeader.exec(normalizedExisting);
-
-  if (existingEntry) {
-    const nextTable = /^\s*\[{1,2}[^\r\n]+\]{1,2}\s*(?:#.*)?$/gm;
-    nextTable.lastIndex = entryHeader.lastIndex;
-    const nextTableMatch = nextTable.exec(normalizedExisting);
-    const sectionEnd = nextTableMatch?.index ?? normalizedExisting.length;
-    const section = normalizedExisting.slice(existingEntry.index, sectionEnd).trim();
-    const exactEntryHeader = new RegExp(
-      `^\\[\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}\\s*\\]\\s*(?:#.*)?$`,
-      'm'
-    );
-    const comparableSection = section.replace(exactEntryHeader, '[mcp_servers.codebase-context]');
-    if (comparableSection === normalizedGenerated) {
-      return { content: existing, mergedFromExisting: true };
-    }
-    const commandLine = /^([ \t]*command[ \t]*=[ \t]*)("(?:[^"\\]|\\.)*")([ \t]*(?:#.*)?)$/m;
-    const argsLine = /^([ \t]*args[ \t]*=[ \t]*)(\[[^\r\n]*\])([ \t]*(?:#.*)?)$/m;
-    const oldCommand = commandLine.exec(section);
-    const oldArgs = argsLine.exec(section);
-    const newCommand = commandLine.exec(normalizedGenerated);
-    const newArgs = argsLine.exec(normalizedGenerated);
-    if (
-      exactEntryHeader.test(section) &&
-      oldCommand &&
-      oldArgs &&
-      newCommand &&
-      newArgs &&
-      !/^[ \t]*url[ \t]*=/m.test(section) &&
-      section.match(/^[ \t]*command[ \t]*=/gm)?.length === 1 &&
-      section.match(/^[ \t]*args[ \t]*=/gm)?.length === 1
-    ) {
-      try {
-        const generatedArgs: unknown = JSON.parse(newArgs[2]);
-        const generatedEntrypoint =
-          Array.isArray(generatedArgs) && typeof generatedArgs[0] === 'string'
-            ? generatedArgs[0]
-            : undefined;
-        if (
-          isGeneratedLaunch(JSON.parse(oldCommand[2]), JSON.parse(oldArgs[2]), generatedEntrypoint)
-        ) {
-          if (
-            jsonValuesEqual(JSON.parse(oldCommand[2]), JSON.parse(newCommand[2])) &&
-            jsonValuesEqual(JSON.parse(oldArgs[2]), JSON.parse(newArgs[2]))
-          ) {
-            return { content: existing, mergedFromExisting: true };
-          }
-          const updated = normalizedExisting
-            .slice(existingEntry.index, sectionEnd)
-            .replace(
-              commandLine,
-              (_line, prefix: string, _value: string, comment: string) =>
-                prefix + newCommand[2] + comment
-            )
-            .replace(
-              argsLine,
-              (_line, prefix: string, _value: string, comment: string) =>
-                prefix + newArgs[2] + comment
-            );
-          const content =
-            normalizedExisting.slice(0, existingEntry.index) +
-            updated +
-            normalizedExisting.slice(sectionEnd);
-          return {
-            content: existing.includes('\r\n') ? content.replace(/\n/g, '\r\n') : content,
-            mergedFromExisting: true
-          };
-        }
-      } catch {
-        // Non-generated TOML values remain untouched and are reported as conflicts.
-      }
-    }
-    throw new Error(
-      `Cannot merge Codex config at ${filePath}: it already contains a different codebase-context configuration.`
-    );
-  }
-
-  const dottedEntry = new RegExp(
-    `^\\s*${mcpServersKey}\\s*\\.\\s*${codebaseContextKey}\\s*(?:=|\\.)`,
-    'm'
-  );
-  if (dottedEntry.test(normalizedExisting)) {
-    throw new Error(
-      `Cannot merge Codex config at ${filePath}: it already contains a different codebase-context configuration.`
-    );
-  }
-
-  const parentTableHeader = new RegExp(`^\\s*\\[\\s*${mcpServersKey}\\s*\\]\\s*(?:#.*)?$`, 'gm');
-  let parentTable = parentTableHeader.exec(normalizedExisting);
-  while (parentTable) {
-    const nextTable = /^\s*\[{1,2}[^\r\n]+\]{1,2}\s*(?:#.*)?$/gm;
-    nextTable.lastIndex = parentTableHeader.lastIndex;
-    const nextTableMatch = nextTable.exec(normalizedExisting);
-    const sectionEnd = nextTableMatch?.index ?? normalizedExisting.length;
-    const parentSettings = normalizedExisting.slice(parentTableHeader.lastIndex, sectionEnd);
-    const childEntry = new RegExp(`^\\s*${codebaseContextKey}\\s*(?:=|\\.)`, 'm');
-    if (childEntry.test(parentSettings)) {
-      throw new Error(
-        `Cannot merge Codex config at ${filePath}: it already contains a different codebase-context configuration.`
+  const normalized = normalizeTomlNewlines(existing);
+  for (const header of normalized.matchAll(headers)) {
+    const start = header.index;
+    const bodyStart = start + header[0].length;
+    const next = /^[ \t]*\[{1,2}[^\r\n]+\]{1,2}[ \t]*(?:#.*)?$/gm;
+    next.lastIndex = bodyStart;
+    const end = next.exec(normalized)?.index ?? normalized.length;
+    const section = normalized.slice(start, end);
+    const updated = section
+      .replace(
+        /^([ \t]*command[ \t]*=[ \t]*)("(?:[^"\\]|\\.)*"|'[^'\r\n]*')([ \t]*(?:#.*)?)$/m,
+        (_line, prefix: string, _value: string, comment: string) =>
+          prefix + JSON.stringify(desired.command) + comment
+      )
+      .replace(
+        /^([ \t]*args[ \t]*=[ \t]*)(\[[^\r\n]*\])([ \t]*(?:#.*)?)$/m,
+        (_line, prefix: string, _value: string, comment: string) =>
+          prefix +
+          '[' +
+          (Array.isArray(desired.args)
+            ? desired.args.map((arg) => JSON.stringify(arg)).join(', ')
+            : '') +
+          ']' +
+          comment
       );
+    const candidate = normalized.slice(0, start) + updated + normalized.slice(end);
+    try {
+      if (isDeepStrictEqual(parse(candidate), expected))
+        return {
+          content: existing.includes('\r\n') ? candidate.replace(/\n/g, '\r\n') : candidate,
+          mergedFromExisting: true
+        };
+    } catch {
+      // A textual match inside a string or an unsupported launch shape is never published.
     }
-    parentTable = parentTableHeader.exec(normalizedExisting);
   }
-
-  const firstTable = /^\s*\[/m.exec(normalizedExisting);
-  const rootSettings = firstTable
-    ? normalizedExisting.slice(0, firstTable.index)
-    : normalizedExisting;
-  const inlineServers = new RegExp(`^\\s*${mcpServersKey}\\s*=`, 'm');
-  if (inlineServers.test(rootSettings)) {
-    throw new Error(
-      `Cannot merge Codex config at ${filePath}: mcp_servers is already configured inline.`
-    );
-  }
-
-  const prefix = normalizedExisting.trimEnd();
-  return {
-    content: `${prefix ? `${prefix}\n\n` : ''}${normalizedGenerated}\n`,
-    mergedFromExisting: true
-  };
+  throw conflict();
 }
 
 type InitOptions = {
@@ -510,6 +460,7 @@ type InitOptions = {
   rootPath: string;
   yes: boolean;
   help: boolean;
+  preview: boolean;
 };
 
 function parseClient(value: string): Client {
@@ -522,12 +473,14 @@ function parseClient(value: string): Client {
 
 function parseInitOptions(args: string[]): InitOptions {
   if (args.includes('--help') || args.includes('-h'))
-    return { clients: [], rootPath: process.cwd(), yes: false, help: true };
+    return { clients: [], rootPath: process.cwd(), yes: false, help: true, preview: false };
   const clients: Client[] = [];
   let yes = false;
+  let preview = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
-    if (arg === '--yes' || arg === '-y') yes = true;
+    if (arg === '--preview') preview = true;
+    else if (arg === '--yes' || arg === '-y') yes = true;
     else if (arg === '--client') {
       const value = args[++index];
       if (!value || value.startsWith('--')) throw new Error('Expected a client after --client.');
@@ -541,7 +494,8 @@ function parseInitOptions(args: string[]): InitOptions {
     clients: [...new Set(clients)],
     rootPath: resolveInitRoot(args, process.env.CODEBASE_ROOT),
     yes,
-    help: false
+    help: false,
+    preview
   };
 }
 
@@ -559,6 +513,7 @@ function printInitUsage(): void {
       CLIENTS.map((client) => client.id).join(', ')
   );
   console.log('  --root <path>    Project root (default: CODEBASE_ROOT or cwd)');
+  console.log('  --preview        Show selected files and exclusions without writing config');
   console.log('  --yes, -y        Configure every detected tool without prompts');
   console.log('  --help, -h       Show this help');
 }
@@ -572,6 +527,15 @@ export async function handleInitCli(args: string[]): Promise<void> {
     }
     if (!(await fs.stat(options.rootPath)).isDirectory())
       throw new Error(`Project root is not a directory: ${options.rootPath}`);
+    if (options.preview) {
+      const config = await loadProjectConfig(options.rootPath);
+      const preview = await new CodebaseIndexer({
+        rootPath: options.rootPath,
+        ...cliProjectOptions(config, true)
+      }).previewFiles();
+      console.log(JSON.stringify(preview, null, 2));
+      return;
+    }
     console.log(`Set up Codebase Context in ${options.rootPath}`);
     let clients = options.clients;
     if (!clients.length) {
@@ -609,7 +573,7 @@ export async function handleInitCli(args: string[]): Promise<void> {
     for (const config of prepared) {
       if (!config.unchanged) {
         await fs.mkdir(path.dirname(config.path), { recursive: true });
-        await fs.writeFile(config.path, config.content, 'utf8');
+        await atomicWrite(config.path, config.content);
       }
       console.log(
         `${config.unchanged ? 'Unchanged' : 'Configured'}: ${path.relative(options.rootPath, config.path)}`

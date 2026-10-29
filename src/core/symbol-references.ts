@@ -1,3 +1,8 @@
+import {
+  withIndexSnapshot,
+  currentIndexSnapshot,
+  resolveIndexArtifact
+} from './index-generation.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME } from '../constants/codebase-context.js';
@@ -128,6 +133,15 @@ export async function findSymbolReferences(
   symbol: string,
   limit = 10
 ): Promise<SymbolReferencesResult> {
+  return withIndexSnapshot(rootPath, () => findPinnedSymbolReferences(rootPath, symbol, limit));
+}
+
+async function findPinnedSymbolReferences(
+  rootPath: string,
+  symbol: string,
+  limit: number
+): Promise<SymbolReferencesResult> {
+  rootPath = currentIndexSnapshot(rootPath)?.realRoot ?? rootPath;
   const normalizedSymbol = symbol.trim();
   const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
 
@@ -138,7 +152,7 @@ export async function findSymbolReferences(
     };
   }
 
-  const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+  const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
   const meta = await readIndexMeta(rootPath);
   const manifest = await readReferenceManifest(rootPath, meta);
 

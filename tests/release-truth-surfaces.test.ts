@@ -167,7 +167,10 @@ describe('release truth surfaces', () => {
     expect(pinnedCommands).toEqual([]);
     expect(readText('README.md')).toContain('npx -y codebase-context');
     expect(readText('docs/client-setup.md')).toContain('npx -y codebase-context');
-    expect(readText('docs/client-setup.md')).toContain('codebase-context@2.4.0 init');
+    expect(readText('docs/client-setup.md')).toContain(
+      'node /path/to/codebase-context/dist/index.js init'
+    );
+    expect(readText('docs/client-setup.md')).not.toContain('codebase-context@2.4.0 init');
     expect(readText('docs/review-context.md')).toContain('--package=codebase-context@2.4.0');
   });
 

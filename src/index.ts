@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { withAvailableIndexSnapshot, resolveIndexArtifact } from './core/index-generation.js';
 
 /**
  * MCP Server for Codebase Context
@@ -45,7 +46,7 @@ import {
   findNearestProjectBoundary,
   isPathWithin
 } from './utils/project-discovery.js';
-import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
+import { readIndexMeta, validateIndexArtifacts, hasCommittedIndex } from './core/index-meta.js';
 import { TOOLS, dispatchTool, type ToolContext, type ToolResponse } from './tools/index.js';
 import { finalizeRelationshipPayload } from './tools/get-code-relationships.js';
 import { finalizeSearchPayloadText } from './tools/search-payload-budget.js';
@@ -84,7 +85,15 @@ let mcpRuntimeReady = false;
 let mcpRuntimePromise: Promise<void> | undefined;
 
 // Flags that are NOT project paths — skip them when resolving the bootstrap root.
-const KNOWN_FLAGS = new Set(['--http', '--port', '--help', '--embeddings', '--no-embeddings', '--version', '-v']);
+const KNOWN_FLAGS = new Set([
+  '--http',
+  '--port',
+  '--help',
+  '--embeddings',
+  '--no-embeddings',
+  '--version',
+  '-v'
+]);
 const CLI_SUBCOMMANDS = [
   'memory',
   'search',
@@ -730,7 +739,9 @@ async function requireValidIndex(project: ProjectState): Promise<IndexSignal> {
   }
 
   // Optional artifact presence informs confidence.
-  const hasIntelligence = await fileExists(project.paths.intelligence);
+  const hasIntelligence = await fileExists(
+    await resolveIndexArtifact(project.rootPath, 'intelligence.json', meta)
+  );
 
   return {
     status: 'ready',
@@ -741,7 +752,7 @@ async function requireValidIndex(project: ProjectState): Promise<IndexSignal> {
 }
 
 async function ensureValidIndexOrAutoHeal(project: ProjectState): Promise<IndexSignal> {
-  if (project.indexState.status === 'indexing') {
+  if (project.indexState.status === 'indexing' && !(await hasCommittedIndex(project.rootPath))) {
     return {
       status: 'indexing',
       confidence: 'low',
@@ -1093,92 +1104,99 @@ export function registerHandlers(target: Server): void {
         }
 
         const project = projectResolution.project;
+        return await withAvailableIndexSnapshot(project.rootPath, async () => {
+          // Gate INDEX_CONSUMING tools on a valid, healthy index
+          let indexSignal: IndexSignal | undefined;
+          if ((INDEX_CONSUMING_TOOL_NAMES as readonly string[]).includes(name)) {
+            if (
+              project.indexState.status === 'indexing' &&
+              !(await hasCommittedIndex(project.rootPath))
+            ) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      status: 'indexing',
+                      message: 'Index build in progress. Check indexing status, then retry.'
+                    })
+                  }
+                ]
+              };
+            }
+            if (
+              project.indexState.status === 'error' &&
+              !(await hasCommittedIndex(project.rootPath))
+            ) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      status: 'error',
+                      message: `Indexer error: ${project.indexState.error}`
+                    })
+                  }
+                ]
+              };
+            }
+            indexSignal = await ensureValidIndexOrAutoHeal(project);
+            if (indexSignal.action === 'rebuild-started') {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      status: 'indexing',
+                      message: 'Index rebuild in progress. Check indexing status, then retry.',
+                      index: indexSignal
+                    })
+                  }
+                ]
+              };
+            }
+          }
 
-        // Gate INDEX_CONSUMING tools on a valid, healthy index
-        let indexSignal: IndexSignal | undefined;
-        if ((INDEX_CONSUMING_TOOL_NAMES as readonly string[]).includes(name)) {
-          if (project.indexState.status === 'indexing') {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    status: 'indexing',
-                    message: 'Index build in progress. Check indexing status, then retry.'
-                  })
-                }
-              ]
-            };
-          }
-          if (project.indexState.status === 'error') {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    status: 'error',
-                    message: `Indexer error: ${project.indexState.error}`
-                  })
-                }
-              ]
-            };
-          }
-          indexSignal = await ensureValidIndexOrAutoHeal(project);
-          if (indexSignal.action === 'rebuild-started') {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    status: 'indexing',
-                    message: 'Index rebuild in progress. Check indexing status, then retry.',
-                    index: indexSignal
-                  })
-                }
-              ]
-            };
-          }
-        }
+          const result = await dispatchTool(name, normalizedArgs, createToolContext(project));
 
-        const result = await dispatchTool(name, normalizedArgs, createToolContext(project));
-
-        // Inject routing/index metadata into JSON responses so agents can reuse the resolved project safely.
-        if (indexSignal !== undefined && result.content?.[0]) {
-          try {
-            const parsed = JSON.parse(result.content[0].text);
-            result.content[0] = {
-              type: 'text',
-              text: finalizeJsonTextPayload(
-                {
-                  ...parsed,
-                  index: indexSignal,
-                  project: buildProjectDescriptor(project.rootPath)
-                },
-                name === 'get_code_relationships'
-              )
-            };
-          } catch {
-            /* response wasn't JSON, skip injection */
+          // Inject routing/index metadata into JSON responses so agents can reuse the resolved project safely.
+          if (indexSignal !== undefined && result.content?.[0]) {
+            try {
+              const parsed = JSON.parse(result.content[0].text);
+              result.content[0] = {
+                type: 'text',
+                text: finalizeJsonTextPayload(
+                  {
+                    ...parsed,
+                    index: indexSignal,
+                    project: buildProjectDescriptor(project.rootPath)
+                  },
+                  name === 'get_code_relationships'
+                )
+              };
+            } catch {
+              /* response wasn't JSON, skip injection */
+            }
+          } else if (result.content?.[0]) {
+            try {
+              const parsed = JSON.parse(result.content[0].text);
+              result.content[0] = {
+                type: 'text',
+                text: finalizeJsonTextPayload(
+                  {
+                    ...parsed,
+                    project: buildProjectDescriptor(project.rootPath)
+                  },
+                  name === 'get_code_relationships'
+                )
+              };
+            } catch {
+              /* response wasn't JSON, skip injection */
+            }
           }
-        } else if (result.content?.[0]) {
-          try {
-            const parsed = JSON.parse(result.content[0].text);
-            result.content[0] = {
-              type: 'text',
-              text: finalizeJsonTextPayload(
-                {
-                  ...parsed,
-                  project: buildProjectDescriptor(project.rootPath)
-                },
-                name === 'get_code_relationships'
-              )
-            };
-          } catch {
-            /* response wasn't JSON, skip injection */
-          }
-        }
 
-        return result;
+          return result;
+        });
       } catch (error) {
         return {
           content: [
@@ -1417,7 +1435,7 @@ async function performIndexing(
 
 async function shouldReindex(paths: ToolPaths): Promise<boolean> {
   try {
-    await fs.access(paths.keywordIndex);
+    await fs.access(await resolveIndexArtifact(path.dirname(paths.baseDir), 'index.json'));
     return false;
   } catch {
     return true;

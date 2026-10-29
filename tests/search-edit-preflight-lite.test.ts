@@ -37,11 +37,13 @@ type SearchPayload = {
 
 const searchMocks = vi.hoisted(() => ({
   search: vi.fn(),
-  sourceCoverage: vi.fn((): SourceCoverageMock => ({
-    status: 'current',
-    checkedFiles: 0,
-    skippedFiles: 0
-  }))
+  sourceCoverage: vi.fn(
+    (): SourceCoverageMock => ({
+      status: 'current',
+      checkedFiles: 0,
+      skippedFiles: 0
+    })
+  )
 }));
 
 function getToolCallHandler(
@@ -319,8 +321,6 @@ describe('search_codebase preflight', () => {
     const payload = JSON.parse(response.content[0].text) as SearchPayload;
     expect(payload.preflight?.ready).toBe(false);
     expect(payload.preflight?.abstain).toBe(true);
-    expect(payload.preflight?.reason).toBe(
-      'Refresh the index to inspect remaining candidates.'
-    );
+    expect(payload.preflight?.reason).toBe('Refresh the index to inspect remaining candidates.');
   });
 });

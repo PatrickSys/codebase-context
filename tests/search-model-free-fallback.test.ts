@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
@@ -77,7 +78,7 @@ async function searchFixture(chunks: CodeChunk[], withImportGraph = false) {
   const graph = new InternalFileGraph(snapshot.rootPath);
   const reloadGraph = async (data: ReturnType<InternalFileGraph['toJSON']>) => {
     await fs.writeFile(
-      path.join(snapshot.rootPath, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
+      await resolveIndexArtifact(snapshot.rootPath, INTELLIGENCE_FILENAME),
       JSON.stringify({ internalFileGraph: data })
     );
     await harness.loadPatternIntelligence();
@@ -336,7 +337,7 @@ describe('model-free query fallback', () => {
     try {
       // The helper's manifest supports in-memory tests; this case starts from
       // ordinary unindexed source and lets the real indexer own all artifacts.
-      await fs.unlink(path.join(snapshot.rootPath, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME));
+      await fs.unlink(await resolveIndexArtifact(snapshot.rootPath, MANIFEST_FILENAME));
       await fs.rmdir(path.join(snapshot.rootPath, CODEBASE_CONTEXT_DIRNAME));
       const indexer = new CodebaseIndexer({ rootPath: snapshot.rootPath });
       await indexer.index();

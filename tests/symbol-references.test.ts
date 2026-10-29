@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -62,7 +63,7 @@ describe('findSymbolReferences', () => {
     const contextPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
     await fs.mkdir(contextPath, { recursive: true });
     await fs.writeFile(
-      path.join(contextPath, KEYWORD_INDEX_FILENAME),
+      await resolveIndexArtifact(path.dirname(contextPath), KEYWORD_INDEX_FILENAME),
       JSON.stringify({
         header: { buildId: 'test', formatVersion: INDEX_FORMAT_VERSION },
         chunks
@@ -86,7 +87,7 @@ describe('findSymbolReferences', () => {
       'utf8'
     );
     await fs.writeFile(
-      path.join(contextPath, MANIFEST_FILENAME),
+      await resolveIndexArtifact(path.dirname(contextPath), MANIFEST_FILENAME),
       JSON.stringify({
         version: 1,
         generatedAt: new Date().toISOString(),
@@ -101,7 +102,11 @@ describe('findSymbolReferences', () => {
 
   async function rewriteManifest(root: string, value: unknown): Promise<void> {
     const contextPath = path.join(root, CODEBASE_CONTEXT_DIRNAME);
-    await fs.writeFile(path.join(contextPath, MANIFEST_FILENAME), JSON.stringify(value), 'utf8');
+    await fs.writeFile(
+      await resolveIndexArtifact(path.dirname(contextPath), MANIFEST_FILENAME),
+      JSON.stringify(value),
+      'utf8'
+    );
   }
 
   async function rewriteManifestArtifactPath(root: string, manifestPath: string): Promise<void> {
@@ -134,7 +139,7 @@ describe('findSymbolReferences', () => {
       projectOptions: { preferredAnalyzer: 'generic' }
     }).index();
 
-    const keywordPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const keywordPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
     const parsed = JSON.parse(await fs.readFile(keywordPath, 'utf8')) as Record<string, unknown>;
     mutate(parsed);
     await fs.writeFile(keywordPath, JSON.stringify(parsed), 'utf8');
@@ -165,13 +170,19 @@ describe('findSymbolReferences', () => {
 
     const contextPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
     const keywordIndex = JSON.parse(
-      await fs.readFile(path.join(contextPath, KEYWORD_INDEX_FILENAME), 'utf8')
+      await fs.readFile(
+        await resolveIndexArtifact(path.dirname(contextPath), KEYWORD_INDEX_FILENAME),
+        'utf8'
+      )
     ) as {
       header: { buildId: string; formatVersion: number };
       chunks: Array<{ relativePath?: string }>;
     };
     const manifest = JSON.parse(
-      await fs.readFile(path.join(contextPath, MANIFEST_FILENAME), 'utf8')
+      await fs.readFile(
+        await resolveIndexArtifact(path.dirname(contextPath), MANIFEST_FILENAME),
+        'utf8'
+      )
     ) as {
       header?: { buildId: string; formatVersion: number };
       files: Record<string, string>;
@@ -231,7 +242,10 @@ describe('findSymbolReferences', () => {
       await fs.readFile(path.join(contextPath, INDEX_META_FILENAME), 'utf8')
     ) as { buildId: string; formatVersion: number };
     const firstManifest = JSON.parse(
-      await fs.readFile(path.join(contextPath, MANIFEST_FILENAME), 'utf8')
+      await fs.readFile(
+        await resolveIndexArtifact(path.dirname(contextPath), MANIFEST_FILENAME),
+        'utf8'
+      )
     ) as { header?: { buildId: string; formatVersion: number } };
     expect(firstManifest.header).toEqual({
       buildId: firstMeta.buildId,
@@ -252,7 +266,10 @@ describe('findSymbolReferences', () => {
       await fs.readFile(path.join(contextPath, INDEX_META_FILENAME), 'utf8')
     ) as { buildId: string; formatVersion: number };
     const nextManifest = JSON.parse(
-      await fs.readFile(path.join(contextPath, MANIFEST_FILENAME), 'utf8')
+      await fs.readFile(
+        await resolveIndexArtifact(path.dirname(contextPath), MANIFEST_FILENAME),
+        'utf8'
+      )
     ) as { header?: { buildId: string; formatVersion: number }; files: Record<string, string> };
     expect(incremental.incremental).toMatchObject({ added: 1, changed: 1, deleted: 1 });
     expect(nextManifest.header).toEqual({
@@ -274,8 +291,11 @@ describe('findSymbolReferences', () => {
     }).index();
 
     const contextPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
-    const manifestPath = path.join(contextPath, MANIFEST_FILENAME);
-    const initialManifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    const manifestPath = await resolveIndexArtifact(path.dirname(contextPath), MANIFEST_FILENAME);
+    const initialManifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
     expect(initialManifest.header).toBeDefined();
     delete initialManifest.header;
     await fs.writeFile(manifestPath, JSON.stringify(initialManifest), 'utf8');
@@ -287,7 +307,10 @@ describe('findSymbolReferences', () => {
       incrementalOnly: true
     }).index();
 
-    const afterIncremental = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    const afterIncremental = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
     const meta = JSON.parse(
       await fs.readFile(path.join(contextPath, INDEX_META_FILENAME), 'utf8')
     ) as { artifacts: { vectorDb: { embeddingEnabled?: boolean } } };
@@ -304,12 +327,18 @@ describe('findSymbolReferences', () => {
       projectOptions: { preferredAnalyzer: 'generic' }
     }).index();
 
-    const repairedManifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as {
+    const repairedManifest = JSON.parse(
+      await fs.readFile(await resolveIndexArtifact(rootPath, MANIFEST_FILENAME), 'utf8')
+    ) as {
       header?: { buildId: string; formatVersion: number };
     };
     const repairedMeta = JSON.parse(
       await fs.readFile(path.join(contextPath, INDEX_META_FILENAME), 'utf8')
-    ) as { buildId: string; formatVersion: number; artifacts: { vectorDb: { embeddingEnabled?: boolean } } };
+    ) as {
+      buildId: string;
+      formatVersion: number;
+      artifacts: { vectorDb: { embeddingEnabled?: boolean } };
+    };
     expect(repairedManifest.header).toEqual({
       buildId: repairedMeta.buildId,
       formatVersion: repairedMeta.formatVersion
@@ -321,20 +350,21 @@ describe('findSymbolReferences', () => {
     ]);
     const repairedResult = await findSymbolReferences(rootPath, 'legacyToken');
     expect(repairedResult.status).toBe('success');
-    if (repairedResult.status !== 'success') throw new Error('Expected reference lookup after full reindex');
+    if (repairedResult.status !== 'success')
+      throw new Error('Expected reference lookup after full reindex');
     expect(repairedResult.usageCount).toBe(1);
   });
 
   it('requires a readable versioned manifest for reference coverage', async () => {
     const root = await createIndex([{ path: 'src/a.ts', source: 'alpha();' }]);
-    await fs.rm(path.join(root, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME));
+    await fs.rm(await resolveIndexArtifact(root, MANIFEST_FILENAME));
 
     await expect(findSymbolReferences(root, 'alpha')).rejects.toThrow(/manifest.*full reindex/i);
   });
 
   it('requires a build-bound manifest instead of accepting the legacy headerless format', async () => {
     const root = await createIndex([{ path: 'src/a.ts', source: 'alpha();' }]);
-    const manifestPath = path.join(root, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME);
+    const manifestPath = await resolveIndexArtifact(root, MANIFEST_FILENAME);
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<string, unknown>;
     delete manifest.header;
     await rewriteManifest(root, manifest);
@@ -347,7 +377,7 @@ describe('findSymbolReferences', () => {
     ['formatVersion', { buildId: 'test', formatVersion: INDEX_FORMAT_VERSION + 1 }]
   ])('rejects manifest header with mismatched %s', async (_field, header) => {
     const root = await createIndex([{ path: 'src/a.ts', source: 'alpha();' }]);
-    const manifestPath = path.join(root, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME);
+    const manifestPath = await resolveIndexArtifact(root, MANIFEST_FILENAME);
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as {
       header: unknown;
       [key: string]: unknown;
@@ -355,7 +385,9 @@ describe('findSymbolReferences', () => {
     manifest.header = header;
     await rewriteManifest(root, manifest);
 
-    await expect(findSymbolReferences(root, 'alpha')).rejects.toThrow(/manifest.*(buildId|formatVersion)/i);
+    await expect(findSymbolReferences(root, 'alpha')).rejects.toThrow(
+      /manifest.*(buildId|formatVersion)/i
+    );
   });
 
   it.each([
@@ -364,7 +396,7 @@ describe('findSymbolReferences', () => {
     ['a malformed hash', { 'src/a.ts': 'not-a-hash' }]
   ])('rejects manifest file entries supplied as %s', async (_description, files) => {
     const root = await createIndex([{ path: 'src/a.ts', source: 'alpha();' }]);
-    const manifestPath = path.join(root, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME);
+    const manifestPath = await resolveIndexArtifact(root, MANIFEST_FILENAME);
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as {
       [key: string]: unknown;
     };
@@ -378,7 +410,7 @@ describe('findSymbolReferences', () => {
     const root = await createIndex([{ path: 'src/a.ts', source: 'alpha();' }]);
     await fs.writeFile(
       path.join(root, MANIFEST_FILENAME),
-      await fs.readFile(path.join(root, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME), 'utf8'),
+      await fs.readFile(await resolveIndexArtifact(root, MANIFEST_FILENAME), 'utf8'),
       'utf8'
     );
     await rewriteManifestArtifactPath(root, `../${MANIFEST_FILENAME}`);
@@ -388,7 +420,7 @@ describe('findSymbolReferences', () => {
 
   it('rejects traversal in manifest source paths before scanning sources', async () => {
     const root = await createIndex([{ path: 'src/a.ts', source: 'alpha();' }]);
-    const manifestPath = path.join(root, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME);
+    const manifestPath = await resolveIndexArtifact(root, MANIFEST_FILENAME);
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as {
       [key: string]: unknown;
     };
@@ -523,7 +555,7 @@ describe('findSymbolReferences', () => {
     await fs.writeFile(path.join(root, files[0].path), '// current source\r\nπροβολή();\r\n');
     // Every other source is manifest-only; capped keyword chunks are not the inventory.
     await fs.writeFile(
-      path.join(root, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
+      await resolveIndexArtifact(root, KEYWORD_INDEX_FILENAME),
       JSON.stringify({
         header: { buildId: 'test', formatVersion: INDEX_FORMAT_VERSION },
         chunks: [{ relativePath: files[0].path }]
@@ -587,14 +619,22 @@ describe('findSymbolReferences', () => {
       if (result.status !== 'success') throw new Error('Expected bounded current-source scan');
       expect(result.usageCount).toBe(8);
       expect(result.usages.map((usage) => usage.file)).toEqual([
-        'src/0.unknown', 'src/2.unknown', 'src/3.unknown'
+        'src/0.unknown',
+        'src/2.unknown',
+        'src/3.unknown'
       ]);
       expect(result.usages[0]).toEqual({
-        file: 'src/0.unknown', line: 2, preview: '// current source\nπροβολή();'
+        file: 'src/0.unknown',
+        line: 2,
+        preview: '// current source\nπροβολή();'
       });
       expect(result.coverage).toEqual({
-        candidateFiles: 9, sourcesRead: 9, filesWithoutText: 1,
-        filesUnavailable: 0, parserCalls: 8, lexicalFallbackFiles: 8
+        candidateFiles: 9,
+        sourcesRead: 9,
+        filesWithoutText: 1,
+        filesUnavailable: 0,
+        parserCalls: 8,
+        lexicalFallbackFiles: 8
       });
       expect(result.confidence).toBe('lexical');
       expect(result.isComplete).toBe(false);
@@ -610,7 +650,8 @@ describe('findSymbolReferences', () => {
     'keeps full observed counts across batches when a source read reports %s',
     async (code) => {
       const files = Array.from({ length: 6 }, (_, index) => ({
-        path: `src/${index}.unknown`, source: 'alpha();'
+        path: `src/${index}.unknown`,
+        source: 'alpha();'
       }));
       const root = await createIndex(files);
       const unavailable = path.join(root, files[1].path);
@@ -628,7 +669,10 @@ describe('findSymbolReferences', () => {
       expect(result.usageCount).toBe(5);
       expect(result.usages.map((usage) => usage.file)).toEqual(['src/0.unknown']);
       expect(result.coverage).toMatchObject({
-        candidateFiles: 6, sourcesRead: 5, filesUnavailable: 1, parserCalls: 5
+        candidateFiles: 6,
+        sourcesRead: 5,
+        filesUnavailable: 1,
+        parserCalls: 5
       });
       expect(result.isComplete).toBe(false);
     }
@@ -638,7 +682,8 @@ describe('findSymbolReferences', () => {
     'fails the entire batch closed on an unexpected %s error without parsing it',
     async (operation) => {
       const files = Array.from({ length: 5 }, (_, index) => ({
-        path: `src/${index}.unknown`, source: 'alpha();'
+        path: `src/${index}.unknown`,
+        source: 'alpha();'
       }));
       const root = await createIndex(files);
       const fatal = path.join(root, files[1].path);
@@ -680,7 +725,8 @@ describe('findSymbolReferences', () => {
 
   it('settles pending source read failures before returning a fatal batch', async () => {
     const files = Array.from({ length: 5 }, (_, index) => ({
-      path: `src/${index}.unknown`, source: 'alpha();'
+      path: `src/${index}.unknown`,
+      source: 'alpha();'
     }));
     const root = await createIndex(files);
     const first = path.join(root, files[0].path);
@@ -701,7 +747,9 @@ describe('findSymbolReferences', () => {
       return originalReadFile(...args);
     });
     findIdentifierOccurrences.mockResolvedValue(null);
-    const scan = findSymbolReferences(root, 'alpha').finally(() => { scanSettled = true; });
+    const scan = findSymbolReferences(root, 'alpha').finally(() => {
+      scanSettled = true;
+    });
     try {
       await vi.waitFor(() => expect(pendingStarted).toBe(true));
       expect(scanSettled).toBe(false);
@@ -721,7 +769,8 @@ describe('findSymbolReferences', () => {
 
   it('fails a batch closed when a manifest-listed source becomes a directory', async () => {
     const files = Array.from({ length: 5 }, (_, index) => ({
-      path: `src/${index}.unknown`, source: 'alpha();'
+      path: `src/${index}.unknown`,
+      source: 'alpha();'
     }));
     const root = await createIndex(files);
     const invalidSource = path.join(root, files[1].path);
@@ -743,7 +792,7 @@ describe('findSymbolReferences', () => {
     try {
       const externalFile = path.join(outsidePath, 'external.ts');
       await fs.writeFile(externalFile, 'alpha();', 'utf8');
-      const indexPath = path.join(root, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const indexPath = await resolveIndexArtifact(root, KEYWORD_INDEX_FILENAME);
       await fs.writeFile(
         indexPath,
         JSON.stringify({
@@ -763,7 +812,9 @@ describe('findSymbolReferences', () => {
     }
   });
 
-  it('fails closed when a manifest-listed source symlink resolves outside the project', async ({ skip }) => {
+  it('fails closed when a manifest-listed source symlink resolves outside the project', async ({
+    skip
+  }) => {
     const root = await createIndex([{ path: 'src/anchor.ts', source: 'safeOnly();' }]);
     const outsidePath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-symbol-manifest-link-'));
     try {
@@ -774,13 +825,14 @@ describe('findSymbolReferences', () => {
       try {
         await fs.symlink(externalFile, linkPath, 'file');
       } catch (error) {
-        const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined;
+        const code =
+          error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined;
         if (code === 'EPERM' || code === 'EACCES' || code === 'ENOSYS') {
           skip(`Symlink creation is unavailable in this environment (${String(code)})`);
         }
         throw error;
       }
-      const manifestPath = path.join(root, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME);
+      const manifestPath = await resolveIndexArtifact(root, MANIFEST_FILENAME);
       const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as {
         files: Record<string, string>;
         [key: string]: unknown;

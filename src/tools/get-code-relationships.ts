@@ -1,3 +1,4 @@
+import { withToolIndexSnapshot } from './index-snapshot.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
@@ -179,6 +180,13 @@ async function verifyEdge(
 }
 
 export async function handle(
+  args: Record<string, unknown>,
+  ctx: ToolContext
+): Promise<ToolResponse> {
+  return withToolIndexSnapshot(ctx, (pinned) => handlePinned(args, pinned));
+}
+
+async function handlePinned(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolResponse> {

@@ -1,12 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import {
-  chmodSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -445,9 +438,13 @@ describe('ContextBench Phase 40 schema gate', () => {
       })
     );
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [

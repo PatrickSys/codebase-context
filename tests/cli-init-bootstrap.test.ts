@@ -10,6 +10,7 @@ import {
   _buildMergedCodexContent
 } from '../src/cli-init.js';
 import { resolveRootPath } from '../src/index.js';
+import { parse as parseToml } from 'smol-toml';
 
 describe('init bootstrap root', () => {
   it('passes the configured project root through the MCP server argv path', () => {
@@ -18,8 +19,8 @@ describe('init bootstrap root', () => {
     const previousEnvRoot = process.env.CODEBASE_ROOT;
     const generated = generateMcpConfig('claude-code', {
       rootPath: projectRoot,
-      platform: 'linux',
-      packageVersion: '9.8.7'
+      nodeExecutable: process.execPath,
+      serverEntrypoint: path.resolve('C:/codebase-context/dist/index.js')
     });
     if (generated.kind !== 'file') throw new Error('expected project MCP config');
 
@@ -27,9 +28,9 @@ describe('init bootstrap root', () => {
       mcpServers: { 'codebase-context': { command: string; args: string[] } };
     };
     const server = parsed.mcpServers['codebase-context'];
-    expect(server.command).toBe('npx');
-    expect(server.args).toEqual(['--yes', 'codebase-context@9.8.7', projectRoot]);
-    process.argv = ['node', 'codebase-context', server.args.at(-1) ?? ''];
+    expect(server.command).toBe(path.resolve(process.execPath));
+    expect(server.args).toEqual([path.resolve('C:/codebase-context/dist/index.js'), projectRoot]);
+    process.argv = [server.command, ...server.args];
     process.env.CODEBASE_ROOT = path.resolve('C:/projects/Other App');
 
     try {
@@ -43,6 +44,60 @@ describe('init bootstrap root', () => {
 });
 
 describe('init preserves custom launchers', () => {
+  it('updates the real launch while preserving an earlier apparent launch inside instructions', async () => {
+    const root = await fs.mkdtemp(path.join(tmpdir(), 'cbc-codex-real-table-'));
+    const entrypoint = path.join(root, 'package', 'dist', 'index.js');
+    const generated = generateMcpConfig('codex', { rootPath: root, serverEntrypoint: entrypoint });
+    const instructions =
+      'developer_instructions = """\n[mcp_servers.codebase-context]\ncommand = "npx"\nargs = ["--yes", "codebase-context@2.2.0", "C:/fake"]\n"""\n';
+    const original =
+      instructions +
+      '\n[mcp_servers.codebase-context]\ncommand = "npx" # real\nargs = ["--yes", "codebase-context@2.2.0", "C:/old"]\nstartup_timeout_sec = 75\n';
+    await fs.mkdir(path.dirname(generated.path), { recursive: true });
+    await fs.writeFile(generated.path, original);
+    try {
+      const merged = await _buildMergedCodexContent(generated.path, generated.content);
+      expect(merged.content.startsWith(instructions)).toBe(true);
+      const parsed = parseToml(merged.content);
+      expect(parsed.mcp_servers).toEqual({
+        'codebase-context': {
+          command: process.execPath,
+          args: [entrypoint, root],
+          startup_timeout_sec: 75
+        }
+      });
+      expect(parsed.developer_instructions).toBe(parseToml(original).developer_instructions);
+      expect(merged.content).toContain('# real');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['basic multiline', '"""', 'escaped quote: \\" and escaped delimiter: \\"""\n'],
+    ['literal multiline', "'''", 'literal quotes: " and \\n\n']
+  ])(
+    'preserves apparent tables inside a %s instruction string',
+    async (_name, delimiter, prefix) => {
+      const root = await fs.mkdtemp(path.join(tmpdir(), 'cbc-codex-multiline-'));
+      const generated = generateMcpConfig('codex', { rootPath: root });
+      const original = `developer_instructions = ${delimiter}\n${prefix}[mcp_servers.codebase-context]\ncommand = "npx"\nargs = ["--yes", "codebase-context@2.2.0", "C:/project"]\n${delimiter}\n`;
+      await fs.mkdir(path.dirname(generated.path), { recursive: true });
+      await fs.writeFile(generated.path, original);
+      try {
+        const merged = await _buildMergedCodexContent(generated.path, generated.content);
+        expect(merged.content.startsWith(original)).toBe(true);
+        expect(merged.content.slice(original.length)).toContain(generated.content.trim());
+        const parsed = parseToml(merged.content);
+        expect(parsed.developer_instructions).toBe(parseToml(original).developer_instructions);
+        expect(parsed.mcp_servers).toEqual(parseToml(generated.content).mcp_servers);
+        expect(await fs.readFile(generated.path, 'utf8')).toBe(original);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }
+  );
+
   it('distinguishes executable files from directories while detecting tools', async () => {
     const root = await fs.mkdtemp(path.join(tmpdir(), 'cbc-detect-files-'));
     const bin = path.join(root, 'bin');

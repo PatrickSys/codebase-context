@@ -3,6 +3,7 @@ import { mkdtemp, rm, access, readFile, writeFile } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { handleMapCli } from '../src/cli-map.js';
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 
 describe('handleMapCli --export', () => {
   let tmpDir: string;
@@ -68,7 +69,7 @@ describe('handleMapCli --export', () => {
     process.env.CODEBASE_ROOT = tmpDir;
     try {
       await handleMapCli(['--export']);
-      await access(path.join(tmpDir, '.codebase-context', 'index.json'));
+      await access(await resolveIndexArtifact(tmpDir, 'index.json'));
       const content = await readFile(path.join(tmpDir, 'CODEBASE_MAP.md'), 'utf-8');
       expect(content).toMatch(/Files: [1-9]/);
     } finally {

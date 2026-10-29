@@ -1,4 +1,4 @@
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool } from '@modelcontextprotocol/server';
 import { promises as fs } from 'fs';
 import { glob } from 'glob';
 import path from 'path';

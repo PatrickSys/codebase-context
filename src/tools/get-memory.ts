@@ -1,4 +1,4 @@
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool } from '@modelcontextprotocol/server';
 import type { ToolContext, ToolResponse } from './types.js';
 import type { MemoryCategory, MemoryType } from '../types/index.js';
 import {

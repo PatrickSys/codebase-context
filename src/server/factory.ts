@@ -7,7 +7,7 @@
  * over module-level state).
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { Server } from '@modelcontextprotocol/server';
 
 export type ServerOptions = {
   name: string;

@@ -8,10 +8,11 @@
 import { promises as fs } from 'fs';
 
 import path from 'path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { fileURLToPath } from 'url';
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import type { Server } from '@modelcontextprotocol/server';
 import type { ProjectConfig } from './server/config.js';
-import type { Resource } from '@modelcontextprotocol/sdk/types.js';
+import type { Resource } from '@modelcontextprotocol/server';
 import { CodebaseIndexer } from './core/indexer.js';
 
 import { analyzerRegistry } from './core/analyzer-registry.js';
@@ -70,12 +71,7 @@ analyzerRegistry.register(new GenericAnalyzer());
 let createServer!: typeof import('./server/factory.js').createServer;
 let startHttpServer!: typeof import('./server/http.js').startHttpServer;
 let loadServerConfig!: typeof import('./server/config.js').loadServerConfig;
-let StdioServerTransport!: typeof import('@modelcontextprotocol/sdk/server/stdio.js').StdioServerTransport;
-let CallToolRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').CallToolRequestSchema;
-let ListToolsRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ListToolsRequestSchema;
-let ListResourcesRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ListResourcesRequestSchema;
-let ReadResourceRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ReadResourceRequestSchema;
-let RootsListChangedNotificationSchema!: typeof import('@modelcontextprotocol/sdk/types.js').RootsListChangedNotificationSchema;
+let StdioServerTransport!: typeof import('@modelcontextprotocol/server/stdio').StdioServerTransport;
 let server!: Server;
 let mcpRuntimeReady = false;
 let mcpRuntimePromise: Promise<void> | undefined;
@@ -143,7 +139,11 @@ const discoveredProjectPaths = new Map<string, string>();
 let clientRootsEnabled = false;
 const projectSourcesByKey = new Map<string, ProjectDescriptor['source']>();
 const projectAccessOrder = new Map<string, number>();
-let activeProjectKey: string | undefined;
+const httpRequestRouting = new AsyncLocalStorage<{ activeProjectKey?: string }>();
+const stdioRouting: { activeProjectKey?: string } = {};
+function routingState(): { activeProjectKey?: string } {
+  return httpRequestRouting.getStore() ?? stdioRouting;
+}
 let nextProjectAccessOrder = 1;
 const MAX_WATCHED_PROJECTS = 5;
 const PROJECT_DISCOVERY_MAX_DEPTH = 4;
@@ -178,24 +178,18 @@ async function ensureMcpRuntimeLoaded(): Promise<void> {
   }
 
   mcpRuntimePromise ??= (async () => {
-    const [factoryModule, httpModule, configModule, stdioModule, sdkTypesModule] =
+    const [factoryModule, httpModule, configModule, stdioModule] =
       await Promise.all([
         import('./server/factory.js'),
         import('./server/http.js'),
         import('./server/config.js'),
-        import('@modelcontextprotocol/sdk/server/stdio.js'),
-        import('@modelcontextprotocol/sdk/types.js')
+        import('@modelcontextprotocol/server/stdio')
       ]);
 
     createServer = factoryModule.createServer;
     startHttpServer = httpModule.startHttpServer;
     loadServerConfig = configModule.loadServerConfig;
     StdioServerTransport = stdioModule.StdioServerTransport;
-    CallToolRequestSchema = sdkTypesModule.CallToolRequestSchema;
-    ListToolsRequestSchema = sdkTypesModule.ListToolsRequestSchema;
-    ListResourcesRequestSchema = sdkTypesModule.ListResourcesRequestSchema;
-    ReadResourceRequestSchema = sdkTypesModule.ReadResourceRequestSchema;
-    RootsListChangedNotificationSchema = sdkTypesModule.RootsListChangedNotificationSchema;
     server = createServer({ name: 'codebase-context', version: PKG_VERSION }, registerHandlers);
     mcpRuntimeReady = true;
   })();
@@ -307,8 +301,8 @@ function forgetProjectPath(rootPath: string): void {
   const rootKey = normalizeRootKey(rootPath);
   projectSourcesByKey.delete(rootKey);
   projectAccessOrder.delete(rootKey);
-  if (activeProjectKey === rootKey) {
-    activeProjectKey = undefined;
+  if (routingState().activeProjectKey === rootKey) {
+    routingState().activeProjectKey = undefined;
   }
 }
 
@@ -350,7 +344,7 @@ function buildProjectDescriptor(rootPath: string): ProjectDescriptor {
     label: formatProjectLabel(resolvedRootPath),
     rootPath: resolvedRootPath,
     relativePath: getRelativeProjectPath(resolvedRootPath),
-    active: activeProjectKey === rootKey,
+    active: routingState().activeProjectKey === rootKey,
     source: projectSourcesByKey.get(rootKey) ?? classifyProjectSource(resolvedRootPath),
     indexStatus: getProjectIndexStatus(resolvedRootPath)
   };
@@ -413,11 +407,11 @@ function listProjectDescriptors(): ProjectDescriptor[] {
 }
 
 function getActiveProjectDescriptor(): ProjectDescriptor | undefined {
-  if (!activeProjectKey) return undefined;
-  const trackedRootPath = getTrackedRootPathByKey(activeProjectKey);
+  if (!routingState().activeProjectKey) return undefined;
+  const trackedRootPath = getTrackedRootPathByKey(routingState().activeProjectKey!);
 
   if (!trackedRootPath) {
-    activeProjectKey = undefined;
+    routingState().activeProjectKey = undefined;
     return undefined;
   }
 
@@ -426,7 +420,7 @@ function getActiveProjectDescriptor(): ProjectDescriptor | undefined {
 
 function setActiveProject(rootPath: string): void {
   const resolvedRootPath = path.resolve(rootPath);
-  activeProjectKey = normalizeRootKey(resolvedRootPath);
+  routingState().activeProjectKey = normalizeRootKey(resolvedRootPath);
   rememberProjectPath(resolvedRootPath);
 }
 
@@ -474,9 +468,9 @@ function syncKnownRoots(rootEntries: Array<{ rootPath: string; label?: string }>
     rememberProjectPath(rootEntry.rootPath, 'root', { touch: false });
   }
 
-  if (activeProjectKey) {
-    if (!getTrackedRootPathByKey(activeProjectKey)) {
-      activeProjectKey = undefined;
+  if (routingState().activeProjectKey) {
+    if (!getTrackedRootPathByKey(routingState().activeProjectKey!)) {
+      routingState().activeProjectKey = undefined;
     }
   }
 }
@@ -922,17 +916,21 @@ const PKG_VERSION: string = JSON.parse(
  * Exported so HTTP mode can wire up per-session servers with the
  * same handler logic that closes over module-level state.
  */
-export function registerHandlers(target: Server): void {
-  target.setRequestHandler(ListToolsRequestSchema, async () =>
-    withTrackedSessionActivity(async () => ({ tools: TOOLS }))
+export function registerHandlers(target: Server, options: { stateless?: boolean } = {}): void {
+  const track = <T>(handler: () => Promise<T>): Promise<T> =>
+    options.stateless
+      ? httpRequestRouting.run({}, () => withTrackedSessionActivity(handler))
+      : withTrackedSessionActivity(handler);
+  target.setRequestHandler('tools/list', async () =>
+    track(async () => ({ tools: TOOLS }))
   );
 
-  target.setRequestHandler(ListResourcesRequestSchema, async () =>
-    withTrackedSessionActivity(async () => ({ resources: buildResources() }))
+  target.setRequestHandler('resources/list', async () =>
+    track(async () => ({ resources: buildResources() }))
   );
 
-  target.setRequestHandler(ReadResourceRequestSchema, async (request) =>
-    withTrackedSessionActivity(async () => {
+  target.setRequestHandler('resources/read', async (request) =>
+    track(async () => {
       const uri = request.params.uri;
       const explicitProjectPath = getProjectPathFromContextResourceUri(uri);
       const explicitFullProjectPath = getProjectPathFromFullContextResourceUri(uri);
@@ -1011,8 +1009,8 @@ export function registerHandlers(target: Server): void {
     })
   );
 
-  target.setRequestHandler(CallToolRequestSchema, async (request) =>
-    withTrackedSessionActivity(async () => {
+  target.setRequestHandler('tools/call', async (request) =>
+    track<ToolResponse>(async () => {
       const { name, arguments: args } = request.params;
       const normalizedArgs =
         args && typeof args === 'object' && !Array.isArray(args)
@@ -1121,7 +1119,7 @@ export function registerHandlers(target: Server): void {
           isError: true
         };
       }
-    })
+    }).then(result => ({ ...result, content: result.content ?? [] }))
   );
 }
 
@@ -1439,7 +1437,17 @@ async function resolveProjectForTool(args: Record<string, unknown>): Promise<Pro
     });
   }
 
-  const activeProject = activeProjectKey ? getTrackedRootPathByKey(activeProjectKey) : undefined;
+  if (httpRequestRouting.getStore()) {
+    const roots = getKnownRootPaths();
+    if (roots.length === 1) return resolveExplicitProjectSelection({ project: roots[0] });
+    return { ok: false, response: buildProjectSelectionError(
+      'selection_required', 'HTTP requests require project unless exactly one server root is configured.',
+      { nextAction: 'retry_with_project' }
+    ) };
+  }
+
+  const activeKey = routingState().activeProjectKey;
+  const activeProject = activeKey ? getTrackedRootPathByKey(activeKey) : undefined;
   if (activeProject) {
     const project = getOrCreateProject(activeProject);
     await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
@@ -1485,7 +1493,13 @@ async function resolveProjectForTool(args: Record<string, unknown>): Promise<Pro
 }
 
 async function resolveProjectForResource(): Promise<ProjectState | undefined> {
-  const activeProject = activeProjectKey ? getTrackedRootPathByKey(activeProjectKey) : undefined;
+  if (httpRequestRouting.getStore()) {
+    const roots = getKnownRootPaths();
+    if (roots.length !== 1) return undefined;
+    const selection = await resolveExplicitProjectSelection({ project: roots[0] });
+    return selection.ok ? selection.project : undefined;
+  }
+  const activeProject = routingState().activeProjectKey ? getTrackedRootPathByKey(routingState().activeProjectKey!) : undefined;
   if (activeProject) {
     const project = getOrCreateProject(activeProject);
     await initProject(project.rootPath, watcherDebounceMs, { enableWatcher: true });
@@ -1593,7 +1607,7 @@ function ensureProjectWatcher(project: ProjectState, debounceMs: number): void {
   }
 
   const evictionCandidates = watchedProjects
-    .filter((entry) => normalizeRootKey(entry.rootPath) !== activeProjectKey)
+    .filter((entry) => normalizeRootKey(entry.rootPath) !== routingState().activeProjectKey)
     .sort((a, b) => {
       const accessA = projectAccessOrder.get(normalizeRootKey(a.rootPath)) ?? 0;
       const accessB = projectAccessOrder.get(normalizeRootKey(b.rootPath)) ?? 0;
@@ -1877,7 +1891,7 @@ async function main() {
   };
 
   // Subscribe to root changes (lightweight — no project init cost)
-  server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+  server.setNotificationHandler('notifications/roots/list_changed', async () => {
     noteSessionActivity();
     try {
       await refreshKnownRootsFromClient();
@@ -1931,17 +1945,7 @@ async function startHttp(explicitPort?: number): Promise<void> {
     version: PKG_VERSION,
     port,
     host,
-    registerHandlers,
-    onSessionReady: (sessionServer) => {
-      // Per-session roots change handler
-      sessionServer.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
-        try {
-          await refreshKnownRootsFromClient();
-        } catch {
-          /* best-effort */
-        }
-      });
-    }
+    registerHandlers: target => registerHandlers(target, { stateless: true })
   });
 
   // Register cleanup — no parent death guard or stdin listeners in HTTP mode

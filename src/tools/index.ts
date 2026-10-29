@@ -1,6 +1,6 @@
 export type { ToolContext, ToolResponse, ToolPaths } from './types.js';
 
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool } from '@modelcontextprotocol/server';
 
 import { definition as d1, handle as h1 } from './search-codebase.js';
 import { definition as d2, handle as h2 } from './get-codebase-metadata.js';

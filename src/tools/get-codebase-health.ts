@@ -1,4 +1,4 @@
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool } from '@modelcontextprotocol/server';
 import type { ToolContext, ToolResponse } from './types.js';
 import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../health/store.js';
 

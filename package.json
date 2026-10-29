@@ -60,7 +60,7 @@
   ],
   "packageManager": "pnpm@10.27.0",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "keywords": [
     "mcp",
@@ -138,7 +138,8 @@
     "@huggingface/transformers": "^4.2.0",
     "@inquirer/prompts": "^3.0.0",
     "@lancedb/lancedb": "^0.4.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.1",
     "@typescript-eslint/typescript-estree": "^7.0.0",
     "chokidar": "^3.6.0",
     "fuse.js": "^7.0.0",
@@ -166,7 +167,8 @@
     "tree-sitter-wasms": "^0.1.13",
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.51.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@modelcontextprotocol/sdk": "^1.27.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

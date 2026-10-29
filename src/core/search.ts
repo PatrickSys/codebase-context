@@ -150,15 +150,17 @@ export class CodebaseSearcher {
       // Use the embedding config the index was built with, not the current env-var defaults.
       // This ensures query vectors are in the same space as stored vectors.
       // Legacy indexes (no embeddingProvider stored) fall back to env-var defaults.
-      const storedProvider = this.indexMeta.artifacts.vectorDb.embeddingProvider;
-      const storedModel = this.indexMeta.artifacts.vectorDb.embeddingModel;
-      const embeddingConfig: Partial<EmbeddingConfig> = storedProvider
-        ? { provider: storedProvider as EmbeddingConfig['provider'], model: storedModel }
-        : {};
-      this.embeddingProvider = await getEmbeddingProvider(embeddingConfig);
-      this.storageProvider = await getStorageProvider({
-        path: this.storagePath
-      });
+      if (this.indexMeta.artifacts.vectorDb.embeddingEnabled !== false) {
+        const storedProvider = this.indexMeta.artifacts.vectorDb.embeddingProvider;
+        const storedModel = this.indexMeta.artifacts.vectorDb.embeddingModel;
+        const embeddingConfig: Partial<EmbeddingConfig> = storedProvider
+          ? { provider: storedProvider as EmbeddingConfig['provider'], model: storedModel }
+          : {};
+        this.embeddingProvider = await getEmbeddingProvider(embeddingConfig);
+        this.storageProvider = await getStorageProvider({
+          path: this.storagePath
+        });
+      }
 
       this.initialized = true;
     } catch (error) {

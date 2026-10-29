@@ -81,7 +81,8 @@ export const IndexMetaSchema = z.object({
         path: z.string().min(1),
         provider: z.string().min(1),
         embeddingProvider: z.string().optional(),
-        embeddingModel: z.string().optional()
+        embeddingModel: z.string().optional(),
+        embeddingEnabled: z.boolean().optional()
       }),
       intelligence: z
         .object({
@@ -102,9 +103,13 @@ export type IndexMeta = z.infer<typeof IndexMetaSchema>;
 export function checkEmbeddingMismatch(
   meta: IndexMeta,
   currentProvider: string,
-  currentModel: string
+  currentModel: string,
+  currentEmbeddingEnabled = true
 ): boolean {
   const stored = meta.artifacts.vectorDb;
+  const storedEmbeddingEnabled = stored.embeddingEnabled ?? true;
+  if (storedEmbeddingEnabled !== currentEmbeddingEnabled) return true;
+  if (!currentEmbeddingEnabled) return false;
   if (!stored.embeddingProvider || !stored.embeddingModel) return false; // legacy index, no info
   return stored.embeddingProvider !== currentProvider || stored.embeddingModel !== currentModel;
 }

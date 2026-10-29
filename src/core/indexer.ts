@@ -488,16 +488,23 @@ export class CodebaseIndexer {
           unchanged: diff.unchanged.length
         };
 
-        // Check for embedding provider/model mismatch — forces full rebuild to avoid
-        // silent vector dimension mismatch when switching providers or models.
+        // Check for embedding configuration mismatch — forces full rebuild to avoid
+        // stale vectors when changing providers, models, or embedding mode.
         try {
           const existingMeta = await readIndexMeta(this.rootPath);
           const currentProvider = this.config.embedding?.provider ?? 'transformers';
           const currentModel = this.config.embedding?.model ?? DEFAULT_MODEL;
-          if (checkEmbeddingMismatch(existingMeta, currentProvider, currentModel)) {
+          if (
+            checkEmbeddingMismatch(
+              existingMeta,
+              currentProvider,
+              currentModel,
+              !this.config.skipEmbedding
+            )
+          ) {
             const stored = existingMeta.artifacts.vectorDb;
             console.error(
-              `Embedding provider/model changed (stored: ${stored.embeddingProvider}:${stored.embeddingModel}, current: ${currentProvider}:${currentModel}) — forcing full rebuild`
+              `Embedding configuration changed (stored: ${stored.embeddingEnabled === false ? 'disabled' : `${stored.embeddingProvider ?? 'unknown'}:${stored.embeddingModel ?? 'unknown'}`}, current: ${this.config.skipEmbedding ? 'disabled' : `${currentProvider}:${currentModel}`}) — forcing full rebuild`
             );
             diff = null;
           }
@@ -1054,7 +1061,8 @@ export class CodebaseIndexer {
                 path: VECTOR_DB_DIRNAME,
                 provider: 'lancedb',
                 embeddingProvider: this.config.embedding?.provider ?? 'transformers',
-                embeddingModel: this.config.embedding?.model ?? DEFAULT_MODEL
+                embeddingModel: this.config.embedding?.model ?? DEFAULT_MODEL,
+                embeddingEnabled: !this.config.skipEmbedding
               },
               intelligence: { path: INTELLIGENCE_FILENAME },
               manifest: { path: MANIFEST_FILENAME },

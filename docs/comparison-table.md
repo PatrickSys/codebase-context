@@ -33,3 +33,17 @@ For reference, the current combined discovery output across `angular-spotify` an
 | `gate.status` | `pending_evidence` |
 
 Those numbers are not compared here as head-to-head wins because the comparator lanes above did not produce matching metrics.
+
+## Corrected retrieval case study (20x1)
+
+This separate fixed retrieval family is preserved for the presentation evidence. It measures expected-file recovery and returned-file precision only; it does not measure completed coding tasks.
+
+| Tool | Completed | Failed | Expected-file coverage | File precision |
+| --- | ---: | ---: | ---: | ---: |
+| Raw search | 20/20 | 0 | 4.3% | 4.0% |
+| Codebase Context | 20/20 | 0 | 25.7% | 11.5% |
+| jCodeMunch | 20/20 | 0 | 27.1% | 11.0% |
+| Repowise | 19/20 | 1 | 20.1% (failed run = 0) | 12.0% |
+| context-mode | 20/20 | 0 | 16.8% | 11.7% |
+
+The family has 99 completed attempts and one failed attempt. These values are preserved from [`results/benchmark-presentation-evidence.json`](../results/benchmark-presentation-evidence.json), whose claim gate remains blocked; they are not a benchmark-winner or productivity claim.

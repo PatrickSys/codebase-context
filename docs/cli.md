@@ -42,12 +42,26 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
+- `init` — interactive setup wizard; non-interactive client flags are currently source-candidate behavior (see [Codex Desktop setup](./client-setup.md#codex-desktop-source-candidate))
 
 ---
+
+## First use
+
+Run these commands from the project root. Build or refresh the local index first; the first index may take a while while the project is scanned and local embeddings are created. Then inspect the conventions map and search for the code you need:
+
+```bash
+npx -y codebase-context reindex
+npx -y codebase-context map
+npx -y codebase-context search --query "auth middleware"
+```
+
+This is the CLI preparation flow. It is separate from MCP client registration and does not by itself show that an MCP client connected successfully.
 
 ## `map`
 
 ```bash
+npx -y codebase-context reindex
 npx -y codebase-context map
 ```
 
@@ -126,6 +140,7 @@ Example output (truncated):
 ## `search`
 
 ```bash
+npx -y codebase-context reindex
 npx -y codebase-context search --query "file watcher" --intent edit --limit 3
 ```
 

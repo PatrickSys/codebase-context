@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'path';
+import { homedir } from 'node:os';
 
 // Mock node:fs/promises at the top level so Vitest can hoist it correctly.
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -7,6 +8,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...actual,
     access: vi.fn(),
+    lstat: vi.fn(),
     readFile: vi.fn(),
     writeFile: vi.fn().mockResolvedValue(undefined),
     mkdir: vi.fn().mockResolvedValue(undefined)
@@ -18,8 +20,10 @@ import {
   generateMcpConfig,
   generateInstructionBlock,
   resolveInstructionFilePath,
+  handleInitCli,
   _appendInstructionBlock,
-  _buildMergedMcpContent
+  _buildMergedMcpContent,
+  _buildCodexMcpContent
 } from '../src/cli-init.js';
 
 // --- generateMcpConfig ---
@@ -57,11 +61,17 @@ describe('generateMcpConfig', () => {
     });
   });
 
-  it('codex exposes the executable and exact user-scoped stdio argv', () => {
-    expect(generateMcpConfig('codex')).toEqual({
-      kind: 'command',
-      executable: 'codex',
-      args: ['mcp', 'add', 'codebase-context', '--', 'npx', '-y', 'codebase-context']
+  it('codex writes a project config with an absolute root argument', () => {
+    const root = path.resolve('projects/example');
+    const result = generateMcpConfig('codex', root);
+    expect(result).toEqual({
+      kind: 'file',
+      path: path.join(root, '.codex', 'config.toml'),
+      content:
+        '[mcp_servers.codebase-context]\n' +
+        'command = "npx"\n' +
+        `cwd = ${JSON.stringify(root)}\n` +
+        `args = ["-y", "codebase-context", ${JSON.stringify(root)}]\n`
     });
   });
 
@@ -129,14 +139,169 @@ describe('resolveInstructionFilePath', () => {
     expect(result).toBe(path.join(cwd, '.cursorrules'));
   });
 
-  it('codex resolves to AGENTS.md', () => {
+  it('codex leaves AGENTS.md untouched', () => {
     const result = resolveInstructionFilePath('codex', cwd);
-    expect(result).toBe(path.join(cwd, 'AGENTS.md'));
+    expect(result).toBeNull();
   });
 
   it('opencode returns null', () => {
     const result = resolveInstructionFilePath('opencode', cwd);
     expect(result).toBeNull();
+  });
+});
+
+describe('_buildCodexMcpContent', () => {
+  const readFileMock = vi.mocked(fsMod.readFile);
+  const lstatMock = vi.mocked(fsMod.lstat);
+  const writeFileMock = vi.mocked(fsMod.writeFile);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    writeFileMock.mockResolvedValue(undefined);
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => false, isFile: () => true } as Awaited<
+      ReturnType<typeof fsMod.lstat>
+    >);
+  });
+
+  it('preserves unrelated TOML text and adds the project server', async () => {
+    const existing = '# keep this comment\n[other]\nvalue = "preserved"\n';
+    readFileMock.mockResolvedValue(existing as unknown as Buffer);
+    const root = path.resolve('project');
+    const generated = generateMcpConfig('codex', root);
+    if (generated.kind !== 'file') throw new Error('expected file config');
+
+    const merged = await _buildCodexMcpContent(generated.path, generated.content, root);
+
+    expect(merged.changed).toBe(true);
+    expect(merged.content).toBe(existing + '\n' + generated.content);
+  });
+
+  it('is idempotent when the existing project server matches', async () => {
+    const root = path.resolve('project');
+    const generated = generateMcpConfig('codex', root);
+    if (generated.kind !== 'file') throw new Error('expected file config');
+    readFileMock.mockResolvedValue(generated.content as unknown as Buffer);
+
+    const merged = await _buildCodexMcpContent(generated.path, generated.content, root);
+
+    expect(merged).toEqual({ content: generated.content, changed: false });
+  });
+
+  it('fails clearly for malformed TOML and conflicting server settings', async () => {
+    const root = path.resolve('project');
+    const generated = generateMcpConfig('codex', root);
+    if (generated.kind !== 'file') throw new Error('expected file config');
+
+    readFileMock.mockResolvedValue('not valid toml' as unknown as Buffer);
+    await expect(_buildCodexMcpContent(generated.path, generated.content, root)).rejects.toThrow(
+      /Cannot parse Codex config/
+    );
+
+    readFileMock.mockResolvedValue(
+      '[mcp_servers.codebase-context]\ncommand = "other"\nargs = []\n' as unknown as Buffer
+    );
+    await expect(_buildCodexMcpContent(generated.path, generated.content, root)).rejects.toThrow(
+      /conflict/
+    );
+  });
+
+  it('refuses linked or unreadable config files', async () => {
+    const root = path.resolve('project');
+    const generated = generateMcpConfig('codex', root);
+    if (generated.kind !== 'file') throw new Error('expected file config');
+
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => true } as Awaited<ReturnType<typeof fsMod.lstat>>);
+    await expect(_buildCodexMcpContent(generated.path, generated.content, root)).rejects.toThrow(
+      /symbolic link/
+    );
+
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => false, isFile: () => true } as Awaited<
+      ReturnType<typeof fsMod.lstat>
+    >);
+    const denied = Object.assign(new Error('access denied'), { code: 'EACCES' });
+    readFileMock.mockRejectedValue(denied);
+    await expect(_buildCodexMcpContent(generated.path, generated.content, root)).rejects.toThrow(
+      /Cannot read Codex config/
+    );
+  });
+});
+
+describe('handleInitCli Codex flow', () => {
+  const lstatMock = vi.mocked(fsMod.lstat);
+  const writeFileMock = vi.mocked(fsMod.writeFile);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+    writeFileMock.mockResolvedValue(undefined);
+    process.exitCode = undefined;
+  });
+
+  it('reports index failure and leaves the instruction path untouched', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const prepareIndex = vi.fn().mockResolvedValue({ status: 'error', error: 'disk full' as string });
+    const root = path.resolve('.');
+
+    await handleInitCli(['--client', 'codex', '--yes', '--root', root], { prepareIndex });
+
+    expect(prepareIndex).toHaveBeenCalledOnce();
+    expect(errorSpy).toHaveBeenCalledWith('Index preparation failed: disk full');
+    expect(errorSpy).toHaveBeenCalledWith(
+      `Next action: change directory to "${root}" and run npx codebase-context reindex`
+    );
+    expect(process.exitCode).toBe(1);
+    expect(writeFileMock).not.toHaveBeenCalledWith(expect.stringContaining('AGENTS.md'), expect.anything(), 'utf8');
+    errorSpy.mockRestore();
+    process.exitCode = undefined;
+  });
+
+  it('refuses a project root whose config is the CODEX_HOME global config', async () => {
+    const root = path.resolve('.');
+    const originalCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = path.join(root, '.codex');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const prepareIndex = vi.fn();
+
+    await handleInitCli(['--client', 'codex', '--yes', '--root', root], { prepareIndex });
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('global config'));
+    expect(prepareIndex).not.toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+    if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = originalCodexHome;
+    process.exitCode = undefined;
+  });
+
+  it('refuses the default home Codex config even when CODEX_HOME is overridden', async () => {
+    const originalCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = path.join(path.resolve('.'), 'scratch-codex-home');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await handleInitCli(['--client', 'codex', '--yes', '--root', homedir()]);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('global config'));
+    expect(writeFileMock).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+    if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = originalCodexHome;
+    process.exitCode = undefined;
+  });
+
+  it('rejects stray positional arguments, missing roots, and non-Codex --root', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await handleInitCli(['codex']);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Unexpected positional'));
+    process.exitCode = undefined;
+
+    await handleInitCli(['--client', 'codex', '--yes', '--root', path.join(path.resolve('.'), 'missing-root')]);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Project root is missing'));
+    process.exitCode = undefined;
+
+    await handleInitCli(['--client', 'cursor', '--yes', '--root', path.resolve('.')]);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('--root is supported only'));
+    errorSpy.mockRestore();
+    process.exitCode = undefined;
   });
 });
 

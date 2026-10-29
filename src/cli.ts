@@ -27,7 +27,7 @@ import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { formatJson } from './cli-formatters.js';
 import { handleMemoryCli } from './cli-memory.js';
 export { handleMemoryCli } from './cli-memory.js';
-import { handleInitCli } from './cli-init.js';
+import { handleInitCli, type InitIndexResult } from './cli-init.js';
 import { handleMapCli } from './cli-map.js';
 import { loadProjectConfig } from './server/config.js';
 
@@ -104,8 +104,8 @@ function resolveCliRootPath(): string {
   return path.resolve(process.env.CODEBASE_ROOT || process.cwd());
 }
 
-async function initToolContext(): Promise<ToolContext> {
-  const rootPath = resolveCliRootPath();
+async function initToolContext(rootPathOverride?: string): Promise<ToolContext> {
+  const rootPath = path.resolve(rootPathOverride ?? resolveCliRootPath());
   const projectConfig = await loadProjectConfig(rootPath);
 
   const paths = {
@@ -175,6 +175,19 @@ async function initToolContext(): Promise<ToolContext> {
     paths,
     rootPath,
     performIndexing
+  };
+}
+
+export async function prepareIndexForInit(rootPath: string): Promise<InitIndexResult> {
+  const ctx = await initToolContext(rootPath);
+  await ctx.performIndexing(false, 'initial project setup');
+  if (ctx.indexState.status === 'error') {
+    return { status: 'error', error: ctx.indexState.error ?? 'unknown indexing error' };
+  }
+  const stats = ctx.indexState.stats;
+  return {
+    status: 'ready',
+    summary: stats ? `${stats.indexedFiles} files, ${stats.totalChunks} chunks` : undefined
   };
 }
 
@@ -275,7 +288,7 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
   }
 
   if (command === 'init') {
-    return handleInitCli(argv.slice(1));
+    return handleInitCli(argv.slice(1), { prepareIndex: prepareIndexForInit });
   }
 
   if (command === 'map') {

@@ -53,6 +53,8 @@ The server runs in two modes. Use stdio unless you need multiple clients connect
 | **stdio** (default) | Process spawned by the client                    | One AI client talking to one or more repos |
 | **HTTP**            | Long-lived server at `http://127.0.0.1:3100/mcp` | Multiple clients sharing one server        |
 
+HTTP is loopback-only by default. A client that opens the optional standalone GET/SSE stream can provide workspace roots for automatic project routing. A POST-only client cannot receive `roots/list`, so pass `project` or `project_directory` explicitly; an ambiguous request returns `selection_required` instead of guessing.
+
 Client support at a glance:
 
 | Client            | stdio | HTTP                                         |
@@ -74,6 +76,9 @@ Full per-client setup, HTTP server instructions, and local build testing: [`docs
 Get a conventions map of your codebase before exploring or editing:
 
 ```bash
+# Build or refresh the local index
+npx -y codebase-context reindex
+
 # See your codebase conventions — architecture layers, patterns, golden files
 npx -y codebase-context map
 
@@ -138,6 +143,8 @@ Memory types: `convention`, `decision`, `gotcha`, `failure`. Confidence decay: c
 ## Multi-project
 
 One server, multiple repos. Three cases:
+
+Automatic routing across several projects requires a client that announces workspace roots through the standalone GET/SSE stream. With POST-only HTTP clients, select the project explicitly with `project` or `project_directory`.
 
 | Case                                          | What happens                                        |
 | --------------------------------------------- | --------------------------------------------------- |

@@ -172,3 +172,17 @@ The current comparator artifact records incomplete comparator evidence, not benc
 - It can support claims that the proof gate is still blocked by comparator evidence.
 - It cannot support claims that `codebase-context` beats the named comparators today.
 - It cannot support claims about edit success, code quality, or implementation speed.
+
+## Corrected Retrieval Case Study (20x1)
+
+The sanitized presentation extract also records a separate corrected retrieval-only family. It is kept separate from the ContextBench pilot and the current 24-task discovery gate. In this fixed setup, Codebase Context recovered 25.7% of expected gold files at 11.5% file precision. Those are retrieval measures, not coding quality or completed-task results.
+
+| Tool | Completed | Failed | Expected-file coverage | File precision |
+| --- | ---: | ---: | ---: | ---: |
+| Raw search | 20/20 | 0 | 4.3% | 4.0% |
+| Codebase Context | 20/20 | 0 | 25.7% | 11.5% |
+| jCodeMunch | 20/20 | 0 | 27.1% | 11.0% |
+| Repowise | 19/20 | 1 | 20.1% (failed run = 0) | 12.0% |
+| context-mode | 20/20 | 0 | 16.8% | 11.7% |
+
+The corrected family contains 99 completed attempts and one failed attempt. The reported `peakPrivateGb` field is retained as source telemetry; its unit was not independently verified. The [sanitized evidence extract](../results/benchmark-presentation-evidence.json) records the source hashes and keeps the claim scope narrow: no benchmark-winner, resource-efficiency, patch-correctness, or generalized productivity claim.

@@ -35,11 +35,10 @@ export type HttpServerOptions = {
   port?: number;
   /** Handler registration callback — wires tool/resource handlers onto each session's Server */
   registerHandlers: RegisterHandlers;
-  /**
-   * Called after each per-session Server is created and connected.
-   * Use this to set up per-session notification handlers, roots refresh, etc.
-   */
-  onSessionReady?: (server: Server) => void;
+  /** Called once after the session's standalone SSE stream is established. */
+  onSessionSseConnected?: (server: Server) => void | Promise<void>;
+  /** Called once when a session is deleted or its transport closes. */
+  onSessionClosed?: (server: Server) => void | Promise<void>;
 };
 
 type SessionEntry = {
@@ -47,6 +46,8 @@ type SessionEntry = {
   transport: StreamableHTTPServerTransport;
   /** Last activity timestamp (ms since epoch) */
   lastActivity: number;
+  /** Whether the client's standalone GET/SSE stream has been established. */
+  sseConnected: boolean;
 };
 
 export type HttpServerHandle = {
@@ -54,9 +55,23 @@ export type HttpServerHandle = {
   close: () => Promise<void>;
 };
 
+function assertLoopbackHost(host: string): void {
+  const normalized = host.trim().toLowerCase();
+  if (normalized !== '127.0.0.1' && normalized !== 'localhost' && normalized !== '::1') {
+    throw new Error(
+      `HTTP transport is loopback-only; refusing host "${host}". Use 127.0.0.1, localhost, or ::1.`
+    );
+  }
+}
+
+function formatHostForUrl(host: string): string {
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+}
+
 export async function startHttpServer(options: HttpServerOptions): Promise<HttpServerHandle> {
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 3100;
+  assertLoopbackHost(host);
   const sessions = new Map<string, SessionEntry>();
 
   function touchSession(sessionId: string): void {
@@ -64,6 +79,14 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
     if (session) {
       session.lastActivity = Date.now();
     }
+  }
+
+  function removeSession(sessionId: string, session: SessionEntry): void {
+    if (sessions.get(sessionId) !== session) return;
+    sessions.delete(sessionId);
+    void Promise.resolve(options.onSessionClosed?.(session.server)).catch((error: unknown) => {
+      console.error('[HTTP] Session cleanup failed:', error);
+    });
   }
 
   function createSessionServer(): { server: Server; transport: StreamableHTTPServerTransport } {
@@ -96,7 +119,7 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
 
   const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
-      const url = new URL(req.url ?? '/', `http://${host}:${port}`);
+      const url = new URL(req.url ?? '/', `http://${formatHostForUrl(host)}:${port}`);
 
       // Health check on root
       if (url.pathname === '/' && req.method === 'GET') {
@@ -141,8 +164,9 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
         // Register onclose before handleRequest so cleanup always fires.
         transport.onclose = () => {
           const sid = transport.sessionId;
-          if (sid && sessions.has(sid)) {
-            sessions.delete(sid);
+          const session = sid ? sessions.get(sid) : undefined;
+          if (sid && session) {
+            removeSession(sid, session);
             console.error(`[HTTP] Session ${sid} disconnected`);
           }
         };
@@ -156,12 +180,11 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
           sessions.set(newSessionId, {
             server: mcpServer,
             transport,
-            lastActivity: Date.now()
+            lastActivity: Date.now(),
+            sseConnected: false
           });
           console.error(`[HTTP] Session ${newSessionId} connected`);
 
-          // Notify caller so they can set up per-session handlers (roots refresh, etc.)
-          options.onSessionReady?.(mcpServer);
         } else {
           // Malformed init request — SDK didn't assign a session ID; clean up the orphan.
           void transport.close().catch(() => {
@@ -183,7 +206,21 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
 
         touchSession(sessionId);
         const session = sessions.get(sessionId)!;
-        await session.transport.handleRequest(req, res);
+        const shouldNotifySseConnected = !session.sseConnected;
+        session.sseConnected = true;
+        const request = session.transport.handleRequest(req, res);
+        if (shouldNotifySseConnected) {
+          // handleRequest installs the SDK's standalone stream mapping before
+          // returning. Defer the callback so roots/list can use that stream.
+          setImmediate(() => {
+            void Promise.resolve(options.onSessionSseConnected?.(session.server)).catch(
+              (error: unknown) => {
+                console.error('[HTTP] Session SSE setup failed:', error);
+              }
+            );
+          });
+        }
+        await request;
         return;
       }
 
@@ -199,7 +236,7 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
         try {
           await session.transport.close();
         } finally {
-          sessions.delete(sessionId);
+          removeSession(sessionId, session);
           console.error(`[HTTP] Session ${sessionId} closed by client`);
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -235,7 +272,9 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
 
   return new Promise<HttpServerHandle>((resolve) => {
     httpServer.listen(port, host, () => {
-      console.error(`Codebase Context MCP server listening on http://${host}:${port}/mcp`);
+      console.error(
+        `Codebase Context MCP server listening on http://${formatHostForUrl(host)}:${port}/mcp`
+      );
 
       const handle: HttpServerHandle = {
         close: async () => {

@@ -11,7 +11,9 @@ The server supports two transport modes:
 | **stdio** (default) | `npx -y codebase-context`                   | Spawned process stdin/stdout |
 | **HTTP**            | `npx -y codebase-context --http [--port N]` | `http://127.0.0.1:3100/mcp`  |
 
-HTTP defaults to `127.0.0.1:3100`. Override with `--port`, `CODEBASE_CONTEXT_PORT`, or `server.port` in `~/.codebase-context/config.json`.
+HTTP is loopback-only and defaults to `127.0.0.1:3100`. Override the port with `--port`, `CODEBASE_CONTEXT_PORT`, or `server.port` in `~/.codebase-context/config.json`; non-loopback bind hosts are rejected.
+
+Clients that establish the optional standalone GET/SSE stream can receive workspace roots for automatic routing. POST-only clients cannot receive `roots/list` and must pass `project` or `project_directory` explicitly.
 
 Config-registered project roots (from `~/.codebase-context/config.json`) are loaded at startup in both modes.
 
@@ -105,7 +107,7 @@ Behavior matrix:
 Rules:
 
 - If the client provides workspace context, that becomes the trusted workspace boundary for the session. In practice this usually comes from MCP roots.
-- Treat seamless multi-project routing as evidence-backed only for roots-capable hosts. Without roots, explicit fallback is still required.
+- Treat seamless multi-project routing as evidence-backed only for roots-capable hosts using the standalone GET/SSE stream. A POST-only client cannot receive roots, so explicit project selection is required.
 - If the server still cannot tell which project to use, a bootstrap path or explicit absolute `project` path remains the fallback.
 - `project` is the canonical explicit selector when routing is ambiguous.
 - `project` may point at a project path, file path, `file://` URI, or relative subproject path.

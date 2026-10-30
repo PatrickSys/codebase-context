@@ -32,13 +32,52 @@ function runCommand(command, args, options = {}) {
   };
 }
 
-function extractSearchFilesFromJson(value) {
+function collectPatternExemplarPaths(patternsValue) {
+  const paths = [];
+  if (!patternsValue) return paths;
+  const entries = Array.isArray(patternsValue)
+    ? patternsValue
+    : typeof patternsValue === 'object'
+      ? Object.values(patternsValue)
+      : [];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue;
+    const primary = entry.primary ?? entry;
+    const canonical = primary?.canonicalExample?.file ?? entry.bestExample ?? entry.example;
+    if (canonical) paths.push(canonical);
+    const examples = primary?.examples;
+    if (Array.isArray(examples)) {
+      for (const example of examples) {
+        if (typeof example === 'string') paths.push(example);
+      }
+    }
+  }
+  return paths;
+}
+
+export function extractSearchFilesFromJson(value) {
   const topFiles = [];
   if (!value || typeof value !== 'object') return topFiles;
+  const push = (candidate) => {
+    const normalized = normalizeRelativePath(candidate);
+    if (normalized && !topFiles.includes(normalized)) topFiles.push(normalized);
+  };
   const results = Array.isArray(value.results) ? value.results : [];
   for (const entry of results) {
-    const normalized = normalizeRelativePath(entry.file ?? entry.path ?? '');
-    if (normalized && !topFiles.includes(normalized)) topFiles.push(normalized);
+    push(entry.file ?? entry.path ?? '');
+  }
+  if (Array.isArray(value.rankedExemplars)) {
+    for (const row of value.rankedExemplars) {
+      push(row?.file ?? row?.path ?? '');
+    }
+  }
+  if (Array.isArray(value.goldenFiles)) {
+    for (const golden of value.goldenFiles) {
+      push(golden?.file ?? '');
+    }
+  }
+  for (const filePath of collectPatternExemplarPaths(value.patterns)) {
+    push(filePath);
   }
   return topFiles;
 }
@@ -128,12 +167,6 @@ export async function runCodebaseContextTask(task, repoPath, projectRoot, indexE
         }
         return normalizeRelativePath(filePath);
       });
-      if (topFiles.length === 0 && Array.isArray(parsed.patterns)) {
-        for (const pattern of parsed.patterns) {
-          const example = normalizeRelativePath(pattern?.bestExample ?? pattern?.example ?? '');
-          if (example) topFiles.push(example);
-        }
-      }
     } catch {
       topFiles = [];
     }

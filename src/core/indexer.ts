@@ -825,8 +825,6 @@ export class CodebaseIndexer {
               return lines.slice(start, end).join('\n').trim();
             };
 
-            const relPath = file.split(/[\\/]/).slice(-3).join('/');
-
             // Get file date for pattern momentum tracking
             // Try multiple path formats since git uses forward slashes
             const normalizedRelPath = path.relative(this.rootPath, file).replace(/\\/g, '/');
@@ -852,7 +850,7 @@ export class CodebaseIndexer {
                 patternDetector.track(
                   pattern.category,
                   pattern.name,
-                  snippet ? { file: relPath, snippet } : undefined,
+                  snippet ? { file: normalizedRelPath, snippet } : undefined,
                   fileDate
                 );
               }
@@ -873,7 +871,7 @@ export class CodebaseIndexer {
               for (const p of detectedPatterns) {
                 patternFlags[`${p.category}:${p.name}`] = true;
               }
-              patternDetector.trackGoldenFile(relPath, patternScore, patternFlags);
+              patternDetector.trackGoldenFile(normalizedRelPath, patternScore, patternFlags);
             }
 
             // Update component statistics

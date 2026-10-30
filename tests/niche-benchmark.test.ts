@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { aggregateLaneResults, scoreTaskResult } from '../scripts/lib/niche-benchmark/scoring.mjs';
+import { extractSearchFilesFromJson } from '../scripts/lib/niche-benchmark/lanes.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const manifest = JSON.parse(
@@ -82,5 +83,36 @@ describe('niche benchmark scoring', () => {
     expect(aggregated.tasksCompleted).toBe(1);
     expect(aggregated.tasksFailed).toBe(1);
     expect(aggregated.top3HitRate).toBe(1);
+  });
+});
+
+describe('extractSearchFilesFromJson (team-convention paths)', () => {
+  it('collects ranked exemplars, golden files, and pattern canonical examples', () => {
+    const payload = {
+      status: 'success',
+      patterns: {
+        dependencyInjection: {
+          primary: {
+            name: 'inject()',
+            canonicalExample: { file: 'apps/web/src/app/core/auth.service.ts', snippet: 'inject(' },
+            examples: ['apps/web/src/app/core/auth.service.ts']
+          }
+        }
+      },
+      goldenFiles: [{ file: 'libs/shared/util-store.ts', score: 4 }],
+      rankedExemplars: [{ file: 'libs/shared/util-store.ts', score: 4, category: 'stateManagement' }]
+    };
+    expect(extractSearchFilesFromJson(payload)).toEqual([
+      'libs/shared/util-store.ts',
+      'apps/web/src/app/core/auth.service.ts'
+    ]);
+  });
+
+  it('still reads search results[] first', () => {
+    const payload = {
+      results: [{ file: 'src/search-hit.ts' }],
+      goldenFiles: [{ file: 'other.ts', score: 1 }]
+    };
+    expect(extractSearchFilesFromJson(payload)[0]).toBe('src/search-hit.ts');
   });
 });

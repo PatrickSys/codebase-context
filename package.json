@@ -181,6 +181,9 @@
     "typescript-eslint": "^8.51.0",
     "vitest": "^4.0.18"
   },
+  "overrides": {
+    "@huggingface/transformers>onnxruntime-node": "1.24.3"
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",

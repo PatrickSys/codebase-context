@@ -1,6 +1,7 @@
 import { EmbeddingProvider, DEFAULT_MODEL } from './types.js';
 import type { FeatureExtractionPipeline } from '@huggingface/transformers';
 import os from 'os';
+import { assertMinimumOnnxRuntimeNodeVersion } from '../utils/onnxruntime-version.js';
 import { assertOptionalDependency } from '../utils/optional-dependency.js';
 
 /**
@@ -58,6 +59,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     if (this.initPromise) return this.initPromise;
 
     assertOptionalDependency('@huggingface/transformers', '^4.2.0');
+    assertMinimumOnnxRuntimeNodeVersion();
 
     this.initPromise = this._initialize();
     return this.initPromise;

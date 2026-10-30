@@ -1,0 +1,56 @@
+# Manual re-render of the terminal hero. The committed GIF and WebM are the
+# ones linked from the README. This workflow does not publish them.
+name: Render hero tape
+
+on:
+  workflow_dispatch:
+
+jobs:
+  render:
+    name: Render hero GIF and WebM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install VHS, ttyd, and ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-jetbrains-mono
+          curl -fsSL -o /tmp/vhs.tar.gz https://github.com/charmbracelet/vhs/releases/download/v0.12.1/vhs_0.12.1_Linux_x86_64.tar.gz
+          tar -xzf /tmp/vhs.tar.gz -C /tmp
+          sudo install -m 755 /tmp/vhs_0.12.1_Linux_x86_64/vhs /usr/local/bin/vhs
+          curl -fsSL -o /tmp/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
+          sudo install -m 755 /tmp/ttyd /usr/local/bin/ttyd
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Render
+        run: vhs docs/tapes/hero.tape
+
+      - name: Keep the GIF short and small
+        run: |
+          bytes=$(stat -c%s docs/assets/hero.gif)
+          echo "gif bytes: $bytes"
+          test "$bytes" -le 3145728
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 docs/assets/hero.gif)
+          echo "gif seconds: $duration"
+          awk -v d="$duration" 'BEGIN { exit !(d > 0 && d < 15) }'
+          test -s docs/assets/hero.webm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hero-terminal
+          path: |
+            docs/assets/hero.gif
+            docs/assets/hero.webm
+          if-no-files-found: error

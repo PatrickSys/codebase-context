@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" role="img" aria-labelledby="title desc">
+  <title id="title">code never leaves the machine</title>
+  <desc id="desc">With the default local embedding provider, code and indexes stay on the machine. Cloud embeddings are optional; if you select one, code chunks are sent to that provider. Docker, a GPU, and an API key are not required.</desc>
+  <rect width="1100" height="640" fill="#fffef8"/>
+  <text x="48" y="58" fill="#1c1917" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="34">code never leaves the machine</text>
+  <text x="48" y="92" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="16">Code and indexes stay on the machine with the default local embedding provider.</text>
+
+  <path d="M48 128 C 52 124, 250 122, 330 130 C 338 132, 342 250, 328 268 C 310 278, 60 276, 46 258 C 38 240, 40 140, 48 128 Z" fill="#d0ebff" stroke="#1c1917" stroke-width="2.5"/>
+  <text x="188" y="188" text-anchor="middle" fill="#1c1917" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="22">Repository</text>
+  <text x="188" y="216" text-anchor="middle" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="15">your files</text>
+
+  <path d="M360 188 C 390 180, 430 196, 452 188" fill="none" stroke="#1c1917" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M442 176 L 456 188 L 438 198" fill="none" stroke="#1c1917" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <path d="M470 124 C 478 118, 700 120, 792 132 C 804 136, 808 248, 788 268 C 760 280, 490 276, 468 252 C 456 232, 458 138, 470 124 Z" fill="#d3f9d8" stroke="#1c1917" stroke-width="2.5"/>
+  <text x="630" y="180" text-anchor="middle" fill="#1c1917" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="22">Local index</text>
+  <text x="630" y="208" text-anchor="middle" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="15">keyword index and</text>
+  <text x="630" y="230" text-anchor="middle" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="15">local embeddings</text>
+
+  <path d="M820 188 C 850 178, 890 198, 918 186" fill="none" stroke="#1c1917" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M906 174 L 922 186 L 902 198" fill="none" stroke="#1c1917" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <path d="M936 126 C 944 120, 1048 122, 1062 140 C 1072 168, 1068 246, 1044 266 C 1008 278, 948 274, 934 250 C 922 226, 924 140, 936 126 Z" fill="#fff3bf" stroke="#1c1917" stroke-width="2.5"/>
+  <text x="998" y="186" text-anchor="middle" fill="#1c1917" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="20">Results</text>
+  <text x="998" y="214" text-anchor="middle" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="14">read on</text>
+  <text x="998" y="234" text-anchor="middle" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="14">this machine</text>
+
+  <path d="M70 340 C 80 332, 980 328, 1036 348 C 1048 360, 1040 470, 1010 488 C 860 508, 160 506, 78 484 C 52 468, 54 356, 70 340 Z" fill="#ffe3e3" stroke="#1c1917" stroke-width="2.5" stroke-dasharray="7 6"/>
+  <text x="550" y="392" text-anchor="middle" fill="#1c1917" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="22">Optional cloud embeddings</text>
+  <text x="550" y="424" text-anchor="middle" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="16">If you select a cloud provider, code chunks are sent to that provider.</text>
+  <text x="550" y="452" text-anchor="middle" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="16">Cloud embeddings are optional.</text>
+
+  <text x="48" y="548" fill="#44403c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="16">Docker, a GPU, and an API key are not required.</text>
+  <text x="48" y="580" fill="#78716c" font-family="Segoe Print, Comic Sans MS, Chalkboard SE, cursive" font-size="15">Your AI client may still send search results or file contents to its own model provider.</text>
+</svg>

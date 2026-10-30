@@ -19,9 +19,18 @@ import { parse as parseToml } from 'smol-toml';
 import { isDeepStrictEqual } from 'node:util';
 import { promises as fs } from 'node:fs';
 import { atomicWrite } from './utils/atomic-write.js';
-import { checkbox } from '@inquirer/prompts';
+import { checkbox, confirm } from '@inquirer/prompts';
 import { homedir } from 'node:os';
-import { constants } from 'node:fs';
+import { constants, readFileSync } from 'node:fs';
+import { formatConfigPreview } from './cli-init-preview.js';
+import { maybePrintInitUpdateNotice } from './cli-init-version-notice.js';
+
+export const INIT_NPX_PACKAGE = 'codebase-context@latest';
+export const CONFIG_BACKUP_MAX_BYTES = 16_384;
+
+const PKG_VERSION: string = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+).version as string;
 
 export type McpConfigResult = { kind: 'file'; path: string; content: string };
 
@@ -29,6 +38,7 @@ export type McpConfigOptions = {
   rootPath?: string;
   /** Override home for user-scoped configs (tests). Defaults to os.homedir(). */
   homeDirectory?: string;
+  platform?: NodeJS.Platform;
   /** Node binary written into the client config. Defaults to the current process. */
   nodeExecutable?: string;
   /**
@@ -70,6 +80,13 @@ export const CLIENTS = [
     executable: 'opencode',
     directory: '.opencode',
     scope: 'project'
+  },
+  {
+    id: 'claude-desktop',
+    name: 'Claude Desktop',
+    executable: '',
+    directory: 'Claude',
+    scope: 'user'
   }
 ] as const;
 
@@ -77,14 +94,16 @@ export type Client = (typeof CLIENTS)[number]['id'];
 
 function resolveHome(
   env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform
+  _platform: NodeJS.Platform = process.platform
 ): string {
-  const paths = platform === 'win32' ? path.win32 : path.posix;
   return env.HOME || env.USERPROFILE || homedir();
 }
 
 function jsonMcpServerKey(
-  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'>
+  client: Extract<
+    Client,
+    'claude-code' | 'claude-desktop' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'
+  >
 ): string {
   if (client === 'opencode') return 'mcp';
   if (client === 'vscode') return 'servers';
@@ -101,6 +120,23 @@ export function resolveClientConfigPath(
   const home = resolveHome(env, platform);
   if (client === 'codex') return path.join(rootPath, '.codex', 'config.toml');
   if (client === 'windsurf') return path.join(home, '.codeium', 'windsurf', 'mcp_config.json');
+  if (client === 'claude-desktop') {
+    if (platform === 'darwin') {
+      return paths.join(
+        home,
+        'Library',
+        'Application Support',
+        'Claude',
+        'claude_desktop_config.json'
+      );
+    }
+    if (platform === 'win32') {
+      const appData = env.APPDATA || paths.join(home, 'AppData', 'Roaming');
+      return paths.join(appData, 'Claude', 'claude_desktop_config.json');
+    }
+    const configHome = env.XDG_CONFIG_HOME || paths.join(home, '.config');
+    return paths.join(configHome, 'Claude', 'claude_desktop_config.json');
+  }
   if (client === 'claude-code') return path.join(rootPath, '.mcp.json');
   if (client === 'cursor') return path.join(rootPath, '.cursor', 'mcp.json');
   if (client === 'vscode') return path.join(rootPath, '.vscode', 'mcp.json');
@@ -119,6 +155,25 @@ export async function detectClients(
   const extensions = platform === 'win32' ? ['', '.exe', '.cmd', '.bat', '.ps1'] : [''];
   const detected: Client[] = [];
   for (const client of CLIENTS) {
+    if (client.id === 'claude-desktop') {
+      const configPath = resolveClientConfigPath('claude-desktop', rootPath, env, platform);
+      const desktopDir = path.dirname(configPath);
+      for (const candidate of [
+        { path: configPath, directory: false },
+        { path: desktopDir, directory: true }
+      ]) {
+        try {
+          await fs.access(candidate.path, candidate.directory ? constants.F_OK : constants.F_OK);
+          const info = await fs.stat(candidate.path);
+          if (candidate.directory ? !info.isDirectory() : !info.isFile()) continue;
+          detected.push(client.id);
+          break;
+        } catch (error) {
+          if (!isFileNotFound(error)) throw error;
+        }
+      }
+      continue;
+    }
     const userDirectory =
       client.id === 'codex'
         ? env.CODEX_HOME || paths.join(home, '.codex')
@@ -135,11 +190,13 @@ export async function detectClients(
         : paths.join(rootPath, client.directory);
     const directories =
       client.scope === 'user' ? [userDirectory] : [projectDirectory, userDirectory];
-    const executables = searchPath
-      .filter(Boolean)
-      .flatMap((directory) =>
-        extensions.map((extension) => paths.join(directory, client.executable + extension))
-      );
+    const executables = client.executable
+      ? searchPath
+          .filter(Boolean)
+          .flatMap((directory) =>
+            extensions.map((extension) => paths.join(directory, client.executable + extension))
+          )
+      : [];
     const candidates = [
       ...directories.map((candidate) => ({ path: candidate, directory: true })),
       ...executables.map((candidate) => ({ path: candidate, directory: false }))
@@ -180,33 +237,71 @@ function resolveServerEntrypoint(explicit?: string): string {
   return path.resolve(entrypoint);
 }
 
+function resolveNpxCommand(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32' ? 'npx.cmd' : 'npx';
+}
+
+function usesDirectLaunch(options: McpConfigOptions): boolean {
+  return options.serverEntrypoint !== undefined || options.nodeExecutable !== undefined;
+}
+
+function buildLaunchArgs(
+  rootPath: string,
+  options: McpConfigOptions
+): {
+  command: string;
+  args: string[];
+  opencodeCommand?: string[];
+} {
+  const platform = options.platform ?? process.platform;
+  if (usesDirectLaunch(options)) {
+    const nodeExecutable = path.resolve(options.nodeExecutable ?? process.execPath);
+    const serverEntrypoint = resolveServerEntrypoint(options.serverEntrypoint);
+    const args = [serverEntrypoint, rootPath];
+    return {
+      command: nodeExecutable,
+      args,
+      opencodeCommand: [nodeExecutable, ...args]
+    };
+  }
+  const npxCommand = resolveNpxCommand(platform);
+  const args = ['-y', INIT_NPX_PACKAGE, rootPath];
+  return {
+    command: npxCommand,
+    args,
+    opencodeCommand: [npxCommand, ...args]
+  };
+}
+
 /**
- * Launch command saved for every client: the Node binary that ran init, the
- * package entrypoint (the npx cache path when init itself was started with npx),
- * and the project folder. Clients then start that file directly.
+ * Launch command saved for every client. Defaults to `npx -y codebase-context@latest`
+ * plus the project folder so installs auto-update. Pass nodeExecutable/serverEntrypoint
+ * only in tests or when pinning to the running checkout.
  */
 export function generateMcpConfig(client: Client, options: McpConfigOptions = {}): McpConfigResult {
   const rootPath = path.resolve(options.rootPath ?? process.cwd());
   const homeDirectory = options.homeDirectory ?? resolveHome();
-  const nodeExecutable = path.resolve(options.nodeExecutable ?? process.execPath);
-  const serverEntrypoint = resolveServerEntrypoint(options.serverEntrypoint);
-  const args = [serverEntrypoint, rootPath];
+  const platform = options.platform ?? process.platform;
+  const launch = buildLaunchArgs(rootPath, options);
   if (client === 'codex') {
+    const npx = usesDirectLaunch(options)
+      ? { command: launch.command, args: launch.args }
+      : { command: 'npx', args: launch.args };
     return {
       kind: 'file',
-      path: resolveClientConfigPath('codex', rootPath, { HOME: homeDirectory }),
+      path: resolveClientConfigPath('codex', rootPath, { HOME: homeDirectory }, platform),
       content:
-        `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(nodeExecutable)}\n` +
-        `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 120\n`
+        `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(npx.command)}\n` +
+        `args = [${npx.args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 120\n`
     };
   }
-  const configPath = resolveClientConfigPath(client, rootPath, { HOME: homeDirectory });
+  const configPath = resolveClientConfigPath(client, rootPath, { HOME: homeDirectory }, platform);
   const serverPayload =
     client === 'opencode'
-      ? { type: 'local', command: [nodeExecutable, ...args] }
+      ? { type: 'local', command: launch.opencodeCommand ?? [launch.command, ...launch.args] }
       : client === 'cursor'
-        ? { type: 'stdio', command: nodeExecutable, args }
-        : { command: nodeExecutable, args };
+        ? { type: 'stdio', command: launch.command, args: launch.args }
+        : { command: launch.command, args: launch.args };
   const body =
     client === 'opencode'
       ? {
@@ -305,40 +400,78 @@ function isNpxCacheEntrypoint(value: string): boolean {
   return /[\\/]node_modules[\\/]codebase-context[\\/]dist[\\/]index\.js$/.test(value);
 }
 
+function isNpxPackageArg(value: string): boolean {
+  return (
+    value === 'codebase-context' ||
+    /^codebase-context@(latest|\d+\.\d+\.\d+(?:-[\w.-]+)?)$/.test(value)
+  );
+}
+
+function isNpxLaunchArgs(args: string[]): boolean {
+  const flag = args[0];
+  if (flag !== '-y' && flag !== '--yes') return false;
+  if (!isNpxPackageArg(args[1] ?? '')) return false;
+  return args.length === 3 && isAbsolutePath(args[2] ?? '');
+}
+
+function isNpxCommandName(command: string): boolean {
+  const normalized = command.replace(/\\/g, '/');
+  const base = path.basename(normalized).toLowerCase();
+  return (base === 'npx' || base === 'npx.cmd') && !normalized.includes('/');
+}
+
+function isOpencodeNpxCommand(command: string[]): boolean {
+  if (!isNpxCommandName(command[0] ?? '')) return false;
+  if (command[1] !== '-y' && command[1] !== '--yes') return false;
+  if (!isNpxPackageArg(command[2] ?? '')) return false;
+  return command.length === 4 && isAbsolutePath(command[3] ?? '');
+}
+
 /**
  * Recognize only CBC-specific launch shapes written by init.
- * A node launch counts when it points at the npx cache copy of this package,
- * or at the entrypoint this run is about to save.
+ * Accepts npx @latest launches and legacy node launches pointing at this package.
  */
 function isGeneratedLaunch(command: unknown, args: unknown, entrypoint?: string): boolean {
   if (
-    typeof command !== 'string' ||
-    !Array.isArray(args) ||
-    !args.every((arg) => typeof arg === 'string')
-  )
+    typeof command === 'string' &&
+    Array.isArray(args) &&
+    args.every((arg) => typeof arg === 'string')
+  ) {
+    if (isNpxCommandName(command)) {
+      return isNpxLaunchArgs(args);
+    }
+    const executable = path.basename(command.replace(/\\/g, '/')).toLowerCase();
+    if (executable === 'node' || executable === 'node.exe') {
+      const script = args[0] ?? '';
+      return (
+        args.length === 2 &&
+        isAbsolutePath(script) &&
+        isAbsolutePath(args[1] ?? '') &&
+        (isNpxCacheEntrypoint(script) || (entrypoint !== undefined && samePath(script, entrypoint)))
+      );
+    }
     return false;
-  const executable = path.basename(command.replace(/\\/g, '/')).toLowerCase();
-  if (executable === 'node' || executable === 'node.exe') {
-    const script = args[0] ?? '';
-    return (
-      args.length === 2 &&
-      isAbsolutePath(script) &&
-      isAbsolutePath(args[1] ?? '') &&
-      (isNpxCacheEntrypoint(script) || (entrypoint !== undefined && samePath(script, entrypoint)))
-    );
   }
-  const launch = command === 'npx' || command === 'npx.cmd' ? args : [];
-  return (
-    launch.length === 3 &&
-    (launch[0] === '--yes' || launch[0] === '-y') &&
-    /^codebase-context@\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(launch[1] ?? '') &&
-    isAbsolutePath(launch[2] ?? '')
-  );
+  if (Array.isArray(command) && command.every((part) => typeof part === 'string')) {
+    if (isOpencodeNpxCommand(command)) return true;
+    const executable = path.basename(command[0]?.replace(/\\/g, '/') ?? '').toLowerCase();
+    if (executable === 'node' || executable === 'node.exe') {
+      const script = command[1] ?? '';
+      return (
+        command.length === 3 &&
+        isAbsolutePath(script) &&
+        isAbsolutePath(command[2] ?? '') &&
+        (isNpxCacheEntrypoint(script) || (entrypoint !== undefined && samePath(script, entrypoint)))
+      );
+    }
+  }
+  return false;
 }
 
 function generatedEntrypoint(generated: unknown, client: Client): string | undefined {
   if (!isJsonObject(generated)) return undefined;
   if (client === 'opencode' && Array.isArray(generated.command)) {
+    if (isOpencodeNpxCommand(generated.command)) return undefined;
     return typeof generated.command[1] === 'string' ? generated.command[1] : undefined;
   }
   return Array.isArray(generated.args) && typeof generated.args[0] === 'string'
@@ -371,7 +504,10 @@ function mergeGeneratedServer(existing: unknown, generated: unknown, client: Cli
 export async function _buildMergedMcpContent(
   filePath: string,
   generatedContent: string,
-  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'>
+  client: Extract<
+    Client,
+    'claude-code' | 'claude-desktop' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'
+  >
 ): Promise<{ content: string; mergedFromExisting: boolean }> {
   const existingText = await readExistingConfig(filePath);
   if (existingText === null) {
@@ -530,7 +666,50 @@ type InitOptions = {
   help: boolean;
   preview: boolean;
   dryRun: boolean;
+  skipIndex: boolean;
+  noUpdateNotice: boolean;
 };
+
+async function backupTinyConfig(
+  configPath: string,
+  existingText: string
+): Promise<string | undefined> {
+  if (Buffer.byteLength(existingText, 'utf8') > CONFIG_BACKUP_MAX_BYTES) return undefined;
+  const backupPath = `${configPath}.bak`;
+  try {
+    await fs.access(backupPath);
+    return undefined;
+  } catch (error) {
+    if (!isFileNotFound(error)) throw error;
+  }
+  await fs.writeFile(backupPath, existingText, 'utf8');
+  return backupPath;
+}
+
+async function runInitialIndex(rootPath: string): Promise<void> {
+  const config = await loadProjectConfig(rootPath);
+  console.log(`Indexing ${rootPath} (first run)...`);
+  let lastLoggedProgress = { phase: '', percentage: -1 };
+  const indexer = new CodebaseIndexer({
+    rootPath,
+    ...cliProjectOptions(config, true),
+    onProgress: (progress) => {
+      const shouldLog =
+        progress.phase !== lastLoggedProgress.phase ||
+        (progress.percentage % 10 === 0 && progress.percentage !== lastLoggedProgress.percentage);
+      if (shouldLog) {
+        console.error(`[${progress.phase}] ${progress.percentage}%`);
+        lastLoggedProgress = { phase: progress.phase, percentage: progress.percentage };
+      }
+    }
+  });
+  const stats = await indexer.index();
+  console.log(
+    `Index ready: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(
+      stats.duration / 1000
+    ).toFixed(1)}s`
+  );
+}
 
 function formatDisplayPath(configPath: string, rootPath: string): string {
   const relative = path.relative(rootPath, configPath);
@@ -579,17 +758,23 @@ function parseInitOptions(args: string[]): InitOptions {
       yes: false,
       help: true,
       preview: false,
-      dryRun: false
+      dryRun: false,
+      skipIndex: false,
+      noUpdateNotice: false
     };
   const clients: Client[] = [];
   let yes = false;
   let preview = false;
   let dryRun = false;
+  let skipIndex = false;
+  let noUpdateNotice = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === '--preview') preview = true;
     else if (arg === '--dry-run') dryRun = true;
     else if (arg === '--yes' || arg === '-y') yes = true;
+    else if (arg === '--skip-index') skipIndex = true;
+    else if (arg === '--no-update-notice') noUpdateNotice = true;
     else if (arg === '--client') {
       const value = args[++index];
       if (!value || value.startsWith('--')) throw new Error('Expected a client after --client.');
@@ -605,7 +790,9 @@ function parseInitOptions(args: string[]): InitOptions {
     yes,
     help: false,
     preview,
-    dryRun
+    dryRun,
+    skipIndex,
+    noUpdateNotice
   };
 }
 
@@ -615,18 +802,21 @@ function printInitUsage(): void {
     'Detect and configure coding tools together. With a terminal, Space toggles and Enter applies.'
   );
   console.log(
-    'Each config saves this Node binary and the package file from the npx cache, plus the project folder.'
+    'Each config saves `npx -y codebase-context@latest` plus your project folder (pin a version in MCP config to freeze updates).'
   );
-  console.log('Codex setup line: codex mcp add codebase-context -- npx -y codebase-context');
+  console.log('Codex setup line: codex mcp add codebase-context -- npx -y codebase-context@latest');
   console.log(
     '  --client <name>  Choose a tool (repeatable): ' +
       CLIENTS.map((client) => client.id).join(', ')
   );
   console.log('  --root <path>    Project root (default: CODEBASE_ROOT or cwd)');
   console.log('  --preview        Show selected files and exclusions without writing config');
-  console.log('  --dry-run        Show MCP config changes without writing files');
+  console.log('  --dry-run        Preview MCP config diffs without writing files');
+  console.log('  --skip-index     Skip the first index after writing configs');
+  console.log('  --no-update-notice  Skip the daily npm update notice');
   console.log('  --yes, -y        Configure every detected tool without prompts');
   console.log('  --help, -h       Show this help');
+  console.log('  CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1  Disable the daily npm update notice');
 }
 
 export async function handleInitCli(args: string[]): Promise<void> {
@@ -638,6 +828,7 @@ export async function handleInitCli(args: string[]): Promise<void> {
     }
     if (!(await fs.stat(options.rootPath)).isDirectory())
       throw new Error(`Project root is not a directory: ${options.rootPath}`);
+    await maybePrintInitUpdateNotice(PKG_VERSION, { disabled: options.noUpdateNotice });
     if (options.preview) {
       const config = await loadProjectConfig(options.rootPath);
       const preview = await new CodebaseIndexer({
@@ -681,11 +872,41 @@ export async function handleInitCli(args: string[]): Promise<void> {
         ...config,
         content: merged.content,
         action,
-        displayPath: formatDisplayPath(config.path, options.rootPath)
+        displayPath: formatDisplayPath(config.path, options.rootPath),
+        existingText
       });
     }
+
+    for (const config of prepared) {
+      if (config.action !== 'unchanged') {
+        console.log(formatConfigPreview(config.displayPath, config.existingText, config.content));
+        console.log('');
+      }
+    }
+
+    const hasChanges = prepared.some((config) => config.action !== 'unchanged');
+    if (
+      hasChanges &&
+      !options.yes &&
+      !options.dryRun &&
+      process.stdin.isTTY &&
+      process.stdout.isTTY
+    ) {
+      const approved = await confirm({ message: 'Apply these MCP config changes?', default: true });
+      if (!approved) {
+        console.log('Setup cancelled; no files written.');
+        return;
+      }
+    }
+
     for (const config of prepared) {
       if (config.action !== 'unchanged' && !options.dryRun) {
+        if (config.existingText !== null) {
+          const backupPath = await backupTinyConfig(config.path, config.existingText);
+          if (backupPath) {
+            console.log(`Backed up: ${formatDisplayPath(backupPath, options.rootPath)}`);
+          }
+        }
         await fs.mkdir(path.dirname(config.path), { recursive: true });
         await atomicWrite(config.path, config.content);
       }
@@ -695,8 +916,10 @@ export async function handleInitCli(args: string[]): Promise<void> {
       console.log('Dry run complete; no files written.');
       return;
     }
+    if (!options.skipIndex) {
+      await runInitialIndex(options.rootPath);
+    }
     console.log('Reopen your tools; approve the server or project trust if asked.');
-    console.log("The first search builds this repository's index.");
   } catch (error) {
     if (
       error instanceof Error &&

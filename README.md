@@ -4,7 +4,24 @@
 
 Codebase Context gives coding agents a map of your repository through MCP, for developers who want their agent to find relevant code and follow the team's patterns. Search, examples and project memory run locally by default.
 
-## Set up your AI client
+## Install (one command)
+
+Use Node.js 22 or newer. From your project root:
+
+```bash
+npx -y codebase-context@latest init
+```
+
+The wizard detects Claude Code, Codex, Cursor, VS Code (Copilot), Windsurf, OpenCode, and Claude Desktop when present, shows a diff preview for each MCP config change, backs up tiny existing configs as `*.bak`, writes `npx -y codebase-context@latest` plus your project folder, and runs a first index with progress. Non-interactive CI:
+
+```bash
+npx -y codebase-context@latest init --yes --dry-run
+npx -y codebase-context@latest init --yes --skip-index
+```
+
+Pin a version in MCP config instead of `@latest` if you prefer frozen updates. Disable the daily npm update notice with `CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1` or `init --no-update-notice`.
+
+## Set up your AI client manually
 
 Use Node.js 22 or newer. These commands use the current npm release of Codebase Context:
 
@@ -21,14 +38,15 @@ opencode mcp add codebase-context '--' npx -y codebase-context
 
 In the unreleased candidate, `--version` prints the installed package version and `map` builds a missing index before printing the map. A low-confidence search includes a hint that weak matches do not establish that code is absent. These additions require the built candidate; the unpinned commands above install published 2.2.0.
 
-This repository's `init` command detects Claude Code, Codex, Cursor, VS Code (Copilot), Windsurf, and OpenCode, then writes or merges each tool's MCP config in one pass. It follows the official VS Code `servers` and Windsurf user-config shapes (same pattern as the [@modelcontextprotocol/server-filesystem](https://www.npmjs.com/package/@modelcontextprotocol/server-filesystem) workspace examples). Use `--dry-run` to preview changes before writing.
+This repository's `init` command is the supported setup path (see **Install** above). It merges each tool's MCP config safely, previews diffs, and refuses to overwrite unrelated custom entries. `@inquirer/prompts` powers the terminal UI (~25KB); `@clack/prompts` was evaluated and left out to avoid a second prompt dependency.
 
 ```bash
-npx codebase-context init --yes              # configure detected tools
-npx codebase-context init --dry-run --yes    # show Would create/update lines only
+npx -y codebase-context@latest init              # interactive wizard
+npx -y codebase-context@latest init --yes        # configure every detected tool
+npx -y codebase-context@latest init --dry-run --yes
 ```
 
-The saved launch is the Node binary and the package file from the npx cache. That command is in this source and is not part of published 2.2.0. Until it is published, use the copy-paste lines above. The [client setup guide](./docs/client-setup.md) marks the unpublished command.
+Until this ships on npm, build from source or use the manual client commands below. The [client setup guide](./docs/client-setup.md) marks unpublished commands.
 
 Start a new agent session in your project, then ask:
 

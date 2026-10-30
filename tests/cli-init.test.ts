@@ -20,11 +20,12 @@ vi.mock('node:fs', async (importOriginal) => {
 });
 
 vi.mock('@inquirer/prompts', () => ({
-  checkbox: vi.fn()
+  checkbox: vi.fn(),
+  confirm: vi.fn().mockResolvedValue(true)
 }));
 
 import { promises as fsMod } from 'node:fs';
-import { checkbox } from '@inquirer/prompts';
+import { checkbox, confirm } from '@inquirer/prompts';
 import {
   CLIENTS,
   generateMcpConfig,
@@ -41,6 +42,11 @@ const nodeExecutable = path.resolve('C:/Program Files/nodejs/node.exe');
 const cacheEntrypoint = path.resolve(
   'C:/npm-cache/_npx/hash/node_modules/codebase-context/dist/index.js'
 );
+const npxCommand = 'npx.cmd';
+
+function npxLaunch(rootPath: string) {
+  return { command: npxCommand, args: ['-y', 'codebase-context@latest', rootPath] as const };
+}
 
 function savedLaunch(rootPath: string) {
   return {
@@ -52,10 +58,23 @@ function savedLaunch(rootPath: string) {
 
 describe('generateMcpConfig', () => {
   const projectRoot = path.resolve('C:/projects/Example Project');
+  const win32 = { platform: 'win32' as const };
 
-  it('saves the npx cache path for Claude Code', () => {
-    const result = generateMcpConfig('claude-code', savedLaunch(projectRoot));
+  it('saves npx codebase-context@latest for Claude Code by default', () => {
+    const result = generateMcpConfig('claude-code', { rootPath: projectRoot, ...win32 });
 
+    expect(result.kind).toBe('file');
+    if (result.kind !== 'file') return;
+    expect(result.path).toBe(path.join(projectRoot, '.mcp.json'));
+    expect(JSON.parse(result.content)).toEqual({
+      mcpServers: {
+        'codebase-context': npxLaunch(projectRoot)
+      }
+    });
+  });
+
+  it('saves the npx cache path when node and entrypoint are overridden', () => {
+    const result = generateMcpConfig('claude-code', { ...savedLaunch(projectRoot), ...win32 });
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(projectRoot, '.mcp.json'));
@@ -69,8 +88,22 @@ describe('generateMcpConfig', () => {
     });
   });
 
-  it('Cursor gets a project stdio config that saves the npx cache path', () => {
-    const result = generateMcpConfig('cursor', savedLaunch(projectRoot));
+  it('Cursor gets a project stdio config with npx by default', () => {
+    const result = generateMcpConfig('cursor', { rootPath: projectRoot, ...win32 });
+    expect(result.kind).toBe('file');
+    if (result.kind !== 'file') return;
+    expect(result.path).toBe(path.join(projectRoot, '.cursor', 'mcp.json'));
+    const parsed = JSON.parse(result.content) as {
+      mcpServers: { 'codebase-context': { type: string; command: string; args: string[] } };
+    };
+    expect(parsed.mcpServers['codebase-context']).toEqual({
+      type: 'stdio',
+      ...npxLaunch(projectRoot)
+    });
+  });
+
+  it('Cursor stdio config can pin the running package file', () => {
+    const result = generateMcpConfig('cursor', { ...savedLaunch(projectRoot), ...win32 });
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(projectRoot, '.cursor', 'mcp.json'));
@@ -84,20 +117,30 @@ describe('generateMcpConfig', () => {
     });
   });
 
-  it('defaults to the current Node binary and the running package file', () => {
-    const result = generateMcpConfig('claude-code', { rootPath: projectRoot });
+  it('defaults to npx codebase-context@latest and the project root', () => {
+    const result = generateMcpConfig('claude-code', { rootPath: projectRoot, ...win32 });
     if (result.kind !== 'file') throw new Error('expected file config');
     const parsed = JSON.parse(result.content) as {
       mcpServers: { 'codebase-context': { command: string; args: string[] } };
     };
     const server = parsed.mcpServers['codebase-context'];
-    expect(server.command).toBe(path.resolve(process.execPath));
-    expect(server.args?.[0]).toBe(path.resolve(process.argv[1] ?? ''));
-    expect(server.args?.[1]).toBe(projectRoot);
+    expect(server.command).toBe(npxCommand);
+    expect(server.args).toEqual(['-y', 'codebase-context@latest', projectRoot]);
   });
 
-  it('Codex saves the node binary and the npx cache path', () => {
-    const result = generateMcpConfig('codex', savedLaunch(projectRoot));
+  it('Codex saves npx by default', () => {
+    const result = generateMcpConfig('codex', { rootPath: projectRoot, ...win32 });
+
+    expect(result.kind).toBe('file');
+    if (result.kind !== 'file') return;
+    expect(result.path).toBe(path.join(projectRoot, '.codex', 'config.toml'));
+    expect(result.content).toBe(
+      `[mcp_servers.codebase-context]\ncommand = "npx"\nargs = ["-y", ${JSON.stringify('codebase-context@latest')}, ${JSON.stringify(projectRoot)}]\nstartup_timeout_sec = 120\n`
+    );
+  });
+
+  it('Codex can pin the node binary and the npx cache path', () => {
+    const result = generateMcpConfig('codex', { ...savedLaunch(projectRoot), ...win32 });
 
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
@@ -107,8 +150,22 @@ describe('generateMcpConfig', () => {
     );
   });
 
-  it('OpenCode uses a local command that saves the npx cache path', () => {
-    const result = generateMcpConfig('opencode', savedLaunch(projectRoot));
+  it('OpenCode uses a local npx command by default', () => {
+    const result = generateMcpConfig('opencode', { rootPath: projectRoot, ...win32 });
+    expect(result.kind).toBe('file');
+    if (result.kind !== 'file') return;
+    expect(result.path).toBe(path.join(projectRoot, 'opencode.json'));
+    const parsed = JSON.parse(result.content) as {
+      mcp: { 'codebase-context': { type: string; command: string[] } };
+    };
+    expect(parsed.mcp['codebase-context']).toEqual({
+      type: 'local',
+      command: [npxCommand, '-y', 'codebase-context@latest', projectRoot]
+    });
+  });
+
+  it('OpenCode can pin the running package file', () => {
+    const result = generateMcpConfig('opencode', { ...savedLaunch(projectRoot), ...win32 });
     expect(result.kind).toBe('file');
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(projectRoot, 'opencode.json'));
@@ -121,29 +178,40 @@ describe('generateMcpConfig', () => {
     });
   });
 
-  it('VS Code writes workspace servers config with the saved launch', () => {
-    const result = generateMcpConfig('vscode', savedLaunch(projectRoot));
+  it('VS Code writes workspace servers config with npx by default', () => {
+    const result = generateMcpConfig('vscode', { rootPath: projectRoot, ...win32 });
     expect(result.path).toBe(path.join(projectRoot, '.vscode', 'mcp.json'));
     expect(JSON.parse(result.content)).toEqual({
       servers: {
-        'codebase-context': {
-          command: nodeExecutable,
-          args: [cacheEntrypoint, projectRoot]
-        }
+        'codebase-context': npxLaunch(projectRoot)
       }
     });
   });
 
-  it('Windsurf writes user mcp_config.json with the saved launch', () => {
+  it('Windsurf writes user mcp_config.json with npx by default', () => {
     const home = path.resolve('C:/Users/Test User');
-    const result = generateMcpConfig('windsurf', { ...savedLaunch(projectRoot), homeDirectory: home });
+    const result = generateMcpConfig('windsurf', { rootPath: projectRoot, homeDirectory: home, ...win32 });
     expect(result.path).toBe(path.join(home, '.codeium', 'windsurf', 'mcp_config.json'));
     expect(JSON.parse(result.content)).toEqual({
       mcpServers: {
-        'codebase-context': {
-          command: nodeExecutable,
-          args: [cacheEntrypoint, projectRoot]
-        }
+        'codebase-context': npxLaunch(projectRoot)
+      }
+    });
+  });
+
+  it('Claude Desktop writes user mcpServers config with npx', () => {
+    const home = path.resolve('C:/Users/Test User');
+    const result = generateMcpConfig('claude-desktop', {
+      rootPath: projectRoot,
+      homeDirectory: home,
+      platform: 'win32'
+    });
+    expect(result.path).toBe(
+      path.win32.join(home, 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json')
+    );
+    expect(JSON.parse(result.content)).toEqual({
+      mcpServers: {
+        'codebase-context': npxLaunch(projectRoot)
       }
     });
   });
@@ -179,6 +247,7 @@ describe('_buildMergedMcpContent', () => {
   const readFileMock = vi.mocked(fsMod.readFile);
 
   beforeEach(() => {
+    process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = '1';
     vi.resetAllMocks();
   });
 
@@ -192,7 +261,7 @@ describe('_buildMergedMcpContent', () => {
       }) as unknown as Buffer
     );
 
-    const generated = generateMcpConfig('cursor', { platform: 'linux' });
+    const generated = generateMcpConfig('cursor', { platform: 'win32', rootPath: '/test/app' });
     if (generated.kind !== 'file') throw new Error('expected file config');
 
     const merged = await _buildMergedMcpContent(
@@ -213,7 +282,7 @@ describe('_buildMergedMcpContent', () => {
     });
     expect(parsed.mcpServers['codebase-context']).toMatchObject({
       type: 'stdio',
-      command: path.resolve(process.execPath)
+      command: npxCommand
     });
   });
 
@@ -229,7 +298,7 @@ describe('_buildMergedMcpContent', () => {
 
     const generated = generateMcpConfig(
       'claude-code',
-      savedLaunch(path.resolve('C:/projects/app'))
+      { ...savedLaunch(path.resolve('C:/projects/app')), platform: 'win32' }
     );
     if (generated.kind !== 'file') throw new Error('expected file config');
 
@@ -329,7 +398,7 @@ describe('_buildMergedMcpContent', () => {
         }
       }) as unknown as Buffer
     );
-    const generated = generateMcpConfig('claude-code', savedLaunch(newRoot));
+    const generated = generateMcpConfig('claude-code', { rootPath: newRoot, platform: 'win32' });
     if (generated.kind !== 'file') throw new Error('expected file config');
 
     const merged = await _buildMergedMcpContent(
@@ -343,8 +412,7 @@ describe('_buildMergedMcpContent', () => {
     };
     expect(parsed.customSetting).toBe(true);
     expect(parsed.mcpServers['codebase-context']).toEqual({
-      command: nodeExecutable,
-      args: [cacheEntrypoint, newRoot],
+      ...npxLaunch(newRoot),
       customTimeout: 8
     });
   });
@@ -363,7 +431,7 @@ describe('_buildMergedMcpContent', () => {
         }
       }) as unknown as Buffer
     );
-    const generated = generateMcpConfig('claude-code', savedLaunch(newRoot));
+    const generated = generateMcpConfig('claude-code', { rootPath: newRoot, platform: 'win32' });
     if (generated.kind !== 'file') throw new Error('expected file config');
 
     const merged = await _buildMergedMcpContent(
@@ -375,8 +443,7 @@ describe('_buildMergedMcpContent', () => {
       mcpServers: { 'codebase-context': { command: string; args: string[]; customLabel: string } };
     };
     expect(parsed.mcpServers['codebase-context']).toEqual({
-      command: nodeExecutable,
-      args: [cacheEntrypoint, newRoot],
+      ...npxLaunch(newRoot),
       customLabel: 'preserve'
     });
   });
@@ -387,6 +454,7 @@ describe('detectClients', () => {
   const missing = () => Object.assign(new Error('missing'), { code: 'ENOENT' });
 
   beforeEach(() => {
+    process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = '1';
     vi.resetAllMocks();
     accessMock.mockRejectedValue(missing());
     vi.mocked(fsMod.stat).mockImplementation(async (candidate) => {
@@ -415,7 +483,8 @@ describe('detectClients', () => {
       'cursor',
       'vscode',
       'windsurf',
-      'opencode'
+      'opencode',
+      'claude-desktop'
     ]);
     expect(clients).toContain('codex');
     expect(clients).not.toContain('claude-code');
@@ -479,6 +548,7 @@ describe('handleInitCli', () => {
   };
 
   beforeEach(() => {
+    process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = '1';
     vi.resetAllMocks();
     writeFileMock.mockResolvedValue(undefined);
     vi.mocked(fsMod.rename).mockResolvedValue(undefined);
@@ -492,6 +562,7 @@ describe('handleInitCli', () => {
     process.exitCode = undefined;
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: false });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: false });
+    vi.mocked(confirm).mockResolvedValue(true);
   });
 
   afterAll(() => {
@@ -507,7 +578,7 @@ describe('handleInitCli', () => {
     const projectRoot = path.resolve('C:/projects/Configured App');
     detectDirectories('claude', 'codex');
 
-    await handleInitCli(['--yes', '--root', projectRoot]);
+    await handleInitCli(['--yes', '--skip-index', '--root', projectRoot]);
 
     expect(checkbox).not.toHaveBeenCalled();
     expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
@@ -523,7 +594,7 @@ describe('handleInitCli', () => {
     const projectRoot = path.resolve('C:/projects/No Terminal');
     detectDirectories('cursor', 'opencode');
 
-    await handleInitCli(['--root', projectRoot]);
+    await handleInitCli(['--root', projectRoot, '--skip-index']);
 
     expect(checkbox).not.toHaveBeenCalled();
     expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
@@ -543,7 +614,7 @@ describe('handleInitCli', () => {
       'claude-code',
       '--client',
       'codex',
-      '--yes',
+      '--yes', '--skip-index',
       '--root',
       projectRoot
     ]);
@@ -559,7 +630,7 @@ describe('handleInitCli', () => {
   });
 
   it('reports no detected clients without writing when there is no terminal', async () => {
-    await handleInitCli(['--yes', '--root', path.resolve('C:/projects/Empty')]);
+    await handleInitCli(['--yes', '--skip-index', '--root', path.resolve('C:/projects/Empty')]);
 
     expect(writeFileMock).not.toHaveBeenCalled();
     expect(mkdirMock).not.toHaveBeenCalled();
@@ -572,7 +643,7 @@ describe('handleInitCli', () => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Interactive')]);
+    await handleInitCli(['--root', path.resolve('C:/projects/Interactive'), '--skip-index']);
 
     const choices = vi.mocked(checkbox).mock.calls[0]?.[0].choices;
     expect(choices).toEqual(
@@ -591,7 +662,7 @@ describe('handleInitCli', () => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Cancelled')]);
+    await handleInitCli(['--root', path.resolve('C:/projects/Cancelled'), '--skip-index']);
 
     const choices = vi.mocked(checkbox).mock.calls[0]?.[0].choices;
     expect(choices).toEqual(
@@ -615,7 +686,7 @@ describe('handleInitCli', () => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Prompt Cancelled')]);
+    await handleInitCli(['--root', path.resolve('C:/projects/Prompt Cancelled'), '--skip-index']);
 
     expect(writeFileMock).not.toHaveBeenCalled();
     expect(mkdirMock).not.toHaveBeenCalled();
@@ -626,7 +697,7 @@ describe('handleInitCli', () => {
       ReturnType<typeof fsMod.stat>
     >);
 
-    await handleInitCli(['--client', 'codex', '--yes', '--root', path.resolve('C:/projects/File')]);
+    await handleInitCli(['--client', 'codex', '--yes', '--skip-index', '--root', path.resolve('C:/projects/File')]);
 
     expect(mkdirMock).not.toHaveBeenCalled();
     expect(writeFileMock).not.toHaveBeenCalled();
@@ -639,7 +710,7 @@ describe('handleInitCli', () => {
     await handleInitCli([
       '--client',
       'codex',
-      '--yes',
+      '--yes', '--skip-index',
       '--root',
       path.resolve('C:/projects/Missing Directory')
     ]);
@@ -654,7 +725,7 @@ describe('handleInitCli', () => {
     const generated = generateMcpConfig('claude-code', { rootPath: projectRoot });
     readFileMock.mockResolvedValue(generated.content as unknown as Buffer);
 
-    await handleInitCli(['--client', 'claude-code', '--yes', '--root', projectRoot]);
+    await handleInitCli(['--client', 'claude-code', '--yes', '--skip-index', '--root', projectRoot]);
 
     expect(writeFileMock).not.toHaveBeenCalled();
   });
@@ -676,7 +747,7 @@ describe('handleInitCli', () => {
       'claude-code',
       '--client',
       'opencode',
-      '--yes',
+      '--yes', '--skip-index',
       '--root',
       projectRoot
     ]);
@@ -709,6 +780,7 @@ describe('_buildMergedCodexContent', () => {
   const statMock = vi.mocked(fsMod.stat);
 
   beforeEach(() => {
+    process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = '1';
     vi.resetAllMocks();
     writeFileMock.mockResolvedValue(undefined);
     vi.mocked(fsMod.rename).mockResolvedValue(undefined);
@@ -732,7 +804,7 @@ describe('_buildMergedCodexContent', () => {
     const previousExitCode = process.exitCode;
     process.exitCode = undefined;
     try {
-      await handleInitCli(['--client', 'codex', '--yes', '--root', projectRoot]);
+      await handleInitCli(['--client', 'codex', '--yes', '--skip-index', '--root', projectRoot]);
       return { initialBytes, persistedBytes, exitCode: process.exitCode };
     } finally {
       process.exitCode = previousExitCode;
@@ -812,7 +884,7 @@ describe('_buildMergedCodexContent', () => {
       'startup_timeout_sec = 75\n' +
       'custom_label = "keep me"\n';
     readFileMock.mockResolvedValue(existing as unknown as Buffer);
-    const generated = generateMcpConfig('codex', savedLaunch(newRoot));
+    const generated = generateMcpConfig('codex', { ...savedLaunch(newRoot), platform: 'win32' });
     if (generated.kind !== 'file') throw new Error('expected file config');
 
     const merged = await _buildMergedCodexContent(generated.path, generated.content);

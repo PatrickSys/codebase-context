@@ -103,41 +103,36 @@ On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a f
 
 ## Setup wizard in the unreleased candidate
 
-The four-client wizard is not in published 2.2.0. From a built checkout or a locally installed candidate, run its actual entrypoint from the project you want to search:
+The interactive wizard is not in published 2.2.0. From your project root:
 
 ```bash
-# Detect Claude Code, Codex, Cursor, VS Code, Windsurf, and OpenCode, then configure the detected clients.
-node /path/to/codebase-context/dist/index.js init --yes
-
-# Preview MCP config changes without writing files.
-node /path/to/codebase-context/dist/index.js init --dry-run --yes
-
-# Configure one client for an explicit project.
-node /path/to/codebase-context/dist/index.js init --client codex --root /path/to/project --yes
-
-# Inspect selected source files and exclusions without writing client config.
-node /path/to/codebase-context/dist/index.js init --root /path/to/project --preview
+npx -y codebase-context@latest init
+npx -y codebase-context@latest init --yes --dry-run
+npx -y codebase-context@latest init --client codex --root /path/to/project --yes --skip-index
+npx -y codebase-context@latest init --root /path/to/project --preview
 ```
 
-Replace the paths with the candidate installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
+With a TTY, omit `--yes` to pick clients (Space toggles, Enter confirms), review unified diffs for every config change, and confirm before writing. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder. `--skip-index` skips the post-setup index; `--no-update-notice` skips the daily npm version hint (`CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1` also works).
 
-Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, VS Code uses `.vscode/mcp.json` (`servers`), Windsurf uses `~/.codeium/windsurf/mcp_config.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
+Clients: Claude Code (`.mcp.json`), Claude Desktop (`claude_desktop_config.json` under the OS Claude app folder), Codex (`.codex/config.toml`), Cursor (`.cursor/mcp.json`), VS Code (`.vscode/mcp.json` with top-level `servers`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), OpenCode (`opencode.json`). Generated launches use `npx -y codebase-context@latest` plus your project folder so patch releases roll out automatically; pin `codebase-context@x.y.z` in MCP config when you need a frozen version.
 
-Existing unrelated settings are preserved. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry from the client config, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked. Config generation and SDK launch tests do not establish acceptance in each native client.
+Existing unrelated settings are preserved. Tiny configs (≤16KiB) are copied to `*.bak` beside the file before an update. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked.
 
-New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option.
+New candidate indexes default to model-free search. The wizard runs a first index with progress unless `--skip-index` or `--dry-run` is set.
+
+Record the wizard for docs with [VHS](https://github.com/charmbracelet/vhs) using [`docs/demo/install.tape`](./demo/install.tape); generate `install.gif` locally and avoid committing large binaries.
+
+The older interactive HTTP wizard remains the behavior of published 2.2.0. A successful candidate wizard exit alone does not establish working client registration.
 
 ## Optional fixed-folder setup and CLI preparation
 
-To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
+To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context@latest", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
 
 To prepare the index separately, run from the project folder:
 
 ```powershell
 npx -y codebase-context reindex
 ```
-
-The older interactive HTTP wizard remains the behavior of published 2.2.0. A successful candidate wizard exit alone does not establish working client registration.
 
 ## Gemini CLI
 

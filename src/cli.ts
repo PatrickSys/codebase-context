@@ -83,7 +83,7 @@ function printUsage(): void {
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
-  console.log('  init [--client <name>] [--yes] [--dry-run]  Configure detected coding tools');
+  console.log('  init [--client <name>] [--yes] [--dry-run]  Interactive MCP setup wizard');
   console.log('  map [--json] [--pretty]              Conventions map (indexes first if needed)');
   console.log('');
   console.log('Global flags:');

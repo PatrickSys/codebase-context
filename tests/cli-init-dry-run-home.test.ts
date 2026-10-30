@@ -7,6 +7,7 @@ import { handleInitCli } from '../src/cli-init.js';
 describe('init dry-run and user-scoped configs', () => {
   const previousHome = process.env.HOME;
   const previousUserProfile = process.env.USERPROFILE;
+  const previousSkipNotice = process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE;
   let tempHome = '';
   let projectRoot = '';
   let logs: string[] = [];
@@ -14,6 +15,8 @@ describe('init dry-run and user-scoped configs', () => {
   afterEach(async () => {
     process.env.HOME = previousHome;
     process.env.USERPROFILE = previousUserProfile;
+    if (previousSkipNotice === undefined) delete process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE;
+    else process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = previousSkipNotice;
     if (tempHome) await fs.rm(tempHome, { recursive: true, force: true });
     tempHome = '';
     projectRoot = '';
@@ -21,6 +24,7 @@ describe('init dry-run and user-scoped configs', () => {
   });
 
   async function runInit(args: string[]) {
+    process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = '1';
     logs = [];
     const logSpy = vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => {
       logs.push(parts.map(String).join(' '));

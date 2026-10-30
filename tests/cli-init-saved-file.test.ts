@@ -39,7 +39,7 @@ describe('Codex init with an existing saved config', () => {
       await writeFile(configPath, initialBytes);
       process.exitCode = undefined;
 
-      await handleInitCli(['--client', 'codex', '--yes', '--root', projectRoot]);
+      await handleInitCli(['--client', 'codex', '--yes', '--skip-index', '--root', projectRoot]);
 
       const persistedBytes = await readFile(configPath);
       expect({ exitCode: process.exitCode, persistedBytes }).toEqual({

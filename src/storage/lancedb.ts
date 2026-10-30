@@ -8,6 +8,11 @@ import type { Connection, Table } from '@lancedb/lancedb';
 import { VectorStorageProvider, CodeChunkWithEmbedding, VectorSearchResult } from './types.js';
 import { CodeChunk, SearchFilters } from '../types/index.js';
 import { IndexCorruptedError } from '../errors/index.js';
+import { assertOptionalDependency } from '../utils/optional-dependency.js';
+
+function sqlString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
 
 interface LanceDBRecord {
   id: string;
@@ -48,6 +53,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     options?: { expectExisting?: boolean; expectedDimensions?: number }
   ): Promise<void> {
     if (this.initialized) return;
+    assertOptionalDependency('@lancedb/lancedb', '^0.4.0');
 
     try {
       this.storagePath = storagePath;
@@ -91,6 +97,11 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
       this.initialized = true;
       console.error(`LanceDB initialized at: ${storagePath}`);
     } catch (error) {
+      try {
+        this.close();
+      } catch (closeError) {
+        console.warn('Failed to release partial LanceDB initialization:', closeError);
+      }
       if (error instanceof IndexCorruptedError) {
         throw error;
       }
@@ -176,16 +187,16 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         const whereConditions: string[] = [];
 
         if (filters.framework) {
-          whereConditions.push(`framework = '${filters.framework}'`);
+          whereConditions.push(`framework = ${sqlString(filters.framework)}`);
         }
         if (filters.componentType) {
-          whereConditions.push(`"componentType" = '${filters.componentType}'`);
+          whereConditions.push(`\`componentType\` = ${sqlString(filters.componentType)}`);
         }
         if (filters.layer) {
-          whereConditions.push(`layer = '${filters.layer}'`);
+          whereConditions.push(`layer = ${sqlString(filters.layer)}`);
         }
         if (filters.language) {
-          whereConditions.push(`language = '${filters.language}'`);
+          whereConditions.push(`language = ${sqlString(filters.language)}`);
         }
 
         if (whereConditions.length > 0) {
@@ -248,11 +259,10 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     try {
       const countBefore = await this.table.countRows();
 
-      // LanceDB supports SQL-style filter for delete
-      // Escape single quotes in file paths to prevent SQL injection
-      const escaped = filePaths.map((p) => p.replace(/'/g, "''"));
-      const inClause = escaped.map((p) => `'${p}'`).join(', ');
-      await this.table.delete(`"filePath" IN (${inClause})`);
+      // The supported Lance parser requires backticks for case-sensitive identifiers;
+      // double quotes produce a string literal and silently match no rows.
+      const inClause = filePaths.map(sqlString).join(', ');
+      await this.table.delete(`\`filePath\` IN (${inClause})`);
 
       const countAfter = await this.table.countRows();
       const deleted = countBefore - countAfter;
@@ -293,6 +303,19 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     } catch (error) {
       console.error('Failed to count rows:', error);
       return 0;
+    }
+  }
+
+  close(): void {
+    const table = this.table;
+    const database = this.db;
+    this.table = null;
+    this.db = null;
+    this.initialized = false;
+    try {
+      table?.close();
+    } finally {
+      database?.close();
     }
   }
 

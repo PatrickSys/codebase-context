@@ -1,0 +1,478 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Frozen public controls for a secondary source-local normalized term-frequency density tie-break.",
+  "formula": "For each existing normalized query group g, tf_g counts normalized body-word occurrences whose existing lexicalAliases(normalizedBodyWord) intersect the aliases in g. Count that body-word occurrence at most once per group, regardless of alias-expansion multiplicity. density = sum_g sqrt(tf_g) / sqrt(max(1, normalizedBodyWordCount)).",
+  "ordering": "Lexicographic comparison: preserve the existing primary rank, then compare descending density only for equal primary ranks, then preserve original chunk ordinal. Never add density to or otherwise alter the primary score.",
+  "scope": "Synthetic source snippets and relative file paths. Expected order is a consequence of the frozen lexical formula and existing primary evidence classes; it does not assert semantic correctness.",
+  "cases": [
+    {
+      "id": "density-breaks-primary-tie",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "long-noise",
+          "filePath": "src/long-noise.ts",
+          "content": "invoice approval billing invoice mail report network"
+        },
+        {
+          "id": "compact",
+          "filePath": "src/compact.ts",
+          "content": "invoice approval"
+        }
+      ],
+      "expectedIds": ["compact", "long-noise"],
+      "expectedPathPatterns": ["src/compact.ts", "src/long-noise.ts"],
+      "expectedProperties": [
+        "primary evidence ties",
+        "unmatched body vocabulary increases the denominator"
+      ]
+    },
+    {
+      "id": "declaration-primary-dominates-density",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "declared-implementation",
+          "filePath": "src/invoice-approval.ts",
+          "content": "export function apply(invoice) { const approval = true; return applyPolicy(invoice, approval); } billing mail report network logging validation storage adapter response",
+          "metadata": {
+            "functionName": "invoiceApproval"
+          }
+        },
+        {
+          "id": "dense-body",
+          "filePath": "src/repeated.ts",
+          "content": "invoice approval invoice approval invoice approval"
+        }
+      ],
+      "expectedIds": ["declared-implementation", "dense-body"],
+      "expectedPathPatterns": ["src/invoice-approval.ts", "src/repeated.ts"],
+      "expectedProperties": [
+        "declaration evidence remains primary",
+        "density cannot promote a weaker primary candidate"
+      ]
+    },
+    {
+      "id": "exact-anchor-primary-dominates-density",
+      "query": "InvoicePolicy invoice policy",
+      "chunks": [
+        {
+          "id": "exact-anchor",
+          "filePath": "src/invoice-policy.ts",
+          "content": "invoice policy resolves a rule through a versioned registry and validates the result against the selected tenant before returning it",
+          "metadata": {
+            "symbolName": "InvoicePolicy"
+          }
+        },
+        {
+          "id": "dense-body",
+          "filePath": "src/repeated-policy.ts",
+          "content": "invoice policy invoice policy invoice policy"
+        }
+      ],
+      "expectedIds": ["exact-anchor", "dense-body"],
+      "expectedPathPatterns": ["src/invoice-policy.ts", "src/repeated-policy.ts"],
+      "expectedProperties": [
+        "exact indexed anchor remains primary",
+        "body density is only a secondary tie-break"
+      ]
+    },
+    {
+      "id": "implementation-primary-dominates-test-density",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "implementation",
+          "filePath": "src/invoice-approval.ts",
+          "content": "invoice approval validates the request and records the accepted result after checking the account state and policy"
+        },
+        {
+          "id": "test",
+          "filePath": "src/__tests__/invoice-approval.test.ts",
+          "content": "invoice approval invoice approval invoice approval invoice approval"
+        }
+      ],
+      "expectedIds": ["implementation", "test"],
+      "expectedPathPatterns": ["src/invoice-approval.ts", "src/__tests__/invoice-approval.test.ts"],
+      "expectedProperties": [
+        "test-file primary penalty remains effective",
+        "repeated test-body terms do not override primary order"
+      ]
+    },
+    {
+      "id": "own-implementation-outranks-repeated-type-mentions",
+      "query": "cache refresh",
+      "chunks": [
+        {
+          "id": "own-implementation",
+          "filePath": "src/cache-refresh.ts",
+          "content": "refreshCache updates the cache after validating the new value and then returns the stored entry",
+          "metadata": {
+            "functionName": "refreshCache"
+          }
+        },
+        {
+          "id": "repeated-type-mentions",
+          "filePath": "src/cache-types.ts",
+          "content": "type CacheRefresh = Cache & Refresh & CacheRefresh & CacheRefresh & CacheRefresh"
+        }
+      ],
+      "expectedIds": ["own-implementation", "repeated-type-mentions"],
+      "expectedPathPatterns": ["src/cache-refresh.ts", "src/cache-types.ts"],
+      "expectedProperties": [
+        "own declaration evidence remains primary",
+        "repetition in a type body is lexical evidence only"
+      ]
+    },
+    {
+      "id": "tiny-wrapper-does-not-beat-stronger-declaration",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "implementation",
+          "filePath": "src/invoice-approval.ts",
+          "content": "invoice approval validates the account, checks the pending state, records the decision, and returns the persisted result",
+          "metadata": {
+            "functionName": "invoiceApproval"
+          }
+        },
+        {
+          "id": "tiny-wrapper",
+          "filePath": "src/wrapper.ts",
+          "content": "invoice approval"
+        }
+      ],
+      "expectedIds": ["implementation", "tiny-wrapper"],
+      "expectedPathPatterns": ["src/invoice-approval.ts", "src/wrapper.ts"],
+      "expectedProperties": [
+        "declaration primary rank dominates the wrapper's higher density",
+        "shortness alone does not imply a better result"
+      ]
+    },
+    {
+      "id": "metadata-repetition-is-not-body-frequency",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "repeated-metadata-first",
+          "filePath": "src/a.ts",
+          "content": "invoice approval validates a request",
+          "metadata": {
+            "componentName": "InvoiceApproval InvoiceApproval InvoiceApproval"
+          }
+        },
+        {
+          "id": "single-metadata-second",
+          "filePath": "src/b.ts",
+          "content": "invoice approval validates a request",
+          "metadata": {
+            "componentName": "InvoiceApproval"
+          }
+        }
+      ],
+      "expectedIds": ["repeated-metadata-first", "single-metadata-second"],
+      "expectedPathPatterns": ["src/a.ts", "src/b.ts"],
+      "expectedProperties": [
+        "body density is identical",
+        "metadata repetition does not increase term frequency",
+        "original ordinal breaks the tie"
+      ]
+    },
+    {
+      "id": "body-inflection-alias-matching-preserves-ordinal",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "inflected-first",
+          "filePath": "src/a.ts",
+          "content": "archiving policy"
+        },
+        {
+          "id": "canonical-second",
+          "filePath": "src/b.ts",
+          "content": "archive policy"
+        }
+      ],
+      "expectedIds": ["inflected-first", "canonical-second"],
+      "expectedPathPatterns": ["src/a.ts", "src/b.ts"],
+      "expectedProperties": [
+        "existing body lexical aliases are intersected with the query-group aliases",
+        "archiving and archive each contribute one occurrence to the archive group",
+        "both bodies have equal density and original ordinal is preserved"
+      ]
+    },
+    {
+      "id": "overlapping-aliases-count-one-occurrence-per-group",
+      "query": "archive archiving policy",
+      "chunks": [
+        {
+          "id": "archiving-first",
+          "filePath": "src/a.ts",
+          "content": "archiving policy"
+        },
+        {
+          "id": "archive-second",
+          "filePath": "src/b.ts",
+          "content": "archive policy"
+        }
+      ],
+      "expectedIds": ["archiving-first", "archive-second"],
+      "expectedPathPatterns": ["src/a.ts", "src/b.ts"],
+      "expectedProperties": [
+        "archive and archiving belong to one existing alias group",
+        "one body occurrence contributes once to that group",
+        "equal density preserves ordinal"
+      ]
+    },
+    {
+      "id": "repeat-one-group-does-not-win-on-raw-count",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "balanced",
+          "filePath": "src/balanced.ts",
+          "content": "archive policy"
+        },
+        {
+          "id": "repeated-archive",
+          "filePath": "src/repeated.ts",
+          "content": "archive archive policy"
+        }
+      ],
+      "expectedIds": ["balanced", "repeated-archive"],
+      "expectedPathPatterns": ["src/balanced.ts", "src/repeated.ts"],
+      "expectedProperties": [
+        "balanced density is 2/sqrt(2)",
+        "repeated density is (sqrt(2)+1)/sqrt(3)",
+        "square-root TF and body length are both applied"
+      ]
+    },
+    {
+      "id": "unrelated-billing-mail-report-network-words-only-add-length",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "compact",
+          "filePath": "src/compact.ts",
+          "content": "archive policy"
+        },
+        {
+          "id": "unrelated-vocabulary",
+          "filePath": "src/unrelated.ts",
+          "content": "archive policy billing invoice mail report network"
+        }
+      ],
+      "expectedIds": ["compact", "unrelated-vocabulary"],
+      "expectedPathPatterns": ["src/compact.ts", "src/unrelated.ts"],
+      "expectedProperties": [
+        "billing, mail, report, and network words are not query clues",
+        "unmatched body words increase the denominator only"
+      ]
+    },
+    {
+      "id": "overlapping-chunks-are-scored-separately",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "long-overlap",
+          "filePath": "src/ledger.ts",
+          "startLine": 1,
+          "content": "invoice approval\ninvoice approval\nreturn approved\nledger entries retain stable boundaries"
+        },
+        {
+          "id": "short-overlap",
+          "filePath": "src/ledger.ts",
+          "startLine": 2,
+          "content": "invoice approval\nreturn approved"
+        }
+      ],
+      "expectedIds": ["short-overlap"],
+      "expectedPathPatterns": ["src/ledger.ts"],
+      "expectedProperties": [
+        "the second chunk exactly matches overlapping source lines",
+        "rescue returns one representative per source file",
+        "density ranks body evidence per chunk before file deduplication",
+        "query term counts are not aggregated across chunks"
+      ]
+    },
+    {
+      "id": "identical-full-bodies-preserve-original-ordinal",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "z-first",
+          "filePath": "src/z.ts",
+          "content": "invoice approval validates the request"
+        },
+        {
+          "id": "a-second",
+          "filePath": "src/a.ts",
+          "content": "invoice approval validates the request"
+        }
+      ],
+      "expectedIds": ["z-first", "a-second"],
+      "expectedPathPatterns": ["src/z.ts", "src/a.ts"],
+      "expectedProperties": [
+        "identical normalized bodies have equal density",
+        "lexicographic path or id does not replace ordinal tie-breaking"
+      ]
+    },
+    {
+      "id": "body-evidence-beats-metadata-only-density-zero",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "metadata-only",
+          "filePath": "src/metadata.ts",
+          "content": "  \n ",
+          "metadata": {
+            "componentName": "InvoiceApproval"
+          }
+        },
+        {
+          "id": "body-present",
+          "filePath": "src/body.ts",
+          "content": "invoice approval",
+          "metadata": {
+            "componentName": "InvoiceApproval"
+          }
+        }
+      ],
+      "expectedIds": ["body-present", "metadata-only"],
+      "expectedPathPatterns": ["src/body.ts", "src/metadata.ts"],
+      "expectedDensityById": {
+        "metadata-only": 0
+      },
+      "expectedProperties": [
+        "primary evidence ties",
+        "empty body uses max(1, body length)",
+        "metadata does not enter the density numerator or denominator"
+      ]
+    },
+    {
+      "id": "empty-metadata-only-bodies-have-finite-zero-density",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "empty-first",
+          "filePath": "src/empty-a.ts",
+          "content": "",
+          "metadata": {
+            "componentName": "InvoiceApproval"
+          }
+        },
+        {
+          "id": "empty-second",
+          "filePath": "src/empty-b.ts",
+          "content": " \n ",
+          "metadata": {
+            "componentName": "InvoiceApproval"
+          }
+        }
+      ],
+      "expectedIds": ["empty-first", "empty-second"],
+      "expectedPathPatterns": ["src/empty-a.ts", "src/empty-b.ts"],
+      "expectedDensityById": {
+        "empty-first": 0,
+        "empty-second": 0
+      },
+      "expectedProperties": [
+        "density is finite and exactly zero",
+        "equal primary evidence and density preserve ordinal"
+      ]
+    },
+    {
+      "id": "equal-primary-tiny-wrapper-wins-density-with-explicit-limitation",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "tiny-wrapper",
+          "filePath": "src/wrapper.ts",
+          "content": "archive policy"
+        },
+        {
+          "id": "repeated-long-body",
+          "filePath": "src/implementation.ts",
+          "content": "archive archive policy policy filler filler filler filler"
+        }
+      ],
+      "expectedIds": ["tiny-wrapper", "repeated-long-body"],
+      "expectedPathPatterns": ["src/wrapper.ts", "src/implementation.ts"],
+      "limitation": "Primary lexical evidence ties, so the fixed formula ranks the short wrapper first (sqrt(1)+sqrt(1) over sqrt(2), versus sqrt(2)+sqrt(2) over sqrt(8)). This order is not evidence that the wrapper is semantically more useful; preserving this counterexample prevents an unsupported semantic claim.",
+      "expectedProperties": [
+        "equal primary ranks invoke density as a separate secondary comparison",
+        "the higher-density result may be a wrapper",
+        "density does not establish semantic usefulness"
+      ]
+    },
+    {
+      "id": "ambiguous-primary-density-order-is-not-semantic-proof",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "comment-repetition",
+          "filePath": "src/comment.ts",
+          "content": "// invoice approval invoice approval invoice approval"
+        },
+        {
+          "id": "implementation",
+          "filePath": "src/implementation.ts",
+          "content": "export function approve(invoice) { return policyAllowsApproval(invoice); }"
+        }
+      ],
+      "expectedIds": ["comment-repetition", "implementation"],
+      "expectedPathPatterns": ["src/comment.ts", "src/implementation.ts"],
+      "limitation": "Primary lexical evidence ties. The fixed formula places the repeated comment first; the available evidence cannot establish whether the comment or implementation is semantically more useful. This expected order is algorithmic, not a semantic winner claim.",
+      "expectedProperties": [
+        "ambiguous exact-primary tie is retained explicitly",
+        "density does not prove action meaning or semantic relevance"
+      ]
+    }
+  ],
+  "sourceValidationCases": [
+    {
+      "id": "stale-sources-within-nomination-pool-are-skipped",
+      "query": "invoice approval",
+      "staleChunkGenerator": {
+        "count": 30,
+        "idPattern": "stale-{index}",
+        "filePathPattern": "src/stale-{index}.ts",
+        "content": "invoice approval"
+      },
+      "currentChunks": [
+        {
+          "id": "current",
+          "filePath": "src/current.ts",
+          "content": "invoice approval validates current source"
+        }
+      ],
+      "mutateFilePathPattern": "src/stale-{index}.ts",
+      "replacementSource": "export const unrelated = true;",
+      "expectedIds": ["current"],
+      "expectedProperties": [
+        "31 candidates fit inside the existing nomination pool",
+        "stale sources are excluded before results are returned",
+        "density cannot bypass source validation",
+        "no beyond-window refill is required"
+      ]
+    },
+    {
+      "id": "changed-only-source-cannot-supply-density-evidence",
+      "query": "invoice approval",
+      "chunks": [
+        {
+          "id": "changed",
+          "filePath": "src/changed.ts",
+          "content": "invoice approval validates the indexed source"
+        }
+      ],
+      "mutateFilePath": "src/changed.ts",
+      "replacementSource": "export const unrelated = true;",
+      "expectedIds": [],
+      "expectedProperties": [
+        "changed source is invalidated by the existing harness",
+        "density cannot bypass source integrity checks"
+      ]
+    }
+  ]
+}

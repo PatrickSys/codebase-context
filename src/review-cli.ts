@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { resolveIndexArtifact } from './core/index-generation.js';
 
 import { execFileSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
@@ -9,14 +10,8 @@ import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { NestJsAnalyzer } from './analyzers/nestjs/index.js';
 import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
 import { ReactAnalyzer } from './analyzers/react/index.js';
-import {
-  CODEBASE_CONTEXT_DIRNAME,
-  HEALTH_FILENAME,
-  INTELLIGENCE_FILENAME,
-  KEYWORD_INDEX_FILENAME,
-  MEMORY_FILENAME,
-  VECTOR_DB_DIRNAME
-} from './constants/codebase-context.js';
+import { KEYWORD_INDEX_FILENAME } from './constants/codebase-context.js';
+import { makePaths } from './project-state.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { CodebaseIndexer } from './core/indexer.js';
 import { buildReviewContextPacket, parseNameStatus } from './review-context.js';
@@ -177,18 +172,11 @@ function assertReviewSourceState(rootPath: string, headCommit: string): void {
 
 async function createToolContext(rootPath: string, noIndex: boolean): Promise<ToolContext> {
   const projectConfig = await loadProjectConfig(rootPath);
-  const paths = {
-    baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
-    memory: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
-    intelligence: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
-    health: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, HEALTH_FILENAME),
-    keywordIndex: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
-    vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
-  };
+  const paths = makePaths(rootPath);
 
   let indexExists = false;
   try {
-    await fs.access(paths.keywordIndex);
+    await fs.access(await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME));
     indexExists = true;
   } catch {
     indexExists = false;

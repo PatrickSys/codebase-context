@@ -118,7 +118,7 @@
     "sync:grammars": "node scripts/sync-grammars.mjs",
     "prebuild": "pnpm run sync:grammars",
     "build": "tsc",
-    "prepack": "pnpm run sync:grammars",
+    "prepack": "pnpm run build",
     "prepublishOnly": "pnpm run build",
     "pretest": "pnpm run sync:grammars",
     "start": "node dist/index.js",
@@ -135,23 +135,36 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
     "@inquirer/prompts": "^3.0.0",
-    "@lancedb/lancedb": "^0.4.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "@typescript-eslint/typescript-estree": "^7.0.0",
-    "chokidar": "^3.6.0",
+    "@typescript-eslint/typescript-estree": "^8.51.0",
+    "chokidar": "^4.0.3",
     "fuse.js": "^7.0.0",
     "glob": "^10.3.10",
     "hono": "^4.12.12",
     "ignore": "^5.3.1",
+    "smol-toml": "1.9.1",
     "typescript": "^5.3.3",
     "uuid": "^14.0.0",
     "web-tree-sitter": "^0.25.10",
     "zod": "^4.3.4"
   },
+  "peerDependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "@lancedb/lancedb": "^0.4.0"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    },
+    "@lancedb/lancedb": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@huggingface/transformers": "^4.2.0",
+    "@lancedb/lancedb": "^0.4.0",
     "@types/glob": "^8.1.0",
     "@types/node": "^20.11.24",
     "@types/uuid": "^9.0.8",

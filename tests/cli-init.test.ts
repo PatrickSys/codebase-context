@@ -2,15 +2,20 @@ import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import path from 'path';
 
 // Mock node:fs/promises at the top level so Vitest can hoist it correctly.
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
   return {
     ...actual,
-    access: vi.fn(),
-    stat: vi.fn(),
-    readFile: vi.fn(),
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    mkdir: vi.fn().mockResolvedValue(undefined)
+    promises: {
+      ...actual.promises,
+      access: vi.fn(),
+      stat: vi.fn(),
+      readFile: vi.fn(),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      mkdir: vi.fn().mockResolvedValue(undefined),
+      rename: vi.fn().mockResolvedValue(undefined),
+      rm: vi.fn().mockResolvedValue(undefined)
+    }
   };
 });
 
@@ -18,7 +23,7 @@ vi.mock('@inquirer/prompts', () => ({
   checkbox: vi.fn()
 }));
 
-import * as fsMod from 'node:fs/promises';
+import { promises as fsMod } from 'node:fs';
 import { checkbox } from '@inquirer/prompts';
 import {
   CLIENTS,
@@ -442,6 +447,8 @@ describe('handleInitCli', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     writeFileMock.mockResolvedValue(undefined);
+    vi.mocked(fsMod.rename).mockResolvedValue(undefined);
+    vi.mocked(fsMod.rm).mockResolvedValue(undefined);
     mkdirMock.mockResolvedValue(undefined);
     readFileMock.mockRejectedValue(missing());
     accessMock.mockRejectedValue(missing());
@@ -469,7 +476,7 @@ describe('handleInitCli', () => {
     await handleInitCli(['--yes', '--root', projectRoot]);
 
     expect(checkbox).not.toHaveBeenCalled();
-    expect(writeFileMock.mock.calls.map(([filePath]) => filePath)).toEqual(
+    expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
       expect.arrayContaining([
         path.join(projectRoot, '.mcp.json'),
         path.join(projectRoot, '.codex', 'config.toml')
@@ -485,7 +492,7 @@ describe('handleInitCli', () => {
     await handleInitCli(['--root', projectRoot]);
 
     expect(checkbox).not.toHaveBeenCalled();
-    expect(writeFileMock.mock.calls.map(([filePath]) => filePath)).toEqual(
+    expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
       expect.arrayContaining([
         path.join(projectRoot, '.cursor', 'mcp.json'),
         path.join(projectRoot, 'opencode.json')
@@ -508,7 +515,7 @@ describe('handleInitCli', () => {
     ]);
 
     expect(accessMock).not.toHaveBeenCalled();
-    expect(writeFileMock.mock.calls.map(([filePath]) => filePath)).toEqual(
+    expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
       expect.arrayContaining([
         path.join(projectRoot, '.mcp.json'),
         path.join(projectRoot, '.codex', 'config.toml')
@@ -670,6 +677,8 @@ describe('_buildMergedCodexContent', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     writeFileMock.mockResolvedValue(undefined);
+    vi.mocked(fsMod.rename).mockResolvedValue(undefined);
+    vi.mocked(fsMod.rm).mockResolvedValue(undefined);
     mkdirMock.mockResolvedValue(undefined);
     statMock.mockResolvedValue({ isDirectory: () => true } as Awaited<
       ReturnType<typeof fsMod.stat>

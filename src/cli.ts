@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from './core/index-generation.js';
 /**
  * CLI subcommands for codebase-context.
  * Memory list/add/remove — vendor-neutral access without any AI agent.
@@ -6,14 +7,8 @@
 
 import path from 'path';
 import { promises as fs } from 'fs';
-import {
-  CODEBASE_CONTEXT_DIRNAME,
-  MEMORY_FILENAME,
-  INTELLIGENCE_FILENAME,
-  HEALTH_FILENAME,
-  KEYWORD_INDEX_FILENAME,
-  VECTOR_DB_DIRNAME
-} from './constants/codebase-context.js';
+import { KEYWORD_INDEX_FILENAME } from './constants/codebase-context.js';
+import { makePaths } from './project-state.js';
 import { CodebaseIndexer } from './core/indexer.js';
 import { dispatchTool } from './tools/index.js';
 import type { ToolContext } from './tools/index.js';
@@ -30,6 +25,7 @@ export { handleMemoryCli } from './cli-memory.js';
 import { handleInitCli } from './cli-init.js';
 import { handleMapCli } from './cli-map.js';
 import { loadProjectConfig } from './server/config.js';
+import { cliProjectOptions } from './cli-project-options.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new NextJsAnalyzer());
@@ -82,12 +78,12 @@ function printUsage(): void {
   console.log('         [--limit <n>] [--lang <l>] [--framework <f>] [--layer <l>]');
   console.log('  metadata                           Project structure, frameworks, deps');
   console.log('  status                             Index state and progress');
-  console.log('  reindex [--incremental] [--reason <r>]  Re-index the codebase');
+  console.log('  reindex [--incremental] [--embeddings|--no-embeddings]  Re-index the codebase');
   console.log('  style-guide [--query <q>] [--category <c>]  Style guide rules');
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
-  console.log('  init                               Set up detected AI clients for this project');
+  console.log('  init [--client <name>] [--yes]     Detect and configure coding tools');
   console.log('  map [--json] [--pretty]              Conventions map (indexes first if needed)');
   console.log('');
   console.log('Global flags:');
@@ -112,18 +108,11 @@ async function initToolContext(): Promise<ToolContext> {
   const rootPath = resolveCliRootPath();
   const projectConfig = await loadProjectConfig(rootPath);
 
-  const paths = {
-    baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
-    memory: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
-    intelligence: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
-    health: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, HEALTH_FILENAME),
-    keywordIndex: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
-    vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
-  };
+  const paths = makePaths(rootPath);
 
   let indexExists = false;
   try {
-    await fs.access(paths.keywordIndex);
+    await fs.access(await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME));
     indexExists = true;
   } catch {
     // no index on disk
@@ -133,7 +122,11 @@ async function initToolContext(): Promise<ToolContext> {
     status: indexExists ? 'ready' : 'idle'
   };
 
-  const performIndexing = async (incrementalOnly?: boolean, reason?: string): Promise<void> => {
+  const performIndexing = async (
+    incrementalOnly?: boolean,
+    reason?: string,
+    skipEmbedding?: boolean
+  ): Promise<void> => {
     indexState.status = 'indexing';
     const mode = incrementalOnly ? 'incremental' : 'full';
     console.error(`Indexing (${mode})${reason ? ` — ${reason}` : ''}: ${rootPath}`);
@@ -142,7 +135,7 @@ async function initToolContext(): Promise<ToolContext> {
       let lastLoggedProgress = { phase: '', percentage: -1 };
       const indexer = new CodebaseIndexer({
         rootPath,
-        ...(projectConfig?.parsing ? { config: { parsing: projectConfig.parsing } } : {}),
+        ...cliProjectOptions(projectConfig, skipEmbedding ?? projectConfig?.skipEmbedding),
         incrementalOnly,
         onProgress: (progress) => {
           const shouldLog =
@@ -171,6 +164,7 @@ async function initToolContext(): Promise<ToolContext> {
       indexState.status = 'error';
       indexState.error = error instanceof Error ? error.message : String(error);
       console.error('Indexing failed:', indexState.error);
+      throw error;
     }
   };
 
@@ -286,6 +280,11 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
     return handleMapCli(argv.slice(1));
   }
 
+  if (argv.slice(1).includes('--help')) {
+    printUsage();
+    return;
+  }
+
   const useJson = argv.includes('--json');
 
   const flags = parseFlags(argv);
@@ -363,10 +362,23 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
       break;
     }
     case 'reindex': {
-      const usage = 'codebase-context reindex [--incremental] [--reason <r>]';
+      const usage =
+        'codebase-context reindex [--incremental] [--reason <r>] [--embeddings|--no-embeddings]';
       const reason = optionalStringFlag(flags, 'reason', usage);
       const incremental = booleanFlag(flags, 'incremental', usage);
-      await ctx.performIndexing(incremental, reason);
+      if ('embeddings' in flags && 'no-embeddings' in flags) {
+        exitWithError(
+          `Error: --embeddings and --no-embeddings are mutually exclusive\nUsage: ${usage}`
+        );
+      }
+      for (const modeFlag of ['embeddings', 'no-embeddings']) {
+        if (modeFlag in flags && flags[modeFlag] !== true) {
+          exitWithError(`Error: --${modeFlag} takes no value\nUsage: ${usage}`);
+        }
+      }
+      const skipEmbedding =
+        'no-embeddings' in flags ? true : 'embeddings' in flags ? false : undefined;
+      await ctx.performIndexing(incremental, reason, skipEmbedding);
       const statusResult = await dispatchTool('get_indexing_status', {}, ctx);
       formatJson(extractText(statusResult), useJson, 'status', ctx.rootPath);
       return;

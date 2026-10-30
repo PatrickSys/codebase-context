@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -59,75 +60,79 @@ describe('Impact candidates (2-hop)', () => {
     }
   });
 
-  it('includes hop 1 and hop 2 candidates in preflight impact.details', async () => {
-    if (!tempRoot) throw new Error('tempRoot not initialized');
+  it(
+    'includes hop 1 and hop 2 candidates in preflight impact.details',
+    async () => {
+      if (!tempRoot) throw new Error('tempRoot not initialized');
 
-    const rootPath = tempRoot;
-    const paths = {
-      baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
-      memory: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
-      intelligence: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
-      keywordIndex: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
-      vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
-    };
+      const rootPath = tempRoot;
+      const paths = {
+        baseDir: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME),
+        memory: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
+        intelligence: await resolveIndexArtifact(rootPath, INTELLIGENCE_FILENAME),
+        keywordIndex: await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME),
+        vectorDb: await resolveIndexArtifact(rootPath, VECTOR_DB_DIRNAME)
+      };
 
-    const ctx: ToolContext = {
-      indexState: { status: 'ready' },
-      paths,
-      rootPath,
-      performIndexing: () => {}
-    };
+      const ctx: ToolContext = {
+        indexState: { status: 'ready' },
+        paths,
+        rootPath,
+        performIndexing: () => {}
+      };
 
-    const relationshipsPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, RELATIONSHIPS_FILENAME);
-    const relationshipsRaw = await fs.readFile(relationshipsPath, 'utf-8');
-    const relationships = JSON.parse(relationshipsRaw) as {
-      graph?: { imports?: Record<string, string[]> };
-    };
-    const imports = relationships.graph?.imports ?? {};
-    const hasInternalEdge =
-      (imports['src/b.ts'] ?? []).some((d) => d.endsWith('src/c.ts') || d === 'src/c.ts') &&
-      (imports['src/a.ts'] ?? []).some((d) => d.endsWith('src/b.ts') || d === 'src/b.ts');
-    if (!hasInternalEdge) {
-      throw new Error(
-        `Expected relationships graph to include src/a.ts -> src/b.ts and src/b.ts -> src/c.ts, got imports keys=${JSON.stringify(
-          Object.keys(imports)
-        )}`
+      const relationshipsPath = await resolveIndexArtifact(rootPath, RELATIONSHIPS_FILENAME);
+      const relationshipsRaw = await fs.readFile(relationshipsPath, 'utf-8');
+      const relationships = JSON.parse(relationshipsRaw) as {
+        graph?: { imports?: Record<string, string[]> };
+      };
+      const imports = relationships.graph?.imports ?? {};
+      const hasInternalEdge =
+        (imports['src/b.ts'] ?? []).some((d) => d.endsWith('src/c.ts') || d === 'src/c.ts') &&
+        (imports['src/a.ts'] ?? []).some((d) => d.endsWith('src/b.ts') || d === 'src/b.ts');
+      if (!hasInternalEdge) {
+        throw new Error(
+          `Expected relationships graph to include src/a.ts -> src/b.ts and src/b.ts -> src/c.ts, got imports keys=${JSON.stringify(
+            Object.keys(imports)
+          )}`
+        );
+      }
+
+      const resp = await dispatchTool(
+        'search_codebase',
+        { query: token, intent: 'edit', includeSnippets: false, limit: 1 },
+        ctx
       );
-    }
 
-    const resp = await dispatchTool(
-      'search_codebase',
-      { query: token, intent: 'edit', includeSnippets: false, limit: 1 },
-      ctx
-    );
+      const text = resp.content?.[0]?.text ?? '';
+      const parsed = JSON.parse(text) as {
+        status?: string;
+        results?: Array<{ file?: string }>;
+        preflight?: { impact?: { details?: Array<{ file: string; hop: 1 | 2 }> } };
+      };
+      const results = parsed.results ?? [];
+      if (!Array.isArray(results) || results.length === 0) {
+        throw new Error(
+          `Expected at least one search result for token, got status=${String(parsed.status)} results=${JSON.stringify(
+            results
+          )}`
+        );
+      }
+      const details = parsed.preflight?.impact?.details ?? [];
 
-    const text = resp.content?.[0]?.text ?? '';
-    const parsed = JSON.parse(text) as {
-      status?: string;
-      results?: Array<{ file?: string }>;
-      preflight?: { impact?: { details?: Array<{ file: string; hop: 1 | 2 }> } };
-    };
-    const results = parsed.results ?? [];
-    if (!Array.isArray(results) || results.length === 0) {
-      throw new Error(
-        `Expected at least one search result for token, got status=${String(parsed.status)} results=${JSON.stringify(
-          results
-        )}`
-      );
-    }
-    const details = parsed.preflight?.impact?.details ?? [];
-
-    const hasHop1 = details.some((d) => d.file.endsWith('src/b.ts') && d.hop === 1);
-    if (!hasHop1) {
-      throw new Error(
-        `Expected hop 1 candidate src/b.ts, got impact.details=${JSON.stringify(details)}`
-      );
-    }
-    const hasHop2 = details.some((d) => d.file.endsWith('src/a.ts') && d.hop === 2);
-    if (!hasHop2) {
-      throw new Error(
-        `Expected hop 2 candidate src/a.ts, got impact.details=${JSON.stringify(details)}`
-      );
-    }
-  }, SLOW_WINDOWS_TEST_TIMEOUT_MS);
+      const hasHop1 = details.some((d) => d.file.endsWith('src/b.ts') && d.hop === 1);
+      if (!hasHop1) {
+        throw new Error(
+          `Expected hop 1 candidate src/b.ts, got impact.details=${JSON.stringify(details)}`
+        );
+      }
+      const hasHop2 = details.some((d) => d.file.endsWith('src/a.ts') && d.hop === 2);
+      if (!hasHop2) {
+        throw new Error(
+          `Expected hop 2 candidate src/a.ts, got impact.details=${JSON.stringify(details)}`
+        );
+      }
+    },
+    SLOW_WINDOWS_TEST_TIMEOUT_MS
+  );
 });

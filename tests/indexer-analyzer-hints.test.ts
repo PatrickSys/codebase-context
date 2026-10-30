@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -17,7 +18,7 @@ type IndexChunk = {
 };
 
 async function readIndexedChunks(rootPath: string): Promise<IndexChunk[]> {
-  const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+  const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
   const indexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as Record<string, unknown>;
 
   if (Array.isArray(indexRaw)) {

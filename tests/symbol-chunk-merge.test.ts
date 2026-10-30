@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -47,7 +48,7 @@ describe('Symbol-aware chunk merge guard', () => {
 
     await indexer.index();
 
-    const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexPath = await resolveIndexArtifact(tempDir, KEYWORD_INDEX_FILENAME);
     const indexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as any;
     const allChunks = (
       Array.isArray(indexRaw) ? indexRaw : Array.isArray(indexRaw?.chunks) ? indexRaw.chunks : []

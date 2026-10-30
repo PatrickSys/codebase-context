@@ -1,3 +1,5 @@
+import { withAvailableIndexSnapshot } from './index-generation.js';
+import { resolveProjectPaths } from '../project-state.js';
 /**
  * Codebase map builder and renderers.
  *
@@ -97,6 +99,18 @@ const MAP_EXCLUDED_DIRECTORY_NAMES = new Set(
 export async function buildCodebaseMap(
   project: ProjectState,
   options: BuildCodebaseMapOptions = {}
+): Promise<CodebaseMapSummary> {
+  return withAvailableIndexSnapshot(project.rootPath, async () =>
+    buildPinnedCodebaseMap(
+      { ...project, paths: await resolveProjectPaths(project.rootPath) },
+      options
+    )
+  );
+}
+
+async function buildPinnedCodebaseMap(
+  project: ProjectState,
+  options: BuildCodebaseMapOptions
 ): Promise<CodebaseMapSummary> {
   const mode = options.mode ?? 'bounded';
   const projectName = path.basename(project.rootPath);

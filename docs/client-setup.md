@@ -101,28 +101,30 @@ Trust the project if asked, restart Codex and start a new task there. Use the fi
 
 On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a folder, environment root or MCP roots, launched from an unrelated directory. That check does not verify the `2.4.0` package. Its first tool call returned `selection_required`; an explicit `project` call selected the prepared fixture, search found the expected symbol, context returned its map, and the runner host opened the returned source. A later call without `project` retained that selection. This is SDK/protocol and runner-host evidence with warmed caches and a pre-indexed fixture, not a native Desktop task.
 
-## Interactive setup wizard
+## Setup wizard in the unreleased candidate
 
-> **Requires 2.4.0 (not yet published)**: One `init` command detects Claude Code, Codex, Cursor, and OpenCode and configures them together. Published 2.2.0 still runs an older interactive wizard. These commands require the unpublished 2.4.0 release and will not work with the current npm release.
-
-Run setup from the project you want the clients to search:
+The four-client wizard is not in published 2.2.0. From a built checkout or a locally installed candidate, run its actual entrypoint from the project you want to search:
 
 ```bash
-# requires the unpublished 2.4.0
-npx -y codebase-context@2.4.0 init --yes
+# Detect Claude Code, Codex, Cursor and OpenCode, then configure the detected clients.
+node /path/to/codebase-context/dist/index.js init --yes
+
+# Configure one client for an explicit project.
+node /path/to/codebase-context/dist/index.js init --client codex --root /path/to/project --yes
+
+# Inspect selected source files and exclusions without writing client config.
+node /path/to/codebase-context/dist/index.js init --root /path/to/project --preview
 ```
 
-That writes `.mcp.json` for Claude Code, `.codex/config.toml` for Codex, `.cursor/mcp.json` for Cursor, and `opencode.json` for OpenCode. Each file saves the Node binary that ran `init` and the package file from the npx cache, plus the project folder. The client starts that file directly and does not look up `npx` again.
+Codex one-liner (published npm): `codex mcp add codebase-context -- npx -y codebase-context`
 
-Codex setup line, including for the published package:
+Replace the paths with the candidate installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
 
-```bash
-codex mcp add codebase-context -- npx -y codebase-context
-```
+Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
 
-Repeat `--client` to choose tools, for example `--client claude-code --client codex`. `--root` selects another folder and takes priority over `CODEBASE_ROOT`. With a terminal and without `--yes`, detected tools start checked.
+Existing unrelated settings are preserved. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry from the client config, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked. Config generation and SDK launch tests do not establish acceptance in each native client.
 
-`--yes` writes the config without prompts. Existing settings are kept. A recognized generated launch is updated when you rerun setup, including when the npx cache path moves. A different Codebase Context entry is left unchanged and reported. Restart the client after setup and approve the server if asked. `map` builds the file index when one is missing.
+New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option. `map` builds a missing index before printing the map.
 
 ## Optional fixed-folder setup and CLI preparation
 
@@ -134,7 +136,7 @@ To prepare the index separately, run from the project folder:
 npx -y codebase-context reindex
 ```
 
-A successful setup exit alone does not establish working client registration.
+The older interactive HTTP wizard remains the behavior of published 2.2.0. A successful candidate wizard exit alone does not establish working client registration.
 
 ## Gemini CLI
 

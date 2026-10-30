@@ -50,6 +50,9 @@ export interface VectorStorageProvider {
    * Check if storage is initialized
    */
   isInitialized(): boolean;
+
+  /** Release native handles before publishing or releasing an operation snapshot. */
+  close?(): Promise<void> | void;
 }
 
 export interface CodeChunkWithEmbedding extends CodeChunk {

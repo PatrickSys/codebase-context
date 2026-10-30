@@ -1,3 +1,4 @@
+import { withToolIndexSnapshot } from './index-snapshot.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { promises as fs } from 'fs';
 import type { ToolContext, ToolResponse } from './types.js';
@@ -15,6 +16,13 @@ export const definition: Tool = {
 };
 
 export async function handle(
+  _args: Record<string, unknown>,
+  ctx: ToolContext
+): Promise<ToolResponse> {
+  return withToolIndexSnapshot(ctx, (pinned) => handlePinned(_args, pinned));
+}
+
+async function handlePinned(
   _args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolResponse> {

@@ -21,7 +21,7 @@ export interface FrameworkAnalyzer {
   canAnalyze(filePath: string, content?: string): boolean;
 
   /** Parse a file and extract structured information */
-  analyze(filePath: string, content: string): Promise<AnalysisResult>;
+  analyze(filePath: string, content: string, options?: AnalysisOptions): Promise<AnalysisResult>;
 
   /** Detect framework-specific patterns and metadata from the entire codebase */
   detectCodebaseMetadata(rootPath: string): Promise<CodebaseMetadata>;
@@ -37,6 +37,10 @@ export interface FrameworkAnalyzer {
 
   /** Get a regex to extract a code snippet for a detected pattern (optional) */
   getSnippetPattern?(category: string, name: string): RegExp | null;
+}
+
+export interface AnalysisOptions {
+  includeScopePrefix?: boolean;
 }
 
 // ============================================================================

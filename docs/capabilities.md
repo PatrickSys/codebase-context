@@ -1,8 +1,8 @@
 # Capabilities Reference
 
-Technical reference for the current Codebase Context npm release and the upcoming 2.4.0 source. Start with the repository map, then search for relevant code. For an overview, see [README.md](../README.md).
+Unpinned `npx codebase-context` commands install the published 2.2.0 package. Sections marked as unreleased describe the source candidate and require a built checkout or a local candidate installation.
 
-Commands use the current npm release. Features marked as planned for 2.4.0 are not yet available from npm; the current published version is 2.2.0.
+Start with the repository map, then search for relevant code. For an overview, see [README.md](../README.md). Features marked as planned for 2.4.0 are not yet available from npm.
 
 ## Transport Modes
 
@@ -93,6 +93,10 @@ Shared selector inputs:
 | `detect_circular_dependencies` | Import cycles in the file graph                      |
 | `refresh_index`                | Full or incremental re-index + git memory extraction |
 | `get_indexing_status`          | Index state, progress, last stats                    |
+
+### File navigation in the unreleased candidate
+
+`get_code_relationships` follows verified TypeScript/JavaScript file imports and re-exports. Supply `file`, optional `direction` (`outgoing` or `incoming`), `max_hops` (1 to 3, default 2) and `max_nodes` (1 to 100, default 50). It checks current source snapshots and reports stale or unresolved edges. Python and Go import navigation are not supported.
 
 ## Project Routing
 
@@ -190,11 +194,12 @@ Ordered by execution:
 12. **Payload budgeting** — final serialized search responses include `searchQuality.tokenEstimate`; warnings only appear above the 4K-token threshold and differ between compact and full mode.
 13. **Full-mode chunk metadata** — when available, full-mode results surface chunk-level `imports` (top 5), `exports` (top 5), and cyclomatic `complexity`.
 
-### Defaults
+### Defaults in the unreleased candidate
 
 - **Chunk size**: 50 lines, 0 overlap
 - **Reranker trigger**: activates when top-3 results are within 0.08 score of each other
-- **Embedding model**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@huggingface/transformers`. Override: `EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX` for Granite (8192 ctx, slower).
+- **Embedding mode**: new indexes are model-free. Existing indexes keep their recorded mode unless explicitly changed. `reindex --embeddings` opts into semantic indexing and requires the optional model/storage packages.
+- **Semantic model when enabled**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@huggingface/transformers`. Override: `EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX` for Granite (8192 ctx, slower).
 - **Vector DB**: LanceDB with cosine distance
 
 ## Decision Card (Edit Intent)
@@ -260,13 +265,20 @@ Impact is 2-hop transitive: direct importers (hop 1) and their importers (hop 2)
 - Git auto-extraction: conventional commits from last 90 days
 - Surface locations: `search_codebase` results (as `relatedMemories`), `get_team_patterns` responses, preflight analysis
 
-## Indexing
+## Indexing in the unreleased candidate
 
-- Initial: full scan → chunking (50 lines, 0 overlap) → embedding → vector DB (LanceDB) + keyword index (Fuse.js)
+- Initial: full scan → chunking (50 lines, 0 overlap) → keyword index (Fuse.js). Explicit semantic mode also creates embeddings and a LanceDB vector index.
 - Incremental: SHA-256 manifest diffing, selective embed/delete, full intelligence regeneration
 - Auto-refresh (MCP server mode only): chokidar file watcher triggers incremental reindex after a debounce on any source file change — `node_modules/`, `.git/`, `dist/`, and `.codebase-context/` are excluded. One-shot CLI runs skip the watcher entirely.
-- Version gating: `index-meta.json` tracks format version; mismatches trigger automatic rebuild
-- Crash-safe rebuilds: full rebuilds write to `.staging/` and swap atomically only on success
+- Version gating: `index-meta.json` tracks format version; older format-4 caches require a full rebuild in their recorded mode before use with format 5. Unknown mode or occupied recovery slots can require explicit recovery.
+- Publication: full and incremental builds write complete `.generations/<buildId>/` directories, close vector handles, then replace the authoritative `index-meta.json`. An interrupted build retains the last committed generation. Each read pins one generation; a later operation sees the latest committed build.
+- Producer integrity: chunks must belong to the analyzed file and contain real source from their claimed interval. Independent, overlapping or disjoint component spans remain separate. Invalid producer output aborts publication and preserves the prior generation; reader source/range checks remain strict.
+- Search evidence: the source manifest must match the pinned build. Each nominated chunk's full body is checked against its current source interval before it can produce a result; a forged stored prefix is corruption and triggers rebuild rather than being stripped. Valid context metadata stays separate from the exact source snippet. These bounded candidate checks do not audit every stored chunk, and describe source state when checked.
+- Relationship freshness: unresolved specifiers are checked again with the current TypeScript/JavaScript resolver. A newly available target is reported as stale until refresh records a verified edge; unchanged importer bytes alone do not prove unchanged resolution.
+- Recovery status: a late auto-heal result carries its current index state instead of a preflight ready signal. Failed launches report an error; wait for a confirmed ready state before retrying.
+- Retention: at most three retained or in-progress generations, counting legacy fixed files. A refresh is deferred when live readers occupy the available slots. Cleanup failures do not roll back a committed build.
+- Recovery: missing root metadata does not make surviving generations a fresh index. Completed or unknown generations are preserved; automatic map/default reindex requires explicit recovery. If all three slots are occupied, first copy and verify the generation you choose to a recovery location outside `.codebase-context` (for example `E:/cbc-index-recovery/my-project/<buildId>`), then relocate that selected directory out of `.generations` and retry `reindex --embeddings` or `reindex --no-embeddings` with the intended mode. The program does not select a generation for you; mode flags do not override the capacity limit.
+- Refresh search: searches can use the previous complete build while a refresh runs, but exclude evidence whose source changed. An initial build still reports `indexing`.
 - Auto-heal: corrupted index triggers automatic full re-index on next search
 - Relationships sidecar: `relationships.json` contains file import graph, symbol export index, and per-edge import details (`importDetails`: line number + imported symbol names where available)
 - Storage: `.codebase-context/` directory (memory.json + generated files)
@@ -305,6 +317,6 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring 
 
 - **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
 - **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
-- **Planned for unpublished 2.4.0:** NestJS analyzer support, React and Next.js detection improvements, and reranker fixes. Dedicated Angular, React, and Next.js analyzers already ship in published 2.2.0. Other languages use the Generic analyzer (30+ languages, chunking + import graph, no framework-specific signal extraction).
-- **Default embedding model is `bge-small-en-v1.5` (512-token context).** Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
+- **Planned for unpublished 2.4.0:** NestJS analyzer support, React and Next.js detection improvements, and reranker fixes. Dedicated Angular, React, and Next.js analyzers already ship in published 2.2.0. Other languages use the Generic analyzer for indexing and retrieval; available symbol extraction depends on parser support. File import resolution and multi-hop navigation currently support TypeScript and JavaScript. Python and Go import navigation are not supported.
+- **The unreleased candidate defaults new indexes to model-free mode. Published 2.2.0 enables embeddings by default.** When semantic mode is enabled, its default model is `bge-small-en-v1.5` (512-token context). Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

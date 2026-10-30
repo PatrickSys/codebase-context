@@ -13,7 +13,9 @@ import type { SearchResponse } from '../src/tools/types.js';
 describe('review context', () => {
   it('parses modified, added, deleted and renamed files', () => {
     expect(
-      parseNameStatus(['M\tsrc/a.ts', 'A\tsrc/b.ts', 'D\tsrc/c.ts', 'R100\tsrc/old.ts\tsrc/new.ts'].join('\n'))
+      parseNameStatus(
+        ['M\tsrc/a.ts', 'A\tsrc/b.ts', 'D\tsrc/c.ts', 'R100\tsrc/old.ts\tsrc/new.ts'].join('\n')
+      )
     ).toEqual([
       { path: 'src/a.ts', status: 'M', rawStatus: 'M' },
       { path: 'src/b.ts', status: 'A', rawStatus: 'A' },
@@ -54,7 +56,9 @@ describe('review context', () => {
   });
 
   it('detects binary patches', () => {
-    expect(inspectPatch('diff --git a/a.png b/a.png\nBinary files a/a.png and b/a.png differ')).toEqual({
+    expect(
+      inspectPatch('diff --git a/a.png b/a.png\nBinary files a/a.png and b/a.png differ')
+    ).toEqual({
       additions: 0,
       deletions: 0,
       binary: true
@@ -118,6 +122,45 @@ describe('review context', () => {
   it('fingerprints exact diff bytes, including the final newline', () => {
     expect(fingerprintDiff('diff body\n')).not.toBe(fingerprintDiff('diff body'));
   });
+
+  it.each(['partial', 'no_fresh_results'] as const)(
+    'keeps %s source coverage visible to review-context consumers',
+    async (status) => {
+      const rawDiff = '@@ -1 +1 @@\n-oldSession();\n+rotateSessionToken();';
+      const sourceCoverage = {
+        status,
+        checkedFiles: status === 'partial' ? 2 : 1,
+        skippedFiles: 1,
+        refreshAction: 'refresh_index'
+      };
+      const packet = await buildReviewContextPacket({
+        base: 'main',
+        head: 'HEAD',
+        baseCommit: 'a'.repeat(40),
+        headCommit: 'b'.repeat(40),
+        rawDiff,
+        changedFiles: [{ path: 'src/auth.ts', status: 'M', rawStatus: 'M' }],
+        patchesByPath: new Map([['src/auth.ts', rawDiff]]),
+        search: async () => ({
+          status: 'ok',
+          searchQuality: { status: 'ok', confidence: 0.9 },
+          sourceCoverage,
+          preflight: { ready: false, reason: 'Indexed candidates are no longer current.' },
+          results:
+            status === 'partial'
+              ? [{ file: 'src/current.ts:1-2', summary: 'Current source', score: 0.9 }]
+              : []
+        })
+      });
+
+      expect(packet.searches[0]?.sourceCoverage).toEqual(sourceCoverage);
+      expect(packet.searches[0]?.preflight?.ready).toBe(false);
+      expect(packet.warnings).toContain(
+        'Search source coverage is incomplete for query: rotateSessionToken oldSession'
+      );
+      expect(packet.searches[0]?.results).toHaveLength(status === 'partial' ? 1 : 0);
+    }
+  );
 
   it('builds a bounded packet and keeps failed searches explicit', async () => {
     const rawDiff = [

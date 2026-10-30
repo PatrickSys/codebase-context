@@ -4,6 +4,28 @@ import os from 'os';
 import { InternalFileGraph } from '../src/utils/usage-tracker.js';
 
 describe('InternalFileGraph serialization', () => {
+  it.each(['not-indexed', 'analysis-unavailable'] as const)(
+    'round-trips the captured canonical target of a %s diagnostic unchanged',
+    (reason) => {
+      const rootPath = path.join(os.tmpdir(), 'canonical-graph');
+      const graph = new InternalFileGraph(rootPath);
+      graph.trackUnresolved(
+        path.join(rootPath, 'main.ts'),
+        {
+          line: 1,
+          specifier: './linked/target',
+          kind: 'import',
+          sourceFingerprint: 'source-sha256',
+          targetFingerprint: ''
+        },
+        { reason, target: 'physical/target.ts' }
+      );
+      const restored = InternalFileGraph.fromJSON(graph.toJSON(), rootPath).toJSON();
+      expect(restored.unresolvedEdges).toEqual(graph.toJSON().unresolvedEdges);
+      expect(restored.unresolvedEdges?.[0]).toMatchObject({ reason, target: 'physical/target.ts' });
+      expect(restored.imports).toEqual({});
+    }
+  );
   it('round-trips importDetails and importedSymbols behavior', () => {
     const rootPath = path.join(os.tmpdir(), `ifg-${Date.now()}`);
     const graph = new InternalFileGraph(rootPath);
@@ -12,7 +34,23 @@ describe('InternalFileGraph serialization', () => {
     const importingFile = path.join(rootPath, 'src', 'importer.ts');
 
     graph.trackExports(exportedFile, [{ name: 'Foo', type: 'function' }]);
-    graph.trackImport(importingFile, exportedFile, 12, ['Foo']);
+    graph.trackImport(importingFile, exportedFile, 12, ['Foo'], {
+      kind: 'reexport',
+      specifier: './exported',
+      sourceFingerprint: 'source-sha256',
+      targetFingerprint: 'target-sha256'
+    });
+    graph.trackUnresolved(
+      importingFile,
+      {
+        line: 18,
+        specifier: './missing',
+        kind: 'import',
+        sourceFingerprint: 'source-sha256',
+        targetFingerprint: ''
+      },
+      'not-found'
+    );
 
     const json = graph.toJSON();
     expect(json.importDetails).toBeDefined();
@@ -20,9 +58,17 @@ describe('InternalFileGraph serialization', () => {
     const restored = InternalFileGraph.fromJSON(json, rootPath);
     const restoredJson = restored.toJSON();
     expect(restoredJson.importDetails).toEqual(json.importDetails);
+    expect(restoredJson.unresolvedEdges).toEqual(json.unresolvedEdges);
+    expect(
+      restoredJson.importDetails?.['src/importer.ts']?.['src/exported.ts']?.sources?.[0]
+    ).toMatchObject({
+      specifier: './exported',
+      kind: 'reexport',
+      sourceFingerprint: 'source-sha256',
+      targetFingerprint: 'target-sha256'
+    });
 
     const unused = restored.findUnusedExports();
     expect(unused.length).toBe(0);
   });
 });
-

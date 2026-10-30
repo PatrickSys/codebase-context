@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -6,7 +7,8 @@ import { readIndexMeta, validateIndexArtifacts } from '../src/core/index-meta.js
 import {
   CODEBASE_CONTEXT_DIRNAME,
   RELATIONSHIPS_FILENAME,
-  INDEX_META_FILENAME
+  INDEX_META_FILENAME,
+  INDEX_FORMAT_VERSION
 } from '../src/constants/codebase-context.js';
 
 async function createTempDir(): Promise<string> {
@@ -60,7 +62,10 @@ describe('Relationship Sidecar', () => {
 
     // Check relationships.json exists
     const contextDir = path.join(tmpDir, CODEBASE_CONTEXT_DIRNAME);
-    const relationshipsPath = path.join(contextDir, RELATIONSHIPS_FILENAME);
+    const relationshipsPath = await resolveIndexArtifact(
+      path.dirname(contextDir),
+      RELATIONSHIPS_FILENAME
+    );
     const relationshipsExists = await fs
       .access(relationshipsPath)
       .then(() => true)
@@ -74,7 +79,7 @@ describe('Relationship Sidecar', () => {
     expect(relationships.header).toBeDefined();
     expect(relationships.header.buildId).toBeDefined();
     expect(typeof relationships.header.buildId).toBe('string');
-    expect(relationships.header.formatVersion).toBe(1);
+    expect(relationships.header.formatVersion).toBe(INDEX_FORMAT_VERSION);
     expect(relationships.generatedAt).toBeDefined();
     expect(relationships.graph).toBeDefined();
     expect(typeof relationships.graph.imports).toBe('object');
@@ -115,7 +120,10 @@ describe('Relationship Sidecar', () => {
     const metaRaw = await fs.readFile(path.join(contextDir, INDEX_META_FILENAME), 'utf-8');
     const meta = JSON.parse(metaRaw);
 
-    const relRaw = await fs.readFile(path.join(contextDir, RELATIONSHIPS_FILENAME), 'utf-8');
+    const relRaw = await fs.readFile(
+      await resolveIndexArtifact(path.dirname(contextDir), RELATIONSHIPS_FILENAME),
+      'utf-8'
+    );
     const relationships = JSON.parse(relRaw);
 
     expect(relationships.header.buildId).toBe(meta.buildId);
@@ -131,7 +139,10 @@ describe('Relationship Sidecar', () => {
   it('updates relationships.json on incremental index', async () => {
     // Record the initial buildId
     const contextDir = path.join(tmpDir, CODEBASE_CONTEXT_DIRNAME);
-    const relRaw1 = await fs.readFile(path.join(contextDir, RELATIONSHIPS_FILENAME), 'utf-8');
+    const relRaw1 = await fs.readFile(
+      await resolveIndexArtifact(path.dirname(contextDir), RELATIONSHIPS_FILENAME),
+      'utf-8'
+    );
     const relationships1 = JSON.parse(relRaw1);
 
     // Add a new file
@@ -151,7 +162,10 @@ describe('Relationship Sidecar', () => {
     await indexer.index();
 
     // Read updated relationships
-    const relRaw2 = await fs.readFile(path.join(contextDir, RELATIONSHIPS_FILENAME), 'utf-8');
+    const relRaw2 = await fs.readFile(
+      await resolveIndexArtifact(path.dirname(contextDir), RELATIONSHIPS_FILENAME),
+      'utf-8'
+    );
     const relationships2 = JSON.parse(relRaw2);
 
     // The file should still have valid structure after incremental update
@@ -177,7 +191,10 @@ describe('Relationship Sidecar', () => {
     await indexer.index();
 
     // Check relationships.json exists again
-    const relationshipsPath = path.join(contextDir, RELATIONSHIPS_FILENAME);
+    const relationshipsPath = await resolveIndexArtifact(
+      path.dirname(contextDir),
+      RELATIONSHIPS_FILENAME
+    );
     const relationshipsExists = await fs
       .access(relationshipsPath)
       .then(() => true)
@@ -189,7 +206,7 @@ describe('Relationship Sidecar', () => {
     const relationships = JSON.parse(raw);
 
     expect(relationships.header).toBeDefined();
-    expect(relationships.header.formatVersion).toBe(1);
+    expect(relationships.header.formatVersion).toBe(INDEX_FORMAT_VERSION);
     expect(relationships.graph).toBeDefined();
     expect(relationships.symbols).toBeDefined();
     expect(relationships.stats).toBeDefined();

@@ -1,6 +1,6 @@
 # Client Setup
 
-These commands use the current npm release because the package name is unpinned. The current published version is 2.2.0; 2.4.0 is not yet published.
+These commands use the current npm release (**2.2.0** on npm today; **2.3.0** pending). **2.4.0** is not published. Historical verification notes below reference **2.2.0** unless another version is named.
 
 Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter.
 

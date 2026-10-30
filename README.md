@@ -2,11 +2,13 @@
 
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](https://github.com/PatrickSys/codebase-context/blob/master/package.json)
 
-Codebase Context gives coding agents a map of your repository through MCP, for developers who want their agent to find relevant code and follow the team's patterns. Search, examples and project memory run locally by default.
+Codebase Context is a local MCP server for **team conventions and edit preflight**: a bounded map of how your repo is organized, ranked search with pattern and memory context, and a decision card before risky edits. It is not a retrieval leaderboard; frozen benchmarks put it at **25.7%** expected-file recovery versus **jCodeMunch 27.1%** in the same adapter run ([details](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md)). Search, examples, and project memory stay on your machine by default.
+
+**Colleagues, not competitors:** [Aider's repo map](https://aider.chat/docs/repomap.html) for structure, [Repomix](https://repomix.com/) for pack-and-prompt workflows, and jCodeMunch for fast MCP code search (see [benchmark comparators](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md)). Codebase Context combines map-first routing, convention detection, scoped memory, and edit-intent gating in one local tool surface.
 
 ## Set up your AI client
 
-Use Node.js 22 or newer. These commands use the current npm release of Codebase Context:
+Use Node.js 22 or newer. Unpinned `npx` installs the **current npm release (2.2.0 today)**; **2.3.0** is the pending release from this repository (Patrick publishes manually). Pin `@2.3.0` after it lands. npm **2.2.0** has a regression where `npx codebase-context --version`, `status`, and `reindex` can exit silently; **2.3.0** fixes that.
 
 ```bash
 # Claude Code
@@ -19,9 +21,7 @@ codex mcp add codebase-context -- npx -y codebase-context
 opencode mcp add codebase-context '--' npx -y codebase-context
 ```
 
-In the unreleased candidate, `--version` prints the installed package version and `map` builds a missing index before printing the map. A low-confidence search includes a hint that weak matches do not establish that code is absent. These additions require the built candidate; the unpinned commands above install published 2.2.0.
-
-This repository's `init` command detects Claude Code, Codex, Cursor, and OpenCode and writes a project config for each selected tool. The saved launch is the Node binary and the package file from the npx cache. That command is in this source and is not part of published 2.2.0. Until it is published, use the copy-paste lines above. The [client setup guide](./docs/client-setup.md) marks the unpublished command.
+**Ships in 2.3.0 (not on npm until published):** `--version`, non-silent `status` / `reindex`, `init` for supported clients, fresh indexes without a model download (use `reindex --embeddings` when you want local semantic search), `map` that builds a missing index first, and low-confidence search hints that weak matches do not prove absence. Until 2.3.0 is on npm, use the manual MCP lines below or install from a built checkout / packed tarball.
 
 Start a new agent session in your project, then ask:
 
@@ -29,13 +29,14 @@ Start a new agent session in your project, then ask:
 
 Replace `[feature]` with something you want to find. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model.
 
-### Planned for 2.4.0 (not yet published)
+### Planned for 2.4.0 (not in 2.3.0)
 
-The unreleased source candidate starts new indexes without a model download. Semantic embeddings are optional; existing indexes keep their recorded mode. Its setup wizard can configure Claude Code, Codex, Cursor and OpenCode using the Node binary and package file that ran setup. These changes are not in the current npm release.
+Do not treat these as shipped until 2.4.0 is published:
 
-- NestJS support from community contributor Aaron Olin. See the [analyzer details](./docs/capabilities.md#analyzers).
-- Better React/Next.js detection and a fix for reranker passage scoring.
-- Transformers.js v4 for local models.
+- NestJS analyzer from community contributor Aaron Olin ([analyzer details](./docs/capabilities.md#analyzers)).
+- React/Next.js detection improvements and reranker passage-scoring fix.
+- Transformers.js v4 for optional local embeddings.
+- Per-project `parsing.maxChunks` in config and packaged `codebase-context-review` polish called out in [review-context](./docs/review-context.md).
 
 Known limits: [Intel Mac indexing crash (#68)](https://github.com/PatrickSys/codebase-context/issues/68), [custom OpenAI endpoints (#70)](https://github.com/PatrickSys/codebase-context/issues/70) and [Ollama (#71)](https://github.com/PatrickSys/codebase-context/issues/71) remain open.
 
@@ -76,7 +77,7 @@ The default connection is `stdio` (standard input/output): your client starts th
 
 ### Team patterns and examples
 
-`get_team_patterns` shows the approaches used in the repository and points to representative files. Dedicated analyzers for Angular, React, and Next.js ship in published 2.2.0; NestJS support (along with React and Next.js detection improvements and a reranker fix) is planned for unpublished 2.4.0.
+`get_team_patterns` shows the approaches used in the repository and points to representative files. Angular, React, and Next.js analyzers ship today on npm 2.2.0 and remain in 2.3.0. NestJS and the 2.4.0 analyzer/reranker work above are not published yet.
 
 ### Project memory
 
@@ -88,11 +89,11 @@ The `codebase-context-review` CLI creates a bounded context packet from a commit
 
 ## How it works
 
-1. **Index locally.** Codebase Context scans the project, builds a keyword index, and creates local semantic embeddings - numeric representations used to match code by meaning as well as exact words.
+1. **Index locally.** Codebase Context scans the project and builds a keyword index; opt into local semantic embeddings with `reindex --embeddings` when you need meaning-based search (npm **2.2.0** still pulled embeddings on first index).
 2. **Understand the repository.** The agent can request a compact codebase map with structure, patterns, and representative files.
 3. **Find the code for the task.** Search returns ranked files and symbols; the agent reads the selected files before editing.
 
-The same information is available from the terminal. Run these commands from your project root. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Once it is ready, inspect the map and search for the code you need:
+The same information is available from the terminal. Run these commands from your project root. **2.3.0** can index without a model download; semantic search is optional. Once the index is ready, inspect the map and search:
 
 ```bash
 # Build or refresh the local index
@@ -161,8 +162,8 @@ The method and failures are documented so the measurements can be inspected with
 - Retrieval measurements describe expected-file coverage, file precision, and reported `peakPrivateGb`, not patch correctness or end-to-end coding quality.
 - The paired token observation covers two frozen investigation tasks and records observed agent behavior; it is not a universal token or time guarantee.
 - Setup checks differ by client. The detailed guide distinguishes a written config, a config recognized by the client, a local connection, and instructions checked only against official docs.
-- Dedicated Angular, React, and Next.js analyzers ship in published 2.2.0; NestJS support is planned for unpublished 2.4.0. Other projects use the generic analyzer and the language parsers available for that stack.
-- The default searchable-chunk limit is 5,000 per project. Customizing this via `projects[].parsing.maxChunks` in `~/.codebase-context/config.json` requires 2.4.0 (not yet published).
+- Angular, React, and Next.js analyzers are on npm 2.2.0; NestJS lands in 2.4.0. Other stacks use the generic analyzer and available parsers.
+- Default searchable-chunk cap is 5,000 per project. `projects[].parsing.maxChunks` in `~/.codebase-context/config.json` requires 2.4.0 (not yet published).
 - The agent must identify its repository in tool calls when no default or unambiguous client root is available. Concurrent HTTP client isolation is not established by the stdio routing checks.
 
 ## Reference

@@ -1,6 +1,6 @@
 # Corrected retrieval comparison
 
-This table summarizes the corrected retrieval-only family across five local code-context tools. In this fixed setup, Codebase Context recovered 25.7% of expected gold files at 11.5% file precision; this does not show better completed coding tasks. Expected-file coverage means expected gold files recovered divided by expected gold files. File precision means expected gold files recovered divided by all files returned. The reported `peakPrivateGb` field is copied from retained telemetry; its underlying unit was not independently verified.
+This table summarizes the corrected retrieval-only family across five local code-context tools. **It is not a product ranking:** Codebase Context optimizes for team conventions and edit preflight; jCodeMunch leads this fixed expected-file metric at 27.1% versus Codebase Context at 25.7%. Expected-file coverage means expected gold files recovered divided by expected gold files. File precision means expected gold files recovered divided by all files returned. The reported `peakPrivateGb` field is copied from retained telemetry; its underlying unit was not independently verified.
 
 | Tool | Completed | Failed | Expected-file coverage | File precision | Reported `peakPrivateGb` |
 | --- | ---: | ---: | ---: | ---: | ---: |

@@ -17,8 +17,14 @@
 - Updated the runtime parser and watcher to remove the legacy braces dependency chain. Watcher exclusions use exact directory names; quoted import and export names retain their public symbol names.
 - Known limits: model-free conceptual relevance is not guaranteed. Short requests can miss implementations when query words differ from source names; syntactic edges are not runtime calls; workspace/language-specific resolution can remain unresolved. Packed/protocol tests and scoped negative cases do not establish general agent-quality improvement or customer adoption. No npm publication is implied by this entry.
 
-## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-04-30)
+## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-10-30)
 
+### Release notes
+
+- **CLI:** Fix npm **2.2.0** regression where `npx codebase-context --version`, `status`, and `reindex` could exit with code 0 and no output (direct CLI subcommands lazy-load the MCP runtime; canonical entrypoint detection includes npm symlink launchers).
+- **Indexing:** Fresh project folders default to keyword-only indexing without downloading embedding models; opt in with `reindex --embeddings` and optional peer packages.
+- **Setup:** `init` wizard for Claude Code, Codex, Cursor, and OpenCode (multi-client registration from one run).
+- **Docs:** Position around local team conventions and edit preflight; cite Aider repo map, Repomix, and jCodeMunch as related tools; report 25.7% vs 27.1% retrieval without leadership claims; keep **2.4.0** features out of shipped language until published.
 
 ### Features
 

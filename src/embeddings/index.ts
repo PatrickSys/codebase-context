@@ -6,14 +6,17 @@ import {
   EmbeddingConfig,
   DEFAULT_EMBEDDING_CONFIG,
   DEFAULT_MODEL,
-  parseEmbeddingProviderName
+  DEFAULT_OLLAMA_MODEL,
+  parseEmbeddingProviderName,
+  resolveOllamaHost
 } from './types.js';
 import { TransformersEmbeddingProvider, MODEL_CONFIGS } from './transformers.js';
+import { getOllamaModelDimensions } from './ollama.js';
 import { assertOptionalDependency } from '../utils/optional-dependency.js';
 
 export function assertEmbeddingRuntimeAvailable(config: Partial<EmbeddingConfig> = {}): void {
   const provider = config.provider ?? DEFAULT_EMBEDDING_CONFIG.provider;
-  if (provider !== 'openai' && provider !== 'custom') {
+  if (provider !== 'openai' && provider !== 'custom' && provider !== 'ollama') {
     assertOptionalDependency('@huggingface/transformers', '^4.2.0');
   }
 }
@@ -30,6 +33,7 @@ export function getConfiguredDimensions(config: Partial<EmbeddingConfig> = {}): 
     config.provider ?? parseEmbeddingProviderName(process.env.EMBEDDING_PROVIDER) ?? 'transformers';
   const model = config.model ?? process.env.EMBEDDING_MODEL ?? DEFAULT_MODEL;
   if (provider === 'openai') return model.includes('large') ? 3072 : 1536; // text-embedding-3-large: 3072, all others: 1536
+  if (provider === 'ollama') return getOllamaModelDimensions(model);
   // Look up from the same MODEL_CONFIGS the provider uses — avoids stale hardcoded guesses
   return MODEL_CONFIGS[model]?.dimensions ?? 384;
 }
@@ -62,11 +66,19 @@ export async function getEmbeddingProvider(
   }
 
   if (mergedConfig.provider === 'custom') {
-    throw new Error("Custom provider not implemented. Use 'openai' or 'transformers'.");
+    throw new Error("Custom provider not implemented. Use 'openai', 'ollama', or 'transformers'.");
   }
 
   if (mergedConfig.provider === 'ollama') {
-    console.warn('Ollama provider not yet implemented, falling back to Transformers.js');
+    const { OllamaEmbeddingProvider } = await import('./ollama.js');
+    const provider = new OllamaEmbeddingProvider(
+      mergedConfig.model || DEFAULT_OLLAMA_MODEL,
+      mergedConfig.apiEndpoint ?? resolveOllamaHost()
+    );
+    await provider.initialize();
+    cachedProvider = provider;
+    cachedProviderType = providerKey;
+    return provider;
   }
 
   const provider = new TransformersEmbeddingProvider(mergedConfig.model);

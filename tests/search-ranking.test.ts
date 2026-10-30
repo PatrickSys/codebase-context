@@ -19,7 +19,7 @@ function createChunk(
     filePath,
     relativePath: filePath.replace(/^.*?Repos\//, ''),
     startLine: 1,
-    endLine: 40,
+    endLine: content.split('\n').length,
     language: 'typescript',
     framework: 'generic',
     componentType: 'service',

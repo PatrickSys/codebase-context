@@ -6,6 +6,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import path from 'node:path';
+import { hasValidSourceLineSpan, isSourceBodyWithinInterval } from './source-interval.js';
 import { isDeepStrictEqual } from 'node:util';
 import { InvalidSourceChunkError } from '../errors/index.js';
 import type { CodeChunk, CodeComponent } from '../types/index.js';
@@ -278,29 +279,11 @@ export function validateSourceChunks(
       throw new InvalidSourceChunkError(
         `Analyzer chunk belongs to another source: ${source.relativePath}`
       );
-    if (
-      !validLineSpan(chunk) ||
-      chunk.endLine > lines.length ||
-      !lines
-        .slice(chunk.startLine - 1, chunk.endLine)
-        .join('\n')
-        .includes(chunk.content)
-    )
+    if (!isSourceBodyWithinInterval(chunk, lines))
       throw new InvalidSourceChunkError(
         `Analyzer chunk does not match its source interval: ${source.relativePath}:${chunk.startLine}-${chunk.endLine}`
       );
   }
-}
-
-function validLineSpan(chunk: CodeChunk): boolean {
-  return (
-    Number.isInteger(chunk.startLine) &&
-    Number.isInteger(chunk.endLine) &&
-    chunk.startLine >= 1 &&
-    chunk.endLine >= chunk.startLine &&
-    typeof chunk.content === 'string' &&
-    chunk.content.split('\n').length === chunk.endLine - chunk.startLine + 1
-  );
 }
 
 function mergeMetadata(chunk: CodeChunk): Record<string, unknown> {
@@ -324,8 +307,8 @@ export function mergeSmallChunks(chunks: CodeChunk[], minSize: number = 20): Cod
   for (let i = 1; i < chunks.length; i++) {
     const next = chunks[i];
     if (
-      validLineSpan(current) &&
-      validLineSpan(next) &&
+      hasValidSourceLineSpan(current) &&
+      hasValidSourceLineSpan(next) &&
       current.filePath === next.filePath &&
       current.relativePath === next.relativePath &&
       next.startLine === current.endLine + 1 &&

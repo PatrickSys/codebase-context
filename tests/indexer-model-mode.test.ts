@@ -181,51 +181,22 @@ describe('persisted embedding mode', () => {
 
   it('initializes keyword search without embedding or vector storage in model-free mode', async () => {
     rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-search-model-free-'));
-    const contextDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
-    const vectorDir = await resolveIndexArtifact(path.dirname(contextDir), VECTOR_DB_DIRNAME);
-    const buildId = 'model-free-build';
-    await fs.mkdir(vectorDir, { recursive: true });
     await fs.writeFile(
-      await resolveIndexArtifact(path.dirname(contextDir), KEYWORD_INDEX_FILENAME),
-      JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks: [] })
+      path.join(rootPath, 'source.ts'),
+      'export const source = "model-free source";\n'
     );
-    await fs.writeFile(
-      await resolveIndexArtifact(path.dirname(contextDir), INTELLIGENCE_FILENAME),
-      JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, patterns: {} })
-    );
-    await fs.writeFile(
-      await resolveIndexArtifact(path.dirname(contextDir), MANIFEST_FILENAME),
-      JSON.stringify({ version: 1, generatedAt: new Date().toISOString(), files: {} })
-    );
-    await fs.writeFile(
-      path.join(vectorDir, 'index-build.json'),
-      JSON.stringify({ buildId, formatVersion: INDEX_FORMAT_VERSION })
-    );
-    await fs.writeFile(
-      path.join(contextDir, INDEX_META_FILENAME),
-      JSON.stringify({
-        metaVersion: INDEX_META_VERSION,
-        formatVersion: INDEX_FORMAT_VERSION,
-        buildId,
-        generatedAt: new Date().toISOString(),
-        toolVersion: '1.0.0',
-        artifacts: {
-          keywordIndex: { path: KEYWORD_INDEX_FILENAME },
-          vectorDb: {
-            path: VECTOR_DB_DIRNAME,
-            provider: 'lancedb',
-            embeddingEnabled: false
-          }
-        }
-      })
-    );
+    // A positive reader case needs a real build-bound source manifest, not an
+    // empty hand-written cache with no manifest path/header.
+    const stats = await new CodebaseIndexer({ rootPath }).index();
+    expect(stats.indexedFiles).toBe(1);
 
     const searcher = new CodebaseSearcher(rootPath);
     await searcher.initialize();
-    await searcher.search('source', 5, undefined, {
+    const results = await searcher.search('source', 5, undefined, {
       useSemanticSearch: true,
       enableReranker: true
     });
+    expect(results[0]?.snippet).toContain('model-free source');
     expect(embeddingInit).not.toHaveBeenCalled();
     expect(storageInit).not.toHaveBeenCalled();
     expect(rerankInit).not.toHaveBeenCalled();

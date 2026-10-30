@@ -17,11 +17,13 @@ import type { ToolContext } from '../src/tools/types.js';
 let root = '';
 const clients: Array<{ client: Client; transport: StdioClientTransport }> = [];
 const children: ChildProcess[] = [];
+const nativeSessions = new Map<Client, { root: string; stderr: () => string }>();
 afterEach(async () => {
   for (const item of clients.splice(0)) {
     await item.client.close().catch(() => {});
     await item.transport.close().catch(() => {});
   }
+  nativeSessions.clear();
   for (const child of children.splice(0)) {
     if (child.exitCode !== null || child.signalCode !== null) continue;
     const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
@@ -90,6 +92,7 @@ async function server() {
     stderr += data.toString();
   });
   const client = new Client({ name: 'late-index-state-regression', version: '1.0.0' });
+  nativeSessions.set(client, { root, stderr: () => stderr });
   clients.push({ client, transport });
   try {
     await client.connect(transport);
@@ -98,10 +101,37 @@ async function server() {
   }
   return { client, stderr: () => stderr };
 }
-async function status(client: Client, expected: string) {
+async function captureEnvelope<T>(client: Client, phase: string, response: T): Promise<T> {
+  const session = nativeSessions.get(client);
+  const envelope = {
+    phase,
+    time: new Date().toISOString(),
+    root: session?.root,
+    response,
+    serverStderr: session?.stderr()
+  };
+  const diagnosticPath = process.env.CBC_TEST_SDK_DIAGNOSTICS;
+  if (diagnosticPath) await fs.appendFile(diagnosticPath, JSON.stringify(envelope) + '\n');
+  return response;
+}
+async function status(client: Client, expected: string, phase = 'status') {
   const deadline = Date.now() + 20000;
   for (;;) {
-    const result = decode(await client.callTool({ name: 'get_indexing_status', arguments: {} }));
+    const response = await captureEnvelope(
+      client,
+      phase,
+      await client.callTool({ name: 'get_indexing_status', arguments: {} })
+    );
+    let result: ReturnType<typeof decode>;
+    try {
+      result = decode(response);
+    } catch (error) {
+      const session = nativeSessions.get(client);
+      throw new Error(
+        `Native status decoding failed before ${expected}: ${JSON.stringify({ phase, response, serverStderr: session?.stderr() })}`,
+        { cause: error }
+      );
+    }
     if (result.status === expected) return result;
     if (Date.now() >= deadline) throw Error(`Did not reach ${expected}: ${JSON.stringify(result)}`);
     await new Promise((resolve) => setTimeout(resolve, 25));
@@ -138,7 +168,7 @@ async function holdWriter() {
 it('uses actual late-corruption state through the SDK and does not duplicate an already-running rebuild', async () => {
   await fixture();
   const s = await server();
-  await status(s.client, 'ready');
+  await status(s.client, 'ready', 'initial ready');
   await corruptLocation();
   const held = await holdWriter();
   const query = () =>
@@ -147,7 +177,7 @@ it('uses actual late-corruption state through the SDK and does not duplicate an 
       undefined,
       { timeout: 20000 }
     );
-  const first = decode(await query());
+  const first = decode(await captureEnvelope(s.client, 'first corrupt search', await query()));
   expect(first.status).toBe('indexing');
   expect(first.index).toMatchObject({
     status: 'indexing',
@@ -156,7 +186,9 @@ it('uses actual late-corruption state through the SDK and does not duplicate an 
   });
   expect(first.project.indexStatus).toBe('indexing');
   const starts = s.stderr().match(/Indexing \(full\)/g)?.length ?? 0;
-  const second = decode(await query());
+  const second = decode(
+    await captureEnvelope(s.client, 'second search while held writer', await query())
+  );
   expect(second.status).toBe('indexing');
   expect(second.index?.status).toBe('indexing');
   expect(second.project.indexStatus).toBe('indexing');
@@ -164,11 +196,40 @@ it('uses actual late-corruption state through the SDK and does not duplicate an 
   const exited = new Promise<void>((resolve) => held.once('exit', () => resolve()));
   held.kill('SIGKILL');
   await exited;
-  await status(s.client, 'ready');
-  const healthy = decode(await query());
+  await status(s.client, 'ready', 'after killed held writer');
+  const healthy = decode(
+    await captureEnvelope(s.client, 'healthy search after recovery', await query())
+  );
   expect(healthy.status).toBe('success');
   expect(healthy.index).toMatchObject({ status: 'ready', action: 'served' });
   expect(healthy.project.indexStatus).toBe('ready');
+}, 30000);
+it('auto-heals a forged stored body through the real SDK without exposing its header', async () => {
+  await fixture();
+  const s = await server();
+  await status(s.client, 'ready');
+  const file = await resolveIndexArtifact(root, 'index.json');
+  const value = z
+    .object({ chunks: z.array(z.object({ content: z.string() }).passthrough()) })
+    .passthrough()
+    .parse(JSON.parse(await fs.readFile(file, 'utf8')));
+  for (const chunk of value.chunks)
+    chunk.content = '// FORGED_HEADER_MUST_NOT_ESCAPE\n' + chunk.content;
+  await fs.writeFile(file, JSON.stringify(value));
+  const query = () =>
+    s.client.callTool(
+      { name: 'search_codebase', arguments: { query: 'route', limit: 5 } },
+      undefined,
+      { timeout: 20000 }
+    );
+  const first = await query();
+  expect(JSON.stringify(first)).not.toContain('FORGED_HEADER_MUST_NOT_ESCAPE');
+  expect(decode(first).index?.action).not.toBe('served');
+  await status(s.client, 'ready');
+  const healthy = await query();
+  expect(decode(healthy).status).toBe('success');
+  expect(decode(healthy).index).toMatchObject({ status: 'ready', action: 'served' });
+  expect(JSON.stringify(healthy)).not.toContain('FORGED_HEADER_MUST_NOT_ESCAPE');
 }, 30000);
 it('reports failed capacity recovery through the real SDK without changing the old pointer/vector marker', async () => {
   await fixture();

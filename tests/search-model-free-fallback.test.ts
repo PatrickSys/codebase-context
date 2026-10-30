@@ -306,7 +306,9 @@ describe('model-free query fallback', () => {
     }
   ])('retrieves real GenericAnalyzer chunks for $file', async ({ file, source, query, exact }) => {
     const analyzer = new GenericAnalyzer();
-    const analysis = await analyzer.analyze(path.resolve(file), `${source}\n`);
+    const analysis = await analyzer.analyze(path.resolve(file), `${source}\n`, {
+      includeScopePrefix: false
+    });
     for (const item of analysis.chunks) {
       item.relativePath = file;
       item.filePath = file;

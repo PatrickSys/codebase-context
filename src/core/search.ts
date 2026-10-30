@@ -24,8 +24,9 @@ import { isTestingRelatedQuery } from '../preflight/query-scope.js';
 import { assessSearchQuality } from './search-quality.js';
 import { rerank } from './reranker.js';
 import { type IndexMeta, readIndexMeta, validateIndexArtifacts } from './index-meta.js';
-import { hashFileContent, readManifest, type FileManifest } from './manifest.js';
+import { hashFileContent, readReferenceManifest, type FileManifest } from './manifest.js';
 import { isPathWithin } from '../utils/project-discovery.js';
+import { isSourceBodyWithinInterval } from '../utils/source-interval.js';
 import {
   InternalSourceResolver,
   loadTsconfigCompilerOptions
@@ -35,7 +36,6 @@ import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
-  MANIFEST_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 
@@ -373,14 +373,11 @@ export class CodebaseSearcher {
   }
 
   private async loadSourceManifest(): Promise<void> {
-    const manifest = await readManifest(
-      await resolveIndexArtifact(this.rootPath, MANIFEST_FILENAME, this.indexMeta ?? undefined)
-    );
-    if (!manifest?.files || Array.isArray(manifest.files)) {
+    if (!this.indexMeta)
       throw new IndexCorruptedError(
-        'Source manifest is missing or invalid. Full rebuild required.'
+        'Source manifest metadata is unavailable. Full rebuild required.'
       );
-    }
+    const manifest = await readReferenceManifest(this.rootPath, this.indexMeta);
 
     // Reject copied indexes with foreign absolute source locations before loading models.
     for (const chunk of this.chunks) this.getIndexedSourcePath(chunk);
@@ -447,7 +444,15 @@ export class CodebaseSearcher {
         }
       }
       const lines = checkedSources.get(sourceKey);
-      if (lines) this.validateSourceRange(chunk, lines);
+      if (lines) {
+        this.validateSourceRange(chunk, lines);
+        // The source read is cached per file; each nominated body still needs
+        // its own proof, including siblings sharing the same source lines.
+        if (!isSourceBodyWithinInterval(chunk, lines))
+          throw new IndexCorruptedError(
+            'Indexed chunk body does not match its source interval. Full rebuild required.'
+          );
+      }
     }
   }
 
@@ -1759,10 +1764,7 @@ export class CodebaseSearcher {
         throw new IndexCorruptedError('Result source was not validated. Full rebuild required.');
       }
       this.validateSourceRange(result, lines);
-      return {
-        ...result,
-        snippet: this.generateSnippet(lines.slice(result.startLine - 1, result.endLine).join('\n'))
-      };
+      return result;
     });
     const skippedFiles = [...checkedSources.values()].filter((source) => source === null).length;
     return {

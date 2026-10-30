@@ -1,4 +1,4 @@
-import { resolveIndexArtifact } from './index-generation.js';
+import { currentIndexSnapshot, resolveIndexArtifact } from './index-generation.js';
 /**
  * File hash manifest for incremental indexing.
  * Tracks SHA-256 hashes of indexed files to detect changes between runs.
@@ -98,7 +98,7 @@ export async function readReferenceManifest(
   let realRoot: string;
   let realContext: string;
   try {
-    realRoot = await fs.realpath(rootPath);
+    realRoot = currentIndexSnapshot(rootPath)?.realRoot ?? (await fs.realpath(rootPath));
     realContext = await fs.realpath(path.join(realRoot, CODEBASE_CONTEXT_DIRNAME));
   } catch (error) {
     throw fullReindexError(

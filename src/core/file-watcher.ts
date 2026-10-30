@@ -50,7 +50,11 @@ export function startFileWatcher(opts: FileWatcherOptions): () => Promise<void> 
 
   const watcher = chokidar.watch(rootPath, {
     ignored: (filePath) => {
-      const pathParts = filePath.split(/[\\/]+/);
+      const relative = path.relative(rootPath, filePath);
+      if (!relative) return false;
+      if (path.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${path.sep}`))
+        return true;
+      const pathParts = relative.split(/[\\/]+/);
       return EXCLUDED_DIRECTORY_NAMES.some((directoryName) => pathParts.includes(directoryName));
     },
     persistent: true,

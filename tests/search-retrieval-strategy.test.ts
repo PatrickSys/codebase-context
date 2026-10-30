@@ -13,7 +13,7 @@ function createChunk(id: string, filePath: string, content: string): CodeChunk {
     filePath,
     relativePath: filePath,
     startLine: 1,
-    endLine: 20,
+    endLine: content.split('\n').length,
     language: 'typescript',
     framework: 'generic',
     componentType: 'service',

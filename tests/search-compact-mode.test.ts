@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import { hashFileContent, writeManifest } from '../src/core/manifest.js';
+import { IndexMetaSchema } from '../src/core/index-meta.js';
 import type { SearchResponse } from '../src/tools/types.js';
 import structuralContextFixture from './fixtures/structural-context-regressions.json';
 import {
@@ -842,8 +843,13 @@ describe('search_codebase compact/full mode', () => {
       await writeManifest(path.join(ctxDir, MANIFEST_FILENAME), {
         version: 1,
         generatedAt: new Date().toISOString(),
+        header: { buildId: 'test-build-compact', formatVersion: INDEX_FORMAT_VERSION },
         files: { [actualChunk.relativePath]: hashFileContent(actualChunk.content) }
       });
+      const metaPath = path.join(ctxDir, INDEX_META_FILENAME);
+      const meta = IndexMetaSchema.parse(JSON.parse(await fs.readFile(metaPath, 'utf8')));
+      meta.artifacts.manifest = { path: MANIFEST_FILENAME };
+      await fs.writeFile(metaPath, JSON.stringify(meta));
 
       const actualSearchModule =
         await vi.importActual<typeof import('../src/core/search.js')>('../src/core/search.js');

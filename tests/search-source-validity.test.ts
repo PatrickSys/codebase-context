@@ -630,7 +630,7 @@ describe('search source-path validity', () => {
     expect(rebuiltResults.some((result) => result.startLine >= 3)).toBe(true);
   });
 
-  it('renders only current cited source lines, not indexing-only context headers', async () => {
+  it('rejects a forged stored context header without rewriting the corrupted index', async () => {
     const rootPath = path.join(tempRoot, 'annotated chunks');
     await createSourceFile(
       rootPath,
@@ -647,17 +647,11 @@ describe('search source-path validity', () => {
     const indexedBytes = JSON.stringify(index);
     await fs.writeFile(indexPath, indexedBytes, 'utf8');
 
-    const results = await new CodebaseSearcher(rootPath).search(
-      'quartzBeacon',
-      5,
-      undefined,
-      KEYWORD_ONLY_OPTIONS
-    );
-
-    await expectSearchResultsOpenInsideRoot(rootPath, results, 'src/quartzBeacon.ts');
-    expect(
-      results.every((result) => !result.snippet.includes('indexing-only signature header'))
-    ).toBe(true);
+    // Format 5 persists raw bodies. A stored presentation prefix is corruption,
+    // not authority to expand the excerpt to surrounding lines or sanitize it.
+    await expect(
+      new CodebaseSearcher(rootPath).search('quartzBeacon', 5, undefined, KEYWORD_ONLY_OPTIONS)
+    ).rejects.toBeInstanceOf(IndexCorruptedError);
     expect(await fs.readFile(indexPath, 'utf8')).toBe(indexedBytes);
   });
 

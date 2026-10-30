@@ -275,10 +275,28 @@ async function handlePinned(
 
     const unresolved: UnresolvedImportEdge[] = [];
     const staleUnresolvedEdges: UnresolvedImportEdge[] = [];
+    const unresolvedVerification = new Map<string, Promise<boolean>>();
+    // Traversal already charged each returned unresolved candidate to its shared
+    // inspection budget. Verify only that bounded set, once per distinct proof.
     for (const edge of result.unresolved) {
-      const importer = await resolveConfined(rootRealPath, edge.from);
-      const importerFingerprint = importer ? await currentFingerprint(importer) : null;
-      if (importerFingerprint === edge.source.sourceFingerprint) unresolved.push(edge);
+      const key = JSON.stringify([
+        edge.from,
+        edge.source.specifier,
+        edge.source.sourceFingerprint,
+        edge.reason
+      ]);
+      let verification = unresolvedVerification.get(key);
+      if (!verification) {
+        verification = (async () => {
+          const importer = await resolveConfined(rootRealPath, edge.from);
+          if (!importer || !edge.source.specifier) return false;
+          if ((await currentFingerprint(importer)) !== edge.source.sourceFingerprint) return false;
+          const current = await resolver.resolve(importer, edge.source.specifier, true);
+          return current.status === 'unresolved' && current.reason === edge.reason;
+        })();
+        unresolvedVerification.set(key, verification);
+      }
+      if (await verification) unresolved.push(edge);
       else staleUnresolvedEdges.push(edge);
     }
     const stale = result.rejectedEdges.length > 0 || staleUnresolvedEdges.length > 0;

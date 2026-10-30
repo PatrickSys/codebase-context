@@ -11,6 +11,7 @@
 import type { SearchResult } from '../types/index.js';
 import type { PreTrainedTokenizer } from '@huggingface/transformers';
 import os from 'os';
+import { assertMinimumOnnxRuntimeNodeVersion } from '../utils/onnxruntime-version.js';
 
 const DEFAULT_RERANKER_MODEL = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
@@ -48,6 +49,8 @@ async function ensureModelLoaded(): Promise<void> {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
+    assertMinimumOnnxRuntimeNodeVersion();
+
     const { AutoTokenizer, AutoModelForSequenceClassification, env } =
       await import('@huggingface/transformers');
 

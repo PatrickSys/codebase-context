@@ -348,6 +348,46 @@ async function atomicJson(target: string, value: unknown): Promise<void> {
   await atomicWrite(target, JSON.stringify(value));
 }
 
+function isBlockedTicketReplacement(error: unknown, target: string): boolean {
+  if (
+    process.platform !== 'win32' ||
+    !(error instanceof Error) ||
+    !('code' in error) ||
+    error.code !== 'EPERM' ||
+    !('syscall' in error) ||
+    error.syscall !== 'rename' ||
+    !('dest' in error) ||
+    error.dest !== target ||
+    !('path' in error) ||
+    typeof error.path !== 'string'
+  )
+    return false;
+  const prefix = `${target}.`;
+  return (
+    error.path.startsWith(prefix) &&
+    error.path.endsWith('.tmp') &&
+    GENERATION_ID.test(error.path.slice(prefix.length, -4))
+  );
+}
+
+async function replaceLeaseTicket(
+  target: string,
+  owner: z.infer<typeof TicketSchema>
+): Promise<void> {
+  const deadline = Date.now() + 250;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await atomicJson(target, owner);
+      return;
+    } catch (error) {
+      if (!isBlockedTicketReplacement(error, target) || attempt >= 8 || Date.now() + 25 >= deadline)
+        throw error;
+      await delay(25);
+      if (Date.now() >= deadline) throw error;
+    }
+  }
+}
+
 /**
  * Lamport's bakery lock uses unique, atomic ticket files rather than unlinking a
  * shared stale lock. Concurrent dead-owner recovery cannot remove a successor.
@@ -391,7 +431,7 @@ async function withLease<T>(
     await atomicJson(ownPath, owner);
     owner.ticket = 1 + Math.max(0, ...(await readTickets()).map((entry) => entry.owner.ticket));
     owner.choosing = false;
-    await atomicJson(ownPath, owner);
+    await replaceLeaseTicket(ownPath, owner);
     const deadline = Date.now() + 60_000;
     while (
       (await readTickets()).some(
@@ -411,7 +451,7 @@ async function withLease<T>(
     // Zero is a released ticket even when file deletion fails. A failed cleanup
     // must never turn a successful metadata commit into an indexing failure.
     try {
-      await atomicJson(ownPath, { ...owner, choosing: false, ticket: 0 });
+      await replaceLeaseTicket(ownPath, { ...owner, choosing: false, ticket: 0 });
     } catch (error) {
       console.warn('Index lease release deferred:', error);
     }

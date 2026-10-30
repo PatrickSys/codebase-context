@@ -34,6 +34,7 @@ repos/
 
 # Local benchmark/lab outputs
 benchmark-runs/
+benchmark-repos/
 /outputs/
 /results/*/raw/
 /results/*/local/

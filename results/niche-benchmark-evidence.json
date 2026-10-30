@@ -1,0 +1,1885 @@
+{
+  "artifactType": "niche-prior-art-benchmark-evidence",
+  "generatedAt": "2026-10-30T22:39:55.772Z",
+  "protocol": {
+    "name": "niche-prior-art-benchmark",
+    "frozenDate": "2026-10-30",
+    "manifestFrozenDate": "2026-10-30"
+  },
+  "runMeta": {
+    "manifestPath": "/workspace/tests/fixtures/niche-benchmark-manifest.json",
+    "protocolPath": "/workspace/tests/fixtures/niche-benchmark-protocol.json",
+    "manifestSha256": "9dd48fb64b7e81e6a16e694be031134f7a1506ff9a259b4cd084ab44827c704c",
+    "protocolSha256": "0b666b5ff5ed86f9a31cd0cc2857ef7dcd233ddf9c85b93091eb92488522aed0",
+    "nodeVersion": "v22.23.4",
+    "lanes": [
+      "codebase-context",
+      "jCodeMunch",
+      "aider-repo-map",
+      "repomix",
+      "ripgrep"
+    ],
+    "repoCheckouts": {
+      "angular-spotify": {
+        "ref": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+        "path": "/workspace/benchmark-repos/angular-spotify"
+      },
+      "excalidraw": {
+        "ref": "e18c1dd213000dde0ae94ef7eb00aab537b39708",
+        "path": "/workspace/benchmark-repos/excalidraw"
+      },
+      "fastapi": {
+        "ref": "628c34e0cae200564d191c95d7edea78c88c4b5e",
+        "path": "/workspace/benchmark-repos/fastapi"
+      }
+    }
+  },
+  "comparators": [
+    {
+      "id": "codebase-context",
+      "displayName": "Codebase Context",
+      "credit": "This repository (local dist CLI / MCP surfaces).",
+      "projectUrl": "https://github.com/PatrickSys/codebase-context",
+      "status": "completed",
+      "tasksTotal": 18,
+      "tasksCompleted": 18,
+      "tasksFailed": 0,
+      "top3HitRate": 0.5,
+      "averageUsefulness": 0.6666666666666666,
+      "averageEstimatedTokens": 641.7222222222222,
+      "averageQueryElapsedMs": 927.6111111111111,
+      "averageIndexElapsedMs": 672.7777777777779,
+      "byNiche": {
+        "team-convention": {
+          "tasks": 6,
+          "top3HitRate": 0
+        },
+        "edit-preflight": {
+          "tasks": 6,
+          "top3HitRate": 0.6666666666666666
+        },
+        "symbol-retrieval": {
+          "tasks": 6,
+          "top3HitRate": 0.8333333333333334
+        }
+      },
+      "taskResults": [
+        {
+          "taskId": "as-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 1,
+          "matchedSignals": [
+            "dependencyInjection"
+          ],
+          "payloadBytes": 1295,
+          "estimatedTokens": 324,
+          "queryElapsedMs": 518,
+          "indexElapsedMs": 512.5,
+          "topFiles": []
+        },
+        {
+          "taskId": "as-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 1,
+          "matchedSignals": [
+            "stateManagement"
+          ],
+          "payloadBytes": 1220,
+          "estimatedTokens": 305,
+          "queryElapsedMs": 492,
+          "indexElapsedMs": 512.5,
+          "topFiles": []
+        },
+        {
+          "taskId": "as-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 4017,
+          "estimatedTokens": 1005,
+          "queryElapsedMs": 978,
+          "indexElapsedMs": 512.5,
+          "topFiles": [
+            "libs/web/auth/data-access/src/lib/store/auth.store.ts",
+            "libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts",
+            "libs/web/visualizer/data-access/src/lib/audio-context.ts",
+            "libs/web/visualizer/data-access/src/lib/particles-renderer.ts",
+            "libs/web/visualizer/data-access/src/lib/sound-lines-renderer.ts"
+          ]
+        },
+        {
+          "taskId": "as-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": true,
+          "firstRelevantHit": 2,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 4114,
+          "estimatedTokens": 1029,
+          "queryElapsedMs": 719,
+          "indexElapsedMs": 512.5,
+          "topFiles": [
+            "libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts",
+            "libs/web/shell/ui/player-controls/src/lib/player-controls.component.ts",
+            "libs/web/shared/ui/media-summary/src/lib/media-summary.component.ts",
+            "libs/web/shell/ui/player-playback/src/lib/player-playback.component.ts",
+            "libs/web/lyrics/ui/lyrics-pip/src/lib/lyrics-pip.component.ts"
+          ]
+        },
+        {
+          "taskId": "as-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 2420,
+          "estimatedTokens": 605,
+          "queryElapsedMs": 645,
+          "indexElapsedMs": 512.5,
+          "topFiles": [
+            "libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts",
+            "libs/web/auth/util/src/lib/interceptors/unauthorized.interceptor.ts",
+            "libs/web/future-responsive/src/lib/albums.mock.json",
+            "libs/web/container-queries/src/lib/albums.mock.json",
+            "tsconfig.base.json"
+          ]
+        },
+        {
+          "taskId": "as-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 2834,
+          "estimatedTokens": 709,
+          "queryElapsedMs": 906,
+          "indexElapsedMs": 512.5,
+          "topFiles": [
+            "libs/web/auth/util/src/lib/interceptors/auth.interceptor.ts",
+            "libs/web/auth/data-access/src/lib/store/auth.store.ts",
+            "libs/web/shared/data-access/store/src/lib/ui/ui-store.ts",
+            "libs/web/auth/util/src/lib/interceptors/unauthorized.interceptor.ts",
+            "libs/web/auth/ui/unauthorized-modal/src/lib/unauthorized-modal.component.html"
+          ]
+        },
+        {
+          "taskId": "ex-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 1,
+          "matchedSignals": [
+            "stateManagement"
+          ],
+          "payloadBytes": 1124,
+          "estimatedTokens": 281,
+          "queryElapsedMs": 500,
+          "indexElapsedMs": 1122,
+          "topFiles": []
+        },
+        {
+          "taskId": "ex-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 51,
+          "estimatedTokens": 13,
+          "queryElapsedMs": 491,
+          "indexElapsedMs": 1122,
+          "topFiles": []
+        },
+        {
+          "taskId": "ex-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 4389,
+          "estimatedTokens": 1098,
+          "queryElapsedMs": 1336,
+          "indexElapsedMs": 1122,
+          "topFiles": [
+            "packages/excalidraw/history.ts",
+            "excalidraw-app/data/FileManager.ts",
+            "excalidraw-app/app_constants.ts",
+            "excalidraw-app/collab/Collab.tsx",
+            "excalidraw-app/App.tsx"
+          ]
+        },
+        {
+          "taskId": "ex-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": true,
+          "firstRelevantHit": 3,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 4537,
+          "estimatedTokens": 1135,
+          "queryElapsedMs": 1261,
+          "indexElapsedMs": 1122,
+          "topFiles": [
+            "packages/excalidraw/components/App.tsx",
+            "packages/element/src/types.ts",
+            "packages/excalidraw/data/blob.ts",
+            "packages/excalidraw/types.ts",
+            "excalidraw-app/data/firebase.ts"
+          ]
+        },
+        {
+          "taskId": "ex-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 3763,
+          "estimatedTokens": 941,
+          "queryElapsedMs": 1224,
+          "indexElapsedMs": 1122,
+          "topFiles": [
+            "packages/math/src/types.ts",
+            "packages/utils/src/withinBounds.ts",
+            "packages/excalidraw/clipboard.ts",
+            "excalidraw-app/data/index.ts",
+            "packages/excalidraw/tests/test-utils.ts"
+          ]
+        },
+        {
+          "taskId": "ex-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 2,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 3568,
+          "estimatedTokens": 892,
+          "queryElapsedMs": 1488,
+          "indexElapsedMs": 1122,
+          "topFiles": [
+            "packages/element/src/types.ts",
+            "packages/excalidraw/data/blob.ts",
+            "excalidraw-app/data/firebase.ts",
+            "packages/excalidraw/data/index.ts",
+            "packages/excalidraw/data/image.ts"
+          ]
+        },
+        {
+          "taskId": "fa-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 51,
+          "estimatedTokens": 13,
+          "queryElapsedMs": 477,
+          "indexElapsedMs": 383.8333333333333,
+          "topFiles": []
+        },
+        {
+          "taskId": "fa-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 51,
+          "estimatedTokens": 13,
+          "queryElapsedMs": 452,
+          "indexElapsedMs": 383.8333333333333,
+          "topFiles": []
+        },
+        {
+          "taskId": "fa-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 3144,
+          "estimatedTokens": 786,
+          "queryElapsedMs": 913,
+          "indexElapsedMs": 383.8333333333333,
+          "topFiles": [
+            "fastapi/security/oauth2.py",
+            "docs_src/security/tutorial005_py39.py",
+            "docs_src/security/tutorial005_py310.py",
+            "fastapi/security/http.py",
+            "fastapi/applications.py"
+          ]
+        },
+        {
+          "taskId": "fa-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 3476,
+          "estimatedTokens": 869,
+          "queryElapsedMs": 1313,
+          "indexElapsedMs": 383.8333333333333,
+          "topFiles": [
+            "tests/test_response_model_as_return_annotation.py",
+            "tests/test_tuples.py",
+            "tests/test_schema_extra_examples.py",
+            "tests/test_response_by_alias.py",
+            "tests/test_response_model_sub_types.py"
+          ]
+        },
+        {
+          "taskId": "fa-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 2727,
+          "estimatedTokens": 682,
+          "queryElapsedMs": 1520,
+          "indexElapsedMs": 383.8333333333333,
+          "topFiles": [
+            "fastapi/routing.py",
+            "fastapi/utils.py",
+            "tests/test_multi_body_errors.py",
+            "scripts/contributors.py",
+            "tests/test_router_events.py"
+          ]
+        },
+        {
+          "taskId": "fa-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 3403,
+          "estimatedTokens": 851,
+          "queryElapsedMs": 1464,
+          "indexElapsedMs": 383.8333333333333,
+          "topFiles": [
+            "tests/test_starlette_exception.py",
+            "tests/test_security_http_basic_optional.py",
+            "tests/test_multi_body_errors.py",
+            "tests/test_webhooks_security.py",
+            "tests/test_union_body.py"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jCodeMunch",
+      "displayName": "jCodeMunch",
+      "credit": "jCodeMunch MCP symbol search and repo indexing (jcodemunch-mcp on PyPI).",
+      "projectUrl": "https://github.com/jgrahamc/jcodemunch",
+      "status": "completed",
+      "tasksTotal": 18,
+      "tasksCompleted": 18,
+      "tasksFailed": 0,
+      "top3HitRate": 0.05555555555555555,
+      "averageUsefulness": 0.1111111111111111,
+      "averageEstimatedTokens": 202.38888888888889,
+      "averageQueryElapsedMs": 701.4444444444445,
+      "averageIndexElapsedMs": 69.27777777777777,
+      "byNiche": {
+        "team-convention": {
+          "tasks": 6,
+          "top3HitRate": 0
+        },
+        "edit-preflight": {
+          "tasks": 6,
+          "top3HitRate": 0
+        },
+        "symbol-retrieval": {
+          "tasks": 6,
+          "top3HitRate": 0.16666666666666666
+        }
+      },
+      "taskResults": [
+        {
+          "taskId": "as-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 787,
+          "estimatedTokens": 197,
+          "queryElapsedMs": 221,
+          "indexElapsedMs": 55.166666666666664,
+          "topFiles": [
+            "constant"
+          ]
+        },
+        {
+          "taskId": "as-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 1141,
+          "estimatedTokens": 286,
+          "queryElapsedMs": 222,
+          "indexElapsedMs": 55.166666666666664,
+          "topFiles": [
+            "method",
+            "constant",
+            "type"
+          ]
+        },
+        {
+          "taskId": "as-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 905,
+          "estimatedTokens": 227,
+          "queryElapsedMs": 225,
+          "indexElapsedMs": 55.166666666666664,
+          "topFiles": [
+            "type",
+            "method"
+          ]
+        },
+        {
+          "taskId": "as-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 1159,
+          "estimatedTokens": 290,
+          "queryElapsedMs": 222,
+          "indexElapsedMs": 55.166666666666664,
+          "topFiles": [
+            "method"
+          ]
+        },
+        {
+          "taskId": "as-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 1072,
+          "estimatedTokens": 268,
+          "queryElapsedMs": 221,
+          "indexElapsedMs": 55.166666666666664,
+          "topFiles": [
+            "method"
+          ]
+        },
+        {
+          "taskId": "as-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 905,
+          "estimatedTokens": 227,
+          "queryElapsedMs": 224,
+          "indexElapsedMs": 55.166666666666664,
+          "topFiles": [
+            "type",
+            "method"
+          ]
+        },
+        {
+          "taskId": "ex-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 947,
+          "estimatedTokens": 237,
+          "queryElapsedMs": 1036,
+          "indexElapsedMs": 50.833333333333336,
+          "topFiles": [
+            "type",
+            "function"
+          ]
+        },
+        {
+          "taskId": "ex-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 818,
+          "estimatedTokens": 205,
+          "queryElapsedMs": 1022,
+          "indexElapsedMs": 50.833333333333336,
+          "topFiles": [
+            "function"
+          ]
+        },
+        {
+          "taskId": "ex-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 797,
+          "estimatedTokens": 200,
+          "queryElapsedMs": 1195,
+          "indexElapsedMs": 50.833333333333336,
+          "topFiles": [
+            "function",
+            "method",
+            "type"
+          ]
+        },
+        {
+          "taskId": "ex-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 772,
+          "estimatedTokens": 193,
+          "queryElapsedMs": 1123,
+          "indexElapsedMs": 50.833333333333336,
+          "topFiles": [
+            "method",
+            "function"
+          ]
+        },
+        {
+          "taskId": "ex-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 592,
+          "estimatedTokens": 148,
+          "queryElapsedMs": 1081,
+          "indexElapsedMs": 50.833333333333336,
+          "topFiles": [
+            "type"
+          ]
+        },
+        {
+          "taskId": "ex-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 626,
+          "estimatedTokens": 157,
+          "queryElapsedMs": 1201,
+          "indexElapsedMs": 50.833333333333336,
+          "topFiles": [
+            "function"
+          ]
+        },
+        {
+          "taskId": "fa-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 850,
+          "estimatedTokens": 213,
+          "queryElapsedMs": 733,
+          "indexElapsedMs": 101.83333333333333,
+          "topFiles": [
+            "method"
+          ]
+        },
+        {
+          "taskId": "fa-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 1,
+          "matchedSignals": [
+            "APIRouter",
+            "router"
+          ],
+          "payloadBytes": 510,
+          "estimatedTokens": 128,
+          "queryElapsedMs": 939,
+          "indexElapsedMs": 101.83333333333333,
+          "topFiles": [
+            "method"
+          ]
+        },
+        {
+          "taskId": "fa-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 721,
+          "estimatedTokens": 181,
+          "queryElapsedMs": 760,
+          "indexElapsedMs": 101.83333333333333,
+          "topFiles": [
+            "class",
+            "function"
+          ]
+        },
+        {
+          "taskId": "fa-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 496,
+          "estimatedTokens": 124,
+          "queryElapsedMs": 764,
+          "indexElapsedMs": 101.83333333333333,
+          "topFiles": [
+            "class",
+            "method"
+          ]
+        },
+        {
+          "taskId": "fa-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 634,
+          "estimatedTokens": 159,
+          "queryElapsedMs": 706,
+          "indexElapsedMs": 101.83333333333333,
+          "topFiles": [
+            "function",
+            "field",
+            "class"
+          ]
+        },
+        {
+          "taskId": "fa-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 810,
+          "estimatedTokens": 203,
+          "queryElapsedMs": 731,
+          "indexElapsedMs": 101.83333333333333,
+          "topFiles": [
+            "function"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "aider-repo-map",
+      "displayName": "Aider repo map",
+      "credit": "Paul Gauthier's Aider RepoMap ranking (aider-chat on PyPI). Query tokens are passed as mentioned identifiers; there is no separate natural-language search API.",
+      "projectUrl": "https://github.com/Aider-AI/aider",
+      "status": "completed",
+      "tasksTotal": 18,
+      "tasksCompleted": 18,
+      "tasksFailed": 0,
+      "top3HitRate": 0.2222222222222222,
+      "averageUsefulness": 0.16666666666666666,
+      "averageEstimatedTokens": 95.05555555555556,
+      "averageQueryElapsedMs": 1441.8654441833496,
+      "averageIndexElapsedMs": 349.8888888888889,
+      "byNiche": {
+        "team-convention": {
+          "tasks": 6,
+          "top3HitRate": 0.3333333333333333
+        },
+        "edit-preflight": {
+          "tasks": 6,
+          "top3HitRate": 0
+        },
+        "symbol-retrieval": {
+          "tasks": 6,
+          "top3HitRate": 0.3333333333333333
+        }
+      },
+      "taskResults": [
+        {
+          "taskId": "as-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 468,
+          "estimatedTokens": 117,
+          "queryElapsedMs": 1425.365924835205,
+          "indexElapsedMs": 351.3333333333333,
+          "topFiles": [
+            "libs/web/shared/app-config/src/lib/app.config.ts",
+            "libs/web/shared/data-access/models/src/lib/api/play-request.ts",
+            "libs/web/shared/data-access/models/src/lib/api/spotify-api-params.ts",
+            "libs/web/visualizer/data-access/src/lib/visualizer-renderer.interface.ts",
+            "libs/web/shared/data-access/models/src/lib/api/track-extended.ts"
+          ]
+        },
+        {
+          "taskId": "as-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 505,
+          "estimatedTokens": 127,
+          "queryElapsedMs": 1442.3494338989258,
+          "indexElapsedMs": 351.3333333333333,
+          "topFiles": [
+            "libs/web/shared/app-config/src/lib/app.config.ts",
+            "libs/web/shared/data-access/models/src/lib/api/play-request.ts",
+            "libs/web/shared/data-access/models/src/lib/api/spotify-api-params.ts",
+            "libs/web/visualizer/data-access/src/lib/visualizer-renderer.interface.ts",
+            "libs/web/shared/data-access/models/src/lib/api/track-extended.ts"
+          ]
+        },
+        {
+          "taskId": "as-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 530,
+          "estimatedTokens": 133,
+          "queryElapsedMs": 1495.1844215393066,
+          "indexElapsedMs": 351.3333333333333,
+          "topFiles": [
+            "libs/web/shared/app-config/src/lib/app.config.ts",
+            "libs/web/shared/data-access/models/src/lib/api/play-request.ts",
+            "libs/web/shared/data-access/models/src/lib/api/spotify-api-params.ts",
+            "libs/web/visualizer/data-access/src/lib/visualizer-renderer.interface.ts",
+            "libs/web/shared/data-access/models/src/lib/api/track-extended.ts"
+          ]
+        },
+        {
+          "taskId": "as-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 488,
+          "estimatedTokens": 122,
+          "queryElapsedMs": 1396.5404033660889,
+          "indexElapsedMs": 351.3333333333333,
+          "topFiles": [
+            "libs/web/shared/app-config/src/lib/app.config.ts",
+            "libs/web/shared/data-access/models/src/lib/api/play-request.ts",
+            "libs/web/shared/data-access/models/src/lib/api/spotify-api-params.ts",
+            "libs/web/visualizer/data-access/src/lib/visualizer-renderer.interface.ts",
+            "libs/web/shared/data-access/models/src/lib/api/track-extended.ts"
+          ]
+        },
+        {
+          "taskId": "as-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 460,
+          "estimatedTokens": 115,
+          "queryElapsedMs": 1381.8109035491943,
+          "indexElapsedMs": 351.3333333333333,
+          "topFiles": [
+            "libs/web/shared/app-config/src/lib/app.config.ts",
+            "libs/web/shared/data-access/models/src/lib/api/play-request.ts",
+            "libs/web/shared/data-access/models/src/lib/api/spotify-api-params.ts",
+            "libs/web/visualizer/data-access/src/lib/visualizer-renderer.interface.ts",
+            "libs/web/shared/data-access/models/src/lib/api/track-extended.ts"
+          ]
+        },
+        {
+          "taskId": "as-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 496,
+          "estimatedTokens": 124,
+          "queryElapsedMs": 1579.0975093841553,
+          "indexElapsedMs": 351.3333333333333,
+          "topFiles": [
+            "libs/web/shared/app-config/src/lib/app.config.ts",
+            "libs/web/shared/data-access/models/src/lib/api/play-request.ts",
+            "libs/web/shared/data-access/models/src/lib/api/spotify-api-params.ts",
+            "libs/web/visualizer/data-access/src/lib/visualizer-renderer.interface.ts",
+            "libs/web/shared/data-access/models/src/lib/api/track-extended.ts"
+          ]
+        },
+        {
+          "taskId": "ex-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 335,
+          "estimatedTokens": 84,
+          "queryElapsedMs": 1385.5478763580322,
+          "indexElapsedMs": 333.8333333333333,
+          "topFiles": [
+            "packages/excalidraw/charts/charts.types.ts",
+            "packages/excalidraw/global.d.ts",
+            "packages/math/src/types.ts",
+            "packages/element/src/types.ts",
+            "packages/excalidraw/types.ts"
+          ]
+        },
+        {
+          "taskId": "ex-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": true,
+          "firstRelevantHit": 3,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 364,
+          "estimatedTokens": 91,
+          "queryElapsedMs": 1377.885341644287,
+          "indexElapsedMs": 333.8333333333333,
+          "topFiles": [
+            "packages/excalidraw/charts/charts.types.ts",
+            "packages/excalidraw/global.d.ts",
+            "packages/math/src/types.ts",
+            "packages/element/src/types.ts",
+            "packages/excalidraw/types.ts"
+          ]
+        },
+        {
+          "taskId": "ex-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 331,
+          "estimatedTokens": 83,
+          "queryElapsedMs": 1376.3632774353027,
+          "indexElapsedMs": 333.8333333333333,
+          "topFiles": [
+            "packages/excalidraw/types.ts",
+            "packages/math/src/types.ts",
+            "packages/excalidraw/charts/charts.types.ts",
+            "packages/element/src/types.ts",
+            "packages/common/src/editorInterface.ts"
+          ]
+        },
+        {
+          "taskId": "ex-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 348,
+          "estimatedTokens": 87,
+          "queryElapsedMs": 1386.0201835632324,
+          "indexElapsedMs": 333.8333333333333,
+          "topFiles": [
+            "packages/excalidraw/types.ts",
+            "packages/math/src/types.ts",
+            "packages/excalidraw/charts/charts.types.ts",
+            "packages/element/src/types.ts",
+            "packages/common/src/editorInterface.ts"
+          ]
+        },
+        {
+          "taskId": "ex-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 308,
+          "estimatedTokens": 77,
+          "queryElapsedMs": 1516.0613059997559,
+          "indexElapsedMs": 333.8333333333333,
+          "topFiles": [
+            "packages/math/src/types.ts",
+            "packages/element/src/types.ts",
+            "packages/excalidraw/tests/helpers/ui.ts",
+            "packages/common/src/bounds.ts",
+            "packages/excalidraw/types.ts"
+          ]
+        },
+        {
+          "taskId": "ex-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 334,
+          "estimatedTokens": 84,
+          "queryElapsedMs": 1381.5414905548096,
+          "indexElapsedMs": 333.8333333333333,
+          "topFiles": [
+            "packages/excalidraw/types.ts",
+            "packages/math/src/types.ts",
+            "packages/excalidraw/charts/charts.types.ts",
+            "packages/element/src/types.ts",
+            "packages/common/src/editorInterface.ts"
+          ]
+        },
+        {
+          "taskId": "fa-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0.5,
+          "matchedSignals": [
+            "dependency"
+          ],
+          "payloadBytes": 307,
+          "estimatedTokens": 77,
+          "queryElapsedMs": 1467.3211574554443,
+          "indexElapsedMs": 364.5,
+          "topFiles": [
+            "fastapi/applications.py",
+            "fastapi/encoders.py",
+            "fastapi/routing.py",
+            "fastapi/_compat.py",
+            "docs/en/docs/js/termynal.js"
+          ]
+        },
+        {
+          "taskId": "fa-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 0.5,
+          "matchedSignals": [
+            "router"
+          ],
+          "payloadBytes": 292,
+          "estimatedTokens": 73,
+          "queryElapsedMs": 1499.6511936187744,
+          "indexElapsedMs": 364.5,
+          "topFiles": [
+            "fastapi/routing.py",
+            "fastapi/exceptions.py",
+            "fastapi/encoders.py",
+            "fastapi/_compat.py",
+            "fastapi/utils.py"
+          ]
+        },
+        {
+          "taskId": "fa-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 308,
+          "estimatedTokens": 77,
+          "queryElapsedMs": 1510.103464126587,
+          "indexElapsedMs": 364.5,
+          "topFiles": [
+            "fastapi/encoders.py",
+            "fastapi/applications.py",
+            "docs/en/docs/js/termynal.js",
+            "fastapi/_compat.py",
+            "fastapi/exceptions.py"
+          ]
+        },
+        {
+          "taskId": "fa-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 317,
+          "estimatedTokens": 80,
+          "queryElapsedMs": 1470.5393314361572,
+          "indexElapsedMs": 364.5,
+          "topFiles": [
+            "fastapi/dependencies/models.py",
+            "fastapi/_compat.py",
+            "fastapi/exceptions.py",
+            "docs/en/docs/js/termynal.js",
+            "fastapi/encoders.py"
+          ]
+        },
+        {
+          "taskId": "fa-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 3,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 320,
+          "estimatedTokens": 80,
+          "queryElapsedMs": 1429.5134544372559,
+          "indexElapsedMs": 364.5,
+          "topFiles": [
+            "fastapi/encoders.py",
+            "fastapi/applications.py",
+            "fastapi/routing.py",
+            "tests/test_additional_properties_bool.py",
+            "fastapi/_compat.py"
+          ]
+        },
+        {
+          "taskId": "fa-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": 5,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 317,
+          "estimatedTokens": 80,
+          "queryElapsedMs": 1432.6813220977783,
+          "indexElapsedMs": 364.5,
+          "topFiles": [
+            "fastapi/encoders.py",
+            "fastapi/applications.py",
+            "docs/en/docs/js/termynal.js",
+            "fastapi/_compat.py",
+            "fastapi/exceptions.py"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repomix",
+      "displayName": "Repomix",
+      "credit": "Repomix repository packing (repomix on npm). Repomix does not expose query-specific retrieval; the lane charges pack generation to index time and ranks files by scanning pack sections for query tokens.",
+      "projectUrl": "https://github.com/yamadashy/repomix",
+      "status": "completed",
+      "tasksTotal": 18,
+      "tasksCompleted": 18,
+      "tasksFailed": 0,
+      "top3HitRate": 0.1111111111111111,
+      "averageUsefulness": 0.1111111111111111,
+      "averageEstimatedTokens": 5559173.666666667,
+      "averageQueryElapsedMs": 113.88888888888889,
+      "averageIndexElapsedMs": 286.27777777777777,
+      "byNiche": {
+        "team-convention": {
+          "tasks": 6,
+          "top3HitRate": 0
+        },
+        "edit-preflight": {
+          "tasks": 6,
+          "top3HitRate": 0.16666666666666666
+        },
+        "symbol-retrieval": {
+          "tasks": 6,
+          "top3HitRate": 0.16666666666666666
+        }
+      },
+      "taskResults": [
+        {
+          "taskId": "as-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 1847698,
+          "queryElapsedMs": 26,
+          "indexElapsedMs": 178.66666666666666,
+          "topFiles": [
+            ".codebase-context/.generations/a2cd3546-363b-4787-910e-11cce05901af/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "as-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 1847698,
+          "queryElapsedMs": 28,
+          "indexElapsedMs": 178.66666666666666,
+          "topFiles": [
+            ".codebase-context/.generations/a2cd3546-363b-4787-910e-11cce05901af/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "as-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 1847698,
+          "queryElapsedMs": 21,
+          "indexElapsedMs": 178.66666666666666,
+          "topFiles": [
+            ".codebase-context/.generations/a2cd3546-363b-4787-910e-11cce05901af/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "as-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 1847698,
+          "queryElapsedMs": 21,
+          "indexElapsedMs": 178.66666666666666,
+          "topFiles": [
+            ".codebase-context/.generations/a2cd3546-363b-4787-910e-11cce05901af/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "as-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 1847698,
+          "queryElapsedMs": 14,
+          "indexElapsedMs": 178.66666666666666,
+          "topFiles": [
+            ".codebase-context/.generations/a2cd3546-363b-4787-910e-11cce05901af/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "as-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 1847698,
+          "queryElapsedMs": 18,
+          "indexElapsedMs": 178.66666666666666,
+          "topFiles": [
+            ".codebase-context/.generations/a2cd3546-363b-4787-910e-11cce05901af/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "ex-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 8754051,
+          "queryElapsedMs": 235,
+          "indexElapsedMs": 346.6666666666667,
+          "topFiles": [
+            ".codebase-context/.generations/7ef9aa97-4e56-4dbe-aaa5-ba2bfb795092/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "ex-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 8754051,
+          "queryElapsedMs": 235,
+          "indexElapsedMs": 346.6666666666667,
+          "topFiles": [
+            ".codebase-context/.generations/7ef9aa97-4e56-4dbe-aaa5-ba2bfb795092/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "ex-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 8754051,
+          "queryElapsedMs": 162,
+          "indexElapsedMs": 346.6666666666667,
+          "topFiles": [
+            ".codebase-context/.generations/7ef9aa97-4e56-4dbe-aaa5-ba2bfb795092/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "ex-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 8754051,
+          "queryElapsedMs": 194,
+          "indexElapsedMs": 346.6666666666667,
+          "topFiles": [
+            ".codebase-context/.generations/7ef9aa97-4e56-4dbe-aaa5-ba2bfb795092/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "ex-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 8754051,
+          "queryElapsedMs": 187,
+          "indexElapsedMs": 346.6666666666667,
+          "topFiles": [
+            ".codebase-context/.generations/7ef9aa97-4e56-4dbe-aaa5-ba2bfb795092/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "ex-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": true,
+          "firstRelevantHit": 1,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 8754051,
+          "queryElapsedMs": 189,
+          "indexElapsedMs": 346.6666666666667,
+          "topFiles": [
+            ".codebase-context/.generations/7ef9aa97-4e56-4dbe-aaa5-ba2bfb795092/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "fa-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 6075772,
+          "queryElapsedMs": 133,
+          "indexElapsedMs": 333.5,
+          "topFiles": [
+            ".codebase-context/.generations/93a21abb-70cf-4b9c-8b23-c234ecf4165f/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "fa-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 6075772,
+          "queryElapsedMs": 111,
+          "indexElapsedMs": 333.5,
+          "topFiles": [
+            ".codebase-context/.generations/93a21abb-70cf-4b9c-8b23-c234ecf4165f/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "fa-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 6075772,
+          "queryElapsedMs": 121,
+          "indexElapsedMs": 333.5,
+          "topFiles": [
+            ".codebase-context/.generations/93a21abb-70cf-4b9c-8b23-c234ecf4165f/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "fa-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 6075772,
+          "queryElapsedMs": 113,
+          "indexElapsedMs": 333.5,
+          "topFiles": [
+            ".codebase-context/.generations/93a21abb-70cf-4b9c-8b23-c234ecf4165f/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "fa-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 6075772,
+          "queryElapsedMs": 122,
+          "indexElapsedMs": 333.5,
+          "topFiles": [
+            ".codebase-context/.generations/93a21abb-70cf-4b9c-8b23-c234ecf4165f/index/index-build.json"
+          ]
+        },
+        {
+          "taskId": "fa-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 50000,
+          "estimatedTokens": 6075772,
+          "queryElapsedMs": 120,
+          "indexElapsedMs": 333.5,
+          "topFiles": [
+            ".codebase-context/.generations/93a21abb-70cf-4b9c-8b23-c234ecf4165f/index/index-build.json"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ripgrep",
+      "displayName": "ripgrep (lexical baseline)",
+      "credit": "BurntSushi ripgrep JSON search over the repo checkout. No index; measures lexical retrieval only.",
+      "projectUrl": "https://github.com/BurntSushi/ripgrep",
+      "status": "completed",
+      "tasksTotal": 18,
+      "tasksCompleted": 18,
+      "tasksFailed": 0,
+      "top3HitRate": 0.05555555555555555,
+      "averageUsefulness": 0.1111111111111111,
+      "averageEstimatedTokens": 5000.5,
+      "averageQueryElapsedMs": 76.16666666666667,
+      "averageIndexElapsedMs": 0,
+      "byNiche": {
+        "team-convention": {
+          "tasks": 6,
+          "top3HitRate": 0
+        },
+        "edit-preflight": {
+          "tasks": 6,
+          "top3HitRate": 0.16666666666666666
+        },
+        "symbol-retrieval": {
+          "tasks": 6,
+          "top3HitRate": 0
+        }
+      },
+      "taskResults": [
+        {
+          "taskId": "as-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20008,
+          "estimatedTokens": 5002,
+          "queryElapsedMs": 24,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "apps/angular-spotify/src/polyfills.ts",
+            "README.md",
+            "yarn.lock",
+            "docs/plans/2026-03-07-infinite-scroll-pagination-design.md",
+            "docs/plans/2026-03-01-visualizer-selector-design.md"
+          ]
+        },
+        {
+          "taskId": "as-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 23,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "apps/angular-spotify/src/environments/environment.ts",
+            "apps/angular-spotify/src/app/app.component.spec.ts",
+            "apps/angular-spotify/src/polyfills.ts",
+            ".codebase-context/.generations/e369989f-3d39-444e-a743-4ed8fb5ce7f5/intelligence.json",
+            "README.md"
+          ]
+        },
+        {
+          "taskId": "as-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 33,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "tsconfig.base.json",
+            "apps/angular-spotify/ngsw-config.json",
+            "apps/angular-spotify/project.json",
+            "apps/angular-spotify/src/environments/environment.prod.ts",
+            "apps/angular-spotify/src/environments/environment.ts"
+          ]
+        },
+        {
+          "taskId": "as-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 26,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "tsconfig.base.json",
+            "apps/angular-spotify/src/environments/environment.ts",
+            "apps/angular-spotify/src/manifest.webmanifest",
+            "apps/angular-spotify/src/index.prod.html",
+            "apps/angular-spotify/src/app/app.component.spec.ts"
+          ]
+        },
+        {
+          "taskId": "as-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20008,
+          "estimatedTokens": 5002,
+          "queryElapsedMs": 22,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "tsconfig.base.json",
+            ".codebase-context/.generations/e369989f-3d39-444e-a743-4ed8fb5ce7f5/intelligence.json",
+            "README.md",
+            "migrations.json",
+            "docs/plans/2026-03-07-infinite-scroll-pagination-design.md"
+          ]
+        },
+        {
+          "taskId": "as-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 24,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "tsconfig.base.json",
+            "apps/angular-spotify/src/environments/environment.prod.ts",
+            "apps/angular-spotify/src/environments/environment.ts",
+            "apps/angular-spotify/src/polyfills.ts",
+            "apps/angular-spotify/src/custom/ant/_button.scss"
+          ]
+        },
+        {
+          "taskId": "ex-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20006,
+          "estimatedTokens": 5002,
+          "queryElapsedMs": 84,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "vitest.config.mts",
+            ".github/copilot-instructions.md",
+            "yarn.lock",
+            ".eslintrc.json",
+            "examples/with-script-in-browser/components/CustomFooter.tsx"
+          ]
+        },
+        {
+          "taskId": "ex-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": 5,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 93,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            ".env.development",
+            ".eslintrc.json",
+            "scripts/release.js",
+            "scripts/build-node.js",
+            "excalidraw-app/collab/Collab.tsx"
+          ]
+        },
+        {
+          "taskId": "ex-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20002,
+          "estimatedTokens": 5001,
+          "queryElapsedMs": 105,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "examples/with-nextjs/README.md",
+            "examples/with-script-in-browser/index.tsx",
+            ".eslintrc.json",
+            "README.md",
+            "examples/with-script-in-browser/components/ExampleApp.tsx"
+          ]
+        },
+        {
+          "taskId": "ex-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": true,
+          "firstRelevantHit": 3,
+          "usefulnessScore": 1,
+          "matchedSignals": [],
+          "payloadBytes": 20004,
+          "estimatedTokens": 5001,
+          "queryElapsedMs": 119,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            ".dockerignore",
+            ".gitignore",
+            ".eslintrc.json",
+            "scripts/release.js",
+            "scripts/buildWasm.js"
+          ]
+        },
+        {
+          "taskId": "ex-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 158,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            ".gitignore",
+            "examples/with-nextjs/.gitignore",
+            "examples/with-nextjs/next.config.js",
+            "examples/with-nextjs/tsconfig.json",
+            "examples/with-nextjs/yarn.lock"
+          ]
+        },
+        {
+          "taskId": "ex-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 110,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            ".gitignore",
+            "examples/with-nextjs/next.config.js",
+            "examples/with-nextjs/src/pages/excalidraw-in-pages.tsx",
+            "examples/with-nextjs/src/excalidrawWrapper.tsx",
+            "examples/with-nextjs/src/app/layout.tsx"
+          ]
+        },
+        {
+          "taskId": "fa-team-01",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0.5,
+          "matchedSignals": [
+            "dependency"
+          ],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 99,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "requirements-docs.txt",
+            "pyproject.toml",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/index/index-build.json",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/intelligence.json",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/relationships.json"
+          ]
+        },
+        {
+          "taskId": "fa-team-02",
+          "status": "completed",
+          "niche": "team-convention",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0.5,
+          "matchedSignals": [
+            "router"
+          ],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 105,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "pyproject.toml",
+            "requirements-docs-tests.txt",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/intelligence.json",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/health.json",
+            "LICENSE"
+          ]
+        },
+        {
+          "taskId": "fa-ep-01",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20002,
+          "estimatedTokens": 5001,
+          "queryElapsedMs": 82,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "pyproject.toml",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/intelligence.json",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/relationships.json",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/health.json",
+            "LICENSE"
+          ]
+        },
+        {
+          "taskId": "fa-ep-02",
+          "status": "completed",
+          "niche": "edit-preflight",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 96,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "requirements-docs.txt",
+            "pyproject.toml",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/index/index-build.json",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/intelligence.json",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/relationships.json"
+          ]
+        },
+        {
+          "taskId": "fa-sym-01",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 76,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "requirements-docs.txt",
+            "pyproject.toml",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/health.json",
+            "LICENSE",
+            "docs_src/body/tutorial001_py310.py"
+          ]
+        },
+        {
+          "taskId": "fa-sym-02",
+          "status": "completed",
+          "niche": "symbol-retrieval",
+          "top3Hit": false,
+          "firstRelevantHit": null,
+          "usefulnessScore": 0,
+          "matchedSignals": [],
+          "payloadBytes": 20000,
+          "estimatedTokens": 5000,
+          "queryElapsedMs": 92,
+          "indexElapsedMs": 0,
+          "topFiles": [
+            "pyproject.toml",
+            "requirements-docs-tests.txt",
+            "requirements-docs-insiders.txt",
+            ".codebase-context/.generations/b4709add-8981-4a99-af8d-5bce4ff4b916/health.json",
+            "scripts/notify_translations.py"
+          ]
+        }
+      ]
+    }
+  ],
+  "summaryTable": [
+    {
+      "laneId": "codebase-context",
+      "status": "completed",
+      "top3HitRate": 0.5,
+      "averageEstimatedTokens": 641.7222222222222,
+      "averageQueryElapsedMs": 927.6111111111111,
+      "averageIndexElapsedMs": 672.7777777777779
+    },
+    {
+      "laneId": "jCodeMunch",
+      "status": "completed",
+      "top3HitRate": 0.05555555555555555,
+      "averageEstimatedTokens": 202.38888888888889,
+      "averageQueryElapsedMs": 701.4444444444445,
+      "averageIndexElapsedMs": 69.27777777777777
+    },
+    {
+      "laneId": "aider-repo-map",
+      "status": "completed",
+      "top3HitRate": 0.2222222222222222,
+      "averageEstimatedTokens": 95.05555555555556,
+      "averageQueryElapsedMs": 1441.8654441833496,
+      "averageIndexElapsedMs": 349.8888888888889
+    },
+    {
+      "laneId": "repomix",
+      "status": "completed",
+      "top3HitRate": 0.1111111111111111,
+      "averageEstimatedTokens": 5559173.666666667,
+      "averageQueryElapsedMs": 113.88888888888889,
+      "averageIndexElapsedMs": 286.27777777777777
+    },
+    {
+      "laneId": "ripgrep",
+      "status": "completed",
+      "top3HitRate": 0.05555555555555555,
+      "averageEstimatedTokens": 5000.5,
+      "averageQueryElapsedMs": 76.16666666666667,
+      "averageIndexElapsedMs": 0
+    }
+  ]
+}

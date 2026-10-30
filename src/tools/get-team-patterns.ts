@@ -7,7 +7,54 @@ import {
   isComplementaryPatternConflict,
   shouldSkipLegacyTestingFrameworkCategory
 } from '../patterns/semantics.js';
-import type { IntelligenceData, IntelligenceGoldenFile, PatternsData } from '../types/index.js';
+import type {
+  IntelligenceData,
+  IntelligenceGoldenFile,
+  PatternEntry,
+  PatternsData
+} from '../types/index.js';
+
+const RANKED_EXEMPLAR_CAP = 10;
+
+/**
+ * Merge category-filtered golden files (by score) with primary canonical examples, deduped.
+ */
+function buildRankedExemplars(
+  patterns: Record<string, unknown> | undefined,
+  goldenFiles: IntelligenceGoldenFile[] | undefined
+): Array<{ file: string; score: number; category?: string }> {
+  const seen = new Set<string>();
+  const ranked: Array<{ file: string; score: number; category?: string }> = [];
+
+  const push = (file: string | undefined, score: number, category?: string) => {
+    if (!file || seen.has(file)) return;
+    seen.add(file);
+    ranked.push(category ? { file, score, category } : { file, score });
+  };
+
+  const sortedGolden = [...(goldenFiles ?? [])].sort((a, b) => b.score - a.score);
+  for (const golden of sortedGolden) {
+    push(golden.file, golden.score);
+  }
+
+  if (patterns) {
+    for (const [category, rawEntry] of Object.entries(patterns)) {
+      const entry = rawEntry as PatternEntry | undefined;
+      const primary = entry?.primary;
+      if (!primary) continue;
+      const score = primary.count ?? 0;
+      push(primary.canonicalExample?.file, score, category);
+      const exampleList = (primary as { examples?: string[] }).examples;
+      if (exampleList) {
+        for (const example of exampleList) {
+          if (typeof example === 'string') push(example, score, category);
+        }
+      }
+    }
+  }
+
+  return ranked.slice(0, RANKED_EXEMPLAR_CAP);
+}
 
 /**
  * Filter golden files by category prefix keys in their patterns map.
@@ -178,6 +225,17 @@ async function handlePinned(
     }
     if (conflicts.length > 0) {
       result.conflicts = conflicts;
+    }
+
+    const patternsForRanking =
+      result.patterns && typeof result.patterns === 'object' && !Array.isArray(result.patterns)
+        ? (result.patterns as Record<string, unknown>)
+        : undefined;
+    const goldenForRanking = Array.isArray(result.goldenFiles)
+      ? (result.goldenFiles as IntelligenceGoldenFile[])
+      : undefined;
+    if (patternsForRanking || goldenForRanking?.length) {
+      result.rankedExemplars = buildRankedExemplars(patternsForRanking, goldenForRanking);
     }
 
     return {

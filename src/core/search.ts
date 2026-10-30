@@ -69,22 +69,6 @@ export interface SearchOutcome {
   sourceCoverage: SearchSourceCoverage;
 }
 
-const SOURCE_REFRESH_ACTION =
-  'Run refresh_index with incrementalOnly=true to refresh changed or unavailable sources, then retry.';
-const CANDIDATE_BUDGET_ACTION =
-  'Search candidate budget was exhausted. Narrow the query to a concrete symbol or path and retry.';
-
-/** Stale or unreadable sources need a refresh. A full candidate budget does not. */
-export function sourceCoverageRefreshAction(input: {
-  skippedFiles: number;
-  candidateBudgetExhausted: boolean;
-  candidateRetrievalFailed: boolean;
-}): string | undefined {
-  if (input.skippedFiles > 0 || input.candidateRetrievalFailed) return SOURCE_REFRESH_ACTION;
-  if (input.candidateBudgetExhausted) return CANDIDATE_BUDGET_ACTION;
-  return undefined;
-}
-
 // Null records ordinary drift/unavailability; integrity failures still throw.
 type CheckedSources = Map<string, string[] | null>;
 
@@ -1783,11 +1767,6 @@ export class CodebaseSearcher {
       return result;
     });
     const skippedFiles = [...checkedSources.values()].filter((source) => source === null).length;
-    const refreshAction = sourceCoverageRefreshAction({
-      skippedFiles,
-      candidateBudgetExhausted: validation.candidateBudgetExhausted === true,
-      candidateRetrievalFailed: validation.candidateRetrievalFailed === true
-    });
     return {
       results,
       sourceCoverage: {
@@ -1803,7 +1782,12 @@ export class CodebaseSearcher {
         skippedFiles,
         ...(validation.candidateBudgetExhausted && { candidateBudgetExhausted: true }),
         ...(validation.candidateRetrievalFailed && { candidateRetrievalFailed: true }),
-        ...(refreshAction ? { refreshAction } : {})
+        ...((skippedFiles > 0 ||
+          validation.candidateBudgetExhausted ||
+          validation.candidateRetrievalFailed) && {
+          refreshAction:
+            'Run refresh_index with incrementalOnly=true to refresh changed or unavailable sources, then retry.'
+        })
       }
     };
   }

@@ -4,6 +4,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { ToolContext, ToolResponse, DecisionCard } from './types.js';
+import { presentSourceCoverage } from '../core/source-coverage-action.js';
 import { CodebaseSearcher } from '../core/search.js';
 import type { SearchIntentProfile, SearchSourceCoverage } from '../core/search.js';
 import type {
@@ -232,7 +233,7 @@ async function handlePinned(
       profile: searchProfile
     });
     results = outcome.results;
-    sourceCoverage = outcome.sourceCoverage;
+    sourceCoverage = presentSourceCoverage(outcome.sourceCoverage);
   } catch (error) {
     if (error instanceof IndexCorruptedError) {
       console.error('[Auto-Heal] Index corrupted. Requesting background re-index...');

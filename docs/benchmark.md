@@ -31,6 +31,52 @@ Clones: [shadcn-ui/taxonomy](https://github.com/shadcn-ui/taxonomy) (Next.js), [
 
 Known limits surfaced here (not fixed in this pass): default 5k chunk cap on very large repos, lexical `load`/`Button` ambiguity, edit preflight still conservative on broad natural-language queries, one Rust-generated TS parse warning in turbo.
 
+## Reproducible niche benchmark (prior art colleagues)
+
+This section reports a **frozen, rerunnable** comparison on **18 tasks** (team-convention lookup, edit-preflight navigation, symbol retrieval) across **three public repos**: [angular-spotify](https://github.com/trungk18/angular-spotify) (TypeScript), [Excalidraw](https://github.com/excalidraw/excalidraw) (TypeScript), and [FastAPI](https://github.com/fastapi/fastapi) (Python). Tasks and expected patterns live in `tests/fixtures/niche-benchmark-manifest.json`; comparator credits and rules live in `tests/fixtures/niche-benchmark-protocol.json`. Full machine output is checked in at `results/niche-benchmark-evidence.json` (generated **2026-10-30** on Node **v22.23.4**).
+
+**Primary accuracy metric:** top-3 file hit rate (expected path substring appears in the first three ranked paths returned for the same natural-language query).
+
+**Efficiency metrics:** estimated tokens returned (UTF-8 bytes ÷ 4) and query latency; index/setup time is reported separately in the evidence JSON.
+
+### One-command rerun
+
+```bash
+pnpm install && pnpm run build
+npm run benchmark:niche
+# or: node scripts/run-niche-benchmark.mjs --validate-fixtures
+```
+
+Optional: `--lanes codebase-context,jCodeMunch,aider-repo-map,repomix,ripgrep` and `--output results/niche-benchmark-evidence.json`.
+
+**Prerequisites (not installed via npm publish):** `git`, `rg`, `python3` with `jcodemunch-mcp` and `aider-chat`, and network access to clone the three pinned repos into `benchmark-repos/`.
+
+### Aggregate results (18 tasks)
+
+| Colleague tool | Top-3 hit rate | Avg est. tokens | Avg query ms | Avg index ms |
+| --- | ---: | ---: | ---: | ---: |
+| **Codebase Context** | **50.0%** | 642 | 928 | 673 |
+| [Aider](https://github.com/Aider-AI/aider) repo map | 22.2% | **95** | 1442 | 350 |
+| [Repomix](https://github.com/yamadashy/repomix) (pack + section rank) | 11.1% | 5,559,174 | **114** | 286 |
+| [jCodeMunch](https://github.com/jgravelle/jcodemunch-mcp) | 5.6% | **202** | 701 | **69** |
+| [ripgrep](https://github.com/BurntSushi/ripgrep) (lexical baseline) | 5.6% | 5,001* | **76** | 0 |
+
+\*Ripgrep and Repomix token figures include large truncated raw payloads in this harness; treat them as upper-bound context cost, not model-ready bundles.
+
+### Where Codebase Context loses (same run)
+
+- **Team-convention file ranking:** 0/6 top-3 file hits — `patterns` answers matched expected **signals** (for example `dependencyInjection`, `stateManagement`) but did not return ranked repo paths, so file-based scoring stays at zero. **Aider repo map** reached **33%** top-3 on the same team-convention slice.
+- **Payload size vs Aider / jCodeMunch:** median-style averages **642** estimated tokens vs **95** (Aider) and **202** (jCodeMunch) on the same queries.
+- **Query latency vs ripgrep:** **928 ms** average query time vs **76 ms** for the ripgrep baseline (no index).
+- **Edit-preflight slice:** **67%** top-3 here, but still below perfect; broad unsafe tasks are out of scope for this table (see edit-preflight fixtures for abstention tests).
+- **Cross-repo variance:** symbol-retrieval top-3 was **83%** on the two TypeScript repos but **50%** on FastAPI in this run (see `byNiche` in the evidence JSON).
+
+### What this does not claim
+
+- No patch correctness, agent productivity, or npm-package performance guarantees.
+- Repomix is not a search engine; the lane documents pack-generation cost plus section ranking.
+- Earlier ContextBench / discovery families below remain separate evidence; they are not merged into this table.
+
 ---
 
 This report describes local evidence from five ways of giving an AI coding agent context: Raw-native, Codebase Context, jCodeMunch, Repowise, and context-mode. The evidence is split into separate families because retrieval, repeated runs, full-agent observations, and a metered replay do not answer the same question. The families are not pooled into one score.

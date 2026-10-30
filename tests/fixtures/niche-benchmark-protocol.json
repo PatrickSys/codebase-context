@@ -1,0 +1,73 @@
+{
+  "name": "niche-prior-art-benchmark",
+  "frozenDate": "2026-10-30",
+  "scope": "local-context-retrieval",
+  "claimAllowed": false,
+  "purpose": "Reproducible comparison of codebase-context against credited prior art on team-convention lookup, edit-preflight navigation, and symbol retrieval. Not patch quality or agent productivity.",
+  "niches": ["team-convention", "edit-preflight", "symbol-retrieval"],
+  "comparators": [
+    {
+      "id": "codebase-context",
+      "displayName": "Codebase Context",
+      "kind": "product",
+      "credit": "This repository (local dist CLI / MCP surfaces).",
+      "projectUrl": "https://github.com/PatrickSys/codebase-context"
+    },
+    {
+      "id": "jCodeMunch",
+      "displayName": "jCodeMunch",
+      "kind": "mcp-comparator",
+      "credit": "jCodeMunch MCP symbol search and repo indexing (jcodemunch-mcp on PyPI).",
+      "projectUrl": "https://github.com/jgravelle/jcodemunch-mcp"
+    },
+    {
+      "id": "aider-repo-map",
+      "displayName": "Aider repo map",
+      "kind": "cli-comparator",
+      "credit": "Paul Gauthier's Aider RepoMap ranking (aider-chat on PyPI). Query tokens are passed as mentioned identifiers; there is no separate natural-language search API.",
+      "projectUrl": "https://github.com/Aider-AI/aider"
+    },
+    {
+      "id": "repomix",
+      "displayName": "Repomix",
+      "kind": "cli-comparator",
+      "credit": "Repomix repository packing (repomix on npm). Repomix does not expose query-specific retrieval; the lane charges pack generation to index time and ranks files by scanning pack sections for query tokens.",
+      "projectUrl": "https://github.com/yamadashy/repomix"
+    },
+    {
+      "id": "ripgrep",
+      "displayName": "ripgrep (lexical baseline)",
+      "kind": "baseline",
+      "credit": "BurntSushi ripgrep JSON search over the repo checkout. No index; measures lexical retrieval only.",
+      "projectUrl": "https://github.com/BurntSushi/ripgrep"
+    }
+  ],
+  "metrics": {
+    "accuracy": {
+      "primary": "top3HitRate",
+      "definition": "Share of tasks where any expectedFilePattern appears in the first three ranked paths returned by the lane."
+    },
+    "tokens": {
+      "primary": "estimatedTokens",
+      "definition": "UTF-8 payload bytes divided by four (same heuristic as discovery benchmark)."
+    },
+    "latency": {
+      "primary": "queryElapsedMs",
+      "secondary": ["indexElapsedMs", "setupElapsedMs"],
+      "definition": "Wall time for the lane query step; index and setup are reported separately and amortized per repo where applicable."
+    }
+  },
+  "fairnessRules": [
+    "Task queries and expected patterns are frozen in tests/fixtures/niche-benchmark-manifest.json before benchmark code ships.",
+    "All lanes receive the same natural-language query string per task.",
+    "Do not adjust expected patterns after observing lane outputs.",
+    "Do not add task-specific ranking heuristics to codebase-context for this benchmark.",
+    "Report setup_failed lanes honestly; do not treat missing competitors as wins.",
+    "Credit prior art by display name and project URL in public docs."
+  ],
+  "blockedClaims": [
+    "codebase_context_beats_all_competitors",
+    "universal_token_savings",
+    "patch_or_productivity_improvement"
+  ]
+}

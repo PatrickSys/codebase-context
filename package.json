@@ -132,6 +132,7 @@
     "type-check": "tsc --noEmit",
     "mcp:inspect": "npx -y @modelcontextprotocol/inspector node dist/index.js .",
     "eval": "pnpm run build && node scripts/run-eval.mjs",
+    "benchmark:niche": "node scripts/run-niche-benchmark.mjs",
     "prepare": "husky"
   },
   "dependencies": {

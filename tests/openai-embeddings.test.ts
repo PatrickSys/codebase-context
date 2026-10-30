@@ -46,6 +46,25 @@ describe('OpenAIEmbeddingProvider', () => {
     expect(result).toEqual([]);
   });
 
+  it('embedBatch() posts to a custom apiEndpoint base URL', async () => {
+    const mockFetch = vi.fn().mockReturnValue(
+      makeFetchResponse({
+        data: [{ embedding: [0.1] }]
+      })
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const provider = new OpenAIEmbeddingProvider(
+      'text-embedding-3-small',
+      'sk-test',
+      'http://127.0.0.1:11434/v1'
+    );
+    await provider.embedBatch(['hello']);
+
+    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:11434/v1/embeddings');
+  });
+
   it('embedBatch() sends correct Authorization header, model, and encoding_format', async () => {
     const mockFetch = vi.fn().mockReturnValue(
       makeFetchResponse({

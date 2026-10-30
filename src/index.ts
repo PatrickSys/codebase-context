@@ -5,7 +5,7 @@
  * Provides codebase indexing and semantic search capabilities
  */
 
-import { promises as fs } from 'fs';
+import { promises as fs, realpathSync } from 'fs';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -97,10 +97,21 @@ const CLI_SUBCOMMANDS = [
   'help'
 ];
 
-// Check if this module is the entry point.
+function canonicalEntrypointPath(filePath: string | undefined): string | undefined {
+  if (!filePath) return undefined;
+  try {
+    const canonicalPath = path.normalize(realpathSync(filePath));
+    return process.platform === 'win32' ? canonicalPath.toLowerCase() : canonicalPath;
+  } catch {
+    return undefined;
+  }
+}
+
+// Resolve symlink launchers while keeping imports and unrelated index files inert.
+const moduleEntrypointPath = canonicalEntrypointPath(fileURLToPath(import.meta.url));
+const processEntrypointPath = canonicalEntrypointPath(process.argv[1]);
 const isDirectRun =
-  process.argv[1]?.replace(/\\/g, '/').endsWith('index.js') ||
-  process.argv[1]?.replace(/\\/g, '/').endsWith('index.ts');
+  moduleEntrypointPath !== undefined && moduleEntrypointPath === processEntrypointPath;
 const directSubcommand = process.argv[2];
 const isDirectCliSubcommand =
   isDirectRun &&

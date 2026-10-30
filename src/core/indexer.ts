@@ -268,7 +268,9 @@ export class CodebaseIndexer {
     const defaultModel =
       defaultEmbeddingProvider === 'openai' && !process.env.EMBEDDING_MODEL
         ? 'text-embedding-3-small'
-        : DEFAULT_MODEL;
+        : defaultEmbeddingProvider === 'ollama' && !process.env.EMBEDDING_MODEL
+          ? 'nomic-embed-text'
+          : DEFAULT_MODEL;
 
     const defaultConfig: CodebaseConfig = {
       analyzers: {

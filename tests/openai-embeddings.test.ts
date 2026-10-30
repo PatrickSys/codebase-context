@@ -46,7 +46,7 @@ describe('OpenAIEmbeddingProvider', () => {
     expect(result).toEqual([]);
   });
 
-  it('embedBatch() posts to a custom apiEndpoint base URL', async () => {
+  it('embedBatch() uses custom apiEndpoint base URL', async () => {
     const mockFetch = vi.fn().mockReturnValue(
       makeFetchResponse({
         data: [{ embedding: [0.1] }]

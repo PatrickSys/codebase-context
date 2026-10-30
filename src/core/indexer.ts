@@ -279,6 +279,7 @@ export class CodebaseIndexer {
       },
       include: [
         '**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
+        '**/*.{vue,svelte}',
         '**/*.{html,htm,css,scss,sass,less}',
         '**/*.{py,pyi,rb,php}',
         '**/*.{java,kt,kts,scala,swift,cs}',

@@ -4,7 +4,11 @@ import { loadProjectConfig } from './server/config.js';
 /**
  * Interactive setup wizard for codebase-context.
  * Handles `codebase-context init` — detects clients and merges project MCP configs
- * for the four first-wave AI clients: Claude Code, Cursor, Codex, OpenCode.
+ * for Claude Code, Cursor, Codex, VS Code (Copilot), Windsurf, and OpenCode.
+ * Config merge shapes follow each client's official docs (VS Code uses a top-level
+ * `servers` object per the MCP filesystem server workspace examples; Windsurf uses
+ * `~/.codeium/windsurf/mcp_config.json`). Use `--dry-run` to preview writes first,
+ * matching the preview-before-apply pattern from MCP filesystem `edit_file`.
  *
  * Config writes run only after all selected registrations pass preflight.
  * File previews share the indexer's selection rules and project configuration.
@@ -19,12 +23,12 @@ import { checkbox } from '@inquirer/prompts';
 import { homedir } from 'node:os';
 import { constants } from 'node:fs';
 
-export type Client = (typeof CLIENTS)[number]['id'];
-
 export type McpConfigResult = { kind: 'file'; path: string; content: string };
 
 export type McpConfigOptions = {
   rootPath?: string;
+  /** Override home for user-scoped configs (tests). Defaults to os.homedir(). */
+  homeDirectory?: string;
   /** Node binary written into the client config. Defaults to the current process. */
   nodeExecutable?: string;
   /**
@@ -37,11 +41,71 @@ export type McpConfigOptions = {
 type JsonObject = Record<string, unknown>;
 
 export const CLIENTS = [
-  { id: 'claude-code', name: 'Claude Code', executable: 'claude', directory: '.claude' },
-  { id: 'codex', name: 'Codex', executable: 'codex', directory: '.codex' },
-  { id: 'cursor', name: 'Cursor', executable: 'cursor', directory: '.cursor' },
-  { id: 'opencode', name: 'OpenCode', executable: 'opencode', directory: '.opencode' }
+  {
+    id: 'claude-code',
+    name: 'Claude Code',
+    executable: 'claude',
+    directory: '.claude',
+    scope: 'project'
+  },
+  { id: 'codex', name: 'Codex', executable: 'codex', directory: '.codex', scope: 'project' },
+  { id: 'cursor', name: 'Cursor', executable: 'cursor', directory: '.cursor', scope: 'project' },
+  {
+    id: 'vscode',
+    name: 'VS Code (Copilot)',
+    executable: 'code',
+    directory: '.vscode',
+    scope: 'project'
+  },
+  {
+    id: 'windsurf',
+    name: 'Windsurf',
+    executable: 'windsurf',
+    directory: '.codeium/windsurf',
+    scope: 'user'
+  },
+  {
+    id: 'opencode',
+    name: 'OpenCode',
+    executable: 'opencode',
+    directory: '.opencode',
+    scope: 'project'
+  }
 ] as const;
+
+export type Client = (typeof CLIENTS)[number]['id'];
+
+function resolveHome(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const paths = platform === 'win32' ? path.win32 : path.posix;
+  return env.HOME || env.USERPROFILE || homedir();
+}
+
+function jsonMcpServerKey(
+  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'>
+): string {
+  if (client === 'opencode') return 'mcp';
+  if (client === 'vscode') return 'servers';
+  return 'mcpServers';
+}
+
+export function resolveClientConfigPath(
+  client: Client,
+  rootPath: string,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const paths = platform === 'win32' ? path.win32 : path.posix;
+  const home = resolveHome(env, platform);
+  if (client === 'codex') return path.join(rootPath, '.codex', 'config.toml');
+  if (client === 'windsurf') return path.join(home, '.codeium', 'windsurf', 'mcp_config.json');
+  if (client === 'claude-code') return path.join(rootPath, '.mcp.json');
+  if (client === 'cursor') return path.join(rootPath, '.cursor', 'mcp.json');
+  if (client === 'vscode') return path.join(rootPath, '.vscode', 'mcp.json');
+  return path.join(rootPath, 'opencode.json');
+}
 
 export async function detectClients(
   rootPath: string,
@@ -49,7 +113,7 @@ export async function detectClients(
   platform: NodeJS.Platform = process.platform
 ): Promise<Client[]> {
   const paths = platform === 'win32' ? path.win32 : path.posix;
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = resolveHome(env, platform);
   const configHome = env.XDG_CONFIG_HOME || paths.join(home, '.config');
   const searchPath = (env.PATH || env.Path || '').split(platform === 'win32' ? ';' : ':');
   const extensions = platform === 'win32' ? ['', '.exe', '.cmd', '.bat', '.ps1'] : [''];
@@ -62,8 +126,15 @@ export async function detectClients(
           ? env.CLAUDE_CONFIG_DIR || paths.join(home, '.claude')
           : client.id === 'opencode'
             ? paths.join(configHome, 'opencode')
-            : paths.join(home, client.directory);
-    const directories = [paths.join(rootPath, client.directory), userDirectory];
+            : client.id === 'windsurf'
+              ? paths.join(home, '.codeium', 'windsurf')
+              : paths.join(home, client.directory.split('/').at(-1) ?? client.directory);
+    const projectDirectory =
+      client.id === 'windsurf'
+        ? paths.join(home, '.codeium', 'windsurf')
+        : paths.join(rootPath, client.directory);
+    const directories =
+      client.scope === 'user' ? [userDirectory] : [projectDirectory, userDirectory];
     const executables = searchPath
       .filter(Boolean)
       .flatMap((directory) =>
@@ -116,47 +187,45 @@ function resolveServerEntrypoint(explicit?: string): string {
  */
 export function generateMcpConfig(client: Client, options: McpConfigOptions = {}): McpConfigResult {
   const rootPath = path.resolve(options.rootPath ?? process.cwd());
+  const homeDirectory = options.homeDirectory ?? resolveHome();
   const nodeExecutable = path.resolve(options.nodeExecutable ?? process.execPath);
   const serverEntrypoint = resolveServerEntrypoint(options.serverEntrypoint);
   const args = [serverEntrypoint, rootPath];
   if (client === 'codex') {
     return {
       kind: 'file',
-      path: path.join(rootPath, '.codex', 'config.toml'),
+      path: resolveClientConfigPath('codex', rootPath, { HOME: homeDirectory }),
       content:
         `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(nodeExecutable)}\n` +
         `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 120\n`
     };
   }
-  const configPath =
-    client === 'claude-code'
-      ? '.mcp.json'
+  const configPath = resolveClientConfigPath(client, rootPath, { HOME: homeDirectory });
+  const serverPayload =
+    client === 'opencode'
+      ? { type: 'local', command: [nodeExecutable, ...args] }
       : client === 'cursor'
-        ? '.cursor/mcp.json'
-        : 'opencode.json';
+        ? { type: 'stdio', command: nodeExecutable, args }
+        : { command: nodeExecutable, args };
+  const body =
+    client === 'opencode'
+      ? {
+          $schema: 'https://opencode.ai/config.json',
+          [jsonMcpServerKey('opencode')]: { 'codebase-context': serverPayload }
+        }
+      : client === 'vscode'
+        ? { [jsonMcpServerKey('vscode')]: { 'codebase-context': serverPayload } }
+        : client === 'windsurf'
+          ? { [jsonMcpServerKey('windsurf')]: { 'codebase-context': serverPayload } }
+          : {
+              mcpServers: {
+                'codebase-context': serverPayload
+              }
+            };
   return {
     kind: 'file',
-    path: path.join(rootPath, configPath),
-    content: JSON.stringify(
-      client === 'opencode'
-        ? {
-            $schema: 'https://opencode.ai/config.json',
-            mcp: {
-              'codebase-context': { type: 'local', command: [nodeExecutable, ...args] }
-            }
-          }
-        : {
-            mcpServers: {
-              'codebase-context': {
-                ...(client === 'cursor' ? { type: 'stdio' } : {}),
-                command: nodeExecutable,
-                args
-              }
-            }
-          },
-      null,
-      2
-    )
+    path: configPath,
+    content: JSON.stringify(body, null, 2)
   };
 }
 
@@ -281,13 +350,12 @@ function mergeGeneratedServer(existing: unknown, generated: unknown, client: Cli
   if (jsonValuesEqual(existing, generated)) return existing;
   if (!isJsonObject(existing) || !isJsonObject(generated) || 'url' in existing) return null;
   const local = client === 'opencode';
+  const stdio = client === 'cursor';
   const command = local && Array.isArray(existing.command) ? existing.command[0] : existing.command;
   const args = local && Array.isArray(existing.command) ? existing.command.slice(1) : existing.args;
-  if (
-    (existing.type !== undefined && existing.type !== (local ? 'local' : 'stdio')) ||
-    !isGeneratedLaunch(command, args, generatedEntrypoint(generated, client))
-  )
-    return null;
+  if (local && existing.type !== undefined && existing.type !== 'local') return null;
+  if (stdio && existing.type !== undefined && existing.type !== 'stdio') return null;
+  if (!isGeneratedLaunch(command, args, generatedEntrypoint(generated, client))) return null;
   return {
     ...existing,
     command: generated.command,
@@ -303,7 +371,7 @@ function mergeGeneratedServer(existing: unknown, generated: unknown, client: Cli
 export async function _buildMergedMcpContent(
   filePath: string,
   generatedContent: string,
-  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode'>
+  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'>
 ): Promise<{ content: string; mergedFromExisting: boolean }> {
   const existingText = await readExistingConfig(filePath);
   if (existingText === null) {
@@ -324,7 +392,7 @@ export async function _buildMergedMcpContent(
     throw new Error(`Cannot merge ${client} config at ${filePath}: expected a JSON object.`);
   }
 
-  const serverKey = client === 'opencode' ? 'mcp' : 'mcpServers';
+  const serverKey = jsonMcpServerKey(client);
   const existingServersValue = existing[serverKey];
   if (existingServersValue !== undefined && !isJsonObject(existingServersValue)) {
     throw new Error(
@@ -461,7 +529,39 @@ type InitOptions = {
   yes: boolean;
   help: boolean;
   preview: boolean;
+  dryRun: boolean;
 };
+
+function formatDisplayPath(configPath: string, rootPath: string): string {
+  const relative = path.relative(rootPath, configPath);
+  if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) return relative;
+  return configPath;
+}
+
+function classifyInitChange(
+  existingText: string | null,
+  mergedContent: string
+): 'create' | 'update' | 'unchanged' {
+  if (existingText === null) return 'create';
+  if (existingText === mergedContent) return 'unchanged';
+  return 'update';
+}
+
+function describeInitChange(
+  dryRun: boolean,
+  action: 'create' | 'update' | 'unchanged',
+  displayPath: string
+): string {
+  if (action === 'unchanged') return `Unchanged: ${displayPath}`;
+  const prefix = dryRun
+    ? action === 'create'
+      ? 'Would create'
+      : 'Would update'
+    : action === 'create'
+      ? 'Created'
+      : 'Updated';
+  return `${prefix}: ${displayPath}`;
+}
 
 function parseClient(value: string): Client {
   const client = CLIENTS.find((client) => client.id === value);
@@ -473,13 +573,22 @@ function parseClient(value: string): Client {
 
 function parseInitOptions(args: string[]): InitOptions {
   if (args.includes('--help') || args.includes('-h'))
-    return { clients: [], rootPath: process.cwd(), yes: false, help: true, preview: false };
+    return {
+      clients: [],
+      rootPath: process.cwd(),
+      yes: false,
+      help: true,
+      preview: false,
+      dryRun: false
+    };
   const clients: Client[] = [];
   let yes = false;
   let preview = false;
+  let dryRun = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === '--preview') preview = true;
+    else if (arg === '--dry-run') dryRun = true;
     else if (arg === '--yes' || arg === '-y') yes = true;
     else if (arg === '--client') {
       const value = args[++index];
@@ -495,7 +604,8 @@ function parseInitOptions(args: string[]): InitOptions {
     rootPath: resolveInitRoot(args, process.env.CODEBASE_ROOT),
     yes,
     help: false,
-    preview
+    preview,
+    dryRun
   };
 }
 
@@ -514,6 +624,7 @@ function printInitUsage(): void {
   );
   console.log('  --root <path>    Project root (default: CODEBASE_ROOT or cwd)');
   console.log('  --preview        Show selected files and exclusions without writing config');
+  console.log('  --dry-run        Show MCP config changes without writing files');
   console.log('  --yes, -y        Configure every detected tool without prompts');
   console.log('  --help, -h       Show this help');
 }
@@ -554,30 +665,35 @@ export async function handleInitCli(args: string[]): Promise<void> {
     }
     if (!clients.length)
       throw new Error(
-        'No coding tools selected or detected. Choose with --client claude-code, --client codex, --client cursor, or --client opencode.'
+        `No coding tools selected or detected. Choose with --client (${CLIENTS.map((client) => client.id).join(', ')}).`
       );
 
     const prepared = [];
     for (const client of clients) {
       const config = generateMcpConfig(client, { rootPath: options.rootPath });
+      const existingText = await readExistingConfig(config.path);
       const merged =
         client === 'codex'
           ? await _buildMergedCodexContent(config.path, config.content)
           : await _buildMergedMcpContent(config.path, config.content, client);
+      const action = classifyInitChange(existingText, merged.content);
       prepared.push({
         ...config,
         content: merged.content,
-        unchanged: (await readExistingConfig(config.path)) === merged.content
+        action,
+        displayPath: formatDisplayPath(config.path, options.rootPath)
       });
     }
     for (const config of prepared) {
-      if (!config.unchanged) {
+      if (config.action !== 'unchanged' && !options.dryRun) {
         await fs.mkdir(path.dirname(config.path), { recursive: true });
         await atomicWrite(config.path, config.content);
       }
-      console.log(
-        `${config.unchanged ? 'Unchanged' : 'Configured'}: ${path.relative(options.rootPath, config.path)}`
-      );
+      console.log(describeInitChange(options.dryRun, config.action, config.displayPath));
+    }
+    if (options.dryRun) {
+      console.log('Dry run complete; no files written.');
+      return;
     }
     console.log('Reopen your tools; approve the server or project trust if asked.');
     console.log("The first search builds this repository's index.");

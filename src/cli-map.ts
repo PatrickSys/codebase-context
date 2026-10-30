@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from './core/index-generation.js';
 /**
  * CLI handler for `codebase-context map`.
  *
@@ -11,16 +12,15 @@
 
 import path from 'path';
 import { promises as fs } from 'fs';
-import {
-  CODEBASE_CONTEXT_DIRNAME,
-  INTELLIGENCE_FILENAME,
-  KEYWORD_INDEX_FILENAME,
-  VECTOR_DB_DIRNAME,
-  MEMORY_FILENAME
-} from './constants/codebase-context.js';
+import { KEYWORD_INDEX_FILENAME } from './constants/codebase-context.js';
 import { createProjectState } from './project-state.js';
 import { buildCodebaseMap, renderMapMarkdown, renderMapPretty } from './core/codebase-map.js';
 import type { IndexState } from './tools/types.js';
+import { CodebaseIndexer } from './core/indexer.js';
+import { loadProjectConfig } from './server/config.js';
+import { cliProjectOptions } from './cli-project-options.js';
+import { inspectIndexDiskState, permitsFirstBuild } from './core/index-generation.js';
+import { IndexCorruptedError } from './errors/index.js';
 
 function resolveMapRootPath(): string {
   return path.resolve(process.env.CODEBASE_ROOT ?? process.cwd());
@@ -56,21 +56,25 @@ export async function handleMapCli(args: string[]): Promise<void> {
   const rootPath = resolveMapRootPath();
 
   // Build a minimal project state — same pattern as the MCP resource path.
-  const baseDir = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME);
-  const paths = {
-    baseDir,
-    memory: path.join(baseDir, MEMORY_FILENAME),
-    intelligence: path.join(baseDir, INTELLIGENCE_FILENAME),
-    keywordIndex: path.join(baseDir, KEYWORD_INDEX_FILENAME),
-    vectorDb: path.join(baseDir, VECTOR_DB_DIRNAME)
-  };
-
   let indexExists = false;
   try {
-    await fs.access(paths.keywordIndex);
+    await fs.access(await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME));
     indexExists = true;
-  } catch {
-    // no index yet
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+    if (!permitsFirstBuild(await inspectIndexDiskState(rootPath)))
+      throw new IndexCorruptedError(
+        'The keyword index is missing from an existing index. Run reindex explicitly before building the map.'
+      );
+    console.error(`Indexing ${rootPath} before building the map.`);
+    const config = await loadProjectConfig(rootPath);
+    await new CodebaseIndexer({
+      rootPath,
+      firstBuildOnly: true,
+      ...cliProjectOptions(config)
+    }).index();
+    console.error('Index ready for the map.');
+    indexExists = true;
   }
 
   const indexState: IndexState = { status: indexExists ? 'ready' : 'idle' };

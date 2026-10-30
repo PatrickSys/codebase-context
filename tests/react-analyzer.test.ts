@@ -14,6 +14,48 @@ describe('ReactAnalyzer', () => {
     expect(analyzer.canAnalyze('/tmp/file.js', 'React.createElement("div");')).toBe(true);
   });
 
+  it.each(['.ts', '.mts', '.cts'])(
+    'does not claim %s files for TypeScript generic or angle-assertion syntax alone',
+    (extension) => {
+      const analyzer = new ReactAnalyzer();
+
+      expect(
+        analyzer.canAnalyze(
+          `/tmp/file${extension}`,
+          'const map = new Map<string, ProjectConfiguration>();'
+        )
+      ).toBe(false);
+      expect(
+        analyzer.canAnalyze(`/tmp/file${extension}`, 'const value = <ProjectConfiguration>input;')
+      ).toBe(false);
+    }
+  );
+
+  it.each(['.ts', '.mts', '.cts'])(
+    'continues to recognize explicit React markers in %s files',
+    (extension) => {
+      const analyzer = new ReactAnalyzer();
+
+      expect(
+        analyzer.canAnalyze(`/tmp/file${extension}`, 'import { useState } from "react";')
+      ).toBe(true);
+      expect(analyzer.canAnalyze(`/tmp/file${extension}`, 'const React = require("react");')).toBe(
+        true
+      );
+      expect(analyzer.canAnalyze(`/tmp/file${extension}`, 'React.createElement("div");')).toBe(
+        true
+      );
+    }
+  );
+
+  it('continues to claim JSX extensions and JavaScript JSX syntax', () => {
+    const analyzer = new ReactAnalyzer();
+
+    expect(analyzer.canAnalyze('/tmp/file.tsx')).toBe(true);
+    expect(analyzer.canAnalyze('/tmp/file.jsx')).toBe(true);
+    expect(analyzer.canAnalyze('/tmp/file.js', 'const element = <section />;')).toBe(true);
+  });
+
   it('detects components, hooks, context, and ecosystem signals', async () => {
     const analyzer = new ReactAnalyzer();
     const filePath = path.join(process.cwd(), 'src', 'components', 'MyWidget.tsx');
@@ -54,7 +96,9 @@ export class LegacyWidget extends Component {
 
     expect(result.framework).toBe('react');
     expect(
-      result.components.some((component) => component.componentType === 'hook' && component.name === 'useTheme')
+      result.components.some(
+        (component) => component.componentType === 'hook' && component.name === 'useTheme'
+      )
     ).toBe(true);
     expect(
       result.components.some(
@@ -67,7 +111,10 @@ export class LegacyWidget extends Component {
       )
     ).toBe(true);
 
-    const patterns = (result.metadata.detectedPatterns || []) as Array<{ category: string; name: string }>;
+    const patterns = (result.metadata.detectedPatterns || []) as Array<{
+      category: string;
+      name: string;
+    }>;
     expect(patterns).toContainEqual({ category: 'stateManagement', name: 'React Context' });
     expect(patterns).toContainEqual({ category: 'reactivity', name: 'Suspense' });
     expect(patterns).toContainEqual({ category: 'reactivity', name: 'Memoization' });
@@ -99,7 +146,10 @@ export function CheckoutForm({ cartPromise }: { cartPromise: Promise<string[]> }
 `;
 
     const result = await analyzer.analyze(filePath, code);
-    const patterns = (result.metadata.detectedPatterns || []) as Array<{ category: string; name: string }>;
+    const patterns = (result.metadata.detectedPatterns || []) as Array<{
+      category: string;
+      name: string;
+    }>;
 
     expect(patterns).toContainEqual({ category: 'reactHooks', name: 'Built-in hooks' });
     expect(patterns).toContainEqual({ category: 'reactivity', name: 'Actions' });

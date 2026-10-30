@@ -101,25 +101,28 @@ Trust the project if asked, restart Codex and start a new task there. Use the fi
 
 On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a folder, environment root or MCP roots, launched from an unrelated directory. That check does not verify the `2.4.0` package. Its first tool call returned `selection_required`; an explicit `project` call selected the prepared fixture, search found the expected symbol, context returned its map, and the runner host opened the returned source. A later call without `project` retained that selection. This is SDK/protocol and runner-host evidence with warmed caches and a pre-indexed fixture, not a native Desktop task.
 
-## Interactive setup wizard
+## Setup wizard in the unreleased candidate
 
-> **Requires 2.4.0 (not yet published)**: The non-interactive `--client` and `--yes` flags are not available in published 2.2.0 (which runs an interactive HTTP wizard). These commands require the unpublished 2.4.0 release and will not work with the current npm release.
-
-Run setup from the project you want the client to search:
+The four-client wizard is not in published 2.2.0. From a built checkout or a locally installed candidate, run its actual entrypoint from the project you want to search:
 
 ```bash
-# Claude Code (requires 2.4.0, not yet published)
-npx -y codebase-context@2.4.0 init --client claude-code --yes
+# Detect Claude Code, Codex, Cursor and OpenCode, then configure the detected clients.
+node /path/to/codebase-context/dist/index.js init --yes
 
-# Codex (requires 2.4.0, not yet published)
-npx -y codebase-context@2.4.0 init --client codex --yes
+# Configure one client for an explicit project.
+node /path/to/codebase-context/dist/index.js init --client codex --root /path/to/project --yes
+
+# Inspect selected source files and exclusions without writing client config.
+node /path/to/codebase-context/dist/index.js init --root /path/to/project --preview
 ```
 
-Claude Code writes `.mcp.json`; Codex writes `.codex/config.toml`. Both configs start the installed server with the selected project. Setup uses the current folder unless `--root` or `CODEBASE_ROOT` selects another one; `--root` takes priority.
+Replace the paths with the candidate installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
 
-`--yes` writes the config without prompts. In 2.2.0, running `init` without flags starts the older interactive wizard. Cursor and OpenCode still use HTTP and need a separately running server.
+Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
 
-Existing settings are kept. If a different Codebase Context entry is already present, setup leaves the file unchanged and reports the conflict. Restart the client after setup and approve the server if asked. The first use builds the code index. Rerun setup if the Codebase Context installation moves, because the config uses its installed location.
+Existing unrelated settings are preserved. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry from the client config, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked. Config generation and SDK launch tests do not establish acceptance in each native client.
+
+New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option.
 
 ## Optional fixed-folder setup and CLI preparation
 
@@ -131,7 +134,7 @@ To prepare the index separately, run from the project folder:
 npx -y codebase-context reindex
 ```
 
-The interactive wizard limitations described above are still present in the current source. A successful wizard exit alone does not establish working client registration.
+The older interactive HTTP wizard remains the behavior of published 2.2.0. A successful candidate wizard exit alone does not establish working client registration.
 
 ## Gemini CLI
 

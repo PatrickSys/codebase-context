@@ -1,3 +1,4 @@
+import { currentIndexSnapshot, resolveIndexArtifact } from './index-generation.js';
 /**
  * File hash manifest for incremental indexing.
  * Tracks SHA-256 hashes of indexed files to detect changes between runs.
@@ -6,12 +7,33 @@
 import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { z } from 'zod';
+
+import { CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME } from '../constants/codebase-context.js';
+import { IndexCorruptedError } from '../errors/index.js';
+import {
+  ArtifactHeaderSchema,
+  validateArtifactBuildIdentity,
+  type ArtifactHeader,
+  type IndexMeta
+} from './index-meta.js';
+import { isPathWithin } from '../utils/project-discovery.js';
 
 export interface FileManifest {
   version: 1;
   generatedAt: string;
   files: Record<string, string>; // relativePath → SHA-256 hash (first 16 hex chars)
+  header?: ArtifactHeader;
 }
+
+const ReferenceManifestSchema = z
+  .object({
+    version: z.literal(1),
+    generatedAt: z.string().datetime(),
+    header: ArtifactHeaderSchema,
+    files: z.record(z.string(), z.string().regex(/^[a-f0-9]{16}$/i))
+  })
+  .strict();
 
 export interface ManifestDiff {
   added: string[]; // new files (not in old manifest)
@@ -42,6 +64,107 @@ export async function readManifest(manifestPath: string): Promise<FileManifest |
   } catch {
     return null;
   }
+}
+
+function fullReindexError(message: string, detail?: string): IndexCorruptedError {
+  const suffix = detail ? ` ${detail}` : '';
+  return new IndexCorruptedError(
+    `${message} Full reindex required: run codebase-context reindex without --incremental.${suffix}`
+  );
+}
+
+function isSafeManifestSourcePath(rootPath: string, relativePath: string): boolean {
+  if (!relativePath || relativePath.includes('\0') || path.isAbsolute(relativePath)) return false;
+  const normalized = relativePath.replace(/\\/g, '/');
+  if (path.posix.isAbsolute(normalized)) return false;
+  if (normalized.split('/').some((segment) => !segment || segment === '.' || segment === '..')) {
+    return false;
+  }
+
+  const resolved = path.resolve(rootPath, relativePath);
+  if (!isPathWithin(rootPath, resolved)) return false;
+  return path.relative(rootPath, resolved).replace(/\\/g, '/') === normalized;
+}
+
+/** Read the build-bound source nominator used by current-source reference lookup. */
+export async function readReferenceManifest(
+  rootPath: string,
+  meta: IndexMeta
+): Promise<FileManifest> {
+  if (!meta.artifacts.manifest?.path) {
+    throw fullReindexError('Reference manifest path is missing or invalid.');
+  }
+
+  let realRoot: string;
+  let realContext: string;
+  try {
+    realRoot = currentIndexSnapshot(rootPath)?.realRoot ?? (await fs.realpath(rootPath));
+    realContext = await fs.realpath(path.join(realRoot, CODEBASE_CONTEXT_DIRNAME));
+  } catch (error) {
+    throw fullReindexError(
+      'Reference manifest directory is missing or unreadable.',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+  if (!isPathWithin(realRoot, realContext)) {
+    throw fullReindexError('Reference manifest directory resolves outside the selected project.');
+  }
+
+  const expectedManifestPath = await resolveIndexArtifact(rootPath, MANIFEST_FILENAME, meta);
+  let realManifestPath: string;
+  try {
+    realManifestPath = await fs.realpath(expectedManifestPath);
+  } catch (error) {
+    throw fullReindexError(
+      'Reference manifest is missing or unreadable.',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+  if (!isPathWithin(realContext, realManifestPath)) {
+    throw fullReindexError('Reference manifest resolves outside the index directory.');
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(await fs.readFile(realManifestPath, 'utf8'));
+  } catch (error) {
+    throw fullReindexError(
+      'Reference manifest is malformed or unreadable.',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  const parsed = ReferenceManifestSchema.safeParse(json);
+  if (!parsed.success) {
+    const details = parsed.error.issues.some((issue) => issue.path[0] === 'header')
+      ? 'The source manifest is legacy or has an invalid build header.'
+      : `Manifest schema mismatch: ${parsed.error.message}`;
+    throw fullReindexError('Reference manifest is invalid.', details);
+  }
+
+  try {
+    validateArtifactBuildIdentity(
+      parsed.data.header,
+      meta,
+      'Reference manifest',
+      MANIFEST_FILENAME
+    );
+  } catch (error) {
+    throw fullReindexError(
+      'Reference manifest build identity does not match index metadata.',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  for (const relativePath of Object.keys(parsed.data.files)) {
+    if (!isSafeManifestSourcePath(realRoot, relativePath)) {
+      throw new IndexCorruptedError(
+        `Reference manifest contains an invalid or escaping source path (${relativePath}). Rebuild required.`
+      );
+    }
+  }
+
+  return parsed.data;
 }
 
 /**

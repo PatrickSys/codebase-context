@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from './core/index-generation.js';
 import path from 'path';
 import {
   CODEBASE_CONTEXT_DIRNAME,
@@ -12,6 +13,8 @@ import type { AutoRefreshController } from './core/auto-refresh.js';
 import type { ToolPaths, IndexState } from './tools/types.js';
 
 export interface ProjectRuntimeOverrides {
+  /** Explicit embedding mode; absent preserves the recorded project mode. */
+  skipEmbedding?: boolean;
   /** Extra glob exclusion patterns merged with the default index-time exclusions. */
   extraExcludePatterns?: string[];
   /** Maximum chunks retained in semantic and keyword indexes for this project. */
@@ -28,7 +31,8 @@ export interface ProjectState {
   indexState: IndexState;
   autoRefresh: AutoRefreshController;
   initPromise?: Promise<void>;
-  stopWatcher?: () => void;
+  stopWatcher?: () => Promise<void>;
+  watcherClosePromise?: Promise<void>;
   runtimeOverrides: ProjectRuntimeOverrides;
 }
 
@@ -41,6 +45,17 @@ export function makePaths(rootPath: string): ToolPaths {
     keywordIndex: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
     vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
   };
+}
+
+export async function resolveProjectPaths(rootPath: string): Promise<ToolPaths> {
+  const legacy = makePaths(rootPath);
+  const [intelligence, health, keywordIndex, vectorDb] = await Promise.all([
+    resolveIndexArtifact(rootPath, INTELLIGENCE_FILENAME),
+    resolveIndexArtifact(rootPath, HEALTH_FILENAME),
+    resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME),
+    resolveIndexArtifact(rootPath, VECTOR_DB_DIRNAME)
+  ]);
+  return { ...legacy, intelligence, health, keywordIndex, vectorDb };
 }
 
 export function makeLegacyPaths(rootPath: string) {
@@ -94,16 +109,45 @@ export function getAllProjects(): ProjectState[] {
   return Array.from(projects.values());
 }
 
-export function removeProject(rootPath: string): void {
-  const key = normalizeRootKey(rootPath);
-  const project = projects.get(key);
-  project?.stopWatcher?.();
-  projects.delete(key);
+export function stopAllProjectWatchers(): Promise<void> {
+  const closing = Array.from(projects.values(), stopProjectWatcher);
+  return Promise.all(closing).then(() => undefined);
 }
 
-export function clearProjects(): void {
-  for (const project of projects.values()) {
-    project.stopWatcher?.();
+export function stopProjectWatcher(project: ProjectState): Promise<void> {
+  if (project.watcherClosePromise) return project.watcherClosePromise;
+  const stop = project.stopWatcher;
+  if (!stop) return Promise.resolve();
+
+  let closing: Promise<void>;
+  try {
+    closing = Promise.resolve(stop());
+  } catch (error) {
+    console.error(`[file-watcher] Failed to close watcher for ${project.rootPath}:`, error);
+    delete project.stopWatcher;
+    return Promise.resolve();
   }
+
+  delete project.stopWatcher;
+  project.watcherClosePromise = closing
+    .catch((error: unknown) => {
+      console.error(`[file-watcher] Failed to close watcher for ${project.rootPath}:`, error);
+    })
+    .finally(() => {
+      delete project.watcherClosePromise;
+    });
+  return project.watcherClosePromise;
+}
+
+export function removeProject(rootPath: string): Promise<void> {
+  const key = normalizeRootKey(rootPath);
+  const project = projects.get(key);
+  projects.delete(key);
+  return project ? stopProjectWatcher(project) : Promise.resolve();
+}
+
+export function clearProjects(): Promise<void> {
+  const closing = stopAllProjectWatchers();
   projects.clear();
+  return closing;
 }

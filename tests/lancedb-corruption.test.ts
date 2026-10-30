@@ -28,11 +28,15 @@ describe('LanceDBStorageProvider corruption detection', () => {
   });
 
   it('throws IndexCorruptedError when vector column missing during initialize()', async () => {
+    const closeTable = vi.fn();
+    const closeConnection = vi.fn();
     const db = {
       tableNames: vi.fn(async () => ['code_chunks']),
       openTable: vi.fn(async () => ({
-        schema: vi.fn(async () => ({ fields: [{ name: 'id' }] }))
-      }))
+        schema: vi.fn(async () => ({ fields: [{ name: 'id' }] })),
+        close: closeTable
+      })),
+      close: closeConnection
     };
 
     lancedb.connect.mockResolvedValue(db);
@@ -41,6 +45,8 @@ describe('LanceDBStorageProvider corruption detection', () => {
     const provider = new LanceDBStorageProvider();
 
     await expect(provider.initialize(tempDir)).rejects.toBeInstanceOf(IndexCorruptedError);
+    expect(closeTable).toHaveBeenCalledOnce();
+    expect(closeConnection).toHaveBeenCalledOnce();
     // dropTable is no longer called within initialize (senior mindset: separation of concerns)
   });
 
@@ -121,7 +127,7 @@ describe('LanceDBStorageProvider corruption detection', () => {
 
     expect(deleted).toBe(3);
     expect(deleteSpy).toHaveBeenCalledWith(
-      "\"filePath\" IN ('C:/repo/src/a.ts', 'C:/repo/src/b''test.ts')"
+      "`filePath` IN ('C:/repo/src/a.ts', 'C:/repo/src/b''test.ts')"
     );
   });
 
@@ -148,6 +154,6 @@ describe('LanceDBStorageProvider corruption detection', () => {
     });
 
     expect(results).toEqual([]);
-    expect(whereSpy).toHaveBeenCalledWith("\"componentType\" = 'service' AND layer = 'business'");
+    expect(whereSpy).toHaveBeenCalledWith("`componentType` = 'service' AND layer = 'business'");
   });
 });

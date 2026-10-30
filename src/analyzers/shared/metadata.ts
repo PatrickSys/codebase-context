@@ -1,3 +1,4 @@
+import { withAvailableIndexSnapshot, resolveIndexArtifact } from '../../core/index-generation.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { CodebaseMetadata } from '../../types/index.js';
@@ -74,8 +75,14 @@ export function createEmptyStatistics(): CodebaseMetadata['statistics'] {
 export async function loadAnalyzerIndexStatistics(
   rootPath: string
 ): Promise<CodebaseMetadata['statistics']> {
+  return withAvailableIndexSnapshot(rootPath, () => loadPinnedAnalyzerIndexStatistics(rootPath));
+}
+
+async function loadPinnedAnalyzerIndexStatistics(
+  rootPath: string
+): Promise<CodebaseMetadata['statistics']> {
   const statistics = createEmptyStatistics();
-  const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+  const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
 
   try {
     const stat = await fs.stat(indexPath);

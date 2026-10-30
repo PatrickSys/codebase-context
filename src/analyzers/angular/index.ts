@@ -1,3 +1,4 @@
+import { resolveIndexArtifact, withAvailableIndexSnapshot } from '../../core/index-generation.js';
 /**
  * Angular Analyzer - Comprehensive Angular-specific code analysis
  * Understands components, services, directives, pipes, modules, guards, interceptors, etc.
@@ -103,9 +104,20 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       return false;
     }
 
-    // For TypeScript files, check if it contains Angular decorators
+    // Eligibility comes from actual framework imports. Method/decorator spellings
+    // classify confirmed Angular code later; comments and lookalikes are not proof.
     if (ext === '.ts' && content) {
-      return Object.values(this.angularPatterns).some((pattern) => pattern.test(content));
+      try {
+        const ast = parse(content);
+        return ast.body.some(
+          (node) =>
+            node.type === 'ImportDeclaration' &&
+            typeof node.source.value === 'string' &&
+            node.source.value.startsWith('@angular/')
+        );
+      } catch {
+        return false;
+      }
     }
 
     // Angular component templates and styles
@@ -171,7 +183,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
               if (s.type === 'ImportDefaultSpecifier') return 'default';
               if (s.type === 'ImportNamespaceSpecifier') return '*';
               const specifier = s as TSESTree.ImportSpecifier;
-              return specifier.imported.name || specifier.local.name;
+              return specifier.imported.type === 'Identifier'
+                ? specifier.imported.name
+                : specifier.imported.value;
             }),
             isDefault: node.specifiers.some(
               (s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'
@@ -854,6 +868,10 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
   }
 
   async detectCodebaseMetadata(rootPath: string): Promise<CodebaseMetadata> {
+    return withAvailableIndexSnapshot(rootPath, () => this.detectPinnedMetadata(rootPath));
+  }
+
+  private async detectPinnedMetadata(rootPath: string): Promise<CodebaseMetadata> {
     const metadata: CodebaseMetadata = {
       name: path.basename(rootPath),
       rootPath,
@@ -984,7 +1002,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
     // Calculate statistics from existing index if available
     try {
-      const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+      const indexPath = await resolveIndexArtifact(rootPath, KEYWORD_INDEX_FILENAME);
       const indexContent = await fs.readFile(indexPath, 'utf-8');
       const parsed = JSON.parse(indexContent) as unknown;
 

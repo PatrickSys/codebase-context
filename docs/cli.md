@@ -46,7 +46,22 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
-- MCP client registration — use the recipes in the [client setup guide](./client-setup.md); `init` is an interactive HTTP setup wizard with the limitations described there
+- MCP client registration — use the recipes in the [client setup guide](./client-setup.md). Published 2.2.0 has the older interactive HTTP wizard; the four-client wizard below requires the unreleased candidate.
+
+## `init` in the unreleased candidate
+
+`init` detects Claude Code, Codex, Cursor and OpenCode, then configures the selected tools together. In a terminal, detected tools start selected; use Space to change the selection and Enter to apply it. Without a terminal, it configures all detected tools.
+
+```powershell
+codebase-context init --help
+codebase-context init
+codebase-context init --yes
+codebase-context init --client codex --client cursor --root "C:\path\to\project"
+```
+
+Use repeatable `--client` options to choose tools explicitly. `--yes` configures every detected tool when no clients are named. `--root` selects another repository; otherwise `CODEBASE_ROOT` or the current directory is used. Setup writes client registrations but does not build an index or change agent instructions. The first search creates the index. The multi-tool flow is not in published npm `2.2.0` yet; see the [main setup guide](../README.md#set-up-your-ai-client) for its publication status and the [client setup guide](./client-setup.md) for current manual recipes.
+
+The built candidate also supports `--version` and builds a missing index when you run `map`. New indexes use keyword search without a model download; `reindex --embeddings` explicitly enables local semantic search. Preview, reindex, and map apply the same project exclusions and analyzer hints. A low-confidence search result means the matches are weak; it does not establish that code is absent.
 
 ---
 
@@ -218,6 +233,18 @@ Example output:
 ```
 
 ## `reindex`
+
+In the unreleased model-free candidate, use the locally installed package:
+
+```bash
+CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex
+CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --incremental
+CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --no-embeddings
+# Requires the optional Transformers and LanceDB runtimes; may download models.
+CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --embeddings
+```
+
+New projects default to model-free. Omit mode flags to preserve the successful mode; explicit changes require a full rebuild even with `--incremental`. The two mode flags are mutually exclusive and index failures return nonzero. The examples below target the older published package.
 
 ```bash
 npx -y codebase-context reindex

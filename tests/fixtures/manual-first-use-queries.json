@@ -1,0 +1,206 @@
+{
+  "scope": "Manual integration check, not a benchmark advantage claim. Queries and expected files frozen before candidate scoring or retrieval repairs.",
+  "rule": "For retrieval cases, report whether an independently identified relevant file appears in top five; report missing context and failures. The five original Express dogfood questions also need source-grounded answers. The graph question is a capability negative, not a ranked-search success. Do not change expected files after observing candidate output.",
+  "corpora": {
+    "express": {
+      "revision": "0dee2c52c7c873498f8ed7d8ee4ddd0a04d3ada8",
+      "source": "https://github.com/expressjs/express",
+      "codeFiles": 141
+    },
+    "hono": {
+      "revision": "90d4182aabd328e2ec6af3f25ec62ddc574ad8cb",
+      "source": "https://github.com/honojs/hono/tree/v4.12.16",
+      "scope": "src plus root package/docs; 284 TypeScript files, not the entire upstream checkout",
+      "codeFiles": 284
+    }
+  },
+  "cases": [
+    {
+      "id": "e01",
+      "repo": "express",
+      "query": "how does routing work",
+      "expectedFiles": [
+        "lib/application.js",
+        "lib/express.js"
+      ],
+      "dogfood": true
+    },
+    {
+      "id": "e02",
+      "repo": "express",
+      "query": "where are errors handled for a request",
+      "expectedFiles": [
+        "lib/application.js",
+        "examples/error/index.js"
+      ],
+      "dogfood": true
+    },
+    {
+      "id": "e03",
+      "repo": "express",
+      "query": "what changes when I add middleware",
+      "expectedFiles": [
+        "lib/application.js",
+        "test/app.use.js"
+      ],
+      "dogfood": true
+    },
+    {
+      "id": "e04",
+      "repo": "express",
+      "query": "where are tests for routing and how do I run them",
+      "expectedFiles": [
+        "test/app.router.js"
+      ],
+      "additionalSource": "package.json",
+      "dogfood": true
+    },
+    {
+      "id": "e05",
+      "repo": "express",
+      "query": "what is the least-connected module",
+      "expectedFiles": [],
+      "kind": "capability-negative",
+      "rule": "Ranked snippets do not answer this graph question. Report an actual connectivity result or an explicit limitation and appropriate next tool.",
+      "dogfood": true
+    },
+    {
+      "id": "e06",
+      "repo": "express",
+      "query": "how is JSON request body parsing exposed",
+      "expectedFiles": [
+        "lib/express.js"
+      ]
+    },
+    {
+      "id": "e07",
+      "repo": "express",
+      "query": "where are views rendered and template engines loaded",
+      "expectedFiles": [
+        "lib/view.js",
+        "lib/application.js"
+      ]
+    },
+    {
+      "id": "e08",
+      "repo": "express",
+      "query": "how do application settings get stored and inherited",
+      "expectedFiles": [
+        "lib/application.js"
+      ]
+    },
+    {
+      "id": "e09",
+      "repo": "express",
+      "query": "how does request content type negotiation work",
+      "expectedFiles": [
+        "lib/request.js"
+      ]
+    },
+    {
+      "id": "e10",
+      "repo": "express",
+      "query": "where is static file middleware exported",
+      "expectedFiles": [
+        "lib/express.js"
+      ]
+    },
+    {
+      "id": "e11",
+      "repo": "express",
+      "query": "how are objects serialized into JSON responses",
+      "expectedFiles": [
+        "lib/response.js"
+      ]
+    },
+    {
+      "id": "h01",
+      "repo": "hono",
+      "query": "how are exceptions caught while middleware runs in sequence",
+      "expectedFiles": [
+        "src/compose.ts"
+      ]
+    },
+    {
+      "id": "h02",
+      "repo": "hono",
+      "query": "where are request headers and query parameters accessed",
+      "expectedFiles": [
+        "src/request.ts"
+      ]
+    },
+    {
+      "id": "h03",
+      "repo": "hono",
+      "query": "how is a JSON response constructed",
+      "expectedFiles": [
+        "src/context.ts"
+      ]
+    },
+    {
+      "id": "h04",
+      "repo": "hono",
+      "query": "how do I attach middleware and handlers to routes",
+      "expectedFiles": [
+        "src/hono-base.ts"
+      ]
+    },
+    {
+      "id": "h05",
+      "repo": "hono",
+      "query": "how is the routing algorithm selected",
+      "expectedFiles": [
+        "src/router/smart-router/router.ts"
+      ]
+    },
+    {
+      "id": "h06",
+      "repo": "hono",
+      "query": "where are cross origin preflight requests handled",
+      "expectedFiles": [
+        "src/middleware/cors/index.ts"
+      ]
+    },
+    {
+      "id": "h07",
+      "repo": "hono",
+      "query": "where is incoming request data validated before a handler",
+      "expectedFiles": [
+        "src/validator/validator.ts"
+      ]
+    },
+    {
+      "id": "h08",
+      "repo": "hono",
+      "query": "how do incoming requests and response times get logged",
+      "expectedFiles": [
+        "src/middleware/logger/index.ts"
+      ]
+    },
+    {
+      "id": "h09",
+      "repo": "hono",
+      "query": "how are JSX child nodes rendered and escaped",
+      "expectedFiles": [
+        "src/jsx/base.ts"
+      ]
+    },
+    {
+      "id": "h10",
+      "repo": "hono",
+      "query": "how does the typed HTTP client construct a request",
+      "expectedFiles": [
+        "src/client/client.ts"
+      ]
+    },
+    {
+      "id": "h11",
+      "repo": "hono",
+      "query": "where are regular expression router tests and how are they run",
+      "expectedFiles": [
+        "src/router/reg-exp-router/router.test.ts"
+      ],
+      "additionalSource": "package.json"
+    }
+  ]
+}

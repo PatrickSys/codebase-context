@@ -1,0 +1,344 @@
+{
+  "contract": "Freeze current exact-source reference behavior before any production nomination change. Each expected result is the current parser path (AST when parse succeeds, otherwise lexical fallback).",
+  "cases": [
+    {
+      "id": "ts-exact-reference",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const Scene = 1; Scene;",
+      "expected": { "mode": "ast", "count": 2 }
+    },
+    {
+      "id": "ts-long-identifier",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const SceneData = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-dollar-identifier",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const $Scene = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-underscore-identifier",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const _Scene = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-underscore-suffix",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const Scene_Thing = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-unicode-start-continuation",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const πScene = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-unicode-end-continuation",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const Sceneπ = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-combining-mark-continuation",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const Scené = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-joiner-continuation",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const Scene‌part = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-string-only",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const message = \"Scene\";",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-comment-only",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "// Scene",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-quoted-property",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const value = { \"Scene\": 1 };",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-unicode-escape-semantic-name",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const \\u0053cene = 1;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "ts-unicode-escape-raw-query",
+      "language": "typescript",
+      "symbol": "\\u0053cene",
+      "source": "const \\u0053cene = 1;",
+      "expected": { "mode": "ast", "count": 1 }
+    },
+    {
+      "id": "ts-incomplete-syntax-fallback",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const Scene =",
+      "expected": { "mode": "lexical", "count": 1 }
+    },
+    {
+      "id": "ts-number-error-split",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "const value = 0xScene;",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "javascript-number-suffix",
+      "language": "javascript",
+      "symbol": "Scene",
+      "source": "const value = 1Scene;",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "python-number-suffix",
+      "language": "python",
+      "symbol": "Scene",
+      "source": "value = 1Scene",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "go-number-suffix",
+      "language": "go",
+      "symbol": "Scene",
+      "source": "package p\nvar value = 1Scene",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "rust-number-suffix",
+      "language": "rust",
+      "symbol": "Scene",
+      "source": "fn f() { let value = 1Scene; }",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "java-number-suffix",
+      "language": "java",
+      "symbol": "Scene",
+      "source": "class C { int value = 1Scene; }",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "c-number-suffix",
+      "language": "c",
+      "symbol": "Scene",
+      "source": "int value = 1Scene;",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "cpp-number-suffix",
+      "language": "cpp",
+      "symbol": "Scene",
+      "source": "int value = 1Scene;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "c-hex-prefix-split",
+      "language": "c",
+      "symbol": "Scene",
+      "source": "int value = 0xScene;",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "cpp-hex-prefix-split",
+      "language": "cpp",
+      "symbol": "Scene",
+      "source": "int value = 0xScene;",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "csharp-number-suffix",
+      "language": "csharp",
+      "symbol": "Scene",
+      "source": "class C { int value = 1Scene; }",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "kotlin-number-suffix",
+      "language": "kotlin",
+      "symbol": "Scene",
+      "source": "val value = 1Scene",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "js-exact-reference",
+      "language": "javascript",
+      "symbol": "Scene",
+      "source": "const Scene = 1; Scene;",
+      "expected": { "mode": "ast", "count": 2 }
+    },
+    {
+      "id": "tsx-jsx-identifier",
+      "language": "typescriptreact",
+      "symbol": "Scene",
+      "source": "const view = <Scene />;",
+      "expected": { "mode": "ast", "count": 1 }
+    },
+    {
+      "id": "python-exact-reference",
+      "language": "python",
+      "symbol": "Scene",
+      "source": "Scene = 1\nprint(Scene)",
+      "expected": { "mode": "ast", "count": 2 }
+    },
+    {
+      "id": "python-long-identifier",
+      "language": "python",
+      "symbol": "Scene",
+      "source": "SceneData = 1",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "go-exact-reference",
+      "language": "go",
+      "symbol": "Scene",
+      "source": "package p\nvar Scene int\nfunc f() { _ = Scene }",
+      "expected": { "mode": "ast", "count": 2 }
+    },
+    {
+      "id": "rust-exact-reference",
+      "language": "rust",
+      "symbol": "Scene",
+      "source": "fn f() { let Scene = 1; println!(\"{}\", Scene); }",
+      "expected": { "mode": "ast", "count": 2 }
+    },
+    {
+      "id": "java-type-reference",
+      "language": "java",
+      "symbol": "Scene",
+      "source": "class Scene { Scene value; }",
+      "expected": { "mode": "ast", "count": 2 }
+    },
+    {
+      "id": "cpp-exact-reference",
+      "language": "cpp",
+      "symbol": "Scene",
+      "source": "int Scene; int f() { return Scene; }",
+      "expected": { "mode": "ast", "count": 2 }
+    },
+    {
+      "id": "c-exact-reference",
+      "language": "c",
+      "symbol": "Scene",
+      "source": "int Scene; int f() { return Scene; }",
+      "expected": { "mode": "ast", "count": 2 }
+    },
+    {
+      "id": "csharp-exact-reference",
+      "language": "csharp",
+      "symbol": "Scene",
+      "source": "class Scene { int value; }",
+      "expected": { "mode": "ast", "count": 1 }
+    },
+    {
+      "id": "kotlin-current-node-name-contract",
+      "language": "kotlin",
+      "symbol": "Scene",
+      "source": "fun main() { val Scene = 1; println(Scene) }",
+      "expected": { "mode": "ast", "count": 0 }
+    },
+    {
+      "id": "unknown-quoted-and-comment-fallback",
+      "language": "unknown",
+      "symbol": "Scene",
+      "source": "val x = \"Scene\" // Scene",
+      "expected": { "mode": "lexical", "count": 2 }
+    },
+    {
+      "id": "unknown-long-identifier",
+      "language": "unknown",
+      "symbol": "Scene",
+      "source": "SceneData",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "unknown-dollar-boundary",
+      "language": "unknown",
+      "symbol": "Scene",
+      "source": "$Scene Scene$",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "unknown-non-ascii-boundaries",
+      "language": "unknown",
+      "symbol": "Scene",
+      "source": "πScene Sceneπ",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "unknown-number-error-split",
+      "language": "unknown",
+      "symbol": "Scene",
+      "source": "0xScene",
+      "expected": { "mode": "lexical", "count": 0 }
+    },
+    {
+      "id": "unknown-composite-symbol",
+      "language": "unknown",
+      "symbol": "foo.bar",
+      "source": "foo.bar + foobar",
+      "expected": { "mode": "lexical", "count": 1 }
+    },
+    {
+      "id": "unknown-raw-escape-spelling",
+      "language": "unknown",
+      "symbol": "\\u0053cene",
+      "source": "\\u0053cene",
+      "expected": { "mode": "lexical", "count": 1 }
+    },
+    {
+      "id": "angular-spotify-source-token",
+      "language": "typescript",
+      "symbol": "Component",
+      "source": "Component",
+      "provenance": {
+        "repository": "angular-spotify",
+        "file": "apps/angular-spotify/src/app/app.component.ts",
+        "sha256": "187e85f943f37ed8cd87eb7ecfee0b00850128e4e82fadbcf8510170ae962b18"
+      },
+      "expected": { "mode": "ast", "count": 1 }
+    },
+    {
+      "id": "excalidraw-source-token-inside-long-identifier",
+      "language": "typescript",
+      "symbol": "Scene",
+      "source": "initializeScene",
+      "provenance": {
+        "repository": "excalidraw-monorepo",
+        "file": "excalidraw-app/App.tsx",
+        "sha256": "59789614d257b77bd89a3e304de3247fed4c821401e0e30173ce52d58b71816b"
+      },
+      "expected": { "mode": "ast", "count": 0 }
+    }
+  ]
+}

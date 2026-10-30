@@ -1,0 +1,124 @@
+{
+  "description": "Supplemental source-grounded retrieval evaluation for excalidraw/excalidraw.",
+  "codebase": "excalidraw/excalidraw",
+  "repository": "https://github.com/excalidraw/excalidraw",
+  "repositoryUrl": "https://github.com/excalidraw/excalidraw",
+  "repositoryRef": "e18c1dd213000dde0ae94ef7eb00aab537b39708",
+  "repositoryRefStatus": "Task-supplied pinned revision; snapshot has no .git metadata for independent verification.",
+  "license": "MIT",
+  "frozenDate": "2026-10-15",
+  "notes": "Supplemental set authored after candidate-04 source/archive freeze; it is not a pre-implementation evaluation and does not replace the existing evaluation set. Do not infer adoption, release quality, or broad generalization from this set alone.",
+  "queries": [
+    {
+      "id": 1,
+      "query": "Where does the app debounce saving the non-deleted scene and app state to browser storage, then save image binaries separately?",
+      "category": "multi_concept_storage_flow",
+      "expectedPatterns": ["excalidraw-app/data/LocalData.ts"],
+      "expectedNotPatterns": ["excalidraw-app/data/tabSync.ts"],
+      "notes": "The local persistence entrypoint coordinates both scene storage and file storage."
+    },
+    {
+      "id": 2,
+      "query": "How does a local .excalidraw JSON export filter out image files used only by deleted elements, and where is the resulting file saved?",
+      "category": "edge_case_export",
+      "expectedPatterns": [
+        "packages/excalidraw/data/json.ts",
+        "packages/excalidraw/data/filesystem.ts"
+      ],
+      "expectedNotPatterns": [
+        "packages/excalidraw/data/image.ts",
+        "packages/excalidraw/clipboard.ts"
+      ],
+      "notes": "Distinguishes standard JSON-file export from PNG embedding and clipboard serialization."
+    },
+    {
+      "id": 3,
+      "query": "When old diagrams are restored, where are legacy text font and line-height values repaired, and how are incomplete arrow point lists normalized?",
+      "category": "compatibility_repair",
+      "expectedPatterns": ["packages/excalidraw/data/restore.ts"],
+      "expectedNotPatterns": ["packages/excalidraw/tests/data/restore.test.ts"],
+      "notes": "Request asks for implementation; the nearby restore test is an explicit distractor."
+    },
+    {
+      "id": 4,
+      "query": "How is scene JSON compressed into a PNG text chunk and decoded back out, including the legacy unencoded scene case?",
+      "category": "exact_identifier_and_compatibility",
+      "expectedPatterns": ["packages/excalidraw/data/image.ts"],
+      "expectedNotPatterns": [
+        "packages/excalidraw/data/json.ts",
+        "packages/excalidraw/tests/data/restore.test.ts"
+      ],
+      "notes": "Targets PNG metadata helpers rather than the ordinary .excalidraw JSON serializer."
+    },
+    {
+      "id": 5,
+      "query": "How does the app map the browser language to a supported locale, fall back to the default, and cache a user selection?",
+      "category": "configuration_and_wiring",
+      "expectedPatterns": [
+        "excalidraw-app/app-language/language-detector.ts",
+        "excalidraw-app/app-language/language-state.ts",
+        "excalidraw-app/app-language/LanguageList.tsx"
+      ],
+      "expectedNotPatterns": ["excalidraw-app/tests/LanguageList.test.tsx"],
+      "notes": "The detector, state hook and selector are distinct steps; test file is the negative match."
+    },
+    {
+      "id": 6,
+      "query": "Where are collaboration scene updates encrypted before socket emission, and where are incoming packets decrypted and reconciled into the scene?",
+      "category": "cross_module_protocol",
+      "expectedPatterns": ["excalidraw-app/collab/Portal.tsx", "excalidraw-app/collab/Collab.tsx"],
+      "expectedNotPatterns": ["excalidraw-app/data/FileManager.ts"],
+      "notes": "Separates outbound transport framing from inbound room-state handling."
+    },
+    {
+      "id": 7,
+      "query": "Which file manager tracks image file versions as fetching, saved or errored so repeated upload and fetch work can be deduplicated?",
+      "category": "implementation_convention",
+      "expectedPatterns": ["excalidraw-app/data/FileManager.ts"],
+      "expectedNotPatterns": ["excalidraw-app/data/fileStatusStore.ts"],
+      "notes": "Distinguishes per-file manager bookkeeping from the shared UI status snapshot store."
+    },
+    {
+      "id": 8,
+      "query": "Where does the legacy localStorage library adapter load and clear saved library items as they migrate to an IndexedDB adapter, and where is that migration wired at startup?",
+      "category": "migration_and_startup_wiring",
+      "expectedPatterns": ["excalidraw-app/data/LocalData.ts", "excalidraw-app/App.tsx"],
+      "expectedNotPatterns": ["packages/excalidraw/data/library.ts"],
+      "notes": "App startup wires the adapters; LocalData defines both persistence adapters."
+    },
+    {
+      "id": 9,
+      "query": "How does this tab decide browser-stored scene or file state is newer than its in-memory version, and update the timestamp marker?",
+      "category": "state_synchronization",
+      "expectedPatterns": ["excalidraw-app/data/tabSync.ts"],
+      "expectedNotPatterns": ["excalidraw-app/data/LocalData.ts"],
+      "notes": "Targets cross-tab timestamp comparison rather than the main local save path."
+    },
+    {
+      "id": 10,
+      "query": "How are clipboard and drag/drop transfer items parsed when the payload mixes text and files, and how are Excalidraw element payloads recognized?",
+      "category": "mixed_input_edge_case",
+      "expectedPatterns": ["packages/excalidraw/clipboard.ts"],
+      "expectedNotPatterns": [
+        "packages/excalidraw/tests/clipboard.test.tsx",
+        "packages/excalidraw/clipboard.test.ts"
+      ],
+      "notes": "Implementation source is distinct from both clipboard test suites."
+    }
+  ],
+  "idProvenance": {
+    "mapping": {
+      "exc-01": 1,
+      "exc-02": 2,
+      "exc-03": 3,
+      "exc-04": 4,
+      "exc-05": 5,
+      "exc-06": 6,
+      "exc-07": 7,
+      "exc-08": 8,
+      "exc-09": 9,
+      "exc-10": 10
+    },
+    "reason": "declared EvalQuery.id:number; factual schema alignment before first score, with question, expected paths, categories, and order unchanged."
+  }
+}

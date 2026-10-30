@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -58,7 +59,7 @@ describe('Indexer exclude patterns — nested directories', () => {
 
     await indexer.index();
 
-    const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexPath = await resolveIndexArtifact(tempDir, KEYWORD_INDEX_FILENAME);
     const indexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as Record<string, unknown>;
 
     let chunks: Array<{ filePath: string }>;

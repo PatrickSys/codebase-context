@@ -1,5 +1,12 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -51,22 +58,17 @@ function childEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return { ...env, ...overrides };
 }
 
-function ignoreWindowsTempCleanupRace(error: unknown): void {
-  const code = (error as NodeJS.ErrnoException).code;
-  if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code ?? '')) throw error;
+function cleanupTempRoot(tempRoot: string): void {
+  rmSync(tempRoot, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 200
+  });
 }
 
 function cleanupSessionRoot(sessionRoot: string): void {
-  try {
-    rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-      recursive: true,
-      force: true,
-      maxRetries: 10,
-      retryDelay: 200
-    });
-  } catch (error) {
-    ignoreWindowsTempCleanupRace(error);
-  }
+  cleanupTempRoot(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))));
 }
 
 function tempSessionRoot(phase: 'phase40' | 'phase41' = 'phase40'): string {
@@ -94,7 +96,15 @@ function createCleanGitRepo(root: string): string {
   execFileSync('git', ['add', 'README.md'], { cwd: repoPath, encoding: 'utf8', env: childEnv() });
   execFileSync(
     'git',
-    ['-c', 'user.name=ContextBench Test', '-c', 'user.email=contextbench@example.invalid', 'commit', '-m', 'fixture'],
+    [
+      '-c',
+      'user.name=ContextBench Test',
+      '-c',
+      'user.email=contextbench@example.invalid',
+      'commit',
+      '-m',
+      'fixture'
+    ],
     { cwd: repoPath, encoding: 'utf8', env: childEnv() }
   );
   return repoPath;
@@ -131,7 +141,11 @@ function writeStubClaude(root: string): string {
   return stubPath;
 }
 
-function writeStubEvaluator(root: string, exitCode: 0 | 1, output = JSON.stringify({ score: 1 })): string {
+function writeStubEvaluator(
+  root: string,
+  exitCode: 0 | 1,
+  output = JSON.stringify({ score: 1 })
+): string {
   const stubPath = path.join(root, `stub-evaluator-${exitCode}.cjs`);
   const serializedOutput = JSON.stringify(output);
   writeFileSync(
@@ -146,14 +160,22 @@ describe('ContextBench Phase 40 baseline runner', () => {
   it('reserves every required slot and writes terminal missing-evidence rows for blocked lanes', () => {
     const sessionRoot = tempSessionRoot();
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       const reservations = JSON.parse(
         readFileSync(path.join(sessionRoot, 'slot-reservations.json'), 'utf8')
-      ) as { reservations: Array<{ laneId: string; status: string; terminalStatus: string | null }> };
+      ) as {
+        reservations: Array<{ laneId: string; status: string; terminalStatus: string | null }>;
+      };
       expect(reservations.reservations).toHaveLength(20 * 6 * 3);
-      const blocked = reservations.reservations.filter((slot) => slot.status === 'terminal_missing_evidence');
+      const blocked = reservations.reservations.filter(
+        (slot) => slot.status === 'terminal_missing_evidence'
+      );
       expect(blocked).toHaveLength(20 * 2 * 3);
       expect([...new Set(blocked.map((slot) => slot.laneId))].sort()).toEqual([
         'codebase-memory-mcp',
@@ -176,10 +198,16 @@ describe('ContextBench Phase 40 baseline runner', () => {
   it('rejects duplicate primary baseline rows during validation', () => {
     const sessionRoot = tempSessionRoot('phase41');
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
-      const firstRow = readFileSync(path.join(sessionRoot, 'run-manifest.jsonl'), 'utf8').trim().split('\n')[0];
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
+      const firstRow = readFileSync(path.join(sessionRoot, 'run-manifest.jsonl'), 'utf8')
+        .trim()
+        .split('\n')[0];
       appendFileSync(path.join(sessionRoot, 'run-manifest.jsonl'), `${firstRow}\n`, 'utf8');
 
       const result = spawnSync(
@@ -191,10 +219,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain('duplicate primary baseline row for reservation');
     } finally {
-      rmSync(path.dirname(path.dirname(path.dirname(path.dirname(sessionRoot)))), {
-        recursive: true,
-        force: true
-      });
+      cleanupSessionRoot(sessionRoot);
     }
   });
 
@@ -202,9 +227,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const sessionRoot = tempSessionRoot();
     const taskId = manifest.tasks[0].instance_id;
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [
@@ -265,7 +294,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
 
   it('records official evaluator invocation metadata for overridden live executor attempts', () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-official-evaluator-'));
-    const sessionRoot = path.join(tempRoot, 'benchmark-runs', 'contextbench', 'phase41', 'runner-smoke');
+    const sessionRoot = path.join(
+      tempRoot,
+      'benchmark-runs',
+      'contextbench',
+      'phase41',
+      'runner-smoke'
+    );
     const taskId = manifest.tasks[0].instance_id;
     const repoPath = createCleanGitRepo(tempRoot);
     const payloadPath = writePayloadFile(tempRoot, taskId, repoPath);
@@ -275,14 +310,22 @@ describe('ContextBench Phase 40 baseline runner', () => {
       CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
       CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
       CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
-        'raw-native': { sourceKind: 'proxy', proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
+        'raw-native': {
+          sourceKind: 'proxy',
+          proofSource: 'stubbed_test_proxy',
+          observedTools: ['native-read']
+        }
       })
     });
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8',
-        env
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8',
+          env
+        }
+      );
       execFileSync(
         'node',
         [
@@ -329,7 +372,12 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(score.stdoutPath).toBeTruthy();
       expect(score.stderrPath).toBeTruthy();
       const rawTrace = JSON.parse(readFileSync(attempt?.raw_trace_path ?? '', 'utf8')) as {
-        laneIsolation?: { proven: boolean; sourceKind: string; proofSource: string; observedTools: string[] };
+        laneIsolation?: {
+          proven: boolean;
+          sourceKind: string;
+          proofSource: string;
+          observedTools: string[];
+        };
       };
       expect(rawTrace.laneIsolation).toMatchObject({
         proven: true,
@@ -338,13 +386,19 @@ describe('ContextBench Phase 40 baseline runner', () => {
         observedTools: ['native-read']
       });
     } finally {
-      rmSync(tempRoot, { recursive: true, force: true });
+      cleanupTempRoot(tempRoot);
     }
   });
 
   it('rejects malformed official evaluator output as judge_failed diagnostic evidence', () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-official-evaluator-malformed-'));
-    const sessionRoot = path.join(tempRoot, 'benchmark-runs', 'contextbench', 'phase41', 'runner-smoke');
+    const sessionRoot = path.join(
+      tempRoot,
+      'benchmark-runs',
+      'contextbench',
+      'phase41',
+      'runner-smoke'
+    );
     const taskId = manifest.tasks[0].instance_id;
     const repoPath = createCleanGitRepo(tempRoot);
     const payloadPath = writePayloadFile(tempRoot, taskId, repoPath);
@@ -354,14 +408,22 @@ describe('ContextBench Phase 40 baseline runner', () => {
       CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
       CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
       CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
-        'raw-native': { sourceKind: 'proxy', proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
+        'raw-native': {
+          sourceKind: 'proxy',
+          proofSource: 'stubbed_test_proxy',
+          observedTools: ['native-read']
+        }
       })
     });
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8',
-        env
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8',
+          env
+        }
+      );
       execFileSync(
         'node',
         [
@@ -401,7 +463,7 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(score.fallbackReason).toBe('official_evaluator_malformed_jsonl');
       expect(score.outputHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     } finally {
-      rmSync(tempRoot, { recursive: true, force: true });
+      cleanupTempRoot(tempRoot);
     }
   });
 
@@ -415,8 +477,16 @@ describe('ContextBench Phase 40 baseline runner', () => {
     ];
 
     for (const testCase of cases) {
-      const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-official-evaluator-envelope-'));
-      const sessionRoot = path.join(tempRoot, 'benchmark-runs', 'contextbench', 'phase41', 'runner-smoke');
+      const tempRoot = mkdtempSync(
+        path.join(tmpdir(), 'contextbench-official-evaluator-envelope-')
+      );
+      const sessionRoot = path.join(
+        tempRoot,
+        'benchmark-runs',
+        'contextbench',
+        'phase41',
+        'runner-smoke'
+      );
       const taskId = manifest.tasks[0].instance_id;
       const repoPath = createCleanGitRepo(tempRoot);
       const payloadPath = writePayloadFile(tempRoot, taskId, repoPath);
@@ -426,14 +496,22 @@ describe('ContextBench Phase 40 baseline runner', () => {
         CONTEXTBENCH_CLAUDE_COMMAND: JSON.stringify([process.execPath, stubClaude]),
         CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator]),
         CONTEXTBENCH_LANE_TELEMETRY_JSON: JSON.stringify({
-          'raw-native': { sourceKind: 'proxy', proofSource: 'stubbed_test_proxy', observedTools: ['native-read'] }
+          'raw-native': {
+            sourceKind: 'proxy',
+            proofSource: 'stubbed_test_proxy',
+            observedTools: ['native-read']
+          }
         })
       });
       try {
-        execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-          encoding: 'utf8',
-          env
-        });
+        execFileSync(
+          'node',
+          ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+          {
+            encoding: 'utf8',
+            env
+          }
+        );
         execFileSync(
           'node',
           [
@@ -460,14 +538,20 @@ describe('ContextBench Phase 40 baseline runner', () => {
         expect(attempt?.status).toBe('judge_failed');
         expect(attempt?.scoring.fallbackReason).toBe(testCase.reason);
       } finally {
-        rmSync(tempRoot, { recursive: true, force: true });
+        cleanupTempRoot(tempRoot);
       }
     }
   });
 
   it('records official evaluator failure as judge_failed without making claims', () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-official-evaluator-fail-'));
-    const sessionRoot = path.join(tempRoot, 'benchmark-runs', 'contextbench', 'phase41', 'runner-smoke');
+    const sessionRoot = path.join(
+      tempRoot,
+      'benchmark-runs',
+      'contextbench',
+      'phase41',
+      'runner-smoke'
+    );
     const taskId = manifest.tasks[0].instance_id;
     const repoPath = createCleanGitRepo(tempRoot);
     const payloadPath = writePayloadFile(tempRoot, taskId, repoPath);
@@ -478,10 +562,14 @@ describe('ContextBench Phase 40 baseline runner', () => {
       CONTEXTBENCH_OFFICIAL_EVALUATOR_COMMAND: JSON.stringify([process.execPath, stubEvaluator])
     });
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8',
-        env
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8',
+          env
+        }
+      );
       execFileSync(
         'node',
         [
@@ -525,16 +613,20 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(score.exitCode).toBe(1);
       expect(score.exitStatus).toBe(1);
     } finally {
-      rmSync(tempRoot, { recursive: true, force: true });
+      cleanupTempRoot(tempRoot);
     }
   });
 
   it('chunks all-ready-lane execution with max-attempts so live runs are resumable', () => {
     const sessionRoot = tempSessionRoot('phase41');
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [
@@ -591,9 +683,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const sessionRoot = tempSessionRoot('phase41');
     const taskId = manifest.tasks[0].instance_id;
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [
@@ -607,8 +703,16 @@ describe('ContextBench Phase 40 baseline runner', () => {
         { encoding: 'utf8' }
       );
       const measurement = JSON.parse(
-        readFileSync(path.join(sessionRoot, 'setup-index', 'raw-native', 'setup-index.json'), 'utf8')
-      ) as { claimBearing: boolean; setupStatus: string; indexStatus: string; setupLogPath: string };
+        readFileSync(
+          path.join(sessionRoot, 'setup-index', 'raw-native', 'setup-index.json'),
+          'utf8'
+        )
+      ) as {
+        claimBearing: boolean;
+        setupStatus: string;
+        indexStatus: string;
+        setupLogPath: string;
+      };
       expect(measurement).toMatchObject({
         claimBearing: false,
         setupStatus: 'not_required',
@@ -652,9 +756,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const sessionRoot = tempSessionRoot('phase41');
     const taskId = manifest.tasks[0].instance_id;
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [
@@ -674,7 +782,8 @@ describe('ContextBench Phase 40 baseline runner', () => {
         { encoding: 'utf8' }
       );
       const attempt = readRows(sessionRoot).find(
-        (row) => row.lane_id === 'codebase-context' && row.task_id === taskId && row.repeat_index === 1
+        (row) =>
+          row.lane_id === 'codebase-context' && row.task_id === taskId && row.repeat_index === 1
       );
       expect(attempt?.status).toBe('setup_failed');
       expect(attempt?.scoring.fallbackReason).toContain('missing_setup_index_measurement');
@@ -688,16 +797,23 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const sessionRoot = tempSessionRoot('phase41');
     const taskId = manifest.tasks[0].instance_id;
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       const logsDir = path.join(sessionRoot, 'manual-setup-index-logs', 'codebase-context');
       mkdirSync(logsDir, { recursive: true });
       const setupLogPath = path.join(logsDir, 'setup.stdout.log');
       const indexLogPath = path.join(logsDir, 'index.stdout.log');
       writeFileSync(setupLogPath, 'setup completed\n', 'utf8');
       writeFileSync(indexLogPath, 'index completed\n', 'utf8');
-      const importPath = path.join(path.dirname(sessionRoot), 'codebase-context-setup-index-import.json');
+      const importPath = path.join(
+        path.dirname(sessionRoot),
+        'codebase-context-setup-index-import.json'
+      );
       writeFileSync(
         importPath,
         JSON.stringify(
@@ -749,7 +865,8 @@ describe('ContextBench Phase 40 baseline runner', () => {
         { encoding: 'utf8' }
       );
       const attempt = readRows(sessionRoot).find(
-        (row) => row.lane_id === 'codebase-context' && row.task_id === taskId && row.repeat_index === 1
+        (row) =>
+          row.lane_id === 'codebase-context' && row.task_id === taskId && row.repeat_index === 1
       );
       expect(attempt?.status).toBe('completed');
       expect(attempt?.setupIndex).toMatchObject({
@@ -769,9 +886,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const sessionRoot = tempSessionRoot('phase41');
     const taskId = manifest.tasks[0].instance_id;
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       const logsDir = path.join(sessionRoot, 'manual-setup-index-logs', 'codebase-context');
       mkdirSync(logsDir, { recursive: true });
       const setupLogPath = path.join(logsDir, 'setup.stdout.log');
@@ -896,7 +1017,8 @@ describe('ContextBench Phase 40 baseline runner', () => {
         { encoding: 'utf8' }
       );
       const attempt = readRows(sessionRoot).find(
-        (row) => row.lane_id === 'codebase-context' && row.task_id === taskId && row.repeat_index === 1
+        (row) =>
+          row.lane_id === 'codebase-context' && row.task_id === taskId && row.repeat_index === 1
       );
       expect(attempt?.status).toBe('setup_failed');
       expect(attempt?.scoring.fallbackReason).toContain('missing_setup_index_measurement');
@@ -922,9 +1044,13 @@ describe('ContextBench Phase 40 baseline runner', () => {
     const sessionRoot = tempSessionRoot();
     const taskId = manifest.tasks[0].instance_id;
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [
@@ -942,7 +1068,9 @@ describe('ContextBench Phase 40 baseline runner', () => {
         { encoding: 'utf8' }
       );
       const rows = readRows(sessionRoot);
-      const diagnosticRows = rows.filter((row) => row.run_id.startsWith('codebase-context-current'));
+      const diagnosticRows = rows.filter((row) =>
+        row.run_id.startsWith('codebase-context-current')
+      );
       expect(diagnosticRows.length).toBeGreaterThanOrEqual(3);
       expect(diagnosticRows.every((row) => row.lane_id === 'codebase-context')).toBe(true);
       expect(diagnosticRows.every((row) => row.scoring.claimBearing === false)).toBe(true);
@@ -957,13 +1085,23 @@ describe('ContextBench Phase 40 baseline runner', () => {
 
   it('runs Phase 42 verification as read-only artifact-derived evidence and fails diagnostic sessions closed', () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-phase42-verify-'));
-    const sessionRoot = path.join(tempRoot, 'benchmark-runs', 'contextbench', 'phase41', 'runner-smoke');
+    const sessionRoot = path.join(
+      tempRoot,
+      'benchmark-runs',
+      'contextbench',
+      'phase41',
+      'runner-smoke'
+    );
     const reportPath = path.join(tempRoot, 'phase42-report.json');
     const taskId = manifest.tasks[0].instance_id;
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [
@@ -1022,21 +1160,33 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(report.failureCounts.official_evaluator_missing).toBeGreaterThan(0);
       expect(report.failureCounts.missing_required_run).toBeGreaterThan(0);
       expect(report.blockedClaims).toContain('Phase 42 passed');
-      expect(readFileSync(path.join(sessionRoot, 'BASELINE-SESSION.json'), 'utf8')).toBe(sessionBefore);
+      expect(readFileSync(path.join(sessionRoot, 'BASELINE-SESSION.json'), 'utf8')).toBe(
+        sessionBefore
+      );
     } finally {
-      rmSync(tempRoot, { recursive: true, force: true });
+      cleanupTempRoot(tempRoot);
     }
   });
 
   it('classifies diagnostic baseline arms as supplemental during Phase 42 verification', () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), 'contextbench-phase42-arms-'));
-    const sessionRoot = path.join(tempRoot, 'benchmark-runs', 'contextbench', 'phase41', 'runner-smoke');
+    const sessionRoot = path.join(
+      tempRoot,
+      'benchmark-runs',
+      'contextbench',
+      'phase41',
+      'runner-smoke'
+    );
     const reportPath = path.join(tempRoot, 'phase42-report.json');
     const taskId = manifest.tasks[0].instance_id;
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [
@@ -1076,16 +1226,20 @@ describe('ContextBench Phase 40 baseline runner', () => {
       expect(report.failureCounts.unexpected_run_row ?? 0).toBe(0);
       expect(report.failureCounts.denominator_count_mismatch).toBe(1);
     } finally {
-      rmSync(tempRoot, { recursive: true, force: true });
+      cleanupTempRoot(tempRoot);
     }
   });
 
   it('blocks baseline seal when terminal row completeness lacks Phase 42 claim evidence', () => {
     const sessionRoot = tempSessionRoot('phase41');
     try {
-      execFileSync('node', ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot], {
-        encoding: 'utf8'
-      });
+      execFileSync(
+        'node',
+        ['scripts/contextbench-runner.mjs', '--baseline-snapshot', '--out', sessionRoot],
+        {
+          encoding: 'utf8'
+        }
+      );
       execFileSync(
         'node',
         [

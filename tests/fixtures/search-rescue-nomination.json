@@ -1,0 +1,382 @@
+{
+  "version": 1,
+  "purpose": "Frozen general rescue-only nomination witnesses and negative controls; synthetic unit contract, not a retrieval accuracy benchmark.",
+  "contract": {
+    "scope": "Replace rescue fuzzy OR nomination deliberately; keep strict fuzzy retrieval and exact rescue admission unchanged.",
+    "nomination": "Conservative literal fragments across content, basename, componentName, symbolName, functionName, className and exports; filters before the dynamic cap; stable original chunk ordinal.",
+    "window": "min(750,max(256,limit*80)); overflow is disclosed through candidateBudgetExhausted. Witness completeness applies inside the nominated window, not beyond it.",
+    "ranking": "Existing exact evidence rank and score remain; equal exact evidence uses original ordinal instead of fuzzy nomination score. This is an intentional nomination and tie-order change, not parity.",
+    "normalization": "Existing ASCII lexical splitting and case folding only; no new Unicode transliteration, synonyms or language-specific rules.",
+    "fallback": "No fuzzy OR rescan in rescue, including overflow/refill; original strict fuzzy search remains the typo and extended-syntax route."
+  },
+  "lexicalCases": [
+    {
+      "id": "plural-policy-to-singular",
+      "query": "policy archive",
+      "content": "/* policies archiving */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "singular-to-plural-query",
+      "query": "policies archives",
+      "content": "/* policy archive */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "plural-library",
+      "query": "library archive",
+      "content": "/* libraries archived */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "silent-e-ing",
+      "query": "archive policy",
+      "content": "/* archiving policies */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "ed-to-ing",
+      "query": "archived policy",
+      "content": "/* archiving policy */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "double-consonant-format",
+      "query": "formatting invoice",
+      "content": "/* formatted invoices */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "double-consonant-stop",
+      "query": "stopping invoice",
+      "content": "/* stopped invoices */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "camel-case",
+      "query": "invoice archive",
+      "content": "export const archiveInvoices = true;",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "snake-case",
+      "query": "credit ledger",
+      "content": "credit_ledger = True",
+      "language": "python",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "acronym-boundary",
+      "query": "http archive",
+      "content": "type HTTPArchive = {};",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "uppercase",
+      "query": "POLICY ARCHIVE",
+      "content": "/* POLICIES ARCHIVING */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "unicode-surroundings",
+      "query": "policy archive",
+      "content": "/* λ archiving 政策 policies café */",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "unicode-lookalikes-not-folded",
+      "query": "policy archive",
+      "content": "/* рolicy аrchive */",
+      "expected": false
+    },
+    {
+      "id": "diacritic-not-transliterated",
+      "query": "policy archive",
+      "content": "/* policies arçhive */",
+      "expected": false
+    },
+    {
+      "id": "repeated-inflections-one-clue",
+      "query": "policy policies",
+      "content": "/* policy policies */",
+      "expected": false
+    },
+    {
+      "id": "source-inflections-one-clue",
+      "query": "archive policy",
+      "content": "/* archived archiving archive */",
+      "expected": false
+    },
+    {
+      "id": "substring-collision",
+      "query": "archive policy",
+      "content": "/* monarchivel policies */",
+      "expected": false
+    },
+    {
+      "id": "single-natural-clue",
+      "query": "archive",
+      "content": "/* archive policy */",
+      "expected": false
+    },
+    {
+      "id": "stop-word-not-corroboration",
+      "query": "where archive",
+      "content": "/* where archive */",
+      "expected": false
+    },
+    {
+      "id": "comment-clues-are-lexical",
+      "query": "archive policy",
+      "content": "// archive policy",
+      "expected": true,
+      "expectedScore": 0.5
+    },
+    {
+      "id": "tags-do-not-admit",
+      "query": "archive policy",
+      "content": "export const value = 0;",
+      "tags": ["archive", "policy"],
+      "expected": false
+    },
+    {
+      "id": "component-name-only",
+      "query": "archive policy",
+      "content": "export const value = 0;",
+      "metadata": {
+        "componentName": "ArchivePolicy"
+      },
+      "expected": true,
+      "expectedScore": 0
+    },
+    {
+      "id": "symbol-name-only",
+      "query": "archive policy",
+      "content": "export const value = 0;",
+      "metadata": {
+        "symbolName": "ArchivePolicy"
+      },
+      "expected": true,
+      "expectedScore": 0
+    },
+    {
+      "id": "basename-only",
+      "query": "archive policy",
+      "content": "export const value = 0;",
+      "filePath": "src/archive-policy.ts",
+      "expected": true,
+      "expectedScore": 0.5
+    }
+  ],
+  "representativeCases": [
+    {
+      "id": "function-metadata-representative",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "declaration",
+          "filePath": "src/a.ts",
+          "content": "export const value = 0;",
+          "metadata": {
+            "functionName": "ArchivePolicy"
+          }
+        },
+        {
+          "id": "body",
+          "filePath": "src/a.ts",
+          "startLine": 3,
+          "content": "// archive policy"
+        }
+      ],
+      "expectedIds": ["declaration"]
+    },
+    {
+      "id": "class-metadata-representative",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "declaration",
+          "filePath": "src/a.ts",
+          "content": "export const value = 0;",
+          "metadata": {
+            "className": "ArchivePolicy"
+          }
+        },
+        {
+          "id": "body",
+          "filePath": "src/a.ts",
+          "startLine": 3,
+          "content": "// archive policy"
+        }
+      ],
+      "expectedIds": ["declaration"]
+    },
+    {
+      "id": "export-metadata-representative",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "export",
+          "filePath": "src/a.ts",
+          "content": "export const value = 0;",
+          "exports": ["ArchivePolicy"]
+        },
+        {
+          "id": "body",
+          "filePath": "src/a.ts",
+          "startLine": 3,
+          "content": "// archive policy"
+        }
+      ],
+      "expectedIds": ["export"]
+    },
+    {
+      "id": "merged-symbol-representative",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "declaration",
+          "filePath": "src/a.ts",
+          "content": "export const value = 0;",
+          "metadata": {
+            "symbolName": "ArchivePolicy+Other"
+          }
+        },
+        {
+          "id": "body",
+          "filePath": "src/a.ts",
+          "startLine": 3,
+          "content": "// archive policy"
+        }
+      ],
+      "expectedIds": ["declaration"]
+    },
+    {
+      "id": "same-file-disjoint-clues",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "first",
+          "filePath": "src/a.ts",
+          "content": "// archive"
+        },
+        {
+          "id": "second",
+          "filePath": "src/a.ts",
+          "startLine": 3,
+          "content": "// policy"
+        }
+      ],
+      "expectedIds": ["first"]
+    },
+    {
+      "id": "equal-evidence-original-ordinal",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "z-first",
+          "filePath": "src/z.ts",
+          "content": "// archive policy"
+        },
+        {
+          "id": "a-second",
+          "filePath": "src/a.ts",
+          "content": "// archive policy"
+        }
+      ],
+      "expectedIds": ["z-first", "a-second"]
+    },
+    {
+      "id": "equal-evidence-reversed-ordinal",
+      "query": "archive policy",
+      "chunks": [
+        {
+          "id": "a-first",
+          "filePath": "src/a.ts",
+          "content": "// archive policy"
+        },
+        {
+          "id": "z-second",
+          "filePath": "src/z.ts",
+          "content": "// archive policy"
+        }
+      ],
+      "expectedIds": ["a-first", "z-second"]
+    }
+  ],
+  "populationCases": [
+    {
+      "id": "below-minimum-window",
+      "limit": 1,
+      "count": 255,
+      "cap": 256,
+      "exhausted": false
+    },
+    {
+      "id": "at-minimum-window",
+      "limit": 1,
+      "count": 256,
+      "cap": 256,
+      "exhausted": false
+    },
+    {
+      "id": "over-minimum-window",
+      "limit": 1,
+      "count": 257,
+      "cap": 256,
+      "exhausted": true
+    },
+    {
+      "id": "intermediate-window",
+      "limit": 9,
+      "count": 721,
+      "cap": 720,
+      "exhausted": true
+    },
+    {
+      "id": "at-maximum-window",
+      "limit": 10,
+      "count": 750,
+      "cap": 750,
+      "exhausted": false
+    },
+    {
+      "id": "over-maximum-window",
+      "limit": 10,
+      "count": 751,
+      "cap": 750,
+      "exhausted": true
+    }
+  ],
+  "lifecycleCases": ["changed", "missing", "directory", "invalid-manifest", "outside-root"],
+  "graphCases": ["current", "no-edge", "changed-companion", "directory-companion"],
+  "strictCases": [
+    {
+      "id": "typo-fuzzy-retained",
+      "query": "archve polcy",
+      "expectsResult": true
+    },
+    {
+      "id": "extended-or-retained",
+      "query": "archive | policy",
+      "expectsResult": true
+    },
+    {
+      "id": "exact-identifier-retained",
+      "query": "ArchivePolicy",
+      "expectsResult": true
+    }
+  ]
+}

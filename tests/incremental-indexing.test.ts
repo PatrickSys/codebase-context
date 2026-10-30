@@ -1,3 +1,4 @@
+import { resolveIndexArtifact } from '../src/core/index-generation.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -32,7 +33,7 @@ describe('Incremental Indexing', () => {
 
     await indexer.index();
 
-    const manifestPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME);
+    const manifestPath = await resolveIndexArtifact(tempDir, MANIFEST_FILENAME);
     const manifest = await readManifest(manifestPath);
     expect(manifest).not.toBeNull();
     expect(manifest!.version).toBe(1);
@@ -136,7 +137,7 @@ describe('Incremental Indexing', () => {
 
     const contextDir = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME);
     await fs.writeFile(
-      path.join(contextDir, INDEXING_STATS_FILENAME),
+      await resolveIndexArtifact(path.dirname(contextDir), INDEXING_STATS_FILENAME),
       JSON.stringify(
         {
           indexedFiles: 77,
@@ -148,7 +149,10 @@ describe('Incremental Indexing', () => {
         2
       )
     );
-    await fs.writeFile(path.join(contextDir, KEYWORD_INDEX_FILENAME), JSON.stringify([]));
+    await fs.writeFile(
+      await resolveIndexArtifact(path.dirname(contextDir), KEYWORD_INDEX_FILENAME),
+      JSON.stringify([])
+    );
 
     const incIndexer = new CodebaseIndexer({
       rootPath: tempDir,
@@ -259,7 +263,7 @@ describe('Incremental Indexing', () => {
     expect(stats.incremental!.deleted).toBe(0);
 
     // Manifest should be created
-    const manifestPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME);
+    const manifestPath = await resolveIndexArtifact(tempDir, MANIFEST_FILENAME);
     const manifest = await readManifest(manifestPath);
     expect(manifest).not.toBeNull();
   });
@@ -274,7 +278,7 @@ describe('Incremental Indexing', () => {
     });
     await indexer1.index();
 
-    const manifestPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME);
+    const manifestPath = await resolveIndexArtifact(tempDir, MANIFEST_FILENAME);
     const manifest1 = await readManifest(manifestPath);
 
     // Add a new file
@@ -288,7 +292,7 @@ describe('Incremental Indexing', () => {
     });
     await indexer2.index();
 
-    const manifest2 = await readManifest(manifestPath);
+    const manifest2 = await readManifest(await resolveIndexArtifact(tempDir, MANIFEST_FILENAME));
     expect(manifest2).not.toBeNull();
 
     // New manifest should have more files
@@ -308,7 +312,7 @@ describe('Incremental Indexing', () => {
     });
     await indexer1.index();
 
-    const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
+    const indexPath = await resolveIndexArtifact(tempDir, KEYWORD_INDEX_FILENAME);
     const fullIndexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as any;
     const fullIndex = Array.isArray(fullIndexRaw)
       ? fullIndexRaw
@@ -328,7 +332,9 @@ describe('Incremental Indexing', () => {
     await indexer2.index();
 
     // Keyword index should still contain chunks from ALL files (not just changed ones)
-    const incrementalRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as any;
+    const incrementalRaw = JSON.parse(
+      await fs.readFile(await resolveIndexArtifact(tempDir, KEYWORD_INDEX_FILENAME), 'utf-8')
+    ) as any;
     const incrementalIndex = Array.isArray(incrementalRaw)
       ? incrementalRaw
       : Array.isArray(incrementalRaw?.chunks)

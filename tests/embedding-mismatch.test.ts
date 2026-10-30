@@ -95,4 +95,8 @@ describe('getConfiguredDimensions', () => {
   it('returns 384 as fallback for unknown transformers model', () => {
     expect(getConfiguredDimensions({ provider: 'transformers', model: 'some/unknown-model' })).toBe(384);
   });
+
+  it('returns 768 for nomic-embed-text via ollama provider', () => {
+    expect(getConfiguredDimensions({ provider: 'ollama', model: 'nomic-embed-text' })).toBe(768);
+  });
 });

@@ -37,7 +37,7 @@ The unreleased source candidate starts new indexes without a model download. Sem
 - Better React/Next.js detection and a fix for reranker passage scoring.
 - Transformers.js v4 for local models.
 
-Known limits: [Intel Mac indexing crash (#68)](https://github.com/PatrickSys/codebase-context/issues/68), [custom OpenAI endpoints (#70)](https://github.com/PatrickSys/codebase-context/issues/70) and [Ollama (#71)](https://github.com/PatrickSys/codebase-context/issues/71) remain open.
+Known limits: [Intel Mac indexing crash (#68)](https://github.com/PatrickSys/codebase-context/issues/68) and [custom OpenAI endpoints (#70)](https://github.com/PatrickSys/codebase-context/issues/70) remain open on published npm; master adds native Ollama and `OPENAI_BASE_URL` wiring.
 
 The existing [benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) reports 25.7% expected-file recovery versus jCodeMunch's 27.1% in a fixed retrieval comparison; it does not establish a winner or coding quality.
 
@@ -132,7 +132,15 @@ More examples are available in the [CLI gallery](./docs/cli.md) and [walkthrough
 
 Code and indexes stay on the machine with the default local embedding provider. Docker, a GPU, and an API key are not required.
 
-Cloud embeddings are optional. If you select a cloud provider, code chunks are sent to that provider to create the search index. The provider, model, project root, and local HTTP port can be changed through environment variables or the project config; see the [capabilities reference](./docs/capabilities.md).
+For local embeddings through [Ollama](https://ollama.com) (avoids Transformers.js on affected Macs, see #68), enable semantic indexing and set:
+
+```bash
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=nomic-embed-text   # optional; default when unset
+OLLAMA_HOST=http://localhost:11434 # optional
+```
+
+Cloud embeddings are optional. If you select OpenAI (`EMBEDDING_PROVIDER=openai`), code chunks are sent to that provider to create the search index. Override the API base with `OPENAI_BASE_URL` (compatible with Ollama’s OpenAI layer, but native `ollama` provider is preferred). The provider, model, project root, and local HTTP port can be changed through environment variables or the project config; see the [capabilities reference](./docs/capabilities.md).
 
 This is the privacy boundary of Codebase Context itself. Your AI client may send search results or file contents to the model provider configured in that client. Codebase Context does not control that connection. If you commit and push `.codebase-context/memory.json`, the recorded project memory also travels with the repository.
 

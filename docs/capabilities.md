@@ -199,7 +199,7 @@ Ordered by execution:
 - **Chunk size**: 50 lines, 0 overlap
 - **Reranker trigger**: activates when top-3 results are within 0.08 score of each other
 - **Embedding mode**: new indexes are model-free. Existing indexes keep their recorded mode unless explicitly changed. `reindex --embeddings` opts into semantic indexing and requires the optional model/storage packages.
-- **Semantic model when enabled**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@huggingface/transformers`. Override: `EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX` for Granite (8192 ctx, slower).
+- **Semantic model when enabled**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@huggingface/transformers`. Override: `EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX` for Granite (8192 ctx, slower). **Ollama**: `EMBEDDING_PROVIDER=ollama`, optional `OLLAMA_HOST` (default `http://localhost:11434`), default model `nomic-embed-text` — embeddings stay on your machine via Ollama’s `/api/embed`.
 - **Vector DB**: LanceDB with cosine distance
 
 ## Decision Card (Edit Intent)
@@ -318,5 +318,5 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring 
 - **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
 - **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
 - **Planned for unpublished 2.4.0:** NestJS analyzer support, React and Next.js detection improvements, and reranker fixes. Dedicated Angular, React, and Next.js analyzers already ship in published 2.2.0. Other languages use the Generic analyzer for indexing and retrieval; available symbol extraction depends on parser support. File import resolution and multi-hop navigation currently support TypeScript and JavaScript. Python and Go import navigation are not supported.
-- **The unreleased candidate defaults new indexes to model-free mode. Published 2.2.0 enables embeddings by default.** When semantic mode is enabled, its default model is `bge-small-en-v1.5` (512-token context). Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
+- **The unreleased candidate defaults new indexes to model-free mode. Published 2.2.0 enables embeddings by default.** When semantic mode is enabled, its default model is `bge-small-en-v1.5` (512-token context). Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` (`OPENAI_BASE_URL` overrides the API host). Ollama is opt-in via `EMBEDDING_PROVIDER=ollama` — local HTTP only, no API key.
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

@@ -5,7 +5,10 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { CodeChunk, CodeComponent } from '../types/index.js';
+import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+import { InvalidSourceChunkError } from '../errors/index.js';
+import type { CodeChunk, CodeComponent } from '../types/index.js';
 
 export interface ChunkingOptions {
   maxChunkSize?: number; // Max lines per chunk
@@ -260,32 +263,101 @@ function generateTags(component: CodeComponent, metadata?: Record<string, any>):
 /**
  * Merge adjacent chunks if they're small
  */
+/** Validate producer evidence against the normalized source snapshot already analyzed. */
+export function validateSourceChunks(
+  chunks: CodeChunk[],
+  source: { filePath: string; relativePath: string; content: string }
+): void {
+  const lines = source.content.split('\n');
+  for (const chunk of chunks) {
+    if (
+      typeof chunk.filePath !== 'string' ||
+      path.relative(path.resolve(source.filePath), path.resolve(chunk.filePath)) !== '' ||
+      chunk.relativePath !== source.relativePath
+    )
+      throw new InvalidSourceChunkError(
+        `Analyzer chunk belongs to another source: ${source.relativePath}`
+      );
+    if (
+      !validLineSpan(chunk) ||
+      chunk.endLine > lines.length ||
+      !lines
+        .slice(chunk.startLine - 1, chunk.endLine)
+        .join('\n')
+        .includes(chunk.content)
+    )
+      throw new InvalidSourceChunkError(
+        `Analyzer chunk does not match its source interval: ${source.relativePath}:${chunk.startLine}-${chunk.endLine}`
+      );
+  }
+}
+
+function validLineSpan(chunk: CodeChunk): boolean {
+  return (
+    Number.isInteger(chunk.startLine) &&
+    Number.isInteger(chunk.endLine) &&
+    chunk.startLine >= 1 &&
+    chunk.endLine >= chunk.startLine &&
+    typeof chunk.content === 'string' &&
+    chunk.content.split('\n').length === chunk.endLine - chunk.startLine + 1
+  );
+}
+
+function mergeMetadata(chunk: CodeChunk): Record<string, unknown> {
+  const { complexity: _complexity, merged: _merged, ...metadata } = chunk.metadata;
+  return metadata;
+}
+
 export function mergeSmallChunks(chunks: CodeChunk[], minSize: number = 20): CodeChunk[] {
   if (chunks.length <= 1) return chunks;
-
   const merged: CodeChunk[] = [];
   let current = chunks[0];
-
+  const unowned = (chunk: CodeChunk) =>
+    ![
+      'componentName',
+      'className',
+      'functionName',
+      'symbolName',
+      'symbolPath',
+      'parentSymbol'
+    ].some((key) => chunk.metadata[key] !== undefined);
   for (let i = 1; i < chunks.length; i++) {
     const next = chunks[i];
-    const currentLines = current.content.split('\n').length;
-    const nextLines = next.content.split('\n').length;
-    const currentIsSymbolAware = current.metadata?.symbolAware === true;
-    const nextIsSymbolAware = next.metadata?.symbolAware === true;
-
     if (
-      !currentIsSymbolAware &&
-      !nextIsSymbolAware &&
-      currentLines < minSize &&
-      nextLines < minSize
+      validLineSpan(current) &&
+      validLineSpan(next) &&
+      current.filePath === next.filePath &&
+      current.relativePath === next.relativePath &&
+      next.startLine === current.endLine + 1 &&
+      current.language === next.language &&
+      current.framework === next.framework &&
+      current.componentType === next.componentType &&
+      current.layer === next.layer &&
+      current.embedding === undefined &&
+      next.embedding === undefined &&
+      !current.metadata.symbolAware &&
+      !next.metadata.symbolAware &&
+      unowned(current) &&
+      unowned(next) &&
+      isDeepStrictEqual(mergeMetadata(current), mergeMetadata(next)) &&
+      current.content.split('\n').length < minSize &&
+      next.content.split('\n').length < minSize
     ) {
-      // Merge chunks
+      const content = current.content + '\n' + next.content;
       current = {
         ...current,
-        content: current.content + '\n' + next.content,
+        content,
         endLine: next.endLine,
+        dependencies: [...new Set([...current.dependencies, ...next.dependencies])],
+        imports: [...new Set([...current.imports, ...next.imports])],
+        exports: [...new Set([...current.exports, ...next.exports])],
+        tags: [...new Set([...current.tags, ...next.tags])],
         metadata: {
           ...current.metadata,
+          ...(typeof current.metadata.complexity === 'number' ||
+          typeof next.metadata.complexity === 'number'
+            ? { complexity: calculateComplexity(content) }
+            : {}),
           merged: true
         }
       };
@@ -294,7 +366,6 @@ export function mergeSmallChunks(chunks: CodeChunk[], minSize: number = 20): Cod
       current = next;
     }
   }
-
   merged.push(current);
   return merged;
 }

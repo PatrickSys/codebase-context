@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { CodebaseIndexer } from '../../src/core/indexer.js';
 
-const [rootPath, hold] = process.argv.slice(2);
+const [rootPath, hold, mode] = process.argv.slice(2);
 if (!rootPath) throw new Error('Expected project root');
 const rename = fs.rename.bind(fs);
 fs.rename = async (source, target) => {
@@ -29,7 +29,7 @@ try {
   const stats = await new CodebaseIndexer({
     rootPath,
     config: { skipEmbedding: true },
-    incrementalOnly: true
+    incrementalOnly: mode !== 'full'
   }).index();
   process.send?.({ type: 'complete', incremental: stats.incremental });
 } catch (error) {

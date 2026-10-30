@@ -20,6 +20,7 @@ import {
 } from '../patterns/semantics.js';
 import { assessSearchQuality } from '../core/search-quality.js';
 import { getRerankerStatus } from '../core/reranker.js';
+import type { IndexSignal } from '../core/index-signal.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import { readMemoriesFile, withConfidence } from '../memory/store.js';
 import type { MemoryWithConfidence } from '../memory/store.js';
@@ -234,23 +235,75 @@ async function handlePinned(
     sourceCoverage = outcome.sourceCoverage;
   } catch (error) {
     if (error instanceof IndexCorruptedError) {
-      console.error('[Auto-Heal] Index corrupted. Triggering background re-index...');
-      void ctx.performIndexing();
+      console.error('[Auto-Heal] Index corrupted. Requesting background re-index...');
+      let finished = false;
+      if (ctx.indexState.status !== 'indexing') {
+        const fail = (failure: unknown) => {
+          ctx.indexState.status = 'error';
+          ctx.indexState.error = failure instanceof Error ? failure.message : String(failure);
+        };
+        try {
+          const task = ctx.performIndexing();
+          if (task)
+            void task.then(() => {
+              finished = true;
+            }, fail);
+        } catch (failure) {
+          fail(failure);
+        }
+        // Observe immediate rejection/state transitions without waiting for a rebuild.
+        await Promise.resolve();
+      }
+      const state = ctx.indexState.status;
+      const index: IndexSignal =
+        state === 'error'
+          ? {
+              status: 'error',
+              confidence: 'low',
+              action: 'rebuild-failed',
+              reason: ctx.indexState.error ?? error.message
+            }
+          : state === 'indexing'
+            ? {
+                status: 'indexing',
+                confidence: 'low',
+                action: 'rebuild-started',
+                reason: error.message
+              }
+            : finished && state === 'ready'
+              ? {
+                  status: 'ready',
+                  confidence: 'low',
+                  action: 'rebuild-completed',
+                  reason: 'Recovery completed; retry the search.'
+                }
+              : {
+                  status: 'unknown',
+                  confidence: 'low',
+                  action: 'rebuild-requested',
+                  reason: 'Recovery was requested but has not entered a confirmed indexing state.'
+                };
       return {
         content: [
           {
             type: 'text',
             text: JSON.stringify(
               {
-                status: 'indexing',
+                status: index.status,
                 message:
-                  'Index is unavailable or not ready. Indexing has started. Check indexing status, then retry.'
+                  index.status === 'error'
+                    ? `Index recovery failed: ${index.reason}`
+                    : index.status === 'indexing'
+                      ? 'Index is unavailable or not ready. Indexing has started. Check indexing status, then retry.'
+                      : index.reason,
+                index
               },
               null,
               2
             )
           }
-        ]
+        ],
+        ...(index.status === 'error' ? { isError: true } : {})
       };
     }
     throw error;

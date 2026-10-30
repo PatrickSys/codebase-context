@@ -21,6 +21,8 @@ import { NextJsAnalyzer } from './analyzers/nextjs/index.js';
 import { NestJsAnalyzer } from './analyzers/nestjs/index.js';
 import { ReactAnalyzer } from './analyzers/react/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
+import { IndexSignalSchema, type IndexSignal } from './core/index-signal.js';
+export type { IndexSignal } from './core/index-signal.js';
 import { IndexCorruptedError } from './errors/index.js';
 import { appendMemoryFile } from './memory/store.js';
 import { handleCliCommand } from './cli.js';
@@ -707,17 +709,6 @@ export const INDEX_CONSUMING_TOOL_NAMES = [
 
 export const INDEX_CONSUMING_RESOURCE_NAMES = ['Codebase Intelligence'] as const;
 
-type IndexStatus = 'ready' | 'rebuild-required' | 'indexing' | 'unknown';
-type IndexConfidence = 'high' | 'low';
-type IndexAction = 'served' | 'rebuild-started' | 'rebuilt-and-served';
-
-export type IndexSignal = {
-  status: IndexStatus;
-  confidence: IndexConfidence;
-  action: IndexAction;
-  reason?: string;
-};
-
 async function requireValidIndex(project: ProjectState): Promise<IndexSignal> {
   const meta = await readIndexMeta(project.rootPath);
   await validateIndexArtifacts(project.rootPath, meta);
@@ -1163,12 +1154,32 @@ export function registerHandlers(target: Server): void {
           if (indexSignal !== undefined && result.content?.[0]) {
             try {
               const parsed = JSON.parse(result.content[0].text);
+              const lateSignal = IndexSignalSchema.safeParse(parsed.index);
+              let finalSignal =
+                lateSignal.success && lateSignal.data.status === parsed.status
+                  ? lateSignal.data
+                  : indexSignal;
+              if (
+                lateSignal.success &&
+                lateSignal.data.action.startsWith('rebuild-') &&
+                project.indexState.status === 'error'
+              ) {
+                parsed.status = 'error';
+                parsed.message = `Index recovery failed: ${project.indexState.error ?? 'unknown error'}`;
+                finalSignal = {
+                  status: 'error',
+                  confidence: 'low',
+                  action: 'rebuild-failed',
+                  reason: parsed.message
+                };
+                result.isError = true;
+              }
               result.content[0] = {
                 type: 'text',
                 text: finalizeJsonTextPayload(
                   {
                     ...parsed,
-                    index: indexSignal,
+                    index: finalSignal,
                     project: buildProjectDescriptor(project.rootPath)
                   },
                   name === 'get_code_relationships'

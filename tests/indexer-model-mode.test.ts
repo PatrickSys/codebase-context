@@ -348,7 +348,7 @@ describe('persisted embedding mode', () => {
       const stats = await new CodebaseIndexer({ rootPath, incrementalOnly: true }).index();
       expect(stats.errors).toEqual([]);
       const rebuilt = JSON.parse(await fs.readFile(metaPath, 'utf8')) as IndexMeta;
-      expect(rebuilt.formatVersion).toBe(4);
+      expect(rebuilt.formatVersion).toBe(INDEX_FORMAT_VERSION);
       expect(rebuilt.buildId).not.toBe(oldMeta.buildId);
       expect(rebuilt.artifacts.vectorDb.embeddingEnabled).toBe(false);
     },

@@ -6,7 +6,7 @@
 import { createHash, randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { IndexCorruptedError } from '../errors/index.js';
+import { IndexCorruptedError, InvalidSourceChunkError } from '../errors/index.js';
 import { glob } from 'glob';
 import ignore from 'ignore';
 import {
@@ -44,7 +44,7 @@ import {
   FileExport,
   ImportEdgeSource
 } from '../utils/usage-tracker.js';
-import { mergeSmallChunks } from '../utils/chunking.js';
+import { mergeSmallChunks, validateSourceChunks } from '../utils/chunking.js';
 import { getFileCommitDates } from '../utils/git-dates.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
@@ -722,6 +722,11 @@ export class CodebaseIndexer {
             }
 
             const mergedChunks = mergeSmallChunks(result.chunks, 15);
+            validateSourceChunks(mergedChunks, {
+              filePath: resolvedFile,
+              relativePath: relativeFile,
+              content
+            });
 
             allChunks.push(...mergedChunks);
             if (isFileChanged) {
@@ -882,7 +887,11 @@ export class CodebaseIndexer {
             stats.skippedFiles++;
           }
         } catch (error) {
-          if (error instanceof SourceSnapshotChangedError) throw error;
+          if (
+            error instanceof SourceSnapshotChangedError ||
+            error instanceof InvalidSourceChunkError
+          )
+            throw error;
           const relativeFile = path.relative(this.rootPath, file).replace(/\\/g, '/');
           if (
             diff?.unchanged.includes(relativeFile) &&

@@ -18,3 +18,11 @@ export class OptionalDependencyError extends Error {
     this.name = 'OptionalDependencyError';
   }
 }
+
+/** Producer corruption is fatal to this build, never a skippable source read error. */
+export class InvalidSourceChunkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidSourceChunkError';
+  }
+}

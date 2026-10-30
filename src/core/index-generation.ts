@@ -136,8 +136,8 @@ async function inspectGeneration(root: string, name: string): Promise<Generation
       if (
         !parsed?.success ||
         parsed.data.buildId !== name ||
-        parsed.data.metaVersion !== INDEX_META_VERSION ||
-        parsed.data.formatVersion !== INDEX_FORMAT_VERSION
+        parsed.data.metaVersion > INDEX_META_VERSION ||
+        parsed.data.formatVersion > INDEX_FORMAT_VERSION
       )
         return { kind: 'unknown', reason: 'Generation completion metadata is untrusted.' };
       // Local completion metadata must name this directory's fixed artifact set.
@@ -708,12 +708,13 @@ async function collect(root: string, reserve: number): Promise<void> {
     const parsed = IndexMetaSchema.safeParse(raw);
     if (
       parsed.success &&
-      parsed.data.metaVersion === INDEX_META_VERSION &&
-      parsed.data.formatVersion === INDEX_FORMAT_VERSION
+      parsed.data.metaVersion <= INDEX_META_VERSION &&
+      parsed.data.formatVersion <= INDEX_FORMAT_VERSION
     ) {
-      for (const filename of DERIVED_FILES) artifactRelative(parsed.data, filename);
       active = parsed.data.buildId;
       activeGeneration = parsed.data.artifacts.keywordIndex.path.startsWith(`${GENERATIONS}/`);
+      if (activeGeneration)
+        for (const filename of DERIVED_FILES) artifactRelative(parsed.data, filename);
     }
   } catch (error) {
     if (!isMissing(error) && !(error instanceof SyntaxError)) throw error;

@@ -63,7 +63,7 @@ vi.mock('../src/core/indexer.js', () => {
     }
 
     async index() {
-      indexerMocks.index();
+      await indexerMocks.index();
       return {
         totalFiles: 0,
         indexedFiles: 0,
@@ -178,28 +178,47 @@ describe('search_codebase auto-heal', () => {
       const { IndexCorruptedError } = await import('../src/errors/index.js');
 
       searchMocks.search.mockRejectedValueOnce(new IndexCorruptedError(errorMessage));
+      const releaseIndexing = Promise.withResolvers<void>();
+      indexerMocks.index.mockImplementationOnce(() => releaseIndexing.promise);
 
       const { server } = await import('../src/index.js');
       const handler = (server as any)._requestHandlers.get('tools/call');
 
-      const response = await handler({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: {
-          name: 'search_codebase',
-          arguments: {
-            query: 'test'
+      let response;
+      try {
+        response = await handler({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: {
+            name: 'search_codebase',
+            arguments: {
+              query: 'test'
+            }
           }
-        }
-      });
+        });
 
-      const payload = JSON.parse(response.content[0].text);
-      expect(payload.status).toBe('indexing');
-      expect(payload.message).toBe(
-        'Index is unavailable or not ready. Indexing has started. Check indexing status, then retry.'
-      );
-      expect(searchMocks.search).toHaveBeenCalledTimes(1);
+        const payload = JSON.parse(response.content[0].text);
+        expect(payload.status).toBe('indexing');
+        expect(payload.message).toBe(
+          'Index is unavailable or not ready. Indexing has started. Check indexing status, then retry.'
+        );
+        expect(searchMocks.search).toHaveBeenCalledTimes(1);
+        expect(payload.index).toMatchObject({
+          status: 'indexing',
+          confidence: 'low',
+          action: 'rebuild-started'
+        });
+        expect(payload.project.indexStatus).toBe('indexing');
+      } finally {
+        releaseIndexing.resolve();
+      }
+      const { getOrCreateProject } = await import('../src/project-state.js');
+      const deadline = Date.now() + 1000;
+      while (getOrCreateProject(tempRoot!).indexState.status === 'indexing') {
+        if (Date.now() >= deadline) throw new Error('Controlled index fixture did not finish');
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
     },
     15000
   );

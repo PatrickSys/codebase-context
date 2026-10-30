@@ -15,6 +15,20 @@ describe('NextJsAnalyzer', () => {
     expect(analyzer.canAnalyze('/tmp/file.tsx', 'import React from "react";')).toBe(false);
   });
 
+  it('ignores SvelteKit route files and Nuxt app/pages vue files', () => {
+    const analyzer = new NextJsAnalyzer();
+
+    expect(
+      analyzer.canAnalyze(
+        '/repo/routes/+page.server.js',
+        'export async function load() { return {}; }'
+      )
+    ).toBe(false);
+    expect(
+      analyzer.canAnalyze('/repo/app/pages/home.vue', '<template><main /></template>')
+    ).toBe(false);
+  });
+
   it('detects app router pages, client components, and metadata exports', async () => {
     const analyzer = new NextJsAnalyzer();
     const filePath = path.join(process.cwd(), 'app', 'settings', 'page.tsx');

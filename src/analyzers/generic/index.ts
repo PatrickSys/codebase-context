@@ -32,6 +32,10 @@ import {
   categorizeDependency
 } from '../../utils/dependency-detection.js';
 import type { WorkspacePackageJson } from '../../utils/workspace-detection.js';
+import {
+  detectFrontendFrameworkFromDeps,
+  extractSingleFileComponentScript
+} from '../../utils/frontend-framework-metadata.js';
 
 export class GenericAnalyzer implements FrameworkAnalyzer {
   readonly name = 'generic';
@@ -91,7 +95,9 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     '.css',
     '.scss',
     '.sass',
-    '.less'
+    '.less',
+    '.vue',
+    '.svelte'
   ];
   readonly priority = 10; // Low priority - fallback analyzer
 
@@ -126,8 +132,23 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         usesTreeSitterSymbols = true;
       }
 
-      if (language === 'typescript' || language === 'javascript') {
-        const parsed = await this.parseJSTSFile(filePath, content, language);
+      let scriptLanguage: 'typescript' | 'javascript' | null = null;
+      let scriptBody: string | null = null;
+      if (language === 'vue' || language === 'svelte') {
+        const extracted = extractSingleFileComponentScript(content, language);
+        if (extracted) {
+          scriptBody = extracted.body;
+          scriptLanguage = extracted.language;
+        }
+      }
+
+      const jstsLanguage =
+        scriptLanguage ??
+        (language === 'typescript' || language === 'javascript' ? language : null);
+      const jstsContent = scriptBody ?? content;
+
+      if (jstsLanguage) {
+        const parsed = await this.parseJSTSFile(filePath, jstsContent, jstsLanguage);
         imports = parsed.imports;
         exports = parsed.exports;
 
@@ -247,6 +268,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
 
     let workspaceType: string = 'single';
     let workspacePackages: WorkspacePackageJson[] = [];
+    let frameworkClaim: CodebaseMetadata['framework'];
 
     try {
       workspaceType = await detectWorkspaceType(rootPath);
@@ -276,6 +298,11 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         version: version as string,
         category: categorizeDependency(name)
       }));
+
+      const framework = detectFrontendFrameworkFromDeps(rawDeps);
+      if (framework) {
+        frameworkClaim = framework;
+      }
     } catch (_error) {
       // skip
     }
@@ -285,6 +312,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       rootPath,
       languages: [],
       dependencies,
+      framework: frameworkClaim,
       architecture: {
         type: 'mixed',
         layers: {

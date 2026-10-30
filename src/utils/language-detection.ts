@@ -16,6 +16,8 @@ const extensionToLanguage: Record<string, string> = {
   '.tsx': 'typescriptreact',
   '.mts': 'typescript',
   '.cts': 'typescript',
+  '.vue': 'vue',
+  '.svelte': 'svelte',
 
   // Web
   '.html': 'html',
@@ -115,6 +117,8 @@ const baseCodeExtensions = new Set([
   '.tsx',
   '.mts',
   '.cts',
+  '.vue',
+  '.svelte',
   '.html',
   '.htm',
   '.css',

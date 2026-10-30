@@ -142,6 +142,36 @@ describe('CLI entrypoint runtime', () => {
       await rm(projectRoot, { recursive: true, force: true });
     }
   }, 70_000);
+  it('dispatches reindex when invoked through an npm-style symlink entrypoint', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'cbc-cli-reindex-entrypoint-'));
+    const tempDirectory = join(tmpdir(), `cbc-cli-bin-${Date.now()}`);
+    const linkedEntrypoint = join(tempDirectory, 'codebase-context');
+
+    await writeFile(join(projectRoot, 'example.ts'), 'export const value = 1;\n');
+    await mkdir(tempDirectory, { recursive: true });
+    symlinkSync(entrypoint, linkedEntrypoint, 'file');
+
+    try {
+      const result = spawnSync(
+        process.execPath,
+        ['--import', import.meta.resolve('tsx'), linkedEntrypoint, 'reindex', '--no-embeddings'],
+        {
+          cwd: projectRoot,
+          env: { ...process.env },
+          encoding: 'utf8',
+          timeout: 120_000
+        }
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stderr).toContain('Complete:');
+      expect(result.stderr).not.toContain('@modelcontextprotocol/sdk/server/stdio.js');
+    } finally {
+      rmSync(tempDirectory, { recursive: true, force: true });
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  }, 120_000);
+
   it('dispatches CLI help when invoked through a symlink entrypoint', (context) => {
     const tempDirectory = mkdtempSync(join(tmpdir(), 'cbc-cli-entrypoint-'));
     const linkedEntrypoint = join(tempDirectory, 'codebase-context.ts');

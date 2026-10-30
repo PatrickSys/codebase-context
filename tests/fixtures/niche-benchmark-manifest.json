@@ -1,0 +1,204 @@
+{
+  "description": "Frozen 18-task niche benchmark across three public repos, two tasks per niche per repo. Expected patterns are path substring checks, not full paths.",
+  "frozenDate": "2026-10-30",
+  "cloneRoot": "benchmark-repos",
+  "repos": [
+    {
+      "id": "angular-spotify",
+      "repository": "trungk18/angular-spotify",
+      "repositoryUrl": "https://github.com/trungk18/angular-spotify",
+      "repositoryRef": "ff9efa765c53cfde78c9a172c62d515ae8ef9fe0",
+      "language": "typescript",
+      "sizeClass": "medium",
+      "sourceFixture": "tests/fixtures/discovery-angular-spotify.json"
+    },
+    {
+      "id": "excalidraw",
+      "repository": "excalidraw/excalidraw",
+      "repositoryUrl": "https://github.com/excalidraw/excalidraw",
+      "repositoryRef": "e18c1dd213000dde0ae94ef7eb00aab537b39708",
+      "language": "typescript",
+      "sizeClass": "large",
+      "sourceFixture": "tests/fixtures/discovery-excalidraw.json"
+    },
+    {
+      "id": "fastapi",
+      "repository": "fastapi/fastapi",
+      "repositoryUrl": "https://github.com/fastapi/fastapi",
+      "repositoryRef": "628c34e0cae200564d191c95d7edea78c88c4b5e",
+      "language": "python",
+      "sizeClass": "medium",
+      "sourceFixture": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "as-team-01",
+      "repoId": "angular-spotify",
+      "niche": "team-convention",
+      "sourceTaskId": "as-find-01",
+      "query": "What DI pattern dominates here?",
+      "expectedFilePatterns": ["service", "inject"],
+      "expectedSignals": ["dependencyInjection"],
+      "codebaseContext": { "command": "patterns", "args": ["--category", "di", "--json"] }
+    },
+    {
+      "id": "as-team-02",
+      "repoId": "angular-spotify",
+      "niche": "team-convention",
+      "sourceTaskId": "as-find-02",
+      "query": "What state-management pattern should an agent imitate?",
+      "expectedFilePatterns": ["store", "state"],
+      "expectedSignals": ["stateManagement"],
+      "codebaseContext": { "command": "patterns", "args": ["--category", "state", "--json"] }
+    },
+    {
+      "id": "as-ep-01",
+      "repoId": "angular-spotify",
+      "niche": "edit-preflight",
+      "sourceTaskId": "as-ep-01",
+      "query": "update how authorization token headers are attached to API requests",
+      "expectedFilePatterns": ["auth", "interceptor"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "edit", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "as-ep-02",
+      "repoId": "angular-spotify",
+      "niche": "edit-preflight",
+      "sourceTaskId": "as-ep-02",
+      "query": "change the logic that skips to the next song",
+      "expectedFilePatterns": ["player-api", "player/api", "player"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "edit", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "as-sym-01",
+      "repoId": "angular-spotify",
+      "niche": "symbol-retrieval",
+      "sourceTaskId": "as-search-01",
+      "query": "skip to next song",
+      "expectedFilePatterns": ["player-api", "player/api", "player"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "explore", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "as-sym-02",
+      "repoId": "angular-spotify",
+      "niche": "symbol-retrieval",
+      "sourceTaskId": "as-search-03",
+      "query": "add authorization token to API requests",
+      "expectedFilePatterns": ["auth", "interceptor"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "explore", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "ex-team-01",
+      "repoId": "excalidraw",
+      "niche": "team-convention",
+      "sourceTaskId": "ex-find-01",
+      "query": "What state-management pattern dominates here?",
+      "expectedFilePatterns": ["appstate", "state", "store"],
+      "expectedSignals": ["stateManagement"],
+      "codebaseContext": { "command": "patterns", "args": ["--category", "state", "--json"] }
+    },
+    {
+      "id": "ex-team-02",
+      "repoId": "excalidraw",
+      "niche": "team-convention",
+      "sourceTaskId": "ex-find-04",
+      "query": "What dependency injection or dependency pattern dominates here?",
+      "expectedFilePatterns": ["component", "app", "src"],
+      "expectedSignals": ["dependencyInjection"],
+      "codebaseContext": { "command": "patterns", "args": ["--category", "di", "--json"] }
+    },
+    {
+      "id": "ex-ep-01",
+      "repoId": "excalidraw",
+      "niche": "edit-preflight",
+      "sourceTaskId": "ex-ep-01",
+      "query": "change how scene updates are applied",
+      "expectedFilePatterns": ["scene"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "edit", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "ex-ep-02",
+      "repoId": "excalidraw",
+      "niche": "edit-preflight",
+      "sourceTaskId": "ex-ep-03",
+      "query": "modify scene serialization to json export",
+      "expectedFilePatterns": ["scene", "json", "data"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "edit", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "ex-sym-01",
+      "repoId": "excalidraw",
+      "niche": "symbol-retrieval",
+      "sourceTaskId": "ex-search-01",
+      "query": "element type definitions",
+      "expectedFilePatterns": ["element", "type"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "explore", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "ex-sym-02",
+      "repoId": "excalidraw",
+      "niche": "symbol-retrieval",
+      "sourceTaskId": "ex-search-02",
+      "query": "scene serialization export json",
+      "expectedFilePatterns": ["scene", "json", "data"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "explore", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "fa-team-01",
+      "repoId": "fastapi",
+      "niche": "team-convention",
+      "sourceTaskId": null,
+      "query": "How does FastAPI wire dependency injection for route handlers?",
+      "expectedFilePatterns": ["param_functions", "depends"],
+      "expectedSignals": ["Depends", "dependency"],
+      "codebaseContext": { "command": "patterns", "args": ["--category", "di", "--json"] }
+    },
+    {
+      "id": "fa-team-02",
+      "repoId": "fastapi",
+      "niche": "team-convention",
+      "sourceTaskId": null,
+      "query": "Where are API routers defined and included in the application?",
+      "expectedFilePatterns": ["routing", "applications"],
+      "expectedSignals": ["APIRouter", "router"],
+      "codebaseContext": { "command": "patterns", "args": ["--category", "all", "--json"] }
+    },
+    {
+      "id": "fa-ep-01",
+      "repoId": "fastapi",
+      "niche": "edit-preflight",
+      "sourceTaskId": null,
+      "query": "change how OAuth2 bearer tokens are extracted from requests",
+      "expectedFilePatterns": ["oauth2", "security"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "edit", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "fa-ep-02",
+      "repoId": "fastapi",
+      "niche": "edit-preflight",
+      "sourceTaskId": null,
+      "query": "modify OpenAPI schema generation for response models",
+      "expectedFilePatterns": ["openapi"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "edit", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "fa-sym-01",
+      "repoId": "fastapi",
+      "niche": "symbol-retrieval",
+      "sourceTaskId": null,
+      "query": "validate request body with pydantic field constraints",
+      "expectedFilePatterns": ["routing", "param"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "explore", "--limit", "5", "--json"] }
+    },
+    {
+      "id": "fa-sym-02",
+      "repoId": "fastapi",
+      "niche": "symbol-retrieval",
+      "sourceTaskId": null,
+      "query": "HTTP exception handler returns JSON error detail",
+      "expectedFilePatterns": ["exception", "routing"],
+      "codebaseContext": { "command": "search", "args": ["--intent", "explore", "--limit", "5", "--json"] }
+    }
+  ]
+}

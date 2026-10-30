@@ -9,7 +9,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { KEYWORD_INDEX_FILENAME } from './constants/codebase-context.js';
 import { makePaths } from './project-state.js';
-import { CodebaseIndexer } from './core/indexer.js';
+import { CodebaseIndexer, formatIndexingCompleteLine } from './core/indexer.js';
 import { dispatchTool } from './tools/index.js';
 import type { ToolContext } from './tools/index.js';
 import type { IndexState } from './tools/types.js';
@@ -83,7 +83,7 @@ function printUsage(): void {
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
-  console.log('  init [--client <name>] [--yes]     Detect and configure coding tools');
+  console.log('  init [--client <name>] [--yes] [--dry-run]  Configure detected coding tools');
   console.log('  map [--json] [--pretty]              Conventions map (indexes first if needed)');
   console.log('');
   console.log('Global flags:');
@@ -155,11 +155,7 @@ async function initToolContext(): Promise<ToolContext> {
       indexState.lastIndexed = new Date();
       indexState.stats = stats;
 
-      console.error(
-        `Complete: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(
-          stats.duration / 1000
-        ).toFixed(2)}s`
-      );
+      console.error(formatIndexingCompleteLine(stats));
     } catch (error) {
       indexState.status = 'error';
       indexState.error = error instanceof Error ? error.message : String(error);

@@ -120,6 +120,33 @@ describe('generateMcpConfig', () => {
       command: [nodeExecutable, cacheEntrypoint, projectRoot]
     });
   });
+
+  it('VS Code writes workspace servers config with the saved launch', () => {
+    const result = generateMcpConfig('vscode', savedLaunch(projectRoot));
+    expect(result.path).toBe(path.join(projectRoot, '.vscode', 'mcp.json'));
+    expect(JSON.parse(result.content)).toEqual({
+      servers: {
+        'codebase-context': {
+          command: nodeExecutable,
+          args: [cacheEntrypoint, projectRoot]
+        }
+      }
+    });
+  });
+
+  it('Windsurf writes user mcp_config.json with the saved launch', () => {
+    const home = path.resolve('C:/Users/Test User');
+    const result = generateMcpConfig('windsurf', { ...savedLaunch(projectRoot), homeDirectory: home });
+    expect(result.path).toBe(path.join(home, '.codeium', 'windsurf', 'mcp_config.json'));
+    expect(JSON.parse(result.content)).toEqual({
+      mcpServers: {
+        'codebase-context': {
+          command: nodeExecutable,
+          args: [cacheEntrypoint, projectRoot]
+        }
+      }
+    });
+  });
 });
 
 describe('resolveInitRoot', () => {
@@ -382,7 +409,14 @@ describe('detectClients', () => {
 
     const clients = await detectClients('/project', { PATH: 'C:/tools' }, 'win32');
 
-    expect(CLIENTS.map(({ id }) => id)).toEqual(['claude-code', 'codex', 'cursor', 'opencode']);
+    expect(CLIENTS.map(({ id }) => id)).toEqual([
+      'claude-code',
+      'codex',
+      'cursor',
+      'vscode',
+      'windsurf',
+      'opencode'
+    ]);
     expect(clients).toContain('codex');
     expect(clients).not.toContain('claude-code');
     expect(

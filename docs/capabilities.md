@@ -1,6 +1,6 @@
 # Capabilities Reference
 
-Unpinned `npx codebase-context` commands install the published 2.2.0 package. Sections marked as unreleased describe the source candidate and require a built checkout or a local candidate installation.
+Unpinned `npx codebase-context` installs **npm 2.2.0 today**. **2.3.0** is the pending release from this repo; **2.4.0** is not published. Sections marked **2.4.0** or **planned** describe future work only.
 
 Start with the repository map, then search for relevant code. For an overview, see [README.md](../README.md). Features marked as planned for 2.4.0 are not yet available from npm.
 
@@ -22,7 +22,7 @@ Per-project config overrides supported today:
 - `projects[].excludePatterns`: merged with the built-in exclusion set for that project at index time
 - `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
 - `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
-- `projects[].parsing.maxChunks`: sets the maximum number of searchable chunks indexed for that project (requires 2.4.0, not yet published)
+- `projects[].parsing.maxChunks`: sets the maximum number of searchable chunks indexed for that project (default 5000; configurable via `~/.codebase-context/config.json`)
 
 Copy-pasteable client config templates are shipped in the package:
 
@@ -65,7 +65,7 @@ npx -y codebase-context reindex --incremental
 
 ## Tool Surface
 
-10 MCP tools + active/project-scoped context resources.
+10 MCP tools plus project-scoped context resources in published 2.2.0/2.3.0. **`get_code_relationships`** and related navigation improvements are documented below for the in-repo build; treat them as **2.4.0** until that release is on npm unless you install from source.
 
 Shared selector inputs:
 
@@ -199,7 +199,7 @@ Ordered by execution:
 - **Chunk size**: 50 lines, 0 overlap
 - **Reranker trigger**: activates when top-3 results are within 0.08 score of each other
 - **Embedding mode**: new indexes are model-free. Existing indexes keep their recorded mode unless explicitly changed. `reindex --embeddings` opts into semantic indexing and requires the optional model/storage packages.
-- **Semantic model when enabled**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@huggingface/transformers`. Override: `EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX` for Granite (8192 ctx, slower).
+- **Semantic model when enabled**: `Xenova/bge-small-en-v1.5` (512 token context, fast, local-first) via `@huggingface/transformers`. Override: `EMBEDDING_MODEL=onnx-community/granite-embedding-small-english-r2-ONNX` for Granite (8192 ctx, slower). **Ollama**: `EMBEDDING_PROVIDER=ollama`, optional `OLLAMA_HOST` (default `http://localhost:11434`), default model `nomic-embed-text` — embeddings stay on your machine via Ollama’s `/api/embed`.
 - **Vector DB**: LanceDB with cosine distance
 
 ## Decision Card (Edit Intent)
@@ -317,6 +317,7 @@ Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring 
 
 - **Symbol refs are not a call-graph.** `get_symbol_references` counts identifier-node occurrences in the AST (comments/strings excluded via Tree-sitter). It does not distinguish call sites from type annotations, variable assignments, or imports. Full call-site-specific analysis (`call_expression` nodes only) is a roadmap item.
 - **Impact is 2-hop max.** `computeImpactCandidates` walks direct importers then their importers. Full BFS reachability is on the roadmap.
-- **Planned for unpublished 2.4.0:** NestJS analyzer support, React and Next.js detection improvements, and reranker fixes. Dedicated Angular, React, and Next.js analyzers already ship in published 2.2.0. Other languages use the Generic analyzer for indexing and retrieval; available symbol extraction depends on parser support. File import resolution and multi-hop navigation currently support TypeScript and JavaScript. Python and Go import navigation are not supported.
-- **The unreleased candidate defaults new indexes to model-free mode. Published 2.2.0 enables embeddings by default.** When semantic mode is enabled, its default model is `bge-small-en-v1.5` (512-token context). Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` — sends code externally.
+- **Planned for 2.4.0 (not on npm):** NestJS analyzer, React/Next.js detection improvements, reranker fixes, optional `maxChunks` config, and full `get_code_relationships` / review-CLI publication called out in [review-context](./review-context.md). Angular, React, and Next.js analyzers ship on npm 2.2.0 and remain in 2.3.0. Other languages use the Generic analyzer for indexing and retrieval; available symbol extraction depends on parser support. File import resolution and multi-hop navigation currently support TypeScript and JavaScript. Python and Go import navigation are not supported.
+- **Indexing defaults in 2.3.0:** new project folders index keyword-only until you run `reindex --embeddings` (optional `@huggingface/transformers` + `@lancedb/lancedb` peers). npm **2.2.0** still pulled embeddings on first index. When semantic mode is enabled, default model is `bge-small-en-v1.5` (512-token context). Granite (8192 context) is opt-in via `EMBEDDING_MODEL`. OpenAI is opt-in via `EMBEDDING_PROVIDER=openai` with `OPENAI_API_KEY`; use `OPENAI_BASE_URL` for OpenAI-compatible endpoints (LiteLLM, proxies). Ollama is opt-in via `EMBEDDING_PROVIDER=ollama` — local HTTP only, no API key (`OLLAMA_HOST` overrides the default host).
+
 - **Patterns are file-level frequency counts.** Not semantic clustering. Rising/Declining trend is derived from git commit recency for files using each pattern, not from usage semantics.

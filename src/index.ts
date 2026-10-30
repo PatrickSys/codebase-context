@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ProjectConfig } from './server/config.js';
 import type { Resource } from '@modelcontextprotocol/sdk/types.js';
-import { CodebaseIndexer } from './core/indexer.js';
+import { CodebaseIndexer, formatIndexingCompleteLine } from './core/indexer.js';
 
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
@@ -1389,11 +1389,7 @@ async function performIndexingOnce(
     project.indexState.lastIndexed = new Date();
     project.indexState.stats = stats;
 
-    console.error(
-      `Complete: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(
-        stats.duration / 1000
-      ).toFixed(2)}s`
-    );
+    console.error(formatIndexingCompleteLine(stats));
 
     // Auto-extract memories from git history (non-blocking, best-effort)
     try {

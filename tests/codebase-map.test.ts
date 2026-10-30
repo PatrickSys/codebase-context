@@ -126,6 +126,33 @@ describe('buildCodebaseMap', () => {
     expect(map.architecture.entrypoints).toEqual(['src/cli.ts', 'src/index.ts']);
   });
 
+  it('excludes vendored raw bundles from bounded map entrypoints and layers', async () => {
+    const rootPath = await createTempMapProject({
+      graph: {
+        imports: {
+          'live-from-ai/raw/index-BMtpUqT3.js': ['live-from-ai/raw/vendor.js'],
+          'NOW.md': [],
+          'scripts/context-route.mjs': ['NOW.md']
+        },
+        importedBy: {
+          'live-from-ai/raw/index-BMtpUqT3.js': [],
+          'NOW.md': ['scripts/context-route.mjs'],
+          'scripts/context-route.mjs': []
+        },
+        exports: {}
+      }
+    });
+    try {
+      const project = createProjectState(rootPath);
+      const map = await buildCodebaseMap(project);
+      expect(map.architecture.layers.map((layer) => layer.name)).not.toContain('live-from-ai');
+      expect(map.architecture.entrypoints.some((ep) => ep.includes('index-BMtpUqT3'))).toBe(false);
+      expect(map.architecture.entrypoints).toContain('scripts/context-route.mjs');
+    } finally {
+      await removeTempMapProject(rootPath);
+    }
+  });
+
   it('derives hub files: top 5 by importedBy count, sorted count-desc then alpha', async () => {
     const project = createProjectState(FIXTURE_ROOT);
     const map = await buildCodebaseMap(project, { mode: 'full' });

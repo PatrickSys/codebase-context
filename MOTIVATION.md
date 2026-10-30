@@ -24,6 +24,9 @@ The root cause isn't the model. It's the context layer. Agents get raw code from
 | ---------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `.cursorrules` / `AGENTS.md` | Static rules the agent may or may not always follow | Can't express migration states ("use A for new code, B for old"). Goes stale.   |
 | Semantic search / RAG        | Finds similar code                                  | Blind to quality. Can't tell the best example to follow from hacky workarounds. |
+| **Aider repo map**           | Compact structural map for the model                | No team pattern frequencies, memory, or edit preflight card.                   |
+| **Repomix**                  | Pack repo (or slices) into a prompt                 | One-shot context, not live search, conventions, or session memory.             |
+| **jCodeMunch**               | Fast MCP code search                                | Strong retrieval in our fixed benchmark; less convention/memory/edit gating.  |
 | Linters / formatters         | Enforce static rules after writing                  | Don't guide before or during generation. Agent still writes wrong code first.   |
 | Tool-heavy MCPs (50+ tools)  | Expose everything                                   | Agents don't know which tool to call. More tools = more confusion.              |
 

@@ -34,6 +34,8 @@ repos/
 
 # Local benchmark/lab outputs
 benchmark-runs/
+benchmark-repos/
+.aider.tags.cache.v4/
 /outputs/
 /results/*/raw/
 /results/*/local/

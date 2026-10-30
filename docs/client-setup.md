@@ -1,6 +1,6 @@
 # Client Setup
 
-These commands use the current npm release because the package name is unpinned. The current published version is 2.2.0; 2.4.0 is not yet published.
+These commands use the current npm release (**2.2.0** on npm today; **2.3.0** pending). **2.4.0** is not published. Historical verification notes below reference **2.2.0** unless another version is named.
 
 Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter.
 
@@ -27,7 +27,7 @@ After registration, start a new agent session in your project and ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project when checking get_indexing_status and searching. Wait for indexing if needed, read codebase://context, then search_codebase and open a returned source file. Show me the relevant files.
 
-The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. You can prepare it separately with `npx -y codebase-context reindex` from the project folder. Index readiness, client connection and useful agent behavior are separate checks.
+The first index pass scans the repository locally. Pending **2.3.0** uses keyword search by default (no model download); npm **2.2.0** still downloads embedding models on first index. You can prepare the index separately with `npx -y codebase-context reindex` (add `--no-embeddings` on 2.3.0, or `--embeddings` when you want semantic search). Index readiness, client connection, and useful agent behavior are separate checks.
 
 ## Claude Code
 
@@ -106,8 +106,11 @@ On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a f
 The four-client wizard is not in published 2.2.0. From a built checkout or a locally installed candidate, run its actual entrypoint from the project you want to search:
 
 ```bash
-# Detect Claude Code, Codex, Cursor and OpenCode, then configure the detected clients.
+# Detect Claude Code, Codex, Cursor, VS Code, Windsurf, and OpenCode, then configure the detected clients.
 node /path/to/codebase-context/dist/index.js init --yes
+
+# Preview MCP config changes without writing files.
+node /path/to/codebase-context/dist/index.js init --dry-run --yes
 
 # Configure one client for an explicit project.
 node /path/to/codebase-context/dist/index.js init --client codex --root /path/to/project --yes
@@ -116,13 +119,15 @@ node /path/to/codebase-context/dist/index.js init --client codex --root /path/to
 node /path/to/codebase-context/dist/index.js init --root /path/to/project --preview
 ```
 
+Codex one-liner (published npm): `codex mcp add codebase-context -- npx -y codebase-context`
+
 Replace the paths with the candidate installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
 
-Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
+Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, VS Code uses `.vscode/mcp.json` (`servers`), Windsurf uses `~/.codeium/windsurf/mcp_config.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
 
 Existing unrelated settings are preserved. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry from the client config, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked. Config generation and SDK launch tests do not establish acceptance in each native client.
 
-New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option.
+New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option. `map` builds a missing index before printing the map.
 
 ## Optional fixed-folder setup and CLI preparation
 

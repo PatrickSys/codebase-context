@@ -132,6 +132,7 @@
     "type-check": "tsc --noEmit",
     "mcp:inspect": "npx -y @modelcontextprotocol/inspector node dist/index.js .",
     "eval": "pnpm run build && node scripts/run-eval.mjs",
+    "benchmark:niche": "node scripts/run-niche-benchmark.mjs",
     "prepare": "husky"
   },
   "dependencies": {
@@ -180,6 +181,9 @@
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.51.0",
     "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "@huggingface/transformers>onnxruntime-node": "1.24.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -49,18 +49,9 @@ describe('init interrupted writes', () => {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, original);
     fault.rename = true;
-    await handleInitCli([
-      '--client',
-      'cursor',
-      '--yes',
-      '--skip-index',
-      '--skip-server-check',
-      '--root',
-      root
-    ]);
+    await handleInitCli(['--client', 'cursor', '--yes', '--root', root]);
     expect(process.exitCode).toBe(1);
     expect(await fs.readFile(file, 'utf8')).toBe(original);
-    expect(await fs.readFile(`${file}.bak`, 'utf8')).toBe(original);
   });
   it('preserves cursor JSON on a partial write failure', async () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-write-'));
@@ -69,15 +60,7 @@ describe('init interrupted writes', () => {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, original);
     fault.enabled = true;
-    await handleInitCli([
-      '--client',
-      'cursor',
-      '--yes',
-      '--skip-index',
-      '--skip-server-check',
-      '--root',
-      root
-    ]);
+    await handleInitCli(['--client', 'cursor', '--yes', '--root', root]);
     expect(process.exitCode).toBe(1);
     expect(await fs.readFile(file, 'utf8')).toBe(original);
   });

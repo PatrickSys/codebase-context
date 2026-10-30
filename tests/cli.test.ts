@@ -21,14 +21,6 @@ vi.mock('../src/server/config.js', () => ({
   loadProjectConfig: cliContextMocks.loadProjectConfig
 }));
 
-vi.mock('../src/cli-init-smoke.js', () => ({
-  verifyMcpServerStarts: vi.fn().mockResolvedValue(undefined)
-}));
-
-vi.mock('../src/cli-init-smoke.js', () => ({
-  verifyMcpServerStarts: vi.fn().mockResolvedValue(undefined)
-}));
-
 vi.mock('@clack/prompts', () => ({
   intro: vi.fn(),
   outro: vi.fn(),
@@ -93,9 +85,7 @@ describe('CLI', () => {
         'cursor',
         '--yes',
         '--root',
-        root,
-        '--skip-index',
-        '--skip-server-check'
+        root
       ]);
       expect(cliContextMocks.indexer).not.toHaveBeenCalled();
       expect(await fs.readFile(path.join(root, '.cursor', 'mcp.json'), 'utf8')).toContain(

@@ -4,26 +4,25 @@
 
 Codebase Context gives coding agents a map of your repository through MCP, for developers who want their agent to find relevant code and follow the team's patterns. Search, examples and project memory run locally by default.
 
-## Install (one command)
+## Install (candidate wizard)
 
-Use Node.js 22 or newer. From your project root:
+Use Node.js 22 or newer. The interactive `init` wizard is **not in published 2.2.0**; it ships in the unreleased candidate. To try it after release (or from a local `npm pack`):
 
 ```bash
-npx -y codebase-context init
+npx -y codebase-context@latest init
 ```
 
 [![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/link/mcp%2Finstall?name=codebase-context&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImNvZGViYXNlLWNvbnRleHQiXX0%3D) [![Install in VS Code](https://img.shields.io/badge/VS%20Code-Install%20MCP-blue?logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode:mcp/install?%7B%22name%22:%22codebase-context%22,%22command%22:%22npx%22,%22args%22:%5B%22-y%22,%22codebase-context%22%5D%7D)
 
-The wizard uses `@clack/prompts`, detects installed tools, runs each vendor CLI where available (`claude mcp add`, `codex mcp add`, `code --add-mcp`), merges JSON only for Cursor and OpenCode, pins `codebase-context@<version>` by default, previews changes, runs a first index, and smoke-tests MCP `initialize`. Upgrades: `npx codebase-context update`.
+The wizard detects installed tools, lets you choose clients (`@clack/prompts`), merges MCP config files under the project root, and supports `--dry-run` (print only, no writes). Default configs pin `codebase-context@<installed-version>`; use `--track-latest` for `@latest`.
 
-Non-interactive CI:
+CI example (candidate):
 
 ```bash
-npx -y codebase-context init --yes --clients cursor,opencode --scope project --dry-run
-npx -y codebase-context init --yes --clients cursor --scope project --skip-index --skip-server-check
+npx -y codebase-context@latest init --yes --clients cursor --clients opencode --dry-run
 ```
 
-Use `init --track-latest` to opt into `codebase-context@latest` in written configs. Disable the daily npm update notice with `CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1`.
+For the **current npm release**, use the manual client commands below — not `init`.
 
 ## Set up your AI client manually
 
@@ -78,8 +77,8 @@ Other clients use their own setup commands:
 | Client                      | Shortest current setup                                                       |
 | --------------------------- | ---------------------------------------------------------------------------- |
 | Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context` |
-| Cursor                      | `codebase-context init --clients cursor` or add `.cursor/mcp.json`            |
-| VS Code with GitHub Copilot | `init --clients vscode --scope user` (`code --add-mcp`) or add `.vscode/mcp.json` manually |
+| Cursor                      | `codebase-context init --clients cursor` (candidate) or add `.cursor/mcp.json` |
+| VS Code with GitHub Copilot | add `.vscode/mcp.json` manually (see client setup guide) |
 | GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context` |
 | Windsurf                    | add `~/.codeium/windsurf/mcp_config.json` manually (not in `init` yet)        |
 

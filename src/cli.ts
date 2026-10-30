@@ -23,7 +23,6 @@ import { formatJson } from './cli-formatters.js';
 import { handleMemoryCli } from './cli-memory.js';
 export { handleMemoryCli } from './cli-memory.js';
 import { handleInitCli } from './cli-init.js';
-import { handleUpdateCli } from './cli-update.js';
 import { handleMapCli } from './cli-map.js';
 import { loadProjectConfig } from './server/config.js';
 import { cliProjectOptions } from './cli-project-options.js';
@@ -45,7 +44,6 @@ const _CLI_COMMANDS = [
   'refs',
   'cycles',
   'init',
-  'update',
   'map'
 ] as const;
 
@@ -86,7 +84,6 @@ function printUsage(): void {
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
   console.log('  init [--clients <name>] [--yes] [--dry-run]  Interactive MCP setup wizard');
-  console.log('  update [--client <name>] [--dry-run]       Refresh pinned MCP package versions');
   console.log('  map [--json] [--pretty]              Conventions map (indexes first if needed)');
   console.log('');
   console.log('Global flags:');
@@ -277,9 +274,6 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
 
   if (command === 'init') {
     return handleInitCli(argv.slice(1));
-  }
-  if (command === 'update') {
-    return handleUpdateCli(argv.slice(1));
   }
 
   if (command === 'map') {

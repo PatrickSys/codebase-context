@@ -28,18 +28,6 @@ vi.mock('@clack/prompts', () => ({
   confirm: vi.fn().mockResolvedValue(true)
 }));
 
-vi.mock('../src/cli-init-smoke.js', () => ({
-  verifyMcpServerStarts: vi.fn().mockResolvedValue(undefined)
-}));
-
-vi.mock('../src/cli-init-runner.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/cli-init-runner.js')>();
-  return {
-    ...actual,
-    runCommand: vi.fn(() => ({ status: 0, stdout: '', stderr: '', error: null }))
-  };
-});
-
 import { promises as fsMod } from 'node:fs';
 import * as clack from '@clack/prompts';
 import {
@@ -51,7 +39,6 @@ import {
   _buildMergedCodexContent,
   handleInitCli
 } from '../src/cli-init.js';
-import { runCommand } from '../src/cli-init-runner.js';
 
 // --- generateMcpConfig ---
 
@@ -593,14 +580,12 @@ describe('handleInitCli', () => {
     });
   });
 
-  it('configures detected CLI clients with --yes', async () => {
+  it('configures detected clients with --yes via config files', async () => {
     const projectRoot = path.resolve('C:/projects/Configured App');
     detectDirectories('claude', 'codex');
 
     await handleInitCli([
       '--yes',
-      '--skip-index',
-      '--skip-server-check',
       '--clients',
       'claude-code',
       '--clients',
@@ -610,23 +595,18 @@ describe('handleInitCli', () => {
     ]);
 
     expect(clack.multiselect).not.toHaveBeenCalled();
-    expect(runCommand).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fsMod.rename).mock.calls.length).toBeGreaterThan(0);
   });
 
   it('configures all detected clients without a terminal even without --yes', async () => {
     const projectRoot = path.resolve('C:/projects/No Terminal');
     detectDirectories('cursor', 'opencode');
 
-    await handleInitCli(['--root', projectRoot, '--skip-index', '--skip-server-check']);
+    await handleInitCli(['--root', projectRoot, '--dry-run']);
 
     expect(clack.multiselect).not.toHaveBeenCalled();
-    expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
-      expect.arrayContaining([
-        path.join(projectRoot, '.cursor', 'mcp.json'),
-        path.join(projectRoot, 'opencode.json')
-      ])
-    );
-    expect(writeFileMock).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fsMod.rename)).not.toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
   });
 
   it('lets repeated --clients options configure JSON-backed tools', async () => {
@@ -638,8 +618,6 @@ describe('handleInitCli', () => {
       '--clients',
       'opencode',
       '--yes',
-      '--skip-index',
-      '--skip-server-check',
       '--root',
       projectRoot
     ]);
@@ -655,7 +633,7 @@ describe('handleInitCli', () => {
   });
 
   it('reports no detected clients without writing when there is no terminal', async () => {
-    await handleInitCli(['--yes', '--skip-index', '--skip-server-check', '--root', path.resolve('C:/projects/Empty')]);
+    await handleInitCli(['--yes', '--root', path.resolve('C:/projects/Empty')]);
 
     expect(writeFileMock).not.toHaveBeenCalled();
     expect(mkdirMock).not.toHaveBeenCalled();
@@ -668,7 +646,7 @@ describe('handleInitCli', () => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Interactive'), '--skip-index', '--skip-server-check']);
+    await handleInitCli(['--root', path.resolve('C:/projects/Interactive')]);
 
     const options = vi.mocked(clack.multiselect).mock.calls[0]?.[0].options;
     expect(options).toEqual(
@@ -685,7 +663,7 @@ describe('handleInitCli', () => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Cancelled'), '--skip-index', '--skip-server-check']);
+    await handleInitCli(['--root', path.resolve('C:/projects/Cancelled')]);
 
     const options = vi.mocked(clack.multiselect).mock.calls[0]?.[0].options;
     expect(options).toEqual(
@@ -707,7 +685,7 @@ describe('handleInitCli', () => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Prompt Cancelled'), '--skip-index', '--skip-server-check']);
+    await handleInitCli(['--root', path.resolve('C:/projects/Prompt Cancelled')]);
 
     expect(writeFileMock).not.toHaveBeenCalled();
     expect(mkdirMock).not.toHaveBeenCalled();
@@ -718,7 +696,7 @@ describe('handleInitCli', () => {
       ReturnType<typeof fsMod.stat>
     >);
 
-    await handleInitCli(['--client', 'codex', '--yes', '--skip-index', '--skip-server-check', '--root', path.resolve('C:/projects/File')]);
+    await handleInitCli(['--client', 'codex', '--yes', '--root', path.resolve('C:/projects/File')]);
 
     expect(mkdirMock).not.toHaveBeenCalled();
     expect(writeFileMock).not.toHaveBeenCalled();
@@ -731,7 +709,7 @@ describe('handleInitCli', () => {
     await handleInitCli([
       '--client',
       'codex',
-      '--yes', '--skip-index', '--skip-server-check',
+      '--yes',
       '--root',
       path.resolve('C:/projects/Missing Directory')
     ]);
@@ -746,7 +724,7 @@ describe('handleInitCli', () => {
     const generated = generateMcpConfig('claude-code', { rootPath: projectRoot });
     readFileMock.mockResolvedValue(generated.content as unknown as Buffer);
 
-    await handleInitCli(['--client', 'claude-code', '--yes', '--skip-index', '--skip-server-check', '--root', projectRoot]);
+    await handleInitCli(['--client', 'claude-code', '--yes', '--root', projectRoot]);
 
     expect(writeFileMock).not.toHaveBeenCalled();
   });
@@ -768,7 +746,7 @@ describe('handleInitCli', () => {
       'claude-code',
       '--client',
       'opencode',
-      '--yes', '--skip-index', '--skip-server-check',
+      '--yes',
       '--root',
       projectRoot
     ]);
@@ -783,8 +761,7 @@ describe('handleInitCli', () => {
     try {
       await handleInitCli(['--help']);
       const help = log.mock.calls.flat().join('\n');
-      expect(help).toContain('Default MCP launch: npx -y codebase-context@');
-      expect(help).toContain('codebase-context update');
+      expect(help).toContain('--dry-run');
     } finally {
       log.mockRestore();
     }

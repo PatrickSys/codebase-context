@@ -1,17 +1,7 @@
-import { cliProjectOptions } from './cli-project-options.js';
-import { CodebaseIndexer } from './core/indexer.js';
-import { loadProjectConfig } from './server/config.js';
 /**
  * Interactive setup wizard for codebase-context.
- * Handles `codebase-context init` — detects clients and merges project MCP configs
- * for Claude Code, Cursor, Codex, VS Code (Copilot), Windsurf, and OpenCode.
- * Config merge shapes follow each client's official docs (VS Code uses a top-level
- * `servers` object per the MCP filesystem server workspace examples; Windsurf uses
- * `~/.codeium/windsurf/mcp_config.json`). Use `--dry-run` to preview writes first,
- * matching the preview-before-apply pattern from MCP filesystem `edit_file`.
- *
- * Config writes run only after all selected registrations pass preflight.
- * File previews share the indexer's selection rules and project configuration.
+ * Detects MCP clients, lets the user choose tools, and merges project MCP config files.
+ * Use `--dry-run` to print previews without writing anything.
  */
 
 import path from 'path';
@@ -23,30 +13,20 @@ import * as clack from '@clack/prompts';
 import { homedir } from 'node:os';
 import { constants } from 'node:fs';
 import { formatConfigPreview } from './cli-init-preview.js';
-import { maybePrintInitUpdateNotice } from './cli-init-version-notice.js';
 import { PKG_VERSION, resolveMcpPackageSpec } from './cli-init-package.js';
-import {
-  describeRegistrationPlan,
-  planClientRegistration,
-  type RegistrationPlan
-} from './cli-init-register.js';
-import { formatCommandPreview, runCommand } from './cli-init-runner.js';
-import { verifyMcpServerStarts } from './cli-init-smoke.js';
 import {
   CLIENTS,
   DETECT_CLIENTS,
   INIT_CLIENTS,
   type Client,
   type InitClient,
-  type InitScope,
   isInitClient
 } from './cli-init-types.js';
 
-export type { Client, InitClient, InitScope } from './cli-init-types.js';
+export type { Client, InitClient } from './cli-init-types.js';
 export { CLIENTS, DETECT_CLIENTS, INIT_CLIENTS, PKG_VERSION, resolveMcpPackageSpec };
 
 export const INIT_NPX_PACKAGE = resolveMcpPackageSpec(false);
-export const CONFIG_BACKUP_MAX_BYTES = 16_384;
 
 export type McpConfigResult = { kind: 'file'; path: string; content: string };
 
@@ -640,12 +620,7 @@ type InitOptions = {
   rootPath: string;
   yes: boolean;
   help: boolean;
-  preview: boolean;
   dryRun: boolean;
-  skipIndex: boolean;
-  skipServerCheck: boolean;
-  noUpdateNotice: boolean;
-  scope: InitScope;
   trackLatest: boolean;
 };
 
@@ -656,100 +631,6 @@ function parseInitClient(value: string): InitClient {
     );
   }
   return value as InitClient;
-}
-
-function parseScope(value: string): InitScope {
-  if (value === 'user' || value === 'project') return value;
-  throw new Error('Expected --scope user or --scope project.');
-}
-
-async function applyJsonRegistration(
-  plan: Extract<RegistrationPlan, { kind: 'json' }>,
-  options: InitOptions
-): Promise<'create' | 'update' | 'unchanged'> {
-  const config = generateMcpConfig(plan.client, {
-    rootPath: options.rootPath,
-    trackLatest: options.trackLatest
-  });
-  const existingText = await readExistingConfig(config.path);
-  const merged = await _buildMergedMcpContent(config.path, config.content, plan.client);
-  const action = classifyInitChange(existingText, merged.content);
-  if (action !== 'unchanged' && !options.dryRun) {
-    if (existingText !== null) {
-      const backupPath = await backupTinyConfig(config.path, existingText);
-      if (backupPath) {
-        console.log(`Backed up: ${formatDisplayPath(backupPath, options.rootPath)}`);
-      }
-    }
-    await fs.mkdir(path.dirname(config.path), { recursive: true });
-    await atomicWrite(config.path, merged.content);
-  }
-  console.log(
-    describeInitChange(options.dryRun, action, formatDisplayPath(config.path, options.rootPath))
-  );
-  return action;
-}
-
-function applyCliRegistration(
-  plan: Extract<RegistrationPlan, { kind: 'cli' }>,
-  options: InitOptions
-): void {
-  const preview = formatCommandPreview(plan.file, plan.args);
-  if (options.dryRun) {
-    console.log(`Would run: ${preview}`);
-    return;
-  }
-  const result = runCommand(plan.file, plan.args, { cwd: plan.cwd ?? options.rootPath });
-  if (result.error) {
-    throw new Error(`${plan.label} failed: ${result.error.message}`);
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `${plan.label} exited with code ${result.status ?? 'unknown'}${result.stderr ? `: ${result.stderr.trim()}` : ''}`
-    );
-  }
-  console.log(`Ran: ${preview}`);
-}
-
-async function backupTinyConfig(
-  configPath: string,
-  existingText: string
-): Promise<string | undefined> {
-  if (Buffer.byteLength(existingText, 'utf8') > CONFIG_BACKUP_MAX_BYTES) return undefined;
-  const backupPath = `${configPath}.bak`;
-  try {
-    await fs.access(backupPath);
-    return undefined;
-  } catch (error) {
-    if (!isFileNotFound(error)) throw error;
-  }
-  await fs.writeFile(backupPath, existingText, 'utf8');
-  return backupPath;
-}
-
-async function runInitialIndex(rootPath: string): Promise<void> {
-  const config = await loadProjectConfig(rootPath);
-  console.log(`Indexing ${rootPath} (first run)...`);
-  let lastLoggedProgress = { phase: '', percentage: -1 };
-  const indexer = new CodebaseIndexer({
-    rootPath,
-    ...cliProjectOptions(config, true),
-    onProgress: (progress) => {
-      const shouldLog =
-        progress.phase !== lastLoggedProgress.phase ||
-        (progress.percentage % 10 === 0 && progress.percentage !== lastLoggedProgress.percentage);
-      if (shouldLog) {
-        console.error(`[${progress.phase}] ${progress.percentage}%`);
-        lastLoggedProgress = { phase: progress.phase, percentage: progress.percentage };
-      }
-    }
-  });
-  const stats = await indexer.index();
-  console.log(
-    `Index ready: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(
-      stats.duration / 1000
-    ).toFixed(1)}s`
-  );
 }
 
 function formatDisplayPath(configPath: string, rootPath: string): string {
@@ -783,6 +664,35 @@ function describeInitChange(
   return `${prefix}: ${displayPath}`;
 }
 
+function appendInitClients(clients: InitClient[], raw: string): void {
+  for (const part of raw.split(',')) {
+    const trimmed = part.trim();
+    if (trimmed) clients.push(parseInitClient(trimmed));
+  }
+}
+
+async function mergeInitClient(
+  client: InitClient,
+  options: Pick<InitOptions, 'rootPath' | 'trackLatest'>
+): Promise<{
+  config: McpConfigResult;
+  merged: { content: string };
+  existingText: string | null;
+  action: 'create' | 'update' | 'unchanged';
+}> {
+  const config = generateMcpConfig(client, {
+    rootPath: options.rootPath,
+    trackLatest: options.trackLatest
+  });
+  const merged =
+    client === 'codex'
+      ? await _buildMergedCodexContent(config.path, config.content)
+      : await _buildMergedMcpContent(config.path, config.content, client);
+  const existingText = await readExistingConfig(config.path);
+  const action = classifyInitChange(existingText, merged.content);
+  return { config, merged, existingText, action };
+}
+
 function parseInitOptions(args: string[]): InitOptions {
   if (args.includes('--help') || args.includes('-h'))
     return {
@@ -790,43 +700,24 @@ function parseInitOptions(args: string[]): InitOptions {
       rootPath: process.cwd(),
       yes: false,
       help: true,
-      preview: false,
       dryRun: false,
-      skipIndex: false,
-      skipServerCheck: false,
-      noUpdateNotice: false,
-      scope: 'project',
       trackLatest: false
     };
   const clients: InitClient[] = [];
   let yes = false;
-  let preview = false;
   let dryRun = false;
-  let skipIndex = false;
-  let skipServerCheck = false;
-  let noUpdateNotice = false;
-  let scope: InitScope = 'project';
   let trackLatest = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
-    if (arg === '--preview') preview = true;
-    else if (arg === '--dry-run') dryRun = true;
+    if (arg === '--dry-run') dryRun = true;
     else if (arg === '--yes' || arg === '-y') yes = true;
-    else if (arg === '--skip-index') skipIndex = true;
-    else if (arg === '--skip-server-check') skipServerCheck = true;
-    else if (arg === '--no-update-notice') noUpdateNotice = true;
     else if (arg === '--track-latest') trackLatest = true;
-    else if (arg === '--scope') {
-      const value = args[++index];
-      if (!value) throw new Error('Expected user or project after --scope.');
-      scope = parseScope(value);
-    } else if (arg?.startsWith('--scope=')) scope = parseScope(arg.slice('--scope='.length));
     else if (arg === '--client' || arg === '--clients') {
       const value = args[++index];
       if (!value || value.startsWith('--')) throw new Error(`Expected a client after ${arg}.`);
-      clients.push(parseInitClient(value));
+      appendInitClients(clients, value);
     } else if (arg?.startsWith('--client=') || arg?.startsWith('--clients=')) {
-      clients.push(parseInitClient(arg.split('=')[1] ?? ''));
+      appendInitClients(clients, arg.split('=').slice(1).join('='));
     } else if (arg === '--root') index++;
     else if (!arg?.startsWith('--root=')) throw new Error(`Unknown init option "${arg}".`);
   }
@@ -835,37 +726,24 @@ function parseInitOptions(args: string[]): InitOptions {
     rootPath: resolveInitRoot(args, process.env.CODEBASE_ROOT),
     yes,
     help: false,
-    preview,
     dryRun,
-    skipIndex,
-    skipServerCheck,
-    noUpdateNotice,
-    scope,
     trackLatest
   };
 }
 
 function printInitUsage(): void {
   console.log('codebase-context init [options]');
+  console.log('Detect tools, choose clients, merge MCP config files under the project root.');
   console.log(
-    'Interactive setup: client CLIs for Claude Code, Codex, and VS Code; JSON merge for Cursor and OpenCode.'
-  );
-  console.log(
-    `Default MCP launch: npx -y codebase-context@${PKG_VERSION} <project> (use --track-latest for @latest).`
+    `Default launch in configs: npx -y codebase-context@${PKG_VERSION} <project> (--track-latest for @latest).`
   );
   console.log(
     '  --clients <name>  Repeatable client id (alias: --client): ' +
       INIT_CLIENTS.map((client) => client.id).join(', ')
   );
-  console.log('  --scope <user|project>  MCP scope for client CLIs (default: project)');
   console.log('  --yes, -y          Non-interactive (for CI scripts)');
-  console.log('  --dry-run          Preview commands and JSON diffs without applying');
+  console.log('  --dry-run          Print previews without writing any files');
   console.log('  --track-latest     Write codebase-context@latest instead of pinning');
-  console.log('  --skip-index       Skip the first index after configuration');
-  console.log('  --skip-server-check Skip MCP initialize smoke test');
-  console.log('  --no-update-notice Skip the daily npm update notice');
-  console.log('  CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1  Disable the daily npm update notice');
-  console.log('After pinning, run `codebase-context update` to refresh installed configs.');
 }
 
 export async function handleInitCli(args: string[]): Promise<void> {
@@ -877,16 +755,6 @@ export async function handleInitCli(args: string[]): Promise<void> {
     }
     if (!(await fs.stat(options.rootPath)).isDirectory())
       throw new Error(`Project root is not a directory: ${options.rootPath}`);
-    await maybePrintInitUpdateNotice(PKG_VERSION, { disabled: options.noUpdateNotice });
-    if (options.preview) {
-      const config = await loadProjectConfig(options.rootPath);
-      const preview = await new CodebaseIndexer({
-        rootPath: options.rootPath,
-        ...cliProjectOptions(config, true)
-      }).previewFiles();
-      console.log(JSON.stringify(preview, null, 2));
-      return;
-    }
 
     clack.intro(`Codebase Context setup in ${options.rootPath}`);
     let clients: InitClient[] = options.clients;
@@ -916,39 +784,22 @@ export async function handleInitCli(args: string[]): Promise<void> {
       );
     }
 
-    const plans = clients.map((client) =>
-      planClientRegistration(client, {
-        rootPath: options.rootPath,
-        scope: options.scope,
-        trackLatest: options.trackLatest
-      })
-    );
+    const prepared = await Promise.all(clients.map((client) => mergeInitClient(client, options)));
 
-    for (const plan of plans) {
-      console.log(describeRegistrationPlan(plan));
-      if (plan.kind === 'json') {
-        const config = generateMcpConfig(plan.client, {
-          rootPath: options.rootPath,
-          trackLatest: options.trackLatest
-        });
-        const existingText = await readExistingConfig(config.path);
-        const merged = await _buildMergedMcpContent(config.path, config.content, plan.client);
-        if (classifyInitChange(existingText, merged.content) !== 'unchanged') {
-          console.log(
-            formatConfigPreview(
-              formatDisplayPath(config.path, options.rootPath),
-              existingText,
-              merged.content
-            )
-          );
-          console.log('');
-        }
-      }
+    for (const item of prepared) {
+      if (item.action === 'unchanged') continue;
+      console.log(
+        formatConfigPreview(
+          formatDisplayPath(item.config.path, options.rootPath),
+          item.existingText,
+          item.merged.content
+        )
+      );
+      console.log('');
     }
 
-    const actionable = plans.filter((plan) => plan.kind !== 'skip');
     if (
-      actionable.length &&
+      prepared.some((item) => item.action !== 'unchanged') &&
       !options.yes &&
       !options.dryRun &&
       process.stdin.isTTY &&
@@ -961,34 +812,21 @@ export async function handleInitCli(args: string[]): Promise<void> {
       }
     }
 
-    for (const plan of plans) {
-      if (plan.kind === 'skip') {
-        console.log(describeRegistrationPlan(plan));
-        continue;
+    for (const item of prepared) {
+      const displayPath = formatDisplayPath(item.config.path, options.rootPath);
+      if (item.action !== 'unchanged' && !options.dryRun) {
+        await fs.mkdir(path.dirname(item.config.path), { recursive: true });
+        await atomicWrite(item.config.path, item.merged.content);
       }
-      if (plan.kind === 'cli') {
-        applyCliRegistration(plan, options);
-      } else {
-        await applyJsonRegistration(plan, options);
-      }
+      console.log(describeInitChange(options.dryRun, item.action, displayPath));
     }
 
     if (options.dryRun) {
-      console.log('Dry run complete; no changes applied.');
+      console.log('Dry run complete; no files written.');
       clack.outro('Dry run finished.');
       return;
     }
 
-    if (!options.skipIndex) {
-      await runInitialIndex(options.rootPath);
-    }
-    if (!options.skipServerCheck) {
-      const entrypoint = process.argv[1];
-      if (!entrypoint) throw new Error('Cannot locate the codebase-context CLI entrypoint.');
-      console.log('Checking MCP server startup...');
-      await verifyMcpServerStarts(entrypoint, options.rootPath);
-      console.log('MCP server responded to initialize.');
-    }
     clack.outro('Setup complete. Reopen your tools and approve trust if prompted.');
   } catch (error) {
     if (clack.isCancel(error)) {

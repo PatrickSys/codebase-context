@@ -11,7 +11,7 @@ Hide
 Type "cd /path/to/your/project"
 Enter
 Sleep 500ms
-Type "npx -y codebase-context@latest init --yes --skip-index --no-update-notice"
+Type "npx -y codebase-context@latest init --yes --dry-run"
 Enter
 Sleep 3s
 Show

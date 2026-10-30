@@ -48,8 +48,6 @@ export type Client = (typeof DETECT_CLIENTS)[number]['id'];
 
 export const CLIENTS = DETECT_CLIENTS;
 
-export type InitScope = 'user' | 'project';
-
 export const INIT_CLIENT_ID_SET: ReadonlySet<string> = new Set(
   INIT_CLIENTS.map((client) => client.id)
 );

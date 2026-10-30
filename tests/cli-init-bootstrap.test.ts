@@ -132,7 +132,7 @@ describe('init preserves custom launchers', () => {
     await fs.mkdir(path.dirname(generated.path), { recursive: true });
     await fs.writeFile(generated.path, original);
     try {
-      await handleInitCli(['--client', 'codex', '--yes', '--skip-index', '--root', root]);
+      await handleInitCli(['--client', 'codex', '--yes', '--root', root]);
       expect(await fs.readFile(generated.path, 'utf8')).toBe(original);
     } finally {
       await fs.rm(root, { recursive: true, force: true });

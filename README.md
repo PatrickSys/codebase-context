@@ -92,6 +92,14 @@ The `codebase-context-review` CLI creates a bounded context packet from a commit
 2. **Understand the repository.** The agent can request a compact codebase map with structure, patterns, and representative files.
 3. **Find the code for the task.** Search returns ranked files and symbols; the agent reads the selected files before editing.
 
+```mermaid
+flowchart TD
+  indexLocal["Index locally"] --> repoMap["Map: structure, patterns, representative files"]
+  repoMap --> searchCode["search_codebase"]
+  searchCode --> ranked["Ranked files and symbols"]
+  searchCode --> beforeEdit["Edit intent: what to read before changing code"]
+```
+
 The same information is available from the terminal. Run these commands from your project root. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Once it is ready, inspect the map and search for the code you need:
 
 ```bash
@@ -112,6 +120,10 @@ One stdio server can route across several repositories. Supply `project` in tool
 
 ## See it
 
+This recording is `map`, then `search --intent edit`, on the fixture in `tests/fixtures/codebases/eval-controlled`. The index was built off-camera with `reindex --no-embeddings`, and the screen is cleared before the search so the preflight stays in view. In this take the preflight says the match is low confidence and not ready to edit. A [WebM copy](https://github.com/PatrickSys/codebase-context/blob/master/docs/assets/hero.webm) is the same take.
+
+![map, then search, paused on the edit preflight for the eval-controlled fixture](./docs/assets/hero.gif)
+
 These are real CLI results from the open-source `angular-spotify` repository.
 
 **Patterns and representative files**
@@ -131,6 +143,8 @@ More examples are available in the [CLI gallery](./docs/cli.md) and [walkthrough
 ## Privacy
 
 Code and indexes stay on the machine with the default local embedding provider. Docker, a GPU, and an API key are not required.
+
+![code never leaves the machine: the default local path keeps the repository and index on this machine. Cloud embeddings are optional and send chunks to that provider.](./docs/assets/code-stays-local.svg)
 
 Cloud embeddings are optional. If you select a cloud provider, code chunks are sent to that provider to create the search index. The provider, model, project root, and local HTTP port can be changed through environment variables or the project config; see the [capabilities reference](./docs/capabilities.md).
 

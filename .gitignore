@@ -27,6 +27,11 @@ grammars/*.wasm
 .agents/
 .tmp-research-repos/
 docs/visuals.md
+
+# Motion Canvas explainer dependencies and local renders
+media/explainer/node_modules/
+media/explainer/output/
+media/explainer/dist/
 .repolore/
 .opencode/
 CODEBASE_MAP.md

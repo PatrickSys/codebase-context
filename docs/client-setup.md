@@ -1,6 +1,6 @@
 # Client Setup
 
-These commands use the current npm release because the package name is unpinned. The current published version is 2.2.0; 2.4.0 is not yet published.
+These commands use the current npm release (**2.2.0** on npm today; **2.3.0** pending). **2.4.0** is not published. Historical verification notes below reference **2.2.0** unless another version is named.
 
 Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter.
 
@@ -27,7 +27,7 @@ After registration, start a new agent session in your project and ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project when checking get_indexing_status and searching. Wait for indexing if needed, read codebase://context, then search_codebase and open a returned source file. Show me the relevant files.
 
-The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. You can prepare it separately with `npx -y codebase-context reindex` from the project folder. Index readiness, client connection and useful agent behavior are separate checks.
+The first index pass scans the repository locally. Pending **2.3.0** uses keyword search by default (no model download); npm **2.2.0** still downloads embedding models on first index. You can prepare the index separately with `npx -y codebase-context reindex` (add `--no-embeddings` on 2.3.0, or `--embeddings` when you want semantic search). Index readiness, client connection, and useful agent behavior are separate checks.
 
 ## Claude Code
 

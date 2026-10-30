@@ -1,24 +1,15 @@
 # Changelog
 
-## Product candidate (not published)
+## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (unreleased — TBD)
 
-- New projects index and search without embedding or reranker models. Existing index modes are preserved; explicit mode switches rebuild fully. Transformers and LanceDB are optional peers with actionable preflight errors.
-- Setup detects supported coding tools and configures the selected tools together. It preserves existing settings, saves version-pinned launches for the selected repository, and leaves indexing to the first search.
-- Added `get_code_relationships`: directed import/re-export paths up to three hops, current resolution and source checks, confined endpoints, unresolved/stale diagnostics, and a 4,000-byte response cap. Resolution selects the root's `tsconfig.json` or, when absent, `tsconfig.base.json`, without inheriting an unrelated parent configuration.
-- AST chunks preserve contiguous source and static property ownership, including concise descriptor methods, callback bodies and same-line siblings. Generated scope labels remain presentation metadata. Index format 4 rebuilds incompatible indexes even when sources are unchanged, preserves the selected embedding mode, and retains previous artifacts if rebuilding fails.
-- Angular TypeScript eligibility uses parsed Angular imports; ordinary `resolve` or `validate` methods, comments, strings and imports from other packages no longer select the Angular analyzer. Other eligible analyzers retain the source and declaration context. The registry order and existing template/style routing are unchanged.
-- Compact `signaturePreview` uses a contiguous window of up to three lines around the strongest query-term match in the returned snippet, falling back to its opening lines. Default and explicit exploration searches omit edit preflight while retaining search quality and incomplete-source warnings. Explicit `edit`, `refactor`, and `migrate` intents retain mutation guards.
-- Search excludes ordinary stale/unavailable nominees without discarding verified current lower results or triggering an automatic full rebuild. Partial coverage, bounded exhaustion and failed semantic replenishment are explicit; corrupt metadata, build identity, paths and source ranges still fail closed.
-- Symbol references scan same-build manifest sources in bounded read batches and skip parsing when a simple ASCII symbol occurs only inside longer identifiers. Unicode or arbitrary query spellings retain raw-text nomination. Coverage keeps raw-text absence separate from parser work and uncertain lexical fallback. Keyword artifact identity uses the shared index validator. Graph traversal verifies edges before consuming output caps, with bounded inspection and honest continuation.
-- Watcher shutdown awaits handle closure and cancels pending callbacks. Connected stdio sessions have no default inactivity shutdown; explicit positive idle timeouts remain supported alongside handshake, EOF and parent-death guards.
-- Chunk paths are persisted relative to the selected project root, including explicit-root indexing from another working directory. Previously incorrect relative paths can require a full reindex.
-- Query advice is limited to grounded returned source, and abstained searches omit global pattern advice. Same-named symbols in different files remain eligible after file-level deduplication; TypeScript type arguments alone no longer select the JSX analyzer.
-- The candidate requires Node 22+. CLI dispatch compares canonical entrypoint identity, including npm symlink launchers, while preserving the exported server's initialization on imports.
-- Updated the runtime parser and watcher to remove the legacy braces dependency chain. Watcher exclusions use exact directory names; quoted import and export names retain their public symbol names.
-- Known limits: model-free conceptual relevance is not guaranteed. Short requests can miss implementations when query words differ from source names; syntactic edges are not runtime calls; workspace/language-specific resolution can remain unresolved. Packed/protocol tests and scoped negative cases do not establish general agent-quality improvement or customer adoption. No npm publication is implied by this entry.
+### Release notes
 
-## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-04-30)
-
+- **CLI:** Fix npm **2.2.0** regression where `npx codebase-context --version`, `status`, and `reindex` could exit with code 0 and no output (direct CLI subcommands lazy-load the MCP runtime; canonical entrypoint detection includes npm symlink launchers). Requires Node 22+.
+- **Indexing:** Fresh project folders default to keyword-only indexing without downloading embedding or reranker models; existing index modes are preserved; opt in with `reindex --embeddings` and optional Transformers/LanceDB peers. Explicit mode switches rebuild fully.
+- **Setup:** `init` wizard detects Claude Code, Codex, Cursor, and OpenCode, configures selected tools together, preserves existing settings, and leaves indexing to the first search.
+- **Search & index pipeline:** AST-aligned chunks, index format metadata with atomic rebuilds, exploration vs edit/refactor/migrate preflight behavior, bounded symbol references, and source-validation hardening (see Features below).
+- **Docs:** Position around local team conventions and edit preflight; cite Aider repo map, Repomix, and jCodeMunch as related tools; report **25.7%** vs **jCodeMunch 27.1%** expected-file recovery per [docs/benchmark.md](./docs/benchmark.md) without leadership claims; keep **2.4.0** features out of shipped language until published.
+- **Thanks:** Nick Roth ([@rothnic](https://github.com/rothnic)) for the Intel Mac embedding crash analysis ([#68](https://github.com/PatrickSys/codebase-context/issues/68)) and custom OpenAI-compatible endpoint requirements ([#70](https://github.com/PatrickSys/codebase-context/issues/70)) that shaped workaround guidance in this release.
 
 ### Features
 

@@ -46,11 +46,11 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
-- MCP client registration — use the recipes in the [client setup guide](./client-setup.md). Published 2.2.0 has the older interactive HTTP wizard; the four-client wizard below requires the unreleased candidate.
+- MCP client registration — use the [client setup guide](./client-setup.md). npm **2.2.0** ships the older HTTP-only wizard path; the multi-client `init` flow ships in **2.3.0** (pending npm publish).
 
-## `init` in the unreleased candidate
+## `init` (2.3.0 — pending npm publish)
 
-`init` detects Claude Code, Codex, Cursor and OpenCode, then configures the selected tools together. In a terminal, detected tools start selected; use Space to change the selection and Enter to apply it. Without a terminal, it configures all detected tools.
+`init` detects Claude Code, Codex, Cursor, and OpenCode, then configures the selected tools together. In a terminal, detected tools start selected; use Space to change the selection and Enter to apply it. Without a terminal, it configures all detected tools. Not available in npm **2.2.0**.
 
 ```powershell
 codebase-context init --help
@@ -59,15 +59,15 @@ codebase-context init --yes
 codebase-context init --client codex --client cursor --root "C:\path\to\project"
 ```
 
-Use repeatable `--client` options to choose tools explicitly. `--yes` configures every detected tool when no clients are named. `--root` selects another repository; otherwise `CODEBASE_ROOT` or the current directory is used. Setup writes client registrations but does not build an index or change agent instructions. The first search creates the index. The multi-tool flow is not in published npm `2.2.0` yet; see the [main setup guide](../README.md#set-up-your-ai-client) for its publication status and the [client setup guide](./client-setup.md) for current manual recipes.
+Use repeatable `--client` options to choose tools explicitly. `--yes` configures every detected tool when no clients are named. `--root` selects another repository; otherwise `CODEBASE_ROOT` or the current directory is used. Setup writes client registrations but does not build an index or change agent instructions. The first search creates the index. Until **2.3.0** is on npm, use the manual recipes in the [client setup guide](./client-setup.md).
 
-The built candidate also supports `--version` and builds a missing index when you run `map`. New indexes use keyword search without a model download; `reindex --embeddings` explicitly enables local semantic search. Preview, reindex, and map apply the same project exclusions and analyzer hints. A low-confidence search result means the matches are weak; it does not establish that code is absent.
+**Also in 2.3.0:** `--version`; non-silent `status` / `reindex` (fixes npm 2.2.0 silent exit); fresh indexes without a model download; `map` builds a missing index first; low-confidence search hints. Use `reindex --embeddings` for local semantic search.
 
 ---
 
 ## First use
 
-Run these CLI commands from the project root. Build or refresh the local index first; the first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Then inspect the conventions map and search for the code you need:
+Run these CLI commands from the project root. **2.3.0** indexes keyword-only on first run (no model download); add `reindex --embeddings` when you want local semantic search. npm **2.2.0** still downloaded a model on first index.
 
 ```bash
 npx -y codebase-context reindex

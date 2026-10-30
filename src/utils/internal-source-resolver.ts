@@ -9,11 +9,13 @@ export interface TsconfigResolverOptions {
   compilerOptions?: ts.CompilerOptions;
 }
 
-export interface SourceResolution {
-  status: 'resolved' | 'unresolved';
-  path?: string;
-  reason?: 'external' | 'not-found' | 'outside-root' | 'unsupported-alias';
-}
+export type SourceResolution =
+  | { status: 'resolved'; path: string; target: string }
+  | { status: 'unresolved'; reason: 'not-indexed'; target: string }
+  | {
+      status: 'unresolved';
+      reason: 'external' | 'not-found' | 'outside-root' | 'unsupported-alias';
+    };
 
 function isWithin(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
@@ -166,9 +168,9 @@ export class InternalSourceResolver {
     const indexedPath = this.indexedFiles.get(
       process.platform === 'win32' ? relative.toLowerCase() : relative
     );
-    if (indexedPath) return { status: 'resolved', path: indexedPath };
-    if (allowUnindexed) return { status: 'resolved', path: real };
-    return { status: 'unresolved', reason: 'not-found' };
+    if (indexedPath) return { status: 'resolved', path: indexedPath, target: relative };
+    if (allowUnindexed) return { status: 'resolved', path: real, target: relative };
+    return { status: 'unresolved', reason: 'not-indexed', target: relative };
   }
 }
 

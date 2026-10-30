@@ -4,6 +4,28 @@ import os from 'os';
 import { InternalFileGraph } from '../src/utils/usage-tracker.js';
 
 describe('InternalFileGraph serialization', () => {
+  it.each(['not-indexed', 'analysis-unavailable'] as const)(
+    'round-trips the captured canonical target of a %s diagnostic unchanged',
+    (reason) => {
+      const rootPath = path.join(os.tmpdir(), 'canonical-graph');
+      const graph = new InternalFileGraph(rootPath);
+      graph.trackUnresolved(
+        path.join(rootPath, 'main.ts'),
+        {
+          line: 1,
+          specifier: './linked/target',
+          kind: 'import',
+          sourceFingerprint: 'source-sha256',
+          targetFingerprint: ''
+        },
+        { reason, target: 'physical/target.ts' }
+      );
+      const restored = InternalFileGraph.fromJSON(graph.toJSON(), rootPath).toJSON();
+      expect(restored.unresolvedEdges).toEqual(graph.toJSON().unresolvedEdges);
+      expect(restored.unresolvedEdges?.[0]).toMatchObject({ reason, target: 'physical/target.ts' });
+      expect(restored.imports).toEqual({});
+    }
+  );
   it('round-trips importDetails and importedSymbols behavior', () => {
     const rootPath = path.join(os.tmpdir(), `ifg-${Date.now()}`);
     const graph = new InternalFileGraph(rootPath);

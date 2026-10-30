@@ -957,7 +957,7 @@ export class CodebaseSearcher {
               path.resolve(this.rootPath, anchor.filePath),
               specifier
             );
-            if (current.reason === 'outside-root') {
+            if (current.status === 'unresolved' && current.reason === 'outside-root') {
               throw new IndexCorruptedError(
                 'Import resolves outside the selected project. Full rebuild required.'
               );

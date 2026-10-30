@@ -667,6 +667,7 @@ export class CodebaseIndexer {
       const pendingResolvedEdges: Array<{
         from: string;
         to: string;
+        target: string;
         line: number;
         importedSymbols: string[];
         source: Omit<ImportEdgeSource, 'line' | 'targetFingerprint'>;
@@ -741,10 +742,11 @@ export class CodebaseIndexer {
               importGraph.trackImport(imp.source, file, imp.line || 1);
 
               const resolution = await sourceResolver.resolve(file, imp.source);
-              if (resolution.status === 'resolved' && resolution.path) {
+              if (resolution.status === 'resolved') {
                 pendingResolvedEdges.push({
                   from: file,
                   to: resolution.path,
+                  target: resolution.target,
                   line: imp.line || 1,
                   importedSymbols: imp.imports,
                   source: {
@@ -763,7 +765,7 @@ export class CodebaseIndexer {
                     sourceFingerprint,
                     targetFingerprint: ''
                   },
-                  resolution.reason ?? 'not-found'
+                  resolution
                 );
               }
             }
@@ -778,10 +780,11 @@ export class CodebaseIndexer {
                 sourceFingerprint,
                 targetFingerprint: ''
               };
-              if (resolution.status === 'resolved' && resolution.path) {
+              if (resolution.status === 'resolved') {
                 pendingResolvedEdges.push({
                   from: file,
                   to: resolution.path,
+                  target: resolution.target,
                   line: reexport.line,
                   importedSymbols: [],
                   source: {
@@ -791,7 +794,7 @@ export class CodebaseIndexer {
                   }
                 });
               } else {
-                internalFileGraph.trackUnresolved(file, proof, resolution.reason ?? 'not-found');
+                internalFileGraph.trackUnresolved(file, proof, resolution);
               }
             }
 
@@ -934,7 +937,7 @@ export class CodebaseIndexer {
               line: edge.line,
               targetFingerprint: ''
             },
-            'not-found'
+            { reason: 'analysis-unavailable', target: edge.target }
           );
         }
       }

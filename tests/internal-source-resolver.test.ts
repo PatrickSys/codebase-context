@@ -12,6 +12,31 @@ import {
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-source-resolver-'));
 afterAll(async () => fs.rm(root, { recursive: true, force: true }));
 
+it('captures the same physical target from selected and unindexed resolution through root aliases', async () => {
+  const project = path.join(root, 'physical-root');
+  await fs.mkdir(path.join(project, 'src'), { recursive: true });
+  await fs.mkdir(path.join(project, 'physical'), { recursive: true });
+  await fs.writeFile(path.join(project, 'src/main.ts'), "import '../linked/target';\n");
+  await fs.writeFile(path.join(project, 'physical/target.ts'), 'export const target = true;\n');
+  await fs.symlink(path.join(project, 'physical'), path.join(project, 'linked'), 'junction');
+  const alias = path.join(root, 'root-alias');
+  await fs.symlink(project, alias, 'junction');
+  const importer = path.join(alias, 'src/main.ts');
+  const target = path.join(alias, 'physical/target.ts');
+  const selected = await InternalSourceResolver.create(alias, [importer, target]);
+  expect(await selected.resolve(importer, '../linked/target')).toEqual({
+    status: 'resolved',
+    path: target,
+    target: 'physical/target.ts'
+  });
+  const unindexed = await InternalSourceResolver.create(alias, [importer]);
+  expect(await unindexed.resolve(importer, '../linked/target')).toEqual({
+    status: 'unresolved',
+    reason: 'not-indexed',
+    target: 'physical/target.ts'
+  });
+});
+
 async function configProject(name: string): Promise<string> {
   const project = path.join(root, name, 'project');
   await fs.mkdir(project, { recursive: true });
@@ -48,7 +73,8 @@ it('loads aliases from the selected root tsconfig.base.json instead of an ancest
   });
   expect(await resolver.resolve(importer, '@shared/util')).toEqual({
     status: 'resolved',
-    path: target
+    path: target,
+    target: 'src/util.ts'
   });
   expect(await resolver.resolve(importer, '@unmapped/util')).toEqual({
     status: 'unresolved',

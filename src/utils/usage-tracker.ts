@@ -639,12 +639,17 @@ export interface ImportEdgeSource {
   targetFingerprint: string;
 }
 
-export interface UnresolvedImportEdge {
+type UnresolvedSpecifierReason = 'external' | 'not-found' | 'outside-root' | 'unsupported-alias';
+
+type UnresolvedImportDiagnostic =
+  | { reason: UnresolvedSpecifierReason }
+  | { reason: 'not-indexed' | 'analysis-unavailable'; target: string };
+
+export type UnresolvedImportEdge = {
   from: string;
   kind: GraphRelationKind;
   source: ImportEdgeSource;
-  reason: 'external' | 'not-found' | 'outside-root' | 'unsupported-alias';
-}
+} & UnresolvedImportDiagnostic;
 
 export interface FileGraphEdge {
   from: string;
@@ -932,14 +937,17 @@ export class InternalFileGraph {
   trackUnresolved(
     importingFile: string,
     source: ImportEdgeSource,
-    reason: UnresolvedImportEdge['reason'],
+    diagnostic: UnresolvedSpecifierReason | UnresolvedImportDiagnostic,
     kind: GraphRelationKind = source.kind
   ): void {
+    const proof = typeof diagnostic === 'string' ? { reason: diagnostic } : diagnostic;
     const edge: UnresolvedImportEdge = {
       from: this.normalizePath(importingFile),
       kind,
       source,
-      reason
+      ...('target' in proof
+        ? { reason: proof.reason, target: proof.target }
+        : { reason: proof.reason })
     };
     if (
       !this.unresolvedEdges.some(

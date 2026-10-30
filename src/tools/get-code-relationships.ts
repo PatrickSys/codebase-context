@@ -3,12 +3,12 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { z } from 'zod';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
 import { readIndexMeta } from '../core/index-meta.js';
 import {
   traverseFileGraphWithVerification,
   type FileGraphEdge,
-  type ImportEdgeDetail,
   type UnresolvedImportEdge
 } from '../utils/usage-tracker.js';
 import {
@@ -84,16 +84,6 @@ export const definition: Tool = {
   }
 };
 
-interface Sidecar {
-  header?: { buildId?: string; formatVersion?: number };
-  graph?: {
-    imports?: Record<string, string[]>;
-    importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
-    exports?: Record<string, unknown>;
-    unresolvedEdges?: UnresolvedImportEdge[];
-  };
-}
-
 function asObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -112,6 +102,66 @@ function safeRelativePath(value: string): string | null {
     return null;
   }
   return normalized;
+}
+
+const StoredRelativePath = z
+  .string()
+  .refine(
+    (value) =>
+      safeRelativePath(value) === value &&
+      !path.win32.parse(value).root &&
+      !value.includes('\\') &&
+      !value.includes('\0') &&
+      value.split('/').every((part) => part !== '' && part !== '.'),
+    'Expected a canonical repository-relative path.'
+  );
+const StoredSource = z.object({
+  line: z.number().int().min(1),
+  specifier: z.string(),
+  kind: z.enum(['import', 'reexport']),
+  sourceFingerprint: z.string(),
+  targetFingerprint: z.string()
+});
+const UnresolvedSource = z.object({
+  from: StoredRelativePath,
+  kind: z.enum(['import', 'reexport']),
+  source: StoredSource.extend({ sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/) })
+});
+const StoredUnresolved = z.union([
+  UnresolvedSource.extend({
+    reason: z.enum(['external', 'not-found', 'outside-root', 'unsupported-alias'])
+  }),
+  UnresolvedSource.extend({
+    reason: z.enum(['not-indexed', 'analysis-unavailable']),
+    target: StoredRelativePath
+  })
+]);
+const StoredGraph = z.object({
+  imports: z.record(StoredRelativePath, z.array(StoredRelativePath)),
+  importDetails: z
+    .record(
+      StoredRelativePath,
+      z.record(
+        StoredRelativePath,
+        z.object({
+          line: z.number().optional(),
+          importedSymbols: z.array(z.string()).optional(),
+          sources: z.array(StoredSource).optional()
+        })
+      )
+    )
+    .optional(),
+  unresolvedEdges: z.array(StoredUnresolved).optional()
+});
+
+function unresolvedDiagnostic(edge: UnresolvedImportEdge) {
+  return {
+    from: edge.from,
+    kind: edge.kind,
+    source: { line: edge.source.line, specifier: edge.source.specifier },
+    reason: edge.reason,
+    ...('target' in edge ? { target: edge.target } : {})
+  };
 }
 
 function matchesRelativePath(root: string, absolute: string, expected: string): boolean {
@@ -221,19 +271,22 @@ async function handlePinned(
 
     const sidecarPath = path.join(path.dirname(ctx.paths.intelligence), RELATIONSHIPS_FILENAME);
     const parsed: unknown = JSON.parse(await fs.readFile(sidecarPath, 'utf8'));
-    const sidecar = asObject(parsed) as Sidecar;
+    const sidecar = asObject(parsed);
+    const header = asObject(sidecar.header);
     const meta = await readIndexMeta(ctx.rootPath);
-    if (!sidecar.header?.buildId || sidecar.header.buildId !== meta.buildId) {
+    if (!header.buildId || header.buildId !== meta.buildId) {
       return reply({
         status: 'stale_index',
         message:
           'Relationship sidecar and index metadata have different build identities. Refresh the index before relying on graph results.'
       });
     }
-    if (!sidecar.graph?.imports) {
+    const graph = StoredGraph.safeParse(sidecar.graph);
+    if (!graph.success) {
       return reply({
         status: 'graph_unavailable',
-        message: 'The current index has no file relationship graph. Refresh indexing to build it.'
+        message:
+          'The relationship graph is missing or contains invalid records. Refresh indexing to rebuild it.'
       });
     }
 
@@ -244,7 +297,7 @@ async function handlePinned(
     });
     const verificationCache = new Map<string, boolean>();
     const result = await traverseFileGraphWithVerification(
-      sidecar.graph,
+      graph.data,
       start,
       { direction, maxHops, maxNodes, maxPaths: 40, maxInspections: MAX_INSPECTIONS },
       async (edge) => {
@@ -283,7 +336,8 @@ async function handlePinned(
         edge.from,
         edge.source.specifier,
         edge.source.sourceFingerprint,
-        edge.reason
+        edge.reason,
+        ...('target' in edge ? [edge.target] : [])
       ]);
       let verification = unresolvedVerification.get(key);
       if (!verification) {
@@ -292,6 +346,12 @@ async function handlePinned(
           if (!importer || !edge.source.specifier) return false;
           if ((await currentFingerprint(importer)) !== edge.source.sourceFingerprint) return false;
           const current = await resolver.resolve(importer, edge.source.specifier, true);
+          if ('target' in edge) {
+            if (current.status !== 'resolved') return false;
+            return process.platform === 'win32'
+              ? current.target.toLowerCase() === edge.target.toLowerCase()
+              : current.target === edge.target;
+          }
           return current.status === 'unresolved' && current.reason === edge.reason;
         })();
         unresolvedVerification.set(key, verification);
@@ -323,29 +383,21 @@ async function handlePinned(
           source: { line: edge.source.line, specifier: edge.source.specifier }
         }))
       })),
-      unresolved: visibleUnresolved.map((edge) => ({
-        from: edge.from,
-        kind: edge.kind,
-        source: { line: edge.source.line, specifier: edge.source.specifier },
-        reason: edge.reason
-      })),
+      unresolved: visibleUnresolved.map(unresolvedDiagnostic),
       ...(visibleStaleEdges.length > 0 ? { staleEdges: visibleStaleEdges } : {}),
       ...(visibleStaleUnresolved.length > 0
         ? {
-            staleUnresolvedEdges: visibleStaleUnresolved.map((edge) => ({
-              from: edge.from,
-              kind: edge.kind,
-              source: { line: edge.source.line, specifier: edge.source.specifier },
-              reason: edge.reason
-            }))
+            staleUnresolvedEdges: visibleStaleUnresolved.map(unresolvedDiagnostic)
           }
         : {}),
       truncated: outputLimited,
       message: stale
         ? 'Some stored relationships could not be proven against current confined source files. Omitted those edges; refresh indexing to update this graph.'
-        : unresolved.length > 0
-          ? 'Resolved relationships are current. Unresolved source specifiers are diagnostics and were not followed.'
-          : 'Relationships are limited to verified imports and re-exports; dynamic calls are not inferred.',
+        : unresolved.some((edge) => edge.reason === 'analysis-unavailable')
+          ? 'Some selected targets lack source snapshots. Inspect indexing errors and refresh after fixing them; these diagnostics were not followed.'
+          : unresolved.length > 0
+            ? 'Resolved relationships are current. Unresolved source specifiers are diagnostics and were not followed.'
+            : 'Relationships are limited to verified imports and re-exports; dynamic calls are not inferred.',
       ...(outputLimited
         ? {
             outputNote: result.inspectionLimited

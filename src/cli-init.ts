@@ -1,17 +1,7 @@
-import { cliProjectOptions } from './cli-project-options.js';
-import { CodebaseIndexer } from './core/indexer.js';
-import { loadProjectConfig } from './server/config.js';
 /**
  * Interactive setup wizard for codebase-context.
- * Handles `codebase-context init` — detects clients and merges project MCP configs
- * for Claude Code, Cursor, Codex, VS Code (Copilot), Windsurf, and OpenCode.
- * Config merge shapes follow each client's official docs (VS Code uses a top-level
- * `servers` object per the MCP filesystem server workspace examples; Windsurf uses
- * `~/.codeium/windsurf/mcp_config.json`). Use `--dry-run` to preview writes first,
- * matching the preview-before-apply pattern from MCP filesystem `edit_file`.
- *
- * Config writes run only after all selected registrations pass preflight.
- * File previews share the indexer's selection rules and project configuration.
+ * Detects MCP clients, lets the user choose tools, and merges project MCP config files.
+ * Use `--dry-run` to print previews without writing anything.
  */
 
 import path from 'path';
@@ -19,9 +9,24 @@ import { parse as parseToml } from 'smol-toml';
 import { isDeepStrictEqual } from 'node:util';
 import { promises as fs } from 'node:fs';
 import { atomicWrite } from './utils/atomic-write.js';
-import { checkbox } from '@inquirer/prompts';
+import * as clack from '@clack/prompts';
 import { homedir } from 'node:os';
 import { constants } from 'node:fs';
+import { formatConfigPreview } from './cli-init-preview.js';
+import { PKG_VERSION, resolveMcpPackageSpec } from './cli-init-package.js';
+import {
+  CLIENTS,
+  DETECT_CLIENTS,
+  INIT_CLIENTS,
+  type Client,
+  type InitClient,
+  isInitClient
+} from './cli-init-types.js';
+
+export type { Client, InitClient } from './cli-init-types.js';
+export { CLIENTS, DETECT_CLIENTS, INIT_CLIENTS, PKG_VERSION, resolveMcpPackageSpec };
+
+export const INIT_NPX_PACKAGE = resolveMcpPackageSpec(false);
 
 export type McpConfigResult = { kind: 'file'; path: string; content: string };
 
@@ -29,6 +34,9 @@ export type McpConfigOptions = {
   rootPath?: string;
   /** Override home for user-scoped configs (tests). Defaults to os.homedir(). */
   homeDirectory?: string;
+  platform?: NodeJS.Platform;
+  /** When true, write codebase-context@latest instead of pinning the running package version. */
+  trackLatest?: boolean;
   /** Node binary written into the client config. Defaults to the current process. */
   nodeExecutable?: string;
   /**
@@ -40,51 +48,18 @@ export type McpConfigOptions = {
 
 type JsonObject = Record<string, unknown>;
 
-export const CLIENTS = [
-  {
-    id: 'claude-code',
-    name: 'Claude Code',
-    executable: 'claude',
-    directory: '.claude',
-    scope: 'project'
-  },
-  { id: 'codex', name: 'Codex', executable: 'codex', directory: '.codex', scope: 'project' },
-  { id: 'cursor', name: 'Cursor', executable: 'cursor', directory: '.cursor', scope: 'project' },
-  {
-    id: 'vscode',
-    name: 'VS Code (Copilot)',
-    executable: 'code',
-    directory: '.vscode',
-    scope: 'project'
-  },
-  {
-    id: 'windsurf',
-    name: 'Windsurf',
-    executable: 'windsurf',
-    directory: '.codeium/windsurf',
-    scope: 'user'
-  },
-  {
-    id: 'opencode',
-    name: 'OpenCode',
-    executable: 'opencode',
-    directory: '.opencode',
-    scope: 'project'
-  }
-] as const;
-
-export type Client = (typeof CLIENTS)[number]['id'];
-
 function resolveHome(
   env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform
+  _platform: NodeJS.Platform = process.platform
 ): string {
-  const paths = platform === 'win32' ? path.win32 : path.posix;
   return env.HOME || env.USERPROFILE || homedir();
 }
 
 function jsonMcpServerKey(
-  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'>
+  client: Extract<
+    Client,
+    'claude-code' | 'claude-desktop' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'
+  >
 ): string {
   if (client === 'opencode') return 'mcp';
   if (client === 'vscode') return 'servers';
@@ -101,6 +76,23 @@ export function resolveClientConfigPath(
   const home = resolveHome(env, platform);
   if (client === 'codex') return path.join(rootPath, '.codex', 'config.toml');
   if (client === 'windsurf') return path.join(home, '.codeium', 'windsurf', 'mcp_config.json');
+  if (client === 'claude-desktop') {
+    if (platform === 'darwin') {
+      return paths.join(
+        home,
+        'Library',
+        'Application Support',
+        'Claude',
+        'claude_desktop_config.json'
+      );
+    }
+    if (platform === 'win32') {
+      const appData = env.APPDATA || paths.join(home, 'AppData', 'Roaming');
+      return paths.join(appData, 'Claude', 'claude_desktop_config.json');
+    }
+    const configHome = env.XDG_CONFIG_HOME || paths.join(home, '.config');
+    return paths.join(configHome, 'Claude', 'claude_desktop_config.json');
+  }
   if (client === 'claude-code') return path.join(rootPath, '.mcp.json');
   if (client === 'cursor') return path.join(rootPath, '.cursor', 'mcp.json');
   if (client === 'vscode') return path.join(rootPath, '.vscode', 'mcp.json');
@@ -118,7 +110,26 @@ export async function detectClients(
   const searchPath = (env.PATH || env.Path || '').split(platform === 'win32' ? ';' : ':');
   const extensions = platform === 'win32' ? ['', '.exe', '.cmd', '.bat', '.ps1'] : [''];
   const detected: Client[] = [];
-  for (const client of CLIENTS) {
+  for (const client of DETECT_CLIENTS) {
+    if (client.id === 'claude-desktop') {
+      const configPath = resolveClientConfigPath('claude-desktop', rootPath, env, platform);
+      const desktopDir = path.dirname(configPath);
+      for (const candidate of [
+        { path: configPath, directory: false },
+        { path: desktopDir, directory: true }
+      ]) {
+        try {
+          await fs.access(candidate.path, candidate.directory ? constants.F_OK : constants.F_OK);
+          const info = await fs.stat(candidate.path);
+          if (candidate.directory ? !info.isDirectory() : !info.isFile()) continue;
+          detected.push(client.id);
+          break;
+        } catch (error) {
+          if (!isFileNotFound(error)) throw error;
+        }
+      }
+      continue;
+    }
     const userDirectory =
       client.id === 'codex'
         ? env.CODEX_HOME || paths.join(home, '.codex')
@@ -135,11 +146,13 @@ export async function detectClients(
         : paths.join(rootPath, client.directory);
     const directories =
       client.scope === 'user' ? [userDirectory] : [projectDirectory, userDirectory];
-    const executables = searchPath
-      .filter(Boolean)
-      .flatMap((directory) =>
-        extensions.map((extension) => paths.join(directory, client.executable + extension))
-      );
+    const executables = client.executable
+      ? searchPath
+          .filter(Boolean)
+          .flatMap((directory) =>
+            extensions.map((extension) => paths.join(directory, client.executable + extension))
+          )
+      : [];
     const candidates = [
       ...directories.map((candidate) => ({ path: candidate, directory: true })),
       ...executables.map((candidate) => ({ path: candidate, directory: false }))
@@ -180,33 +193,71 @@ function resolveServerEntrypoint(explicit?: string): string {
   return path.resolve(entrypoint);
 }
 
+function resolveNpxCommand(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32' ? 'npx.cmd' : 'npx';
+}
+
+function usesDirectLaunch(options: McpConfigOptions): boolean {
+  return options.serverEntrypoint !== undefined || options.nodeExecutable !== undefined;
+}
+
+function buildLaunchArgs(
+  rootPath: string,
+  options: McpConfigOptions
+): {
+  command: string;
+  args: string[];
+  opencodeCommand?: string[];
+} {
+  const platform = options.platform ?? process.platform;
+  if (usesDirectLaunch(options)) {
+    const nodeExecutable = path.resolve(options.nodeExecutable ?? process.execPath);
+    const serverEntrypoint = resolveServerEntrypoint(options.serverEntrypoint);
+    const args = [serverEntrypoint, rootPath];
+    return {
+      command: nodeExecutable,
+      args,
+      opencodeCommand: [nodeExecutable, ...args]
+    };
+  }
+  const npxCommand = resolveNpxCommand(platform);
+  const packageSpec = resolveMcpPackageSpec(options.trackLatest ?? false);
+  const args = ['-y', packageSpec, rootPath];
+  return {
+    command: npxCommand,
+    args,
+    opencodeCommand: [npxCommand, ...args]
+  };
+}
+
 /**
- * Launch command saved for every client: the Node binary that ran init, the
- * package entrypoint (the npx cache path when init itself was started with npx),
- * and the project folder. Clients then start that file directly.
+ * Launch command for JSON-backed clients (Cursor, OpenCode). Pins codebase-context@<version>
+ * unless trackLatest is set. Pass nodeExecutable/serverEntrypoint only in tests.
  */
 export function generateMcpConfig(client: Client, options: McpConfigOptions = {}): McpConfigResult {
   const rootPath = path.resolve(options.rootPath ?? process.cwd());
   const homeDirectory = options.homeDirectory ?? resolveHome();
-  const nodeExecutable = path.resolve(options.nodeExecutable ?? process.execPath);
-  const serverEntrypoint = resolveServerEntrypoint(options.serverEntrypoint);
-  const args = [serverEntrypoint, rootPath];
+  const platform = options.platform ?? process.platform;
+  const launch = buildLaunchArgs(rootPath, options);
   if (client === 'codex') {
+    const npx = usesDirectLaunch(options)
+      ? { command: launch.command, args: launch.args }
+      : { command: 'npx', args: launch.args };
     return {
       kind: 'file',
-      path: resolveClientConfigPath('codex', rootPath, { HOME: homeDirectory }),
+      path: resolveClientConfigPath('codex', rootPath, { HOME: homeDirectory }, platform),
       content:
-        `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(nodeExecutable)}\n` +
-        `args = [${args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 120\n`
+        `[mcp_servers.codebase-context]\ncommand = ${JSON.stringify(npx.command)}\n` +
+        `args = [${npx.args.map((value) => JSON.stringify(value)).join(', ')}]\nstartup_timeout_sec = 120\n`
     };
   }
-  const configPath = resolveClientConfigPath(client, rootPath, { HOME: homeDirectory });
+  const configPath = resolveClientConfigPath(client, rootPath, { HOME: homeDirectory }, platform);
   const serverPayload =
     client === 'opencode'
-      ? { type: 'local', command: [nodeExecutable, ...args] }
+      ? { type: 'local', command: launch.opencodeCommand ?? [launch.command, ...launch.args] }
       : client === 'cursor'
-        ? { type: 'stdio', command: nodeExecutable, args }
-        : { command: nodeExecutable, args };
+        ? { type: 'stdio', command: launch.command, args: launch.args }
+        : { command: launch.command, args: launch.args };
   const body =
     client === 'opencode'
       ? {
@@ -305,40 +356,78 @@ function isNpxCacheEntrypoint(value: string): boolean {
   return /[\\/]node_modules[\\/]codebase-context[\\/]dist[\\/]index\.js$/.test(value);
 }
 
+function isNpxPackageArg(value: string): boolean {
+  return (
+    value === 'codebase-context' ||
+    /^codebase-context@(latest|\d+\.\d+\.\d+(?:-[\w.-]+)?)$/.test(value)
+  );
+}
+
+function isNpxLaunchArgs(args: string[]): boolean {
+  const flag = args[0];
+  if (flag !== '-y' && flag !== '--yes') return false;
+  if (!isNpxPackageArg(args[1] ?? '')) return false;
+  return args.length === 3 && isAbsolutePath(args[2] ?? '');
+}
+
+function isNpxCommandName(command: string): boolean {
+  const normalized = command.replace(/\\/g, '/');
+  const base = path.basename(normalized).toLowerCase();
+  return (base === 'npx' || base === 'npx.cmd') && !normalized.includes('/');
+}
+
+function isOpencodeNpxCommand(command: string[]): boolean {
+  if (!isNpxCommandName(command[0] ?? '')) return false;
+  if (command[1] !== '-y' && command[1] !== '--yes') return false;
+  if (!isNpxPackageArg(command[2] ?? '')) return false;
+  return command.length === 4 && isAbsolutePath(command[3] ?? '');
+}
+
 /**
  * Recognize only CBC-specific launch shapes written by init.
- * A node launch counts when it points at the npx cache copy of this package,
- * or at the entrypoint this run is about to save.
+ * Accepts npx @latest launches and legacy node launches pointing at this package.
  */
 function isGeneratedLaunch(command: unknown, args: unknown, entrypoint?: string): boolean {
   if (
-    typeof command !== 'string' ||
-    !Array.isArray(args) ||
-    !args.every((arg) => typeof arg === 'string')
-  )
+    typeof command === 'string' &&
+    Array.isArray(args) &&
+    args.every((arg) => typeof arg === 'string')
+  ) {
+    if (isNpxCommandName(command)) {
+      return isNpxLaunchArgs(args);
+    }
+    const executable = path.basename(command.replace(/\\/g, '/')).toLowerCase();
+    if (executable === 'node' || executable === 'node.exe') {
+      const script = args[0] ?? '';
+      return (
+        args.length === 2 &&
+        isAbsolutePath(script) &&
+        isAbsolutePath(args[1] ?? '') &&
+        (isNpxCacheEntrypoint(script) || (entrypoint !== undefined && samePath(script, entrypoint)))
+      );
+    }
     return false;
-  const executable = path.basename(command.replace(/\\/g, '/')).toLowerCase();
-  if (executable === 'node' || executable === 'node.exe') {
-    const script = args[0] ?? '';
-    return (
-      args.length === 2 &&
-      isAbsolutePath(script) &&
-      isAbsolutePath(args[1] ?? '') &&
-      (isNpxCacheEntrypoint(script) || (entrypoint !== undefined && samePath(script, entrypoint)))
-    );
   }
-  const launch = command === 'npx' || command === 'npx.cmd' ? args : [];
-  return (
-    launch.length === 3 &&
-    (launch[0] === '--yes' || launch[0] === '-y') &&
-    /^codebase-context@\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(launch[1] ?? '') &&
-    isAbsolutePath(launch[2] ?? '')
-  );
+  if (Array.isArray(command) && command.every((part) => typeof part === 'string')) {
+    if (isOpencodeNpxCommand(command)) return true;
+    const executable = path.basename(command[0]?.replace(/\\/g, '/') ?? '').toLowerCase();
+    if (executable === 'node' || executable === 'node.exe') {
+      const script = command[1] ?? '';
+      return (
+        command.length === 3 &&
+        isAbsolutePath(script) &&
+        isAbsolutePath(command[2] ?? '') &&
+        (isNpxCacheEntrypoint(script) || (entrypoint !== undefined && samePath(script, entrypoint)))
+      );
+    }
+  }
+  return false;
 }
 
 function generatedEntrypoint(generated: unknown, client: Client): string | undefined {
   if (!isJsonObject(generated)) return undefined;
   if (client === 'opencode' && Array.isArray(generated.command)) {
+    if (isOpencodeNpxCommand(generated.command)) return undefined;
     return typeof generated.command[1] === 'string' ? generated.command[1] : undefined;
   }
   return Array.isArray(generated.args) && typeof generated.args[0] === 'string'
@@ -371,7 +460,10 @@ function mergeGeneratedServer(existing: unknown, generated: unknown, client: Cli
 export async function _buildMergedMcpContent(
   filePath: string,
   generatedContent: string,
-  client: Extract<Client, 'claude-code' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'>
+  client: Extract<
+    Client,
+    'claude-code' | 'claude-desktop' | 'cursor' | 'opencode' | 'vscode' | 'windsurf'
+  >
 ): Promise<{ content: string; mergedFromExisting: boolean }> {
   const existingText = await readExistingConfig(filePath);
   if (existingText === null) {
@@ -524,13 +616,22 @@ export async function _buildMergedCodexContent(
 }
 
 type InitOptions = {
-  clients: Client[];
+  clients: InitClient[];
   rootPath: string;
   yes: boolean;
   help: boolean;
-  preview: boolean;
   dryRun: boolean;
+  trackLatest: boolean;
 };
+
+function parseInitClient(value: string): InitClient {
+  if (!isInitClient(value as Client)) {
+    throw new Error(
+      `Unknown or unsupported client "${value}". Choose ${INIT_CLIENTS.map((client) => client.id).join(', ')}.`
+    );
+  }
+  return value as InitClient;
+}
 
 function formatDisplayPath(configPath: string, rootPath: string): string {
   const relative = path.relative(rootPath, configPath);
@@ -563,12 +664,33 @@ function describeInitChange(
   return `${prefix}: ${displayPath}`;
 }
 
-function parseClient(value: string): Client {
-  const client = CLIENTS.find((client) => client.id === value);
-  if (client) return client.id;
-  throw new Error(
-    `Unknown client "${value}". Choose ${CLIENTS.map((client) => client.id).join(', ')}.`
-  );
+function appendInitClients(clients: InitClient[], raw: string): void {
+  for (const part of raw.split(',')) {
+    const trimmed = part.trim();
+    if (trimmed) clients.push(parseInitClient(trimmed));
+  }
+}
+
+async function mergeInitClient(
+  client: InitClient,
+  options: Pick<InitOptions, 'rootPath' | 'trackLatest'>
+): Promise<{
+  config: McpConfigResult;
+  merged: { content: string };
+  existingText: string | null;
+  action: 'create' | 'update' | 'unchanged';
+}> {
+  const config = generateMcpConfig(client, {
+    rootPath: options.rootPath,
+    trackLatest: options.trackLatest
+  });
+  const merged =
+    client === 'codex'
+      ? await _buildMergedCodexContent(config.path, config.content)
+      : await _buildMergedMcpContent(config.path, config.content, client);
+  const existingText = await readExistingConfig(config.path);
+  const action = classifyInitChange(existingText, merged.content);
+  return { config, merged, existingText, action };
 }
 
 function parseInitOptions(args: string[]): InitOptions {
@@ -578,25 +700,25 @@ function parseInitOptions(args: string[]): InitOptions {
       rootPath: process.cwd(),
       yes: false,
       help: true,
-      preview: false,
-      dryRun: false
+      dryRun: false,
+      trackLatest: false
     };
-  const clients: Client[] = [];
+  const clients: InitClient[] = [];
   let yes = false;
-  let preview = false;
   let dryRun = false;
+  let trackLatest = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
-    if (arg === '--preview') preview = true;
-    else if (arg === '--dry-run') dryRun = true;
+    if (arg === '--dry-run') dryRun = true;
     else if (arg === '--yes' || arg === '-y') yes = true;
-    else if (arg === '--client') {
+    else if (arg === '--track-latest') trackLatest = true;
+    else if (arg === '--client' || arg === '--clients') {
       const value = args[++index];
-      if (!value || value.startsWith('--')) throw new Error('Expected a client after --client.');
-      clients.push(parseClient(value));
-    } else if (arg?.startsWith('--client='))
-      clients.push(parseClient(arg.slice('--client='.length)));
-    else if (arg === '--root') index++;
+      if (!value || value.startsWith('--')) throw new Error(`Expected a client after ${arg}.`);
+      appendInitClients(clients, value);
+    } else if (arg?.startsWith('--client=') || arg?.startsWith('--clients=')) {
+      appendInitClients(clients, arg.split('=').slice(1).join('='));
+    } else if (arg === '--root') index++;
     else if (!arg?.startsWith('--root=')) throw new Error(`Unknown init option "${arg}".`);
   }
   return {
@@ -604,29 +726,24 @@ function parseInitOptions(args: string[]): InitOptions {
     rootPath: resolveInitRoot(args, process.env.CODEBASE_ROOT),
     yes,
     help: false,
-    preview,
-    dryRun
+    dryRun,
+    trackLatest
   };
 }
 
 function printInitUsage(): void {
   console.log('codebase-context init [options]');
+  console.log('Detect tools, choose clients, merge MCP config files under the project root.');
   console.log(
-    'Detect and configure coding tools together. With a terminal, Space toggles and Enter applies.'
+    `Default launch in configs: npx -y codebase-context@${PKG_VERSION} <project> (--track-latest for @latest).`
   );
   console.log(
-    'Each config saves this Node binary and the package file from the npx cache, plus the project folder.'
+    '  --clients <name>  Repeatable client id (alias: --client): ' +
+      INIT_CLIENTS.map((client) => client.id).join(', ')
   );
-  console.log('Codex setup line: codex mcp add codebase-context -- npx -y codebase-context');
-  console.log(
-    '  --client <name>  Choose a tool (repeatable): ' +
-      CLIENTS.map((client) => client.id).join(', ')
-  );
-  console.log('  --root <path>    Project root (default: CODEBASE_ROOT or cwd)');
-  console.log('  --preview        Show selected files and exclusions without writing config');
-  console.log('  --dry-run        Show MCP config changes without writing files');
-  console.log('  --yes, -y        Configure every detected tool without prompts');
-  console.log('  --help, -h       Show this help');
+  console.log('  --yes, -y          Non-interactive (for CI scripts)');
+  console.log('  --dry-run          Print previews without writing any files');
+  console.log('  --track-latest     Write codebase-context@latest instead of pinning');
 }
 
 export async function handleInitCli(args: string[]): Promise<void> {
@@ -638,73 +755,82 @@ export async function handleInitCli(args: string[]): Promise<void> {
     }
     if (!(await fs.stat(options.rootPath)).isDirectory())
       throw new Error(`Project root is not a directory: ${options.rootPath}`);
-    if (options.preview) {
-      const config = await loadProjectConfig(options.rootPath);
-      const preview = await new CodebaseIndexer({
-        rootPath: options.rootPath,
-        ...cliProjectOptions(config, true)
-      }).previewFiles();
-      console.log(JSON.stringify(preview, null, 2));
-      return;
-    }
-    console.log(`Set up Codebase Context in ${options.rootPath}`);
-    let clients = options.clients;
-    if (!clients.length) {
-      const detected = await detectClients(options.rootPath);
-      clients =
-        !options.yes && process.stdin.isTTY && process.stdout.isTTY
-          ? await checkbox<Client>({
-              message: 'Choose tools (Space toggles, Enter sets up):',
-              choices: CLIENTS.map((client) => ({
-                name: client.name + (detected.includes(client.id) ? ' (detected)' : ''),
-                value: client.id,
-                checked: detected.includes(client.id)
-              }))
-            })
-          : detected;
-    }
-    if (!clients.length)
-      throw new Error(
-        `No coding tools selected or detected. Choose with --client (${CLIENTS.map((client) => client.id).join(', ')}).`
-      );
 
-    const prepared = [];
-    for (const client of clients) {
-      const config = generateMcpConfig(client, { rootPath: options.rootPath });
-      const existingText = await readExistingConfig(config.path);
-      const merged =
-        client === 'codex'
-          ? await _buildMergedCodexContent(config.path, config.content)
-          : await _buildMergedMcpContent(config.path, config.content, client);
-      const action = classifyInitChange(existingText, merged.content);
-      prepared.push({
-        ...config,
-        content: merged.content,
-        action,
-        displayPath: formatDisplayPath(config.path, options.rootPath)
-      });
-    }
-    for (const config of prepared) {
-      if (config.action !== 'unchanged' && !options.dryRun) {
-        await fs.mkdir(path.dirname(config.path), { recursive: true });
-        await atomicWrite(config.path, config.content);
+    clack.intro(`Codebase Context setup in ${options.rootPath}`);
+    let clients: InitClient[] = options.clients;
+    if (!clients.length) {
+      const detected = (await detectClients(options.rootPath)).filter(isInitClient);
+      if (!options.yes && process.stdin.isTTY && process.stdout.isTTY) {
+        const selected = await clack.multiselect({
+          message: 'Choose tools to configure',
+          options: INIT_CLIENTS.map((client) => ({
+            label: client.name + (detected.includes(client.id) ? ' (detected)' : ''),
+            value: client.id
+          })),
+          initialValues: detected
+        });
+        if (clack.isCancel(selected)) {
+          clack.cancel('Setup cancelled.');
+          return;
+        }
+        clients = selected;
+      } else {
+        clients = detected;
       }
-      console.log(describeInitChange(options.dryRun, config.action, config.displayPath));
     }
+    if (!clients.length) {
+      throw new Error(
+        `No tools selected or detected. Pass --clients (${INIT_CLIENTS.map((client) => client.id).join(', ')}).`
+      );
+    }
+
+    const prepared = await Promise.all(clients.map((client) => mergeInitClient(client, options)));
+
+    for (const item of prepared) {
+      if (item.action === 'unchanged') continue;
+      console.log(
+        formatConfigPreview(
+          formatDisplayPath(item.config.path, options.rootPath),
+          item.existingText,
+          item.merged.content
+        )
+      );
+      console.log('');
+    }
+
+    if (
+      prepared.some((item) => item.action !== 'unchanged') &&
+      !options.yes &&
+      !options.dryRun &&
+      process.stdin.isTTY &&
+      process.stdout.isTTY
+    ) {
+      const approved = await clack.confirm({ message: 'Apply these changes?', initialValue: true });
+      if (clack.isCancel(approved) || !approved) {
+        clack.cancel('Setup cancelled.');
+        return;
+      }
+    }
+
+    for (const item of prepared) {
+      const displayPath = formatDisplayPath(item.config.path, options.rootPath);
+      if (item.action !== 'unchanged' && !options.dryRun) {
+        await fs.mkdir(path.dirname(item.config.path), { recursive: true });
+        await atomicWrite(item.config.path, item.merged.content);
+      }
+      console.log(describeInitChange(options.dryRun, item.action, displayPath));
+    }
+
     if (options.dryRun) {
       console.log('Dry run complete; no files written.');
+      clack.outro('Dry run finished.');
       return;
     }
-    console.log('Reopen your tools; approve the server or project trust if asked.');
-    console.log("The first search builds this repository's index.");
+
+    clack.outro('Setup complete. Reopen your tools and approve trust if prompted.');
   } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.name === 'ExitPromptError' ||
-        error.name === 'AbortPromptError' ||
-        error.name === 'CancelPromptError')
-    ) {
-      console.log('Setup cancelled; no files written.');
+    if (clack.isCancel(error)) {
+      clack.cancel('Setup cancelled.');
       return;
     }
     console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);

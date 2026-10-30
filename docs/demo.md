@@ -6,6 +6,8 @@ These commands use the current npm release. The output shown below is historical
 
 To try the same CLI flow, use Node.js 22 or newer and open a terminal in the repository you want to inspect. These commands target `codebase-context`; the CLI uses the current directory as the project root. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
 
+Record the setup wizard with VHS: `vhs docs/demo/install.tape` (writes `docs/demo/install.gif`; keep large GIFs out of git).
+
 The saved output below is from an earlier CLI run, not from the current commands. The machine-specific repository root is omitted from the returned file path. This capture does not verify the current package or an MCP connection.
 
 ## 0. Build The Local Index

@@ -199,6 +199,7 @@ describe('init preserves custom launchers', () => {
         '--client',
         'codex',
         '--yes',
+        '--skip-index',
         '--root',
         root
       ]);

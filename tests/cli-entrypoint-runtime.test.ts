@@ -174,7 +174,7 @@ describe('CLI entrypoint runtime', () => {
 
       expect(result.status).toBe(0);
       expect(result.stdout).toContain('codebase-context <command> [options]');
-      expect(result.stdout).toContain('init [--client <name>]');
+      expect(result.stdout).toContain('init [--clients <name>]');
       expect(result.stderr).not.toContain('ERR_MODULE_NOT_FOUND');
     } finally {
       rmSync(tempDirectory, { recursive: true, force: true });

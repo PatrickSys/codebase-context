@@ -96,33 +96,6 @@ describe('index preview enumeration', () => {
     });
   });
 
-  it('honors project config exclusions in the Codex init preview', async () => {
-    root = await fs.mkdtemp(path.join(os.tmpdir(), 'indexer-preview-config-'));
-    await fs.mkdir(path.join(root, 'src'), { recursive: true });
-    await fs.mkdir(path.join(root, 'private'), { recursive: true });
-    await fs.writeFile(path.join(root, 'src', 'keep.ts'), 'export const keep = 1;\n');
-    await fs.writeFile(path.join(root, 'private', 'secret.ts'), 'export const secret = 1;\n');
-    const configPath = path.join(root, 'server-config.json');
-    await fs.writeFile(
-      configPath,
-      JSON.stringify({ projects: [{ root, excludePatterns: ['**/private/**'] }] })
-    );
-    const previousConfigPath = process.env.CODEBASE_CONTEXT_CONFIG_PATH;
-    process.env.CODEBASE_CONTEXT_CONFIG_PATH = configPath;
-    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    try {
-      await handleCliCommand(['init', '--client', 'codex', '--root', root, '--preview']);
-      const rendered = output.mock.calls.flat().join('\n');
-      expect(rendered).toContain('src/keep.ts');
-      expect(rendered).not.toContain('private/secret.ts');
-      expect(rendered).toContain('**/private/**');
-    } finally {
-      output.mockRestore();
-      if (previousConfigPath === undefined) delete process.env.CODEBASE_CONTEXT_CONFIG_PATH;
-      else process.env.CODEBASE_CONTEXT_CONFIG_PATH = previousConfigPath;
-    }
-  });
-
   it('reports overflow with a count and bounded examples, without materializing an overflow list', () => {
     const files = Array.from({ length: 10025 }, (_, index) => `file-${index}.ts`);
 

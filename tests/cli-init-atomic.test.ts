@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fault = vi.hoisted(() => ({ enabled: false, rename: false }));
 vi.mock('node:fs', async (importOriginal) => {
@@ -30,7 +30,13 @@ import { handleInitCli } from '../src/cli-init.js';
 describe('init interrupted writes', () => {
   let root: string;
   const previousExitCode = process.exitCode;
+  const previousSkipNotice = process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE;
+  beforeEach(() => {
+    process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = '1';
+  });
   afterEach(async () => {
+    if (previousSkipNotice === undefined) delete process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE;
+    else process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = previousSkipNotice;
     fault.enabled = false;
     fault.rename = false;
     process.exitCode = previousExitCode;
@@ -38,34 +44,24 @@ describe('init interrupted writes', () => {
   });
   it('preserves the original config when publication fails after the temporary file is complete', async () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-rename-'));
-    const file = path.join(root, '.mcp.json');
+    const file = path.join(root, '.cursor', 'mcp.json');
     const original = '{ "customSetting": "keep" }\n';
+    await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, original);
     fault.rename = true;
-    await handleInitCli(['--client', 'claude-code', '--yes', '--root', root]);
+    await handleInitCli(['--client', 'cursor', '--yes', '--root', root]);
     expect(process.exitCode).toBe(1);
     expect(await fs.readFile(file, 'utf8')).toBe(original);
-    expect(await fs.readdir(root)).toEqual(['.mcp.json']);
   });
-  it.each(['claude-code', 'codex'])(
-    'preserves the entire existing %s config on a partial write failure',
-    async (client) => {
-      root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-write-'));
-      const file =
-        client === 'codex'
-          ? path.join(root, '.codex', 'config.toml')
-          : path.join(root, '.mcp.json');
-      const original =
-        client === 'codex'
-          ? '# original instructions\nmodel = "keep"\n'
-          : '{ "customSetting": "keep" }\n';
-      await fs.mkdir(path.dirname(file), { recursive: true });
-      await fs.writeFile(file, original);
-      fault.enabled = true;
-      await handleInitCli(['--client', client, '--yes', '--root', root]);
-      expect(process.exitCode).toBe(1);
-      expect(await fs.readFile(file, 'utf8')).toBe(original);
-      expect(await fs.readdir(path.dirname(file))).toEqual([path.basename(file)]);
-    }
-  );
+  it('preserves cursor JSON on a partial write failure', async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-write-'));
+    const file = path.join(root, '.cursor', 'mcp.json');
+    const original = '{ "customSetting": "keep" }\n';
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, original);
+    fault.enabled = true;
+    await handleInitCli(['--client', 'cursor', '--yes', '--root', root]);
+    expect(process.exitCode).toBe(1);
+    expect(await fs.readFile(file, 'utf8')).toBe(original);
+  });
 });

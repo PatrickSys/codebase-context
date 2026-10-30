@@ -21,11 +21,20 @@ vi.mock('../src/server/config.js', () => ({
   loadProjectConfig: cliContextMocks.loadProjectConfig
 }));
 
+vi.mock('@clack/prompts', () => ({
+  intro: vi.fn(),
+  outro: vi.fn(),
+  cancel: vi.fn(),
+  isCancel: vi.fn(() => false),
+  multiselect: vi.fn(),
+  confirm: vi.fn().mockResolvedValue(true)
+}));
+
 vi.mock('../src/core/indexer.js', () => ({
-  CodebaseIndexer: vi.fn().mockImplementation(() => ({
-    index: cliContextMocks.indexer,
-    getProgress: vi.fn()
-  }))
+  CodebaseIndexer: class {
+    index = cliContextMocks.indexer;
+    getProgress = vi.fn();
+  }
 }));
 
 import { handleCliCommand, handleMemoryCli } from '../src/cli.js';
@@ -64,16 +73,23 @@ describe('CLI', () => {
     else process.env.CODEBASE_ROOT = originalEnvRoot;
   });
 
-  it('init configures the selected repository without preparing its index', async () => {
+  it('init configures cursor JSON without indexing when skipped', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-only-'));
     const previousExitCode = process.exitCode;
+    process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = '1';
     try {
       process.exitCode = undefined;
-      await handleCliCommand(['init', '--client', 'codex', '--yes', '--root', root]);
+      await handleCliCommand([
+        'init',
+        '--clients',
+        'cursor',
+        '--yes',
+        '--root',
+        root
+      ]);
       expect(cliContextMocks.indexer).not.toHaveBeenCalled();
-      expect(cliContextMocks.loadProjectConfig).not.toHaveBeenCalled();
-      expect(await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8')).toContain(
-        '[mcp_servers.codebase-context]'
+      expect(await fs.readFile(path.join(root, '.cursor', 'mcp.json'), 'utf8')).toContain(
+        'codebase-context'
       );
     } finally {
       process.exitCode = previousExitCode;

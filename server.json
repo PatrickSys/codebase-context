@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.patricksys/codebase-context",
+  "title": "Codebase Context",
+  "description": "Local MCP search, conventions map, and team patterns for coding agents.",
+  "version": "2.3.0",
+  "websiteUrl": "https://github.com/PatrickSys/codebase-context#readme",
+  "repository": {
+    "url": "https://github.com/PatrickSys/codebase-context",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "codebase-context",
+      "version": "2.3.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

@@ -103,41 +103,31 @@ On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a f
 
 ## Setup wizard in the unreleased candidate
 
-The four-client wizard is not in published 2.2.0. From a built checkout or a locally installed candidate, run its actual entrypoint from the project you want to search:
+The interactive wizard is not in published 2.2.0. From your project root (candidate package or local build):
 
 ```bash
-# Detect Claude Code, Codex, Cursor, VS Code, Windsurf, and OpenCode, then configure the detected clients.
-node /path/to/codebase-context/dist/index.js init --yes
-
-# Preview MCP config changes without writing files.
-node /path/to/codebase-context/dist/index.js init --dry-run --yes
-
-# Configure one client for an explicit project.
-node /path/to/codebase-context/dist/index.js init --client codex --root /path/to/project --yes
-
-# Inspect selected source files and exclusions without writing client config.
-node /path/to/codebase-context/dist/index.js init --root /path/to/project --preview
+npx -y codebase-context@latest init
+npx -y codebase-context@latest init --yes --dry-run
+npx -y codebase-context@latest init --yes --clients codex --clients cursor --root /path/to/project
 ```
 
-Replace the paths with the candidate installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
+With a TTY, omit `--yes` to pick clients (Space toggles, Enter confirms), review diffs, and confirm before writing. `--clients` is repeatable (`--client` is an alias; comma-separated values work). `--root` takes priority over `CODEBASE_ROOT` and the current folder. `--dry-run` prints previews and writes nothing. `--track-latest` writes `codebase-context@latest` instead of pinning the installed package version.
 
-Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, VS Code uses `.vscode/mcp.json` (`servers`), Windsurf uses `~/.codeium/windsurf/mcp_config.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
+Init merges project MCP configs for Claude Code (`.mcp.json`), Codex (`.codex/config.toml`), Cursor (`.cursor/mcp.json`), VS Code (`.vscode/mcp.json`), and OpenCode (`opencode.json`). Existing unrelated settings are preserved. A conflicting custom Codebase Context entry stops setup before writes. Restart clients and approve trust if asked.
 
-Existing unrelated settings are preserved. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry from the client config, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked. Config generation and SDK launch tests do not establish acceptance in each native client.
+Record the wizard for docs with [VHS](https://github.com/charmbracelet/vhs) using [`docs/demo/install.tape`](./demo/install.tape); generate `install.gif` locally and avoid committing large binaries.
 
-New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option.
+The older interactive HTTP wizard remains the behavior of published 2.2.0. A successful candidate wizard exit alone does not establish working client registration.
 
 ## Optional fixed-folder setup and CLI preparation
 
-To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
+To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context@latest", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
 
 To prepare the index separately, run from the project folder:
 
 ```powershell
 npx -y codebase-context reindex
 ```
-
-The older interactive HTTP wizard remains the behavior of published 2.2.0. A successful candidate wizard exit alone does not establish working client registration.
 
 ## Gemini CLI
 

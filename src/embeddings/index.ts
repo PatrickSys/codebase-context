@@ -42,7 +42,12 @@ export async function getEmbeddingProvider(
 ): Promise<EmbeddingProvider> {
   assertEmbeddingRuntimeAvailable(config);
   const mergedConfig = { ...DEFAULT_EMBEDDING_CONFIG, ...config };
-  const providerKey = `${mergedConfig.provider}:${mergedConfig.model}`;
+  const providerKey = [
+    mergedConfig.provider,
+    mergedConfig.model,
+    mergedConfig.apiEndpoint ?? '',
+    mergedConfig.apiKey ?? ''
+  ].join(':');
 
   if (cachedProvider && cachedProviderType === providerKey) {
     return cachedProvider;

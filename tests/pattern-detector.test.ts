@@ -27,4 +27,33 @@ describe('PatternDetector testing categories', () => {
     expect(patterns.unitTestFramework?.primary.name).toBe('Jest');
     expect(patterns.testingFramework?.primary.name).toBe('Jest');
   });
+
+  it('does not treat JWT or email Subject as RxJS', () => {
+    const detector = new PatternDetector();
+    detector.detectFromCode(
+      'type Claims struct {\n\tSubject string `json:"sub"`\n}\n',
+      'server/tokens/claims.go'
+    );
+    detector.detectFromCode(
+      'body = b"""Subject: Undelivered Mail Returned to Sender\\n"""\n',
+      'hc/api/tests/test_smtpd.py'
+    );
+    expect(detector.getAllPatterns().stateManagement).toBeUndefined();
+  });
+
+  it('tracks an rxjs import and BehaviorSubject as RxJS', () => {
+    const imported = new PatternDetector();
+    imported.detectFromCode(
+      "import { Subject } from 'rxjs';\nconst events = new Subject<string>();\n",
+      'src/events.ts'
+    );
+    expect(imported.getAllPatterns().stateManagement?.primary.name).toBe('RxJS');
+
+    const typed = new PatternDetector();
+    typed.detectFromCode(
+      'export class AuthService { state = new BehaviorSubject(false); }\n',
+      'src/auth.service.ts'
+    );
+    expect(typed.getAllPatterns().stateManagement?.primary.name).toBe('RxJS');
+  });
 });

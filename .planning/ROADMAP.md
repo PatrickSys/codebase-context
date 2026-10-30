@@ -515,3 +515,15 @@ Promotion rule:
 5. commit the manifest, scorer, limits, failure policy, and report schema
 6. fingerprint the frozen set
 7. only after G1 PASS may any claim-bearing treatment run begin
+
+---
+
+# Next
+
+Remaining gaps from the backend and mixed-repo operational smoke in `docs/benchmark.md`. These are not Phase 1 work.
+
+- Python and Go file-import graphs are empty, so convention maps and edit-preflight impact cannot name callers outside TypeScript and JavaScript. On the FastAPI full-stack template, impact named generated TypeScript client files for a Python route change.
+- The keyword index keeps the first 5000 chunks. Dex analyzed 13,940 chunks and healthchecks 5,812; later chunks are absent from search. Status now reports that omission. Choosing which chunks to keep is still open.
+- Style-guide lookup reads a fixed filename list and only returns sections that match the query. NestJS `authentication` and Dex `connector` returned no content even though `CONTRIBUTING.md` was present.
+- Team-pattern detection is still oriented around JavaScript and TypeScript libraries. After removing the false RxJS match on JWT and email `Subject`, Python and Go maps have no language-native patterns.
+- Edit preflight stayed low-confidence for prose change requests on the Python, Go, and mixed repos. Symbol search for a concrete name succeeded on all four. Routing a prose edit to that symbol is still open.

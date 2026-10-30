@@ -78,3 +78,39 @@ The benchmark does not measure patch correctness, end-to-end task completion, or
 Historical note: the [earlier public report archive](./benchmark-prior-public-report.md) contains a one-task official pilot and a separate 24-task discovery report. Those records and their comparator statuses remain separate, are not folded into this current four-family summary, and retain their claim gates.
 
 See the [comparison table](./comparison-table.md) for the retrieval family in a compact form. The repository walkthrough is in the [demo](./demo.md).
+
+## Repo-kind operational smoke
+
+This section records whether `init`, `reindex`, `status`, convention lookup (`map`, plus `style-guide`), edit preflight (`search --intent edit`), and symbol search (`refs`) finish with a usable payload. It is not a retrieval-quality score and it does not change the claim gates above. Wall times are one local run on Linux x64, Node.js 22.23.4, model-free indexing (embeddings skipped). Clones were `--depth 40`. A command is a pass only when it exits 0 and the payload is usable for that step.
+
+Checked revisions:
+
+| Kind | Repository | Commit |
+| --- | --- | --- |
+| NestJS backend | [brocoders/nestjs-boilerplate](https://github.com/brocoders/nestjs-boilerplate) | `9620f15` |
+| Django app | [healthchecks/healthchecks](https://github.com/healthchecks/healthchecks) | `f6c46b5` |
+| Go service | [dexidp/dex](https://github.com/dexidp/dex) | `b02ead0` |
+| TypeScript frontend + Python FastAPI | [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) | `f4bcfab` |
+
+`init --yes` detected Cursor from the home directory and wrote `.cursor/mcp.json` in each repo.
+
+### Backend and mixed repositories
+
+| Repo | init | reindex | status | conventions | edit preflight | symbol search |
+| --- | --- | --- | --- | --- | --- | --- |
+| NestJS boilerplate | Pass 0.68s | Pass 3.20s. 226 files, 694 chunks, indexer 2.60s | Fail 0.57s. Ready, but a new process omitted file and chunk counts | Pass 0.64s. Nest patterns and 428 import edges. `style-guide --query authentication` found no section | Pass 0.99s. Top hit `MailService`; impact includes `auth.service.ts`. `ready` is false | Pass 1.34s. `MailService`, 6 syntactic usages, complete |
+| healthchecks (Django) | Pass 0.70s | Pass 4.09s. 1,018 files, 5,812 chunks analyzed, indexer 3.47s. Keyword index kept 5,000 | Fail 0.62s. Ready, counts and the 812-chunk omission were hidden | Fail 0.63s. Only pattern was RxJS at 100% adoption. Import edges 0. `style-guide --query contributing` matched `CONTRIBUTING.md` | Fail 1.58s. Low confidence (0.07). Abstain told the caller to refresh a current index. Top hits were not `format_duration` | Pass 0.71s. `format_duration`, 17 syntactic usages. `isComplete` false because the limit was 8 |
+| dex (Go) | Pass 0.66s | Pass 3.88s. 485 files, 13,940 chunks analyzed, indexer 3.29s. Keyword index kept 5,000 | Fail 0.64s. Ready, counts and the 8,940-chunk omission were hidden | Fail 0.65s. Only pattern was RxJS at 100% adoption. Import edges 0. `style-guide --query connector` found no section | Fail 1.29s. Rank 2 was `retryOnConflict`, then the card said to refresh a current index. Low confidence 0.17 | Pass 0.70s. `retryOnConflict`, 8 syntactic usages, at the limit |
+| full-stack FastAPI template | Pass 0.65s | Pass 3.21s. 180 files, 943 chunks, indexer 2.57s | Fail 0.59s. Ready, but a new process omitted file and chunk counts | Fail 0.70s for the Python API. Map patterns are React-only. Graph is 33 files and 91 edges, and the examples are TSX. `style-guide --query development` matched `CONTRIBUTING.md` | Fail 0.81s. Results include `delete_item` in `backend/app/api/routes/items.py`. Impact names generated TS client files. Low confidence 0.09, `ready` false | Pass 0.73s. `get_current_user`, 2 syntactic usages, both in `backend/app/api/deps.py`, which matches the source |
+
+Edit requests were: NestJS password-reset mail via `MailService`; healthchecks downtime duration formatting; Dex Kubernetes conflict retry; full-stack superuser check before item delete.
+
+The false RxJS pattern came from bare `Subject` in JWT claims and email headers. The refresh instruction came from the search candidate budget, not from stale files (`skippedFiles` was 0).
+
+### After those three fixes
+
+Re-checked on the same clones. This does not turn the failed convention or preflight cells into passes.
+
+- `status` on a new process now reads persisted stats. healthchecks reports 5,000 searchable chunks of 5,812 (812 omitted). Dex reports 5,000 of 13,940 (8,940 omitted). NestJS (694) and the full-stack template (943) are under the cap, so they show counts only.
+- After reindex, healthchecks (wall 2.22s, indexer 1.73s) and Dex (wall 2.18s, indexer 1.70s) no longer report RxJS. Their maps have no active patterns, no best examples, and 0 import edges.
+- Edit preflight for the same Dex and healthchecks queries now says the candidate budget was exhausted and to narrow the query. Both stay `ready: false` with low confidence. Dex still ranks `retryOnConflict` second. healthchecks still does not surface `format_duration` in the top 5.

@@ -587,8 +587,13 @@ export class PatternDetector {
       }
     }
 
-    // Generic state patterns (framework-agnostic)
-    if (/BehaviorSubject|ReplaySubject|Subject|Observable/.test(content)) {
+    // RxJS only. Bare "Subject" and "Observable" also appear in JWT claims and
+    // email headers, so they are not evidence on their own.
+    const importsRxjs =
+      /from\s+['"]rxjs(?:\/[^'"]*)?['"]/.test(content) ||
+      /require\(\s*['"]rxjs(?:\/[^'"]*)?['"]\s*\)/.test(content);
+    const usesRxjsSubject = /\b(?:BehaviorSubject|ReplaySubject|AsyncSubject)\b/.test(content);
+    if (importsRxjs || usesRxjsSubject) {
       this.track('stateManagement', 'RxJS');
     }
     if (content.includes('createStore') || content.includes('configureStore')) {

@@ -302,6 +302,8 @@ describe('frozen rescue-only literal nomination contract', () => {
       expect(outcome.results).toHaveLength(1);
       expect(outcome.sourceCoverage.status).toBe('partial');
       expect(outcome.sourceCoverage.candidateBudgetExhausted).toBe(true);
+      expect(outcome.sourceCoverage.refreshAction).toMatch(/candidate budget/i);
+      expect(outcome.sourceCoverage.refreshAction).not.toMatch(/refresh_index/);
     } finally {
       await subject.cleanup();
     }

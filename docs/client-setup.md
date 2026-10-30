@@ -116,13 +116,15 @@ node /path/to/codebase-context/dist/index.js init --client codex --root /path/to
 node /path/to/codebase-context/dist/index.js init --root /path/to/project --preview
 ```
 
+Codex one-liner (published npm): `codex mcp add codebase-context -- npx -y codebase-context`
+
 Replace the paths with the candidate installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
 
 Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
 
 Existing unrelated settings are preserved. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry from the client config, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked. Config generation and SDK launch tests do not establish acceptance in each native client.
 
-New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option.
+New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option. `map` builds a missing index before printing the map.
 
 ## Optional fixed-folder setup and CLI preparation
 

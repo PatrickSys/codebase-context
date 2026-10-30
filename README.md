@@ -27,7 +27,7 @@ Start a new agent session in your project, then ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project, wait for indexing if needed, and open the relevant source files.
 
-Replace `[feature]` with something you want to find. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model.
+Replace `[feature]` with something you want to find. The first index pass scans the repository locally; **2.3.0** uses keyword search by default (no embedding model download). npm **2.2.0** still downloads a local embedding model on first index unless you change providers. Duration depends on repository size and CPU; optional semantic search adds model download time when enabled.
 
 ### Planned for 2.4.0 (not in 2.3.0)
 

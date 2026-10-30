@@ -71,7 +71,19 @@ export class NextJsAnalyzer implements FrameworkAnalyzer {
       return false;
     }
 
-    if (isInAppRouter(filePath) || isInPagesRouter(filePath) || isProxyFile(filePath)) {
+    if (isSvelteKitRouteFile(filePath)) {
+      return false;
+    }
+
+    if (isProxyFile(filePath)) {
+      return true;
+    }
+
+    if (matchesNextAppRouterConvention(filePath)) {
+      return true;
+    }
+
+    if (isInPagesRouter(filePath)) {
       return true;
     }
 
@@ -340,6 +352,18 @@ function analyzeRouting(filePath: string, content: string): NextRoutingInfo {
     hasMetadata:
       /\bexport\s+(?:const|async\s+function|function)\s+(metadata|generateMetadata)\b/.test(content)
   };
+}
+
+function isSvelteKitRouteFile(filePath: string): boolean {
+  const baseName = path.basename(filePath, path.extname(filePath));
+  return baseName.startsWith('+');
+}
+
+function matchesNextAppRouterConvention(filePath: string): boolean {
+  if (!isInAppRouter(filePath)) {
+    return false;
+  }
+  return getAppRouteFileKind(path.basename(filePath)) !== null;
 }
 
 function isInAppRouter(filePath: string): boolean {

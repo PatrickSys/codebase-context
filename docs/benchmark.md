@@ -1,5 +1,38 @@
 # What our local code-context experiments show
 
+## Front-end repo matrix (plan)
+
+### Now
+
+- Ship `.vue` / `.svelte` indexing, Nuxt/SvelteKit framework claims, and tighter Next.js route detection (SvelteKit `+` routes, Nuxt `app/pages/*.vue`).
+- Re-run the five-repo smoke matrix after each fix; keep this section honest.
+
+### Next
+
+- Dedicated Vue/Nuxt and Svelte analyzers (patterns, route conventions) instead of generic-only SPA handling.
+- Path-alias coverage for Vite/Nuxt `~/` and monorepo package exports beyond TypeScript `paths`.
+- Markdown-heavy repos (docs sites) as a separate benchmark series.
+
+### Done
+
+- 2026-10-30: Cloned and exercised five OSS front-end repos (see table below); fixed SPA file gaps and Next.js false positives; added fixture tests in `tests/frontend-spa-indexing.test.ts`.
+
+### Five-repo smoke (2026-10-30, `reindex --no-embeddings`, Node 22, this branch)
+
+Clones: [shadcn-ui/taxonomy](https://github.com/shadcn-ui/taxonomy) (Next.js), [nuxt/ui](https://github.com/nuxt/ui), [angular/components](https://github.com/angular/components), [sveltejs/kit](https://github.com/sveltejs/kit), [vercel/turbo](https://github.com/vercel/turbo) (pnpm/turbo monorepo with UI apps).
+
+| Repo | Init / reindex / status | Framework metadata | SPA sources in index | Symbol refs | Edit preflight (realistic query) |
+| --- | --- | --- | --- | --- | --- |
+| taxonomy (Next.js) | pass / pass / ready | Next.js detected | 94 `.tsx` indexed | `cn` useful (241 hits) | not ready — low confidence; top hit was relevant layout |
+| nuxt/ui | pass / pass / ready | Nuxt detected (was missing) | **816** `.vue` indexed (was **0**) | `UButton` finds `Button.vue` imports | not ready — low confidence; stale-source hint on some queries |
+| angular/components | pass / pass / ready | Angular patterns | TS/Angular only | `MatDialog` static refs OK | not ready — low confidence; dialog hits sensible |
+| sveltejs/kit | pass / pass / ready | SvelteKit detected (monorepo deps) | **1011** `.svelte` indexed (was **0**) | `load` very noisy (587 lexical) | not ready — no longer mislabels SvelteKit tests as Next.js pages |
+| vercel/turbo | pass / pass / ready; chunk cap warning | monorepo packages listed | UI via Next apps in `examples/` | `Button` finds UI components | not ready — low confidence; 5k chunk cap drops most of repo |
+
+Known limits surfaced here (not fixed in this pass): default 5k chunk cap on very large repos, lexical `load`/`Button` ambiguity, edit preflight still conservative on broad natural-language queries, one Rust-generated TS parse warning in turbo.
+
+---
+
 This report describes local evidence from five ways of giving an AI coding agent context: Raw-native, Codebase Context, jCodeMunch, Repowise, and context-mode. The evidence is split into separate families because retrieval, repeated runs, full-agent observations, and a metered replay do not answer the same question. The families are not pooled into one score.
 
 The clearest current finding is narrow: in this fixed retrieval setup, Codebase Context recovered 25.7% of expected gold files at 11.5% file precision, while fresh indexing had material local cost. These measurements do not show better completed coding tasks.

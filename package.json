@@ -1,5 +1,6 @@
 {
   "name": "codebase-context",
+  "mcpName": "io.github.patricksys/codebase-context",
   "version": "2.3.0",
   "description": "Bounded conventions map and local-pattern discovery for AI coding agents. Local-first MCP server with AST-backed hybrid search.",
   "type": "module",
@@ -52,6 +53,7 @@
     "grammars",
     "README.md",
     "LICENSE",
+    "server.json",
     "docs/cli.md",
     "docs/capabilities.md",
     "docs/client-setup.md",
@@ -135,7 +137,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@inquirer/prompts": "^3.0.0",
+    "@clack/prompts": "^0.10.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@typescript-eslint/typescript-estree": "^8.51.0",
     "chokidar": "^4.0.3",

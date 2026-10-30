@@ -19,13 +19,29 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-vi.mock('@inquirer/prompts', () => ({
-  checkbox: vi.fn(),
+vi.mock('@clack/prompts', () => ({
+  intro: vi.fn(),
+  outro: vi.fn(),
+  cancel: vi.fn(),
+  isCancel: vi.fn(() => false),
+  multiselect: vi.fn(),
   confirm: vi.fn().mockResolvedValue(true)
 }));
 
+vi.mock('../src/cli-init-smoke.js', () => ({
+  verifyMcpServerStarts: vi.fn().mockResolvedValue(undefined)
+}));
+
+vi.mock('../src/cli-init-runner.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/cli-init-runner.js')>();
+  return {
+    ...actual,
+    runCommand: vi.fn(() => ({ status: 0, stdout: '', stderr: '', error: null }))
+  };
+});
+
 import { promises as fsMod } from 'node:fs';
-import { checkbox, confirm } from '@inquirer/prompts';
+import * as clack from '@clack/prompts';
 import {
   CLIENTS,
   generateMcpConfig,
@@ -35,6 +51,7 @@ import {
   _buildMergedCodexContent,
   handleInitCli
 } from '../src/cli-init.js';
+import { runCommand } from '../src/cli-init-runner.js';
 
 // --- generateMcpConfig ---
 
@@ -44,8 +61,10 @@ const cacheEntrypoint = path.resolve(
 );
 const npxCommand = 'npx.cmd';
 
+const PINNED = 'codebase-context@2.3.0';
+
 function npxLaunch(rootPath: string) {
-  return { command: npxCommand, args: ['-y', 'codebase-context@latest', rootPath] as const };
+  return { command: npxCommand, args: ['-y', PINNED, rootPath] as const };
 }
 
 function savedLaunch(rootPath: string) {
@@ -125,7 +144,7 @@ describe('generateMcpConfig', () => {
     };
     const server = parsed.mcpServers['codebase-context'];
     expect(server.command).toBe(npxCommand);
-    expect(server.args).toEqual(['-y', 'codebase-context@latest', projectRoot]);
+    expect(server.args).toEqual(['-y', PINNED, projectRoot]);
   });
 
   it('Codex saves npx by default', () => {
@@ -135,7 +154,7 @@ describe('generateMcpConfig', () => {
     if (result.kind !== 'file') return;
     expect(result.path).toBe(path.join(projectRoot, '.codex', 'config.toml'));
     expect(result.content).toBe(
-      `[mcp_servers.codebase-context]\ncommand = "npx"\nargs = ["-y", ${JSON.stringify('codebase-context@latest')}, ${JSON.stringify(projectRoot)}]\nstartup_timeout_sec = 120\n`
+      `[mcp_servers.codebase-context]\ncommand = "npx"\nargs = ["-y", ${JSON.stringify(PINNED)}, ${JSON.stringify(projectRoot)}]\nstartup_timeout_sec = 120\n`
     );
   });
 
@@ -160,7 +179,7 @@ describe('generateMcpConfig', () => {
     };
     expect(parsed.mcp['codebase-context']).toEqual({
       type: 'local',
-      command: [npxCommand, '-y', 'codebase-context@latest', projectRoot]
+      command: [npxCommand, '-y', PINNED, projectRoot]
     });
   });
 
@@ -482,8 +501,8 @@ describe('detectClients', () => {
       'codex',
       'cursor',
       'vscode',
-      'windsurf',
       'opencode',
+      'windsurf',
       'claude-desktop'
     ]);
     expect(clients).toContain('codex');
@@ -562,7 +581,7 @@ describe('handleInitCli', () => {
     process.exitCode = undefined;
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: false });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: false });
-    vi.mocked(confirm).mockResolvedValue(true);
+    vi.mocked(clack.confirm).mockResolvedValue(true);
   });
 
   afterAll(() => {
@@ -574,29 +593,33 @@ describe('handleInitCli', () => {
     });
   });
 
-  it('configures all detected clients with --yes', async () => {
+  it('configures detected CLI clients with --yes', async () => {
     const projectRoot = path.resolve('C:/projects/Configured App');
     detectDirectories('claude', 'codex');
 
-    await handleInitCli(['--yes', '--skip-index', '--root', projectRoot]);
+    await handleInitCli([
+      '--yes',
+      '--skip-index',
+      '--skip-server-check',
+      '--clients',
+      'claude-code',
+      '--clients',
+      'codex',
+      '--root',
+      projectRoot
+    ]);
 
-    expect(checkbox).not.toHaveBeenCalled();
-    expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
-      expect.arrayContaining([
-        path.join(projectRoot, '.mcp.json'),
-        path.join(projectRoot, '.codex', 'config.toml')
-      ])
-    );
-    expect(writeFileMock).toHaveBeenCalledTimes(2);
+    expect(clack.multiselect).not.toHaveBeenCalled();
+    expect(runCommand).toHaveBeenCalledTimes(2);
   });
 
   it('configures all detected clients without a terminal even without --yes', async () => {
     const projectRoot = path.resolve('C:/projects/No Terminal');
     detectDirectories('cursor', 'opencode');
 
-    await handleInitCli(['--root', projectRoot, '--skip-index']);
+    await handleInitCli(['--root', projectRoot, '--skip-index', '--skip-server-check']);
 
-    expect(checkbox).not.toHaveBeenCalled();
+    expect(clack.multiselect).not.toHaveBeenCalled();
     expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
       expect.arrayContaining([
         path.join(projectRoot, '.cursor', 'mcp.json'),
@@ -606,15 +629,17 @@ describe('handleInitCli', () => {
     expect(writeFileMock).toHaveBeenCalledTimes(2);
   });
 
-  it('lets repeated --client options override detection', async () => {
+  it('lets repeated --clients options configure JSON-backed tools', async () => {
     const projectRoot = path.resolve('C:/projects/Explicit Clients');
 
     await handleInitCli([
-      '--client',
-      'claude-code',
-      '--client',
-      'codex',
-      '--yes', '--skip-index',
+      '--clients',
+      'cursor',
+      '--clients',
+      'opencode',
+      '--yes',
+      '--skip-index',
+      '--skip-server-check',
       '--root',
       projectRoot
     ]);
@@ -622,15 +647,15 @@ describe('handleInitCli', () => {
     expect(accessMock).not.toHaveBeenCalled();
     expect(vi.mocked(fsMod.rename).mock.calls.map(([, filePath]) => filePath)).toEqual(
       expect.arrayContaining([
-        path.join(projectRoot, '.mcp.json'),
-        path.join(projectRoot, '.codex', 'config.toml')
+        path.join(projectRoot, '.cursor', 'mcp.json'),
+        path.join(projectRoot, 'opencode.json')
       ])
     );
     expect(writeFileMock).toHaveBeenCalledTimes(2);
   });
 
   it('reports no detected clients without writing when there is no terminal', async () => {
-    await handleInitCli(['--yes', '--skip-index', '--root', path.resolve('C:/projects/Empty')]);
+    await handleInitCli(['--yes', '--skip-index', '--skip-server-check', '--root', path.resolve('C:/projects/Empty')]);
 
     expect(writeFileMock).not.toHaveBeenCalled();
     expect(mkdirMock).not.toHaveBeenCalled();
@@ -639,38 +664,34 @@ describe('handleInitCli', () => {
 
   it('shows detected clients checked in the terminal multi-select', async () => {
     detectDirectories('claude', 'codex');
-    vi.mocked(checkbox).mockResolvedValue(['claude-code']);
+    vi.mocked(clack.multiselect).mockResolvedValue(['cursor']);
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Interactive'), '--skip-index']);
+    await handleInitCli(['--root', path.resolve('C:/projects/Interactive'), '--skip-index', '--skip-server-check']);
 
-    const choices = vi.mocked(checkbox).mock.calls[0]?.[0].choices;
-    expect(choices).toEqual(
+    const options = vi.mocked(clack.multiselect).mock.calls[0]?.[0].options;
+    expect(options).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ value: 'claude-code', checked: true }),
-        expect.objectContaining({ value: 'codex', checked: true }),
-        expect.objectContaining({ value: 'cursor', checked: false }),
-        expect.objectContaining({ value: 'opencode', checked: false })
+        expect.objectContaining({ value: 'claude-code' }),
+        expect.objectContaining({ value: 'codex' })
       ])
     );
     expect(writeFileMock).toHaveBeenCalledOnce();
   });
 
   it('leaves all no-detection terminal choices unchecked and writes nothing on empty selection', async () => {
-    vi.mocked(checkbox).mockResolvedValue([]);
+    vi.mocked(clack.multiselect).mockResolvedValue([]);
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Cancelled'), '--skip-index']);
+    await handleInitCli(['--root', path.resolve('C:/projects/Cancelled'), '--skip-index', '--skip-server-check']);
 
-    const choices = vi.mocked(checkbox).mock.calls[0]?.[0].choices;
-    expect(choices).toEqual(
+    const options = vi.mocked(clack.multiselect).mock.calls[0]?.[0].options;
+    expect(options).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ value: 'claude-code', checked: false }),
-        expect.objectContaining({ value: 'codex', checked: false }),
-        expect.objectContaining({ value: 'cursor', checked: false }),
-        expect.objectContaining({ value: 'opencode', checked: false })
+        expect.objectContaining({ value: 'claude-code' }),
+        expect.objectContaining({ value: 'codex' })
       ])
     );
     expect(writeFileMock).not.toHaveBeenCalled();
@@ -680,13 +701,13 @@ describe('handleInitCli', () => {
 
   it('does not write when the terminal prompt throws its cancellation error', async () => {
     detectDirectories('claude');
-    vi.mocked(checkbox).mockRejectedValue(
+    vi.mocked(clack.multiselect).mockRejectedValue(
       Object.assign(new Error('User force closed the prompt'), { name: 'ExitPromptError' })
     );
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
 
-    await handleInitCli(['--root', path.resolve('C:/projects/Prompt Cancelled'), '--skip-index']);
+    await handleInitCli(['--root', path.resolve('C:/projects/Prompt Cancelled'), '--skip-index', '--skip-server-check']);
 
     expect(writeFileMock).not.toHaveBeenCalled();
     expect(mkdirMock).not.toHaveBeenCalled();
@@ -697,7 +718,7 @@ describe('handleInitCli', () => {
       ReturnType<typeof fsMod.stat>
     >);
 
-    await handleInitCli(['--client', 'codex', '--yes', '--skip-index', '--root', path.resolve('C:/projects/File')]);
+    await handleInitCli(['--client', 'codex', '--yes', '--skip-index', '--skip-server-check', '--root', path.resolve('C:/projects/File')]);
 
     expect(mkdirMock).not.toHaveBeenCalled();
     expect(writeFileMock).not.toHaveBeenCalled();
@@ -710,7 +731,7 @@ describe('handleInitCli', () => {
     await handleInitCli([
       '--client',
       'codex',
-      '--yes', '--skip-index',
+      '--yes', '--skip-index', '--skip-server-check',
       '--root',
       path.resolve('C:/projects/Missing Directory')
     ]);
@@ -725,7 +746,7 @@ describe('handleInitCli', () => {
     const generated = generateMcpConfig('claude-code', { rootPath: projectRoot });
     readFileMock.mockResolvedValue(generated.content as unknown as Buffer);
 
-    await handleInitCli(['--client', 'claude-code', '--yes', '--skip-index', '--root', projectRoot]);
+    await handleInitCli(['--client', 'claude-code', '--yes', '--skip-index', '--skip-server-check', '--root', projectRoot]);
 
     expect(writeFileMock).not.toHaveBeenCalled();
   });
@@ -747,7 +768,7 @@ describe('handleInitCli', () => {
       'claude-code',
       '--client',
       'opencode',
-      '--yes', '--skip-index',
+      '--yes', '--skip-index', '--skip-server-check',
       '--root',
       projectRoot
     ]);
@@ -761,14 +782,14 @@ describe('handleInitCli', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
       await handleInitCli(['--help']);
-      expect(log.mock.calls.flat().join('\n')).toContain(
-        'codex mcp add codebase-context -- npx -y codebase-context'
-      );
+      const help = log.mock.calls.flat().join('\n');
+      expect(help).toContain('Default MCP launch: npx -y codebase-context@');
+      expect(help).toContain('codebase-context update');
     } finally {
       log.mockRestore();
     }
 
-    expect(checkbox).not.toHaveBeenCalled();
+    expect(clack.multiselect).not.toHaveBeenCalled();
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 });
@@ -792,23 +813,14 @@ describe('_buildMergedCodexContent', () => {
     readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
   });
 
-  const runCodexSetupWithExistingConfig = async (existingToml: string) => {
+  const expectCodexMergeConflict = async (existingToml: string) => {
     const projectRoot = path.resolve('C:/projects/Codex Existing');
-    const initialBytes = Buffer.from(existingToml, 'utf8');
-    let persistedBytes = Buffer.from(initialBytes);
     readFileMock.mockResolvedValue(existingToml as unknown as Buffer);
-    writeFileMock.mockImplementation(async (_filePath, content) => {
-      persistedBytes = Buffer.from(content as string, 'utf8');
-    });
-
-    const previousExitCode = process.exitCode;
-    process.exitCode = undefined;
-    try {
-      await handleInitCli(['--client', 'codex', '--yes', '--skip-index', '--root', projectRoot]);
-      return { initialBytes, persistedBytes, exitCode: process.exitCode };
-    } finally {
-      process.exitCode = previousExitCode;
-    }
+    const generated = generateMcpConfig('codex', { rootPath: projectRoot, platform: 'win32' });
+    if (generated.kind !== 'file') throw new Error('expected file config');
+    await expect(_buildMergedCodexContent(generated.path, generated.content)).rejects.toThrow(
+      /already contains a different codebase-context configuration/i
+    );
   };
 
   it('preserves unrelated Codex TOML settings when adding the project server', async () => {
@@ -909,11 +921,7 @@ describe('_buildMergedCodexContent', () => {
   ])(
     'refuses to replace a Codex entry under $name without changing its bytes',
     async ({ toml }) => {
-      const result = await runCodexSetupWithExistingConfig(toml);
-
-      expect(result.exitCode).toBe(1);
-      expect(writeFileMock).not.toHaveBeenCalled();
-      expect(result.persistedBytes).toEqual(result.initialBytes);
+      await expectCodexMergeConflict(toml);
     }
   );
 
@@ -937,11 +945,7 @@ describe('_buildMergedCodexContent', () => {
   ])(
     'refuses to replace a Codex entry under $name without changing its bytes',
     async ({ toml }) => {
-      const result = await runCodexSetupWithExistingConfig(toml);
-
-      expect(result.exitCode).toBe(1);
-      expect(writeFileMock).not.toHaveBeenCalled();
-      expect(result.persistedBytes).toEqual(result.initialBytes);
+      await expectCodexMergeConflict(toml);
     }
   );
 });

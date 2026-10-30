@@ -9,17 +9,21 @@ Codebase Context gives coding agents a map of your repository through MCP, for d
 Use Node.js 22 or newer. From your project root:
 
 ```bash
-npx -y codebase-context@latest init
+npx -y codebase-context init
 ```
 
-The wizard detects Claude Code, Codex, Cursor, VS Code (Copilot), Windsurf, OpenCode, and Claude Desktop when present, shows a diff preview for each MCP config change, backs up tiny existing configs as `*.bak`, writes `npx -y codebase-context@latest` plus your project folder, and runs a first index with progress. Non-interactive CI:
+[![Install MCP Server in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/link/mcp%2Finstall?name=codebase-context&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImNvZGViYXNlLWNvbnRleHQiXX0%3D) [![Install in VS Code](https://img.shields.io/badge/VS%20Code-Install%20MCP-blue?logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode:mcp/install?%7B%22name%22:%22codebase-context%22,%22command%22:%22npx%22,%22args%22:%5B%22-y%22,%22codebase-context%22%5D%7D)
+
+The wizard uses `@clack/prompts`, detects installed tools, runs each vendor CLI where available (`claude mcp add`, `codex mcp add`, `code --add-mcp`), merges JSON only for Cursor and OpenCode, pins `codebase-context@<version>` by default, previews changes, runs a first index, and smoke-tests MCP `initialize`. Upgrades: `npx codebase-context update`.
+
+Non-interactive CI:
 
 ```bash
-npx -y codebase-context@latest init --yes --dry-run
-npx -y codebase-context@latest init --yes --skip-index
+npx -y codebase-context init --yes --clients cursor,opencode --scope project --dry-run
+npx -y codebase-context init --yes --clients cursor --scope project --skip-index --skip-server-check
 ```
 
-Pin a version in MCP config instead of `@latest` if you prefer frozen updates. Disable the daily npm update notice with `CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1` or `init --no-update-notice`.
+Use `init --track-latest` to opt into `codebase-context@latest` in written configs. Disable the daily npm update notice with `CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1`.
 
 ## Set up your AI client manually
 
@@ -38,15 +42,7 @@ opencode mcp add codebase-context '--' npx -y codebase-context
 
 In the unreleased candidate, `--version` prints the installed package version and `map` builds a missing index before printing the map. A low-confidence search includes a hint that weak matches do not establish that code is absent. These additions require the built candidate; the unpinned commands above install published 2.2.0.
 
-This repository's `init` command is the supported setup path (see **Install** above). It merges each tool's MCP config safely, previews diffs, and refuses to overwrite unrelated custom entries. `@inquirer/prompts` powers the terminal UI (~25KB); `@clack/prompts` was evaluated and left out to avoid a second prompt dependency.
-
-```bash
-npx -y codebase-context@latest init              # interactive wizard
-npx -y codebase-context@latest init --yes        # configure every detected tool
-npx -y codebase-context@latest init --dry-run --yes
-```
-
-Until this ships on npm, build from source or use the manual client commands below. The [client setup guide](./docs/client-setup.md) marks unpublished commands.
+This repository's `init` command is the supported setup path (see **Install** above). Registry metadata for future publishing lives in [`server.json`](./server.json) (not published to the MCP registry in this PR).
 
 Start a new agent session in your project, then ask:
 
@@ -82,10 +78,10 @@ Other clients use their own setup commands:
 | Client                      | Shortest current setup                                                       |
 | --------------------------- | ---------------------------------------------------------------------------- |
 | Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context` |
-| Cursor                      | `codebase-context init --client cursor` or add `.cursor/mcp.json`            |
-| VS Code with GitHub Copilot | `codebase-context init --client vscode` or add `.vscode/mcp.json`            |
+| Cursor                      | `codebase-context init --clients cursor` or add `.cursor/mcp.json`            |
+| VS Code with GitHub Copilot | `init --clients vscode --scope user` (`code --add-mcp`) or add `.vscode/mcp.json` manually |
 | GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context` |
-| Windsurf                    | `codebase-context init --client windsurf` or add `~/.codeium/windsurf/mcp_config.json` |
+| Windsurf                    | add `~/.codeium/windsurf/mcp_config.json` manually (not in `init` yet)        |
 
 Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration and the interactive setup wizard's limitations.
 

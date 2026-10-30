@@ -21,11 +21,20 @@ describe('init config backup', () => {
 
   it('backs up a tiny existing config before updating', async () => {
     root = await mkdtemp(path.join(os.tmpdir(), 'cbc-init-backup-'));
-    const configPath = path.join(root, '.mcp.json');
-    const { writeFile } = await import('node:fs/promises');
+    const configPath = path.join(root, '.cursor', 'mcp.json');
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(path.dirname(configPath), { recursive: true });
     await writeFile(configPath, '{ "note": "keep" }\n', 'utf8');
 
-    await handleInitCli(['--client', 'claude-code', '--yes', '--skip-index', '--root', root]);
+    await handleInitCli([
+      '--client',
+      'cursor',
+      '--yes',
+      '--skip-index',
+      '--skip-server-check',
+      '--root',
+      root
+    ]);
 
     expect(await readFile(`${configPath}.bak`, 'utf8')).toBe('{ "note": "keep" }\n');
     const updated = JSON.parse(await readFile(configPath, 'utf8')) as {

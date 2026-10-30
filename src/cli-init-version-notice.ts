@@ -88,8 +88,7 @@ export async function maybePrintInitUpdateNotice(
   await writeCache(cachePath, { checkedAtMs: nowMs, latestVersion });
   if (latestVersion !== installedVersion) {
     console.log(
-      `Update available: codebase-context@${latestVersion} is on npm (you have ${installedVersion}). ` +
-        'Init writes npx -y codebase-context@latest; pin a version in MCP config if you prefer stability.'
+      `Update available: codebase-context@${latestVersion} is on npm (you have ${installedVersion}). Run \`codebase-context update\` to refresh pinned configs, or init with --track-latest.`
     );
   }
 }

@@ -19,18 +19,34 @@ import { parse as parseToml } from 'smol-toml';
 import { isDeepStrictEqual } from 'node:util';
 import { promises as fs } from 'node:fs';
 import { atomicWrite } from './utils/atomic-write.js';
-import { checkbox, confirm } from '@inquirer/prompts';
+import * as clack from '@clack/prompts';
 import { homedir } from 'node:os';
-import { constants, readFileSync } from 'node:fs';
+import { constants } from 'node:fs';
 import { formatConfigPreview } from './cli-init-preview.js';
 import { maybePrintInitUpdateNotice } from './cli-init-version-notice.js';
+import { PKG_VERSION, resolveMcpPackageSpec } from './cli-init-package.js';
+import {
+  describeRegistrationPlan,
+  planClientRegistration,
+  type RegistrationPlan
+} from './cli-init-register.js';
+import { formatCommandPreview, runCommand } from './cli-init-runner.js';
+import { verifyMcpServerStarts } from './cli-init-smoke.js';
+import {
+  CLIENTS,
+  DETECT_CLIENTS,
+  INIT_CLIENTS,
+  type Client,
+  type InitClient,
+  type InitScope,
+  isInitClient
+} from './cli-init-types.js';
 
-export const INIT_NPX_PACKAGE = 'codebase-context@latest';
+export type { Client, InitClient, InitScope } from './cli-init-types.js';
+export { CLIENTS, DETECT_CLIENTS, INIT_CLIENTS, PKG_VERSION, resolveMcpPackageSpec };
+
+export const INIT_NPX_PACKAGE = resolveMcpPackageSpec(false);
 export const CONFIG_BACKUP_MAX_BYTES = 16_384;
-
-const PKG_VERSION: string = JSON.parse(
-  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
-).version as string;
 
 export type McpConfigResult = { kind: 'file'; path: string; content: string };
 
@@ -39,6 +55,8 @@ export type McpConfigOptions = {
   /** Override home for user-scoped configs (tests). Defaults to os.homedir(). */
   homeDirectory?: string;
   platform?: NodeJS.Platform;
+  /** When true, write codebase-context@latest instead of pinning the running package version. */
+  trackLatest?: boolean;
   /** Node binary written into the client config. Defaults to the current process. */
   nodeExecutable?: string;
   /**
@@ -49,48 +67,6 @@ export type McpConfigOptions = {
 };
 
 type JsonObject = Record<string, unknown>;
-
-export const CLIENTS = [
-  {
-    id: 'claude-code',
-    name: 'Claude Code',
-    executable: 'claude',
-    directory: '.claude',
-    scope: 'project'
-  },
-  { id: 'codex', name: 'Codex', executable: 'codex', directory: '.codex', scope: 'project' },
-  { id: 'cursor', name: 'Cursor', executable: 'cursor', directory: '.cursor', scope: 'project' },
-  {
-    id: 'vscode',
-    name: 'VS Code (Copilot)',
-    executable: 'code',
-    directory: '.vscode',
-    scope: 'project'
-  },
-  {
-    id: 'windsurf',
-    name: 'Windsurf',
-    executable: 'windsurf',
-    directory: '.codeium/windsurf',
-    scope: 'user'
-  },
-  {
-    id: 'opencode',
-    name: 'OpenCode',
-    executable: 'opencode',
-    directory: '.opencode',
-    scope: 'project'
-  },
-  {
-    id: 'claude-desktop',
-    name: 'Claude Desktop',
-    executable: '',
-    directory: 'Claude',
-    scope: 'user'
-  }
-] as const;
-
-export type Client = (typeof CLIENTS)[number]['id'];
 
 function resolveHome(
   env: NodeJS.ProcessEnv = process.env,
@@ -154,7 +130,7 @@ export async function detectClients(
   const searchPath = (env.PATH || env.Path || '').split(platform === 'win32' ? ';' : ':');
   const extensions = platform === 'win32' ? ['', '.exe', '.cmd', '.bat', '.ps1'] : [''];
   const detected: Client[] = [];
-  for (const client of CLIENTS) {
+  for (const client of DETECT_CLIENTS) {
     if (client.id === 'claude-desktop') {
       const configPath = resolveClientConfigPath('claude-desktop', rootPath, env, platform);
       const desktopDir = path.dirname(configPath);
@@ -265,7 +241,8 @@ function buildLaunchArgs(
     };
   }
   const npxCommand = resolveNpxCommand(platform);
-  const args = ['-y', INIT_NPX_PACKAGE, rootPath];
+  const packageSpec = resolveMcpPackageSpec(options.trackLatest ?? false);
+  const args = ['-y', packageSpec, rootPath];
   return {
     command: npxCommand,
     args,
@@ -274,9 +251,8 @@ function buildLaunchArgs(
 }
 
 /**
- * Launch command saved for every client. Defaults to `npx -y codebase-context@latest`
- * plus the project folder so installs auto-update. Pass nodeExecutable/serverEntrypoint
- * only in tests or when pinning to the running checkout.
+ * Launch command for JSON-backed clients (Cursor, OpenCode). Pins codebase-context@<version>
+ * unless trackLatest is set. Pass nodeExecutable/serverEntrypoint only in tests.
  */
 export function generateMcpConfig(client: Client, options: McpConfigOptions = {}): McpConfigResult {
   const rootPath = path.resolve(options.rootPath ?? process.cwd());
@@ -660,15 +636,80 @@ export async function _buildMergedCodexContent(
 }
 
 type InitOptions = {
-  clients: Client[];
+  clients: InitClient[];
   rootPath: string;
   yes: boolean;
   help: boolean;
   preview: boolean;
   dryRun: boolean;
   skipIndex: boolean;
+  skipServerCheck: boolean;
   noUpdateNotice: boolean;
+  scope: InitScope;
+  trackLatest: boolean;
 };
+
+function parseInitClient(value: string): InitClient {
+  if (!isInitClient(value as Client)) {
+    throw new Error(
+      `Unknown or unsupported client "${value}". Choose ${INIT_CLIENTS.map((client) => client.id).join(', ')}.`
+    );
+  }
+  return value as InitClient;
+}
+
+function parseScope(value: string): InitScope {
+  if (value === 'user' || value === 'project') return value;
+  throw new Error('Expected --scope user or --scope project.');
+}
+
+async function applyJsonRegistration(
+  plan: Extract<RegistrationPlan, { kind: 'json' }>,
+  options: InitOptions
+): Promise<'create' | 'update' | 'unchanged'> {
+  const config = generateMcpConfig(plan.client, {
+    rootPath: options.rootPath,
+    trackLatest: options.trackLatest
+  });
+  const existingText = await readExistingConfig(config.path);
+  const merged = await _buildMergedMcpContent(config.path, config.content, plan.client);
+  const action = classifyInitChange(existingText, merged.content);
+  if (action !== 'unchanged' && !options.dryRun) {
+    if (existingText !== null) {
+      const backupPath = await backupTinyConfig(config.path, existingText);
+      if (backupPath) {
+        console.log(`Backed up: ${formatDisplayPath(backupPath, options.rootPath)}`);
+      }
+    }
+    await fs.mkdir(path.dirname(config.path), { recursive: true });
+    await atomicWrite(config.path, merged.content);
+  }
+  console.log(
+    describeInitChange(options.dryRun, action, formatDisplayPath(config.path, options.rootPath))
+  );
+  return action;
+}
+
+function applyCliRegistration(
+  plan: Extract<RegistrationPlan, { kind: 'cli' }>,
+  options: InitOptions
+): void {
+  const preview = formatCommandPreview(plan.file, plan.args);
+  if (options.dryRun) {
+    console.log(`Would run: ${preview}`);
+    return;
+  }
+  const result = runCommand(plan.file, plan.args, { cwd: plan.cwd ?? options.rootPath });
+  if (result.error) {
+    throw new Error(`${plan.label} failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `${plan.label} exited with code ${result.status ?? 'unknown'}${result.stderr ? `: ${result.stderr.trim()}` : ''}`
+    );
+  }
+  console.log(`Ran: ${preview}`);
+}
 
 async function backupTinyConfig(
   configPath: string,
@@ -742,14 +783,6 @@ function describeInitChange(
   return `${prefix}: ${displayPath}`;
 }
 
-function parseClient(value: string): Client {
-  const client = CLIENTS.find((client) => client.id === value);
-  if (client) return client.id;
-  throw new Error(
-    `Unknown client "${value}". Choose ${CLIENTS.map((client) => client.id).join(', ')}.`
-  );
-}
-
 function parseInitOptions(args: string[]): InitOptions {
   if (args.includes('--help') || args.includes('-h'))
     return {
@@ -760,28 +793,41 @@ function parseInitOptions(args: string[]): InitOptions {
       preview: false,
       dryRun: false,
       skipIndex: false,
-      noUpdateNotice: false
+      skipServerCheck: false,
+      noUpdateNotice: false,
+      scope: 'project',
+      trackLatest: false
     };
-  const clients: Client[] = [];
+  const clients: InitClient[] = [];
   let yes = false;
   let preview = false;
   let dryRun = false;
   let skipIndex = false;
+  let skipServerCheck = false;
   let noUpdateNotice = false;
+  let scope: InitScope = 'project';
+  let trackLatest = false;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === '--preview') preview = true;
     else if (arg === '--dry-run') dryRun = true;
     else if (arg === '--yes' || arg === '-y') yes = true;
     else if (arg === '--skip-index') skipIndex = true;
+    else if (arg === '--skip-server-check') skipServerCheck = true;
     else if (arg === '--no-update-notice') noUpdateNotice = true;
-    else if (arg === '--client') {
+    else if (arg === '--track-latest') trackLatest = true;
+    else if (arg === '--scope') {
       const value = args[++index];
-      if (!value || value.startsWith('--')) throw new Error('Expected a client after --client.');
-      clients.push(parseClient(value));
-    } else if (arg?.startsWith('--client='))
-      clients.push(parseClient(arg.slice('--client='.length)));
-    else if (arg === '--root') index++;
+      if (!value) throw new Error('Expected user or project after --scope.');
+      scope = parseScope(value);
+    } else if (arg?.startsWith('--scope=')) scope = parseScope(arg.slice('--scope='.length));
+    else if (arg === '--client' || arg === '--clients') {
+      const value = args[++index];
+      if (!value || value.startsWith('--')) throw new Error(`Expected a client after ${arg}.`);
+      clients.push(parseInitClient(value));
+    } else if (arg?.startsWith('--client=') || arg?.startsWith('--clients=')) {
+      clients.push(parseInitClient(arg.split('=')[1] ?? ''));
+    } else if (arg === '--root') index++;
     else if (!arg?.startsWith('--root=')) throw new Error(`Unknown init option "${arg}".`);
   }
   return {
@@ -792,31 +838,34 @@ function parseInitOptions(args: string[]): InitOptions {
     preview,
     dryRun,
     skipIndex,
-    noUpdateNotice
+    skipServerCheck,
+    noUpdateNotice,
+    scope,
+    trackLatest
   };
 }
 
 function printInitUsage(): void {
   console.log('codebase-context init [options]');
   console.log(
-    'Detect and configure coding tools together. With a terminal, Space toggles and Enter applies.'
+    'Interactive setup: client CLIs for Claude Code, Codex, and VS Code; JSON merge for Cursor and OpenCode.'
   );
   console.log(
-    'Each config saves `npx -y codebase-context@latest` plus your project folder (pin a version in MCP config to freeze updates).'
+    `Default MCP launch: npx -y codebase-context@${PKG_VERSION} <project> (use --track-latest for @latest).`
   );
-  console.log('Codex setup line: codex mcp add codebase-context -- npx -y codebase-context@latest');
   console.log(
-    '  --client <name>  Choose a tool (repeatable): ' +
-      CLIENTS.map((client) => client.id).join(', ')
+    '  --clients <name>  Repeatable client id (alias: --client): ' +
+      INIT_CLIENTS.map((client) => client.id).join(', ')
   );
-  console.log('  --root <path>    Project root (default: CODEBASE_ROOT or cwd)');
-  console.log('  --preview        Show selected files and exclusions without writing config');
-  console.log('  --dry-run        Preview MCP config diffs without writing files');
-  console.log('  --skip-index     Skip the first index after writing configs');
-  console.log('  --no-update-notice  Skip the daily npm update notice');
-  console.log('  --yes, -y        Configure every detected tool without prompts');
-  console.log('  --help, -h       Show this help');
+  console.log('  --scope <user|project>  MCP scope for client CLIs (default: project)');
+  console.log('  --yes, -y          Non-interactive (for CI scripts)');
+  console.log('  --dry-run          Preview commands and JSON diffs without applying');
+  console.log('  --track-latest     Write codebase-context@latest instead of pinning');
+  console.log('  --skip-index       Skip the first index after configuration');
+  console.log('  --skip-server-check Skip MCP initialize smoke test');
+  console.log('  --no-update-notice Skip the daily npm update notice');
   console.log('  CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1  Disable the daily npm update notice');
+  console.log('After pinning, run `codebase-context update` to refresh installed configs.');
 }
 
 export async function handleInitCli(args: string[]): Promise<void> {
@@ -838,96 +887,112 @@ export async function handleInitCli(args: string[]): Promise<void> {
       console.log(JSON.stringify(preview, null, 2));
       return;
     }
-    console.log(`Set up Codebase Context in ${options.rootPath}`);
-    let clients = options.clients;
+
+    clack.intro(`Codebase Context setup in ${options.rootPath}`);
+    let clients: InitClient[] = options.clients;
     if (!clients.length) {
-      const detected = await detectClients(options.rootPath);
-      clients =
-        !options.yes && process.stdin.isTTY && process.stdout.isTTY
-          ? await checkbox<Client>({
-              message: 'Choose tools (Space toggles, Enter sets up):',
-              choices: CLIENTS.map((client) => ({
-                name: client.name + (detected.includes(client.id) ? ' (detected)' : ''),
-                value: client.id,
-                checked: detected.includes(client.id)
-              }))
-            })
-          : detected;
+      const detected = (await detectClients(options.rootPath)).filter(isInitClient);
+      if (!options.yes && process.stdin.isTTY && process.stdout.isTTY) {
+        const selected = await clack.multiselect({
+          message: 'Choose tools to configure',
+          options: INIT_CLIENTS.map((client) => ({
+            label: client.name + (detected.includes(client.id) ? ' (detected)' : ''),
+            value: client.id
+          })),
+          initialValues: detected
+        });
+        if (clack.isCancel(selected)) {
+          clack.cancel('Setup cancelled.');
+          return;
+        }
+        clients = selected;
+      } else {
+        clients = detected;
+      }
     }
-    if (!clients.length)
+    if (!clients.length) {
       throw new Error(
-        `No coding tools selected or detected. Choose with --client (${CLIENTS.map((client) => client.id).join(', ')}).`
+        `No tools selected or detected. Pass --clients (${INIT_CLIENTS.map((client) => client.id).join(', ')}).`
       );
-
-    const prepared = [];
-    for (const client of clients) {
-      const config = generateMcpConfig(client, { rootPath: options.rootPath });
-      const existingText = await readExistingConfig(config.path);
-      const merged =
-        client === 'codex'
-          ? await _buildMergedCodexContent(config.path, config.content)
-          : await _buildMergedMcpContent(config.path, config.content, client);
-      const action = classifyInitChange(existingText, merged.content);
-      prepared.push({
-        ...config,
-        content: merged.content,
-        action,
-        displayPath: formatDisplayPath(config.path, options.rootPath),
-        existingText
-      });
     }
 
-    for (const config of prepared) {
-      if (config.action !== 'unchanged') {
-        console.log(formatConfigPreview(config.displayPath, config.existingText, config.content));
-        console.log('');
+    const plans = clients.map((client) =>
+      planClientRegistration(client, {
+        rootPath: options.rootPath,
+        scope: options.scope,
+        trackLatest: options.trackLatest
+      })
+    );
+
+    for (const plan of plans) {
+      console.log(describeRegistrationPlan(plan));
+      if (plan.kind === 'json') {
+        const config = generateMcpConfig(plan.client, {
+          rootPath: options.rootPath,
+          trackLatest: options.trackLatest
+        });
+        const existingText = await readExistingConfig(config.path);
+        const merged = await _buildMergedMcpContent(config.path, config.content, plan.client);
+        if (classifyInitChange(existingText, merged.content) !== 'unchanged') {
+          console.log(
+            formatConfigPreview(
+              formatDisplayPath(config.path, options.rootPath),
+              existingText,
+              merged.content
+            )
+          );
+          console.log('');
+        }
       }
     }
 
-    const hasChanges = prepared.some((config) => config.action !== 'unchanged');
+    const actionable = plans.filter((plan) => plan.kind !== 'skip');
     if (
-      hasChanges &&
+      actionable.length &&
       !options.yes &&
       !options.dryRun &&
       process.stdin.isTTY &&
       process.stdout.isTTY
     ) {
-      const approved = await confirm({ message: 'Apply these MCP config changes?', default: true });
-      if (!approved) {
-        console.log('Setup cancelled; no files written.');
+      const approved = await clack.confirm({ message: 'Apply these changes?', initialValue: true });
+      if (clack.isCancel(approved) || !approved) {
+        clack.cancel('Setup cancelled.');
         return;
       }
     }
 
-    for (const config of prepared) {
-      if (config.action !== 'unchanged' && !options.dryRun) {
-        if (config.existingText !== null) {
-          const backupPath = await backupTinyConfig(config.path, config.existingText);
-          if (backupPath) {
-            console.log(`Backed up: ${formatDisplayPath(backupPath, options.rootPath)}`);
-          }
-        }
-        await fs.mkdir(path.dirname(config.path), { recursive: true });
-        await atomicWrite(config.path, config.content);
+    for (const plan of plans) {
+      if (plan.kind === 'skip') {
+        console.log(describeRegistrationPlan(plan));
+        continue;
       }
-      console.log(describeInitChange(options.dryRun, config.action, config.displayPath));
+      if (plan.kind === 'cli') {
+        applyCliRegistration(plan, options);
+      } else {
+        await applyJsonRegistration(plan, options);
+      }
     }
+
     if (options.dryRun) {
-      console.log('Dry run complete; no files written.');
+      console.log('Dry run complete; no changes applied.');
+      clack.outro('Dry run finished.');
       return;
     }
+
     if (!options.skipIndex) {
       await runInitialIndex(options.rootPath);
     }
-    console.log('Reopen your tools; approve the server or project trust if asked.');
+    if (!options.skipServerCheck) {
+      const entrypoint = process.argv[1];
+      if (!entrypoint) throw new Error('Cannot locate the codebase-context CLI entrypoint.');
+      console.log('Checking MCP server startup...');
+      await verifyMcpServerStarts(entrypoint, options.rootPath);
+      console.log('MCP server responded to initialize.');
+    }
+    clack.outro('Setup complete. Reopen your tools and approve trust if prompted.');
   } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.name === 'ExitPromptError' ||
-        error.name === 'AbortPromptError' ||
-        error.name === 'CancelPromptError')
-    ) {
-      console.log('Setup cancelled; no files written.');
+    if (clack.isCancel(error)) {
+      clack.cancel('Setup cancelled.');
       return;
     }
     console.error(`Init failed: ${error instanceof Error ? error.message : String(error)}`);

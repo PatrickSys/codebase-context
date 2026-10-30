@@ -106,19 +106,20 @@ On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a f
 The interactive wizard is not in published 2.2.0. From your project root:
 
 ```bash
+npx -y codebase-context init
 npx -y codebase-context@latest init
-npx -y codebase-context@latest init --yes --dry-run
-npx -y codebase-context@latest init --client codex --root /path/to/project --yes --skip-index
-npx -y codebase-context@latest init --root /path/to/project --preview
+npx -y codebase-context init --yes --dry-run
+npx -y codebase-context init --yes --clients codex --scope project --root /path/to/project --skip-index
+npx -y codebase-context update
 ```
 
-With a TTY, omit `--yes` to pick clients (Space toggles, Enter confirms), review unified diffs for every config change, and confirm before writing. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder. `--skip-index` skips the post-setup index; `--no-update-notice` skips the daily npm version hint (`CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1` also works).
+With a TTY, omit `--yes` to pick clients (Space toggles, Enter confirms), review JSON diffs for Cursor/OpenCode, and confirm before writing. `--clients` is repeatable (`--client` is an alias). `--root` takes priority over `CODEBASE_ROOT` and the current folder. `--scope project|user` applies to vendor CLIs (default `project`). `--skip-index` skips the post-setup index; `--skip-server-check` skips the MCP `initialize` smoke test; `--no-update-notice` skips the daily npm version hint (`CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE=1` also works). Use `init --track-latest` to write `codebase-context@latest` instead of pinning the installed package version; run `codebase-context update` later to refresh pinned configs.
 
-Clients: Claude Code (`.mcp.json`), Claude Desktop (`claude_desktop_config.json` under the OS Claude app folder), Codex (`.codex/config.toml`), Cursor (`.cursor/mcp.json`), VS Code (`.vscode/mcp.json` with top-level `servers`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), OpenCode (`opencode.json`). Generated launches use `npx -y codebase-context@latest` plus your project folder so patch releases roll out automatically; pin `codebase-context@x.y.z` in MCP config when you need a frozen version.
+Init clients: Claude Code and Codex (`claude mcp add`, `codex mcp add`), VS Code user scope (`code --add-mcp`; project scope skips because workspace MCP uses `.vscode/mcp.json`), Cursor (`.cursor/mcp.json`), OpenCode (`opencode.json`). Detection also looks for Windsurf and Claude Desktop, but the wizard does not configure them yet. Default launches pin `codebase-context@<installed-version>` plus your project folder; opt into `@latest` with `--track-latest`.
 
-Existing unrelated settings are preserved. Tiny configs (≤16KiB) are copied to `*.bak` beside the file before an update. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked.
+Cursor and OpenCode merges preserve unrelated settings. Tiny JSON configs (≤16KiB) are copied to `*.bak` before an update. A conflicting custom Codebase Context entry in JSON or Codex TOML stops setup before writes. To replace a custom launch, remove only its Codebase Context entry and rerun setup or `update`. Restart the client and approve trust if asked.
 
-New candidate indexes default to model-free search. The wizard runs a first index with progress unless `--skip-index` or `--dry-run` is set.
+New candidate indexes default to model-free search. The wizard runs a first index with progress unless `--skip-index` or `--dry-run` is set, then smoke-tests MCP `initialize` on stdio unless `--skip-server-check` is set.
 
 Record the wizard for docs with [VHS](https://github.com/charmbracelet/vhs) using [`docs/demo/install.tape`](./demo/install.tape); generate `install.gif` locally and avoid committing large binaries.
 

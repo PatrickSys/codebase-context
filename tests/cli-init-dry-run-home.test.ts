@@ -4,21 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { handleInitCli } from '../src/cli-init.js';
 
-describe('init dry-run and user-scoped configs', () => {
-  const previousHome = process.env.HOME;
-  const previousUserProfile = process.env.USERPROFILE;
+describe('init dry-run and scoped registration', () => {
   const previousSkipNotice = process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE;
-  let tempHome = '';
   let projectRoot = '';
   let logs: string[] = [];
 
   afterEach(async () => {
-    process.env.HOME = previousHome;
-    process.env.USERPROFILE = previousUserProfile;
     if (previousSkipNotice === undefined) delete process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE;
     else process.env.CODEBASE_CONTEXT_SKIP_UPDATE_NOTICE = previousSkipNotice;
-    if (tempHome) await fs.rm(tempHome, { recursive: true, force: true });
-    tempHome = '';
+    if (projectRoot) await fs.rm(projectRoot, { recursive: true, force: true });
     projectRoot = '';
     logs = [];
   });
@@ -37,59 +31,84 @@ describe('init dry-run and user-scoped configs', () => {
     return logs.join('\n');
   }
 
-  it('dry-run writes Windsurf user config under a temp HOME without touching disk', async () => {
-    tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-home-'));
+  it('dry-run previews Cursor JSON without writing files', async () => {
     projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-project-'));
-    process.env.HOME = tempHome;
-    process.env.USERPROFILE = tempHome;
-    await fs.mkdir(path.join(tempHome, '.codeium', 'windsurf'), { recursive: true });
 
     const output = await runInit([
       '--client',
-      'windsurf',
+      'cursor',
       '--yes',
       '--dry-run',
+      '--skip-index',
+      '--skip-server-check',
       '--root',
       projectRoot
     ]);
 
-    expect(output).toContain(`Would create: ${path.join(tempHome, '.codeium', 'windsurf', 'mcp_config.json')}`);
-    expect(output).toContain('Dry run complete; no files written.');
-    await expect(
-      fs.access(path.join(tempHome, '.codeium', 'windsurf', 'mcp_config.json'))
-    ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(output).toContain('Would create: .cursor/mcp.json');
+    expect(output).toContain('Dry run complete; no changes applied.');
+    await expect(fs.access(path.join(projectRoot, '.cursor', 'mcp.json'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
   });
 
-  it('merges VS Code servers and reports an update on repeat dry-run', async () => {
-    tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-home-'));
+  it('dry-run previews VS Code user CLI without running code', async () => {
     projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-project-'));
-    process.env.HOME = tempHome;
-    process.env.USERPROFILE = tempHome;
-    const vscodeDir = path.join(projectRoot, '.vscode');
-    await fs.mkdir(vscodeDir, { recursive: true });
+
+    const output = await runInit([
+      '--client',
+      'vscode',
+      '--scope',
+      'user',
+      '--yes',
+      '--dry-run',
+      '--skip-index',
+      '--skip-server-check',
+      '--root',
+      projectRoot
+    ]);
+
+    expect(output).toContain('Would run:');
+    expect(output).toContain('--add-mcp');
+    expect(output).toContain('Dry run complete; no changes applied.');
+  });
+
+  it('merges Cursor JSON and reports unchanged on repeat dry-run', async () => {
+    projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cbc-init-project-'));
+    const cursorDir = path.join(projectRoot, '.cursor');
+    await fs.mkdir(cursorDir, { recursive: true });
     await fs.writeFile(
-      path.join(vscodeDir, 'mcp.json'),
-      JSON.stringify(
-        {
-          servers: {
-            other: { command: 'echo', args: ['hi'] }
-          }
-        },
-        null,
-        2
-      )
+      path.join(cursorDir, 'mcp.json'),
+      JSON.stringify({ mcpServers: { other: { command: 'echo', args: ['hi'] } } }, null, 2)
     );
 
-    const first = await runInit(['--client', 'vscode', '--yes', '--root', projectRoot]);
-    expect(first).toContain('Updated: .vscode/mcp.json');
+    const first = await runInit([
+      '--client',
+      'cursor',
+      '--yes',
+      '--skip-index',
+      '--skip-server-check',
+      '--root',
+      projectRoot
+    ]);
+    expect(first).toContain('Updated: .cursor/mcp.json');
 
-    const second = await runInit(['--client', 'vscode', '--yes', '--dry-run', '--root', projectRoot]);
-    expect(second).toContain('Unchanged: .vscode/mcp.json');
+    const second = await runInit([
+      '--client',
+      'cursor',
+      '--yes',
+      '--dry-run',
+      '--skip-index',
+      '--skip-server-check',
+      '--root',
+      projectRoot
+    ]);
+    expect(second).toContain('Unchanged: .cursor/mcp.json');
 
-    const saved = JSON.parse(await fs.readFile(path.join(vscodeDir, 'mcp.json'), 'utf8')) as {
-      servers: Record<string, unknown>;
+    const saved = JSON.parse(await fs.readFile(path.join(cursorDir, 'mcp.json'), 'utf8')) as {
+      mcpServers: Record<string, unknown>;
     };
-    expect(saved.servers.other).toEqual({ command: 'echo', args: ['hi'] });
-    expect(saved.servers['codebase-context']).toBeDefined();
+    expect(saved.mcpServers.other).toEqual({ command: 'echo', args: ['hi'] });
+    expect(saved.mcpServers['codebase-context']).toBeDefined();
   });
 });

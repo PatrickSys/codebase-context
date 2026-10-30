@@ -46,16 +46,17 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
-- MCP client registration — use the recipes in the [client setup guide](./client-setup.md). Published 2.2.0 has the older interactive HTTP wizard; the four-client wizard below requires the unreleased candidate.
+- MCP client registration — use the recipes in the [client setup guide](./client-setup.md). Published 2.2.0 has the older interactive HTTP wizard; the six-client wizard below requires the unreleased candidate.
 
 ## `init` in the unreleased candidate
 
-`init` detects Claude Code, Codex, Cursor and OpenCode, then configures the selected tools together. In a terminal, detected tools start selected; use Space to change the selection and Enter to apply it. Without a terminal, it configures all detected tools.
+`init` detects Claude Code, Codex, Cursor, VS Code (Copilot), Windsurf, and OpenCode, then configures the selected tools together. In a terminal, detected tools start selected; use Space to change the selection and Enter to apply it. Without a terminal, it configures all detected tools. Add `--dry-run` to print `Would create`, `Would update`, or `Unchanged` without writing files.
 
 ```powershell
 codebase-context init --help
 codebase-context init
 codebase-context init --yes
+codebase-context init --dry-run --yes
 codebase-context init --client codex --client cursor --root "C:\path\to\project"
 ```
 

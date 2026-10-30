@@ -106,8 +106,11 @@ On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a f
 The four-client wizard is not in published 2.2.0. From a built checkout or a locally installed candidate, run its actual entrypoint from the project you want to search:
 
 ```bash
-# Detect Claude Code, Codex, Cursor and OpenCode, then configure the detected clients.
+# Detect Claude Code, Codex, Cursor, VS Code, Windsurf, and OpenCode, then configure the detected clients.
 node /path/to/codebase-context/dist/index.js init --yes
+
+# Preview MCP config changes without writing files.
+node /path/to/codebase-context/dist/index.js init --dry-run --yes
 
 # Configure one client for an explicit project.
 node /path/to/codebase-context/dist/index.js init --client codex --root /path/to/project --yes
@@ -120,7 +123,7 @@ Codex one-liner (published npm): `codex mcp add codebase-context -- npx -y codeb
 
 Replace the paths with the candidate installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
 
-Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
+Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, VS Code uses `.vscode/mcp.json` (`servers`), Windsurf uses `~/.codeium/windsurf/mcp_config.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
 
 Existing unrelated settings are preserved. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry from the client config, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked. Config generation and SDK launch tests do not establish acceptance in each native client.
 

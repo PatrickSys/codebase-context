@@ -21,7 +21,14 @@ opencode mcp add codebase-context '--' npx -y codebase-context
 
 In the unreleased candidate, `--version` prints the installed package version and `map` builds a missing index before printing the map. A low-confidence search includes a hint that weak matches do not establish that code is absent. These additions require the built candidate; the unpinned commands above install published 2.2.0.
 
-This repository's `init` command detects Claude Code, Codex, Cursor, and OpenCode and writes a project config for each selected tool. The saved launch is the Node binary and the package file from the npx cache. That command is in this source and is not part of published 2.2.0. Until it is published, use the copy-paste lines above. The [client setup guide](./docs/client-setup.md) marks the unpublished command.
+This repository's `init` command detects Claude Code, Codex, Cursor, VS Code (Copilot), Windsurf, and OpenCode, then writes or merges each tool's MCP config in one pass. It follows the official VS Code `servers` and Windsurf user-config shapes (same pattern as the [@modelcontextprotocol/server-filesystem](https://www.npmjs.com/package/@modelcontextprotocol/server-filesystem) workspace examples). Use `--dry-run` to preview changes before writing.
+
+```bash
+npx codebase-context init --yes              # configure detected tools
+npx codebase-context init --dry-run --yes    # show Would create/update lines only
+```
+
+The saved launch is the Node binary and the package file from the npx cache. That command is in this source and is not part of published 2.2.0. Until it is published, use the copy-paste lines above. The [client setup guide](./docs/client-setup.md) marks the unpublished command.
 
 Start a new agent session in your project, then ask:
 
@@ -31,7 +38,7 @@ Replace `[feature]` with something you want to find. The first run downloads a l
 
 ### Planned for 2.4.0 (not yet published)
 
-The unreleased source candidate starts new indexes without a model download. Semantic embeddings are optional; existing indexes keep their recorded mode. Its setup wizard can configure Claude Code, Codex, Cursor and OpenCode using the Node binary and package file that ran setup. These changes are not in the current npm release.
+The unreleased source candidate starts new indexes without a model download. Semantic embeddings are optional; existing indexes keep their recorded mode. Its setup wizard configures Claude Code, Codex, Cursor, VS Code (Copilot), Windsurf, and OpenCode using the Node binary and package file that ran setup, with `--dry-run` to preview MCP config changes. These changes are not in the current npm release.
 
 - NestJS support from community contributor Aaron Olin. See the [analyzer details](./docs/capabilities.md#analyzers).
 - Better React/Next.js detection and a fix for reranker passage scoring.
@@ -57,10 +64,10 @@ Other clients use their own setup commands:
 | Client                      | Shortest current setup                                                       |
 | --------------------------- | ---------------------------------------------------------------------------- |
 | Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context` |
-| Cursor                      | Add `.cursor/mcp.json`                                                       |
-| VS Code with GitHub Copilot | Add `.vscode/mcp.json`                                                       |
+| Cursor                      | `codebase-context init --client cursor` or add `.cursor/mcp.json`            |
+| VS Code with GitHub Copilot | `codebase-context init --client vscode` or add `.vscode/mcp.json`            |
 | GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context` |
-| Windsurf                    | Add `~/.codeium/windsurf/mcp_config.json`                                    |
+| Windsurf                    | `codebase-context init --client windsurf` or add `~/.codeium/windsurf/mcp_config.json` |
 
 Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration and the interactive setup wizard's limitations.
 

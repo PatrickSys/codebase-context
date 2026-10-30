@@ -39,6 +39,24 @@ import {
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 
+/** File/path-like tokens in a natural-language query (e.g. NOW.md, check-agent-instructions.mjs). */
+export function extractQueryPathTokens(query: string): string[] {
+  const tokens = new Set<string>();
+  for (const match of query.matchAll(/\b([A-Za-z0-9][A-Za-z0-9._-]*\.(?:md|mdx|txt))\b/g)) {
+    tokens.add(match[1].toLowerCase());
+  }
+  for (const match of query.matchAll(/\b([a-z][a-z0-9-]*(?:-[a-z0-9]+)+)\.(?:mjs|cjs|js|ts)\b/gi)) {
+    tokens.add(match[0].toLowerCase());
+    tokens.add(match[1].toLowerCase());
+  }
+  for (const match of query.matchAll(/\b([a-z][a-z0-9-]*(?:-[a-z0-9]+){2,})\b/gi)) {
+    if (match[1].length >= 12) {
+      tokens.add(match[1].toLowerCase());
+    }
+  }
+  return [...tokens];
+}
+
 export interface SearchOptions {
   useSemanticSearch?: boolean;
   useKeywordSearch?: boolean;
@@ -1941,11 +1959,23 @@ export class CodebaseSearcher {
     }
 
     if (fuseResults.length === 0 || (fuseResults[0].score ?? 0) > KEYWORD_FUSE_OPTIONS.threshold!) {
-      const rescue = await this.rescueKeywordMatches(query, limit, filters, validation);
-      const seen = new Set(rescue.map(({ item }) => item.id));
-      fuseResults = [...rescue, ...fuseResults.filter(({ item }) => !seen.has(item.id))].sort(
-        (a, b) => (a.score ?? 0) - (b.score ?? 0)
+      const pathRescue: FuseResult<CodeChunk>[] = this.matchChunksByPathTokens(query, filters).map(
+        (chunk, refIndex) => ({
+          item: chunk,
+          refIndex,
+          score: 0
+        })
       );
+      const rescue = await this.rescueKeywordMatches(query, limit, filters, validation);
+      const seen = new Set([
+        ...pathRescue.map(({ item }) => item.id),
+        ...rescue.map(({ item }) => item.id)
+      ]);
+      fuseResults = [
+        ...pathRescue,
+        ...rescue,
+        ...fuseResults.filter(({ item }) => !seen.has(item.id))
+      ].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
     }
     const current = await this.selectCurrentCandidates(
       fuseResults,
@@ -1984,6 +2014,20 @@ export class CodebaseSearcher {
           score = Math.min(1.0, score + 0.1);
         }
 
+        for (const token of extractQueryPathTokens(query)) {
+          const base = path.basename(relativePathLower);
+          const stem = base.replace(/\.[^.]+$/, '');
+          if (
+            base === token ||
+            relativePathLower.endsWith(`/${token}`) ||
+            stem === token.replace(/\.[^.]+$/, '')
+          ) {
+            score = Math.min(1.0, score + 0.45);
+          } else if (stem.includes(token) || relativePathLower.includes(token)) {
+            score = Math.min(1.0, score + 0.25);
+          }
+        }
+
         return {
           chunk,
           score
@@ -1994,6 +2038,29 @@ export class CodebaseSearcher {
           Number(this.hasExactQueryDeclaration(b.chunk, query)) -
             Number(this.hasExactQueryDeclaration(a.chunk, query)) || b.score - a.score
       );
+  }
+
+  private matchChunksByPathTokens(query: string, filters?: SearchFilters): CodeChunk[] {
+    const tokens = extractQueryPathTokens(query);
+    if (tokens.length === 0) {
+      return [];
+    }
+    return this.chunks.filter((item) => {
+      if (!this.matchesSearchFilters(item, filters)) {
+        return false;
+      }
+      const relativePathLower = item.relativePath.toLowerCase();
+      const base = path.basename(relativePathLower);
+      const stem = base.replace(/\.[^.]+$/, '');
+      return tokens.some(
+        (token) =>
+          base === token ||
+          relativePathLower.endsWith(`/${token}`) ||
+          stem === token.replace(/\.[^.]+$/, '') ||
+          stem.includes(token) ||
+          relativePathLower.includes(token)
+      );
+    });
   }
 
   private generateRelevanceReason(chunk: CodeChunk, query: string): string {

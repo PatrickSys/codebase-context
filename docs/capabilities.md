@@ -22,7 +22,7 @@ Per-project config overrides supported today:
 - `projects[].excludePatterns`: merged with the built-in exclusion set for that project at index time
 - `projects[].analyzerHints.analyzer`: prefers a registered analyzer by name for that project and falls back safely when the name is missing or invalid
 - `projects[].analyzerHints.extensions`: adds project-local source extensions for indexing and auto-refresh watching without changing defaults for other projects
-- `projects[].parsing.maxChunks`: sets the maximum number of searchable chunks indexed for that project (requires 2.4.0, not yet published)
+- `projects[].parsing.maxChunks`: sets the maximum number of searchable chunks indexed for that project (default 5000; configurable via `~/.codebase-context/config.json`)
 
 Copy-pasteable client config templates are shipped in the package:
 

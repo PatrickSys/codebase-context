@@ -433,6 +433,10 @@ export interface IndexingStats {
   indexedFiles: number;
   skippedFiles: number;
   totalChunks: number;
+  /** Chunks written to the keyword index (may be lower than totalChunks when capped). */
+  searchableChunks?: number;
+  /** True when parsing.maxChunks (default 5000) truncated the searchable index. */
+  chunkLimitApplied?: boolean;
   totalLines: number;
   duration: number; // milliseconds
   avgChunkSize: number;

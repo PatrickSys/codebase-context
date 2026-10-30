@@ -78,6 +78,9 @@ const MAP_EXCLUDED_PATH_PATTERNS = [
   /(?:^|\/)(?:fixtures?|__fixtures__)(?:\/|$)/i,
   /(?:^|\/)(?:generated|__generated__)(?:\/|$)/i,
   /(?:^|\/)[^/]*\.(?:generated|gen|min)\.[^/]+$/i,
+  /(?:^|\/)raw(?:\/|$)/i,
+  /(?:^|\/)live-from-ai(?:\/|$)/i,
+  /[^/]+-[A-Za-z0-9]{6,}\.(?:js|css|mjs|cjs)$/i,
   /\.snap$/i
 ] as const;
 
@@ -180,6 +183,7 @@ async function buildPinnedCodebaseMap(
   const entrypoints: string[] = [];
   for (const [file, imports] of Object.entries(graphImports)) {
     if (imports.length === 0) continue; // no imports — not an entrypoint
+    if (!isMapEligiblePath(file, mode)) continue;
     const importers = graphImportedBy[file];
     if (!importers || importers.length === 0) {
       entrypoints.push(file);
@@ -193,7 +197,7 @@ async function buildPinnedCodebaseMap(
     graphImportedBy
   ).map(([file, importers]) => ({ file, count: importers.length }));
   const hubFiles: string[] = sortByCountThenAlpha(
-    importedByCounts,
+    importedByCounts.filter(({ file }) => isMapEligiblePath(file, mode)),
     (x) => x.count,
     (x) => x.file
   )

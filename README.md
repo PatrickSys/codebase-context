@@ -120,7 +120,7 @@ One stdio server can route across several repositories. Supply `project` in tool
 
 ## See it
 
-This recording is `map`, then `search --intent edit`, on the fixture in `tests/fixtures/codebases/eval-controlled`. The index was built off-camera with `reindex --no-embeddings`, and the screen is cleared before the search so the preflight stays in view. In this take the preflight says the match is low confidence and not ready to edit. A [WebM copy](./docs/assets/hero.webm) is the same take.
+This recording is `map`, then `search --intent edit`, on the fixture in `tests/fixtures/codebases/eval-controlled`. The index was built off-camera with `reindex --no-embeddings`, and the screen is cleared before the search so the preflight stays in view. In this take the preflight says the match is low confidence and not ready to edit. A [WebM copy](https://github.com/PatrickSys/codebase-context/blob/master/docs/assets/hero.webm) is the same take.
 
 ![map, then search, paused on the edit preflight for the eval-controlled fixture](./docs/assets/hero.gif)
 

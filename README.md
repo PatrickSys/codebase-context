@@ -162,7 +162,7 @@ The method and failures are documented so the measurements can be inspected with
 - The paired token observation covers two frozen investigation tasks and records observed agent behavior; it is not a universal token or time guarantee.
 - Setup checks differ by client. The detailed guide distinguishes a written config, a config recognized by the client, a local connection, and instructions checked only against official docs.
 - Dedicated Angular, React, and Next.js analyzers ship in published 2.2.0; NestJS support is planned for unpublished 2.4.0. Other projects use the generic analyzer and the language parsers available for that stack.
-- The default searchable-chunk limit is 5,000 per project. Customizing this via `projects[].parsing.maxChunks` in `~/.codebase-context/config.json` requires 2.4.0 (not yet published).
+- The default searchable-chunk limit is 5,000 per project. Raise it with `projects[].parsing.maxChunks` in `~/.codebase-context/config.json` (see [capabilities](docs/capabilities.md)).
 - The agent must identify its repository in tool calls when no default or unambiguous client root is available. Concurrent HTTP client isolation is not established by the stdio routing checks.
 
 ## Reference

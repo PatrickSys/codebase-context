@@ -141,6 +141,8 @@ export interface IndexerOptions {
 interface PersistedIndexingStats {
   indexedFiles: number;
   totalChunks: number;
+  searchableChunks?: number;
+  chunkLimitApplied?: boolean;
   totalFiles: number;
   generatedAt: string;
 }
@@ -956,7 +958,9 @@ export class CodebaseIndexer {
       let chunksToEmbed = chunksForEmbedding;
       if (chunksForEmbedding.length > maxChunks) {
         console.warn(
-          `WARNING: ${chunksForEmbedding.length} chunks exceed limit. Indexing first ${maxChunks} chunks.`
+          `WARNING: ${chunksForEmbedding.length} chunks exceed the searchable limit (${maxChunks}). ` +
+            `Only the first ${maxChunks} chunks are indexed for search. ` +
+            `Raise projects[].parsing.maxChunks in ~/.codebase-context/config.json for this repo root.`
         );
         chunksToEmbed = chunksForEmbedding.slice(0, maxChunks);
       }
@@ -1098,8 +1102,10 @@ export class CodebaseIndexer {
       // Keyword index always uses ALL chunks (full regen)
       const indexPath = path.join(generationDirectory, KEYWORD_INDEX_FILENAME);
       // Memory safety: cap keyword index too
-      const keywordChunks =
-        allChunks.length > maxChunks ? allChunks.slice(0, maxChunks) : allChunks;
+      const chunkLimitApplied = allChunks.length > maxChunks;
+      const keywordChunks = chunkLimitApplied ? allChunks.slice(0, maxChunks) : allChunks;
+      stats.searchableChunks = keywordChunks.length;
+      stats.chunkLimitApplied = chunkLimitApplied;
       await fs.writeFile(
         indexPath,
         JSON.stringify({
@@ -1206,6 +1212,8 @@ export class CodebaseIndexer {
       const persistedStats: PersistedIndexingStats = {
         indexedFiles: stats.indexedFiles,
         totalChunks: stats.totalChunks,
+        searchableChunks: stats.searchableChunks,
+        chunkLimitApplied: stats.chunkLimitApplied,
         totalFiles: stats.totalFiles,
         generatedAt
       };
@@ -1264,7 +1272,7 @@ export class CodebaseIndexer {
         );
       } else {
         console.error(`Indexing complete in ${stats.duration}ms`);
-        console.error(`Indexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks`);
+        console.error(formatIndexingProgressSummary(stats));
       }
 
       return stats;
@@ -1588,4 +1596,24 @@ export class CodebaseIndexer {
   getProgress(): IndexingProgress {
     return { ...this.progress };
   }
+}
+
+export function formatIndexingProgressSummary(stats: IndexingStats): string {
+  const searchable = stats.searchableChunks ?? stats.totalChunks;
+  if (stats.chunkLimitApplied && searchable < stats.totalChunks) {
+    return (
+      `Indexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks analyzed, ` +
+      `${searchable} chunks searchable (limit applied)`
+    );
+  }
+  return `Indexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks`;
+}
+
+export function formatIndexingCompleteLine(stats: IndexingStats): string {
+  const searchable = stats.searchableChunks ?? stats.totalChunks;
+  const durationSec = (stats.duration / 1000).toFixed(2);
+  if (stats.chunkLimitApplied && searchable < stats.totalChunks) {
+    return `Complete: ${stats.indexedFiles} files, ${searchable}/${stats.totalChunks} chunks searchable in ${durationSec}s`;
+  }
+  return `Complete: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${durationSec}s`;
 }

@@ -9,7 +9,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { KEYWORD_INDEX_FILENAME } from './constants/codebase-context.js';
 import { makePaths } from './project-state.js';
-import { CodebaseIndexer } from './core/indexer.js';
+import { CodebaseIndexer, formatIndexingCompleteLine } from './core/indexer.js';
 import { dispatchTool } from './tools/index.js';
 import type { ToolContext } from './tools/index.js';
 import type { IndexState } from './tools/types.js';
@@ -155,11 +155,7 @@ async function initToolContext(): Promise<ToolContext> {
       indexState.lastIndexed = new Date();
       indexState.stats = stats;
 
-      console.error(
-        `Complete: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(
-          stats.duration / 1000
-        ).toFixed(2)}s`
-      );
+      console.error(formatIndexingCompleteLine(stats));
     } catch (error) {
       indexState.status = 'error';
       indexState.error = error instanceof Error ? error.message : String(error);

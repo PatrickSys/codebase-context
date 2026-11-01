@@ -39,15 +39,13 @@ import {
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 
-/** File/path-like tokens in a natural-language query (e.g. NOW.md, check-agent-instructions.mjs). */
+/** Explicit filenames/relative paths and long hyphenated stems in a query. */
 export function extractQueryPathTokens(query: string): string[] {
   const tokens = new Set<string>();
-  for (const match of query.matchAll(/\b([A-Za-z0-9][A-Za-z0-9._-]*\.(?:md|mdx|txt))\b/g)) {
-    tokens.add(match[1].toLowerCase());
-  }
-  for (const match of query.matchAll(/\b([a-z][a-z0-9-]*(?:-[a-z0-9]+)+)\.(?:mjs|cjs|js|ts)\b/gi)) {
+  for (const match of query.matchAll(
+    /\b(?:[a-z0-9_.-]+\/)*[a-z0-9][a-z0-9_.-]*\.[a-z][a-z0-9]*\b/gi
+  )) {
     tokens.add(match[0].toLowerCase());
-    tokens.add(match[1].toLowerCase());
   }
   for (const match of query.matchAll(/\b([a-z][a-z0-9-]*(?:-[a-z0-9]+){2,})\b/gi)) {
     if (match[1].length >= 12) {
@@ -871,7 +869,29 @@ export class CodebaseSearcher {
       ({ item }) => checkedSources.get(path.resolve(this.rootPath, item.filePath)) !== null
     );
     if (availableCandidates.length > candidateLimit) validation.candidateBudgetExhausted = true;
-    const candidates = availableCandidates.slice(0, candidateLimit);
+    // Nomination already scans indexed text. Use its distinct query clues to
+    // choose the bounded evidence window, rather than letting corpus order
+    // hide relevant implementations behind hundreds of one-clue mentions.
+    // Substrings only nominate; exact lexical and current-source checks below
+    // still govern admission and confidence.
+    const candidates = availableCandidates
+      .map((result) => {
+        const text = [
+          result.item.content,
+          path.basename(result.item.relativePath),
+          ...this.indexedDeclarationNames(result.item),
+          ...(result.item.exports ?? [])
+        ]
+          .join(' ')
+          .toLowerCase();
+        const clues = [...queryTerms.values()].filter((aliases) =>
+          aliases.some((alias) => text.includes(alias))
+        ).length;
+        return { result, clues };
+      })
+      .sort((a, b) => b.clues - a.clues || a.result.refIndex - b.result.refIndex)
+      .slice(0, candidateLimit)
+      .map(({ result }) => result);
     const unavailableBefore = [...checkedSources.values()].filter(
       (source) => source === null
     ).length;
@@ -1437,6 +1457,15 @@ export class CodebaseSearcher {
       );
     }
 
+    const pathTokens = extractQueryPathTokens(query);
+    if (pathTokens.length > 0) {
+      scoredResults.sort(
+        (a, b) =>
+          this.pathTokenMatchStrength(b.filePath, pathTokens) -
+          this.pathTokenMatchStrength(a.filePath, pathTokens)
+      );
+    }
+
     // File-level deduplication
     const seenFiles = new Set<string>();
     const deduped: SearchResult[] = [];
@@ -1776,6 +1805,15 @@ export class CodebaseSearcher {
       }
     }
 
+    const pathTokens = extractQueryPathTokens(query);
+    if (pathTokens.length > 0) {
+      bestResults.sort(
+        (a, b) =>
+          this.pathTokenMatchStrength(b.filePath, pathTokens) -
+          this.pathTokenMatchStrength(a.filePath, pathTokens)
+      );
+    }
+
     const results = bestResults.map((result) => {
       const lines = checkedSources.get(path.resolve(this.rootPath, result.filePath));
       if (lines == null) {
@@ -1958,32 +1996,23 @@ export class CodebaseSearcher {
       fuseResults = fuseResults.filter(({ item }) => this.matchesSearchFilters(item, filters));
     }
 
-    if (fuseResults.length === 0 || (fuseResults[0].score ?? 0) > KEYWORD_FUSE_OPTIONS.threshold!) {
-      const pathRescue: FuseResult<CodeChunk>[] = this.matchChunksByPathTokens(query, filters).map(
-        (chunk, refIndex) => ({
-          item: chunk,
-          refIndex,
-          score: 0
-        })
-      );
-      const rescue = await this.rescueKeywordMatches(query, limit, filters, validation);
-      const seen = new Set([
-        ...pathRescue.map(({ item }) => item.id),
-        ...rescue.map(({ item }) => item.id)
-      ]);
-      fuseResults = [
-        ...pathRescue,
-        ...rescue,
-        ...fuseResults.filter(({ item }) => !seen.has(item.id))
-      ].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
-    }
-    const current = await this.selectCurrentCandidates(
-      fuseResults,
-      limit,
-      (result) => result.item,
-      validation
+    const pathTokens = extractQueryPathTokens(query);
+    const pathRescue: FuseResult<CodeChunk>[] = this.matchChunksByPathTokens(query, filters).map(
+      (chunk, refIndex) => ({ item: chunk, refIndex, score: 1 })
     );
-    return current
+    let rescue: FuseResult<CodeChunk>[] = [];
+    if (fuseResults.length === 0 || (fuseResults[0].score ?? 0) > KEYWORD_FUSE_OPTIONS.threshold!) {
+      rescue = await this.rescueKeywordMatches(query, limit, filters, validation);
+    }
+    const seen = new Set<string>();
+    fuseResults = [...rescue, ...fuseResults, ...pathRescue]
+      .sort((a, b) => (a.score ?? 0) - (b.score ?? 0))
+      .filter(({ item }) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+    const scored = fuseResults
       .map((r) => {
         const chunk = r.item;
         let score = 1 - (r.score || 0);
@@ -2014,19 +2043,8 @@ export class CodebaseSearcher {
           score = Math.min(1.0, score + 0.1);
         }
 
-        for (const token of extractQueryPathTokens(query)) {
-          const base = path.basename(relativePathLower);
-          const stem = base.replace(/\.[^.]+$/, '');
-          if (
-            base === token ||
-            relativePathLower.endsWith(`/${token}`) ||
-            stem === token.replace(/\.[^.]+$/, '')
-          ) {
-            score = Math.min(1.0, score + 0.45);
-          } else if (stem.includes(token) || relativePathLower.includes(token)) {
-            score = Math.min(1.0, score + 0.25);
-          }
-        }
+        const pathStrength = this.pathTokenMatchStrength(relativePathLower, pathTokens);
+        if (pathStrength > 0) score = Math.min(1.0, score + (pathStrength === 2 ? 0.45 : 0.25));
 
         return {
           chunk,
@@ -2035,9 +2053,62 @@ export class CodebaseSearcher {
       })
       .sort(
         (a, b) =>
+          this.pathTokenMatchStrength(b.chunk.relativePath, pathTokens) -
+            this.pathTokenMatchStrength(a.chunk.relativePath, pathTokens) ||
           Number(this.hasExactQueryDeclaration(b.chunk, query)) -
-            Number(this.hasExactQueryDeclaration(a.chunk, query)) || b.score - a.score
+            Number(this.hasExactQueryDeclaration(a.chunk, query)) ||
+          b.score - a.score
       );
+    if (pathTokens.length === 0) {
+      return this.selectCurrentCandidates(scored, limit, (result) => result.chunk, validation);
+    }
+    const seenFiles = new Set<string>();
+    const distinct = scored.filter(({ chunk }) => {
+      const key = this.indexedFileKey(chunk.filePath);
+      if (seenFiles.has(key)) return false;
+      seenFiles.add(key);
+      return true;
+    });
+    const current = await this.selectCurrentCandidates(
+      distinct,
+      limit,
+      (result) => result.chunk,
+      validation
+    );
+    const currentFiles = new Set(current.map(({ chunk }) => this.indexedFileKey(chunk.filePath)));
+    // Keep every returned witness inside the bounded body-check window, then
+    // admit siblings against already cached sources. Uninspected siblings are
+    // outside this window and must leave coverage explicitly partial.
+    const returnedIds = new Set(current.map(({ chunk }) => chunk.id));
+    const siblings = scored.filter(
+      ({ chunk }) =>
+        currentFiles.has(this.indexedFileKey(chunk.filePath)) && !returnedIds.has(chunk.id)
+    );
+    const siblingLimit = Math.max(0, MAX_CANDIDATE_WORK - current.length);
+    if (siblings.length > siblingLimit) validation.candidateBudgetExhausted = true;
+    await this.validateCandidateSources(
+      siblings.slice(0, siblingLimit).map(({ chunk }) => chunk),
+      validation
+    );
+    return current;
+  }
+
+  private pathTokenMatchStrength(file: string, tokens: string[]): number {
+    const relativePath = file.replace(/\\/g, '/').toLowerCase();
+    const base = path.posix.basename(relativePath);
+    const stem = base.replace(/\.[^.]+$/, '');
+    let strength = 0;
+    for (const token of tokens) {
+      if (
+        base === token ||
+        relativePath.endsWith(`/${token}`) ||
+        (!token.includes('.') && stem === token)
+      )
+        return 2;
+      if (relativePath.includes(token) || stem.includes(token.replace(/\.[^.]+$/, '')))
+        strength = 1;
+    }
+    return strength;
   }
 
   private matchChunksByPathTokens(query: string, filters?: SearchFilters): CodeChunk[] {
@@ -2049,17 +2120,7 @@ export class CodebaseSearcher {
       if (!this.matchesSearchFilters(item, filters)) {
         return false;
       }
-      const relativePathLower = item.relativePath.toLowerCase();
-      const base = path.basename(relativePathLower);
-      const stem = base.replace(/\.[^.]+$/, '');
-      return tokens.some(
-        (token) =>
-          base === token ||
-          relativePathLower.endsWith(`/${token}`) ||
-          stem === token.replace(/\.[^.]+$/, '') ||
-          stem.includes(token) ||
-          relativePathLower.includes(token)
-      );
+      return this.pathTokenMatchStrength(item.relativePath, tokens) > 0;
     });
   }
 

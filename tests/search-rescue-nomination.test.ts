@@ -119,6 +119,37 @@ async function setup(chunks: CodeChunk[]) {
 }
 
 describe('frozen rescue-only literal nomination contract', () => {
+  it('counts a witness shared by path and lexical rescue once', async () => {
+    const subject = await setup([
+      chunk({ id: 'path', filePath: 'src/query-builder.js', content: '// archive policy' }),
+      chunk({ id: 'other', filePath: 'src/other.js', content: '// archive policy' })
+    ]);
+    try {
+      const results = await subject.harness.keywordSearch('query-builder.js archive policy', 5);
+      expect(results.map(({ chunk }) => chunk.id)).toEqual(['path', 'other']);
+    } finally {
+      await subject.cleanup();
+    }
+  });
+  it('admits a multi-clue implementation beyond a prefix of single-clue chunks', async () => {
+    const chunks = [
+      ...Array.from({ length: 800 }, (_, i) =>
+        chunk({
+          id: `single-${i}`,
+          filePath: `src/single-${i}.ts`,
+          content: '// archive only'
+        })
+      ),
+      chunk({ id: 'tail', filePath: 'src/policies.ts', content: '// archive policy' })
+    ];
+    const subject = await setup(chunks);
+    try {
+      const results = await subject.harness.rescueKeywordMatches('archive policy', 5);
+      expect(results.map(({ item }) => item.id)).toEqual(['tail']);
+    } finally {
+      await subject.cleanup();
+    }
+  });
   // These are lexical unit controls, not an accuracy score. In particular, a
   // comment can provide a lexical clue without proving a program relationship.
   it.each(fixture.lexicalCases)('$id', async (control) => {

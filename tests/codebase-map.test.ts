@@ -351,6 +351,28 @@ describe('buildCodebaseMap', () => {
     }
   });
 
+  it('keeps ordinary hyphenated source names while excluding fingerprinted bundles', async () => {
+    const files = ['src/query-builder.js', 'scripts/sync-grammars.mjs', 'assets/index-A1b2C3.js'];
+    const rootPath = await createTempMapProject({
+      goldenFiles: files.map((file) => ({ file, score: 0.9 })),
+      graph: {
+        imports: Object.fromEntries(files.map((file) => [file, ['src/common.js']])),
+        exports: Object.fromEntries(
+          files.map((file) => [file, [{ name: 'build', type: 'function' }]])
+        )
+      }
+    });
+    try {
+      const map = await buildCodebaseMap(createProjectState(rootPath));
+      expect(map.bestExamples.map((item) => item.file)).toEqual(files.slice(0, 2));
+      expect(map.architecture.apiSurface.map((item) => item.file).sort()).toEqual(
+        files.slice(0, 2).sort()
+      );
+    } finally {
+      await removeTempMapProject(rootPath);
+    }
+  });
+
   it('restores excluded paths in full mode and removes bounded caps', async () => {
     const imports: Record<string, string[]> = {};
     const importedBy: Record<string, string[]> = {};

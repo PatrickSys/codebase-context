@@ -80,7 +80,7 @@ const MAP_EXCLUDED_PATH_PATTERNS = [
   /(?:^|\/)[^/]*\.(?:generated|gen|min)\.[^/]+$/i,
   /(?:^|\/)raw(?:\/|$)/i,
   /(?:^|\/)live-from-ai(?:\/|$)/i,
-  /[^/]+-[A-Za-z0-9]{6,}\.(?:js|css|mjs|cjs)$/i,
+  /[^/]+-(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,}\.(?:js|css|mjs|cjs)$/i,
   /\.snap$/i
 ] as const;
 

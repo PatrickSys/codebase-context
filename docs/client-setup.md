@@ -1,10 +1,10 @@
 # Client Setup
 
-These commands use the current npm release because the package name is unpinned. The current published version is 2.2.0; 2.4.0 is not yet published.
+The npm release checked on 3 November 2026 is `2.2.0`. The manual npx recipes below select that registry package and retain their dated evidence; they do not select a local candidate. For the unpublished candidate, start with the [local setup wizard](#setup-wizard-in-the-unreleased-candidate) and point Node at that installed copy. No candidate publication or new native-client acceptance is implied.
 
 Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter.
 
-Use Node.js 22 or newer, as required by the package.
+The source candidate requires Node.js 22 or newer. Use that runtime for the candidate instructions here; the historical client checks below retain their original versions and scope.
 
 The copyable registration commands target PowerShell or a POSIX terminal. Windows Command Prompt was not tested; OpenCode's quoted separator is shell-dependent.
 
@@ -27,7 +27,7 @@ After registration, start a new agent session in your project and ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project when checking get_indexing_status and searching. Wait for indexing if needed, read codebase://context, then search_codebase and open a returned source file. Show me the relevant files.
 
-The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. You can prepare it separately with `npx -y codebase-context reindex` from the project folder. Index readiness, client connection and useful agent behavior are separate checks.
+The candidate starts a fresh index in keyword-only mode, without downloading an embedding or reranker model. Existing indexes keep their recorded mode; explicitly enabling local embeddings can require model downloads and the optional runtimes. Prepare the candidate from the project folder with `node /path/to/codebase-context/dist/index.js reindex`. Index readiness, client connection and useful agent behavior are separate checks.
 
 ## Claude Code
 
@@ -128,11 +128,13 @@ New candidate indexes default to model-free search and do not initialize the opt
 
 To set a default project before the first tool call, append its full path to the server arguments, for example `args = ["-y", "codebase-context", "C:/projects/my-app"]`. Use a quoted literal shell argument in registration commands. This makes the default fixed across repositories when the registration is user-scoped; explicit tool selection can still choose another allowed project.
 
-To prepare the index separately, run from the project folder:
+To prepare a local candidate index separately, run from the project folder:
 
 ```powershell
-npx -y codebase-context reindex
+node /path/to/codebase-context/dist/index.js reindex
 ```
+
+Omit mode flags to preserve an existing recorded mode. Use `reindex --embeddings` only after installing the optional runtimes and choosing semantic indexing; `reindex --no-embeddings` explicitly selects keyword-only mode.
 
 The older interactive HTTP wizard remains the behavior of published 2.2.0. A successful candidate wizard exit alone does not establish working client registration.
 

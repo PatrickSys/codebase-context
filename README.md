@@ -2,178 +2,101 @@
 
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](https://github.com/PatrickSys/codebase-context/blob/master/package.json)
 
-Codebase Context gives coding agents a map of your repository through MCP, for developers who want their agent to find relevant code and follow the team's patterns. Search, examples and project memory run locally by default.
+Local repository maps, code search and symbol references for coding agents. Codebase Context exposes these through MCP and a CLI so an agent can inspect the repository before editing it.
+
+## Local candidate: not published
+
+This checkout describes an unpublished candidate and requires **Node.js 22 or newer**. The npm release checked on **3 November 2026** is `2.2.0`. An unpinned `npx -y codebase-context` command uses the registry package, not this checkout. A local version number or tarball does not mean a release has been approved or published.
+
+**Fresh candidate indexes use keyword search without downloading an embedding or reranker model.** Existing indexes keep their recorded mode. Semantic indexing is an explicit option; its optional runtimes and model downloads are separate from the default path.
+
+### Try the candidate from the terminal
+
+Use a built checkout (`pnpm install`, then `pnpm build` in the CBC checkout) or an installed local tarball. From the repository you want to inspect, point Node at that candidate's actual entrypoint:
+
+```bash
+node /path/to/codebase-context/dist/index.js --version
+node /path/to/codebase-context/dist/index.js map
+node /path/to/codebase-context/dist/index.js search --query "a symbol or feature in this repository" --limit 5
+node /path/to/codebase-context/dist/index.js status
+```
+
+Replace the paths and query with your own. For a tarball installed under `/path/to/cbc-local`, the entrypoint is `/path/to/cbc-local/node_modules/codebase-context/dist/index.js`. Quote paths containing spaces.
+
+`map` builds an index when the folder has no previous index. It then returns a bounded repository map. Search returns ranked source locations; open the returned code before relying on it. Low confidence means weak matching evidence, not that an implementation is absent.
+
+To refresh the index, use `reindex`. Omitting mode flags preserves the recorded mode; `reindex --no-embeddings` explicitly selects keyword-only indexing. `reindex --embeddings` selects the configured embedding provider and requires optional LanceDB storage. The default local provider also requires Transformers and may download models; an explicitly configured remote provider has its own connection requirements. Changing modes requires a full rebuild, including when `--incremental` is supplied.
 
 ## Set up your AI client
 
-Use Node.js 22 or newer. These commands use the current npm release of Codebase Context:
+From the target repository, the built candidate can write project registrations for selected detected clients:
 
 ```bash
-# Claude Code
-claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context
-
-# Codex CLI (this is the Codex setup line)
-codex mcp add codebase-context -- npx -y codebase-context
-
-# OpenCode 1.x (keep the quoted separator on Windows)
-opencode mcp add codebase-context '--' npx -y codebase-context
+node /path/to/codebase-context/dist/index.js init
+# Or select one client explicitly:
+node /path/to/codebase-context/dist/index.js init --client codex --root /path/to/project --yes
 ```
 
-In the unreleased candidate, `--version` prints the installed package version and `map` builds a missing index before printing the map. A low-confidence search includes a hint that weak matches do not establish that code is absent. These additions require the built candidate; the unpinned commands above install published 2.2.0.
+The wizard recognizes Claude Code, Codex, Cursor and OpenCode. It saves the Node binary and package entrypoint that ran setup. If that installation or its npx cache is moved or removed, rerun setup. Writing a config does not prove that a native client connected or completed a coding task.
 
-This repository's `init` command detects Claude Code, Codex, Cursor, and OpenCode and writes a project config for each selected tool. The saved launch is the Node binary and the package file from the npx cache. That command is in this source and is not part of published 2.2.0. Until it is published, use the copy-paste lines above. The [client setup guide](./docs/client-setup.md) marks the unpublished command.
-
-Start a new agent session in your project, then ask:
+After registration, restart the client and ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project, wait for indexing if needed, and open the relevant source files.
 
-Replace `[feature]` with something you want to find. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model.
-
-### Planned for 2.4.0 (not yet published)
-
-The unreleased source candidate starts new indexes without a model download. Semantic embeddings are optional; existing indexes keep their recorded mode. Its setup wizard can configure Claude Code, Codex, Cursor and OpenCode using the Node binary and package file that ran setup. These changes are not in the current npm release.
-
-- NestJS support from community contributor Aaron Olin. See the [analyzer details](./docs/capabilities.md#analyzers).
-- Better React/Next.js detection and a fix for reranker passage scoring.
-- Transformers.js v4 for local models.
-
-Known limits: [Intel Mac indexing crash (#68)](https://github.com/PatrickSys/codebase-context/issues/68), [custom OpenAI endpoints (#70)](https://github.com/PatrickSys/codebase-context/issues/70) and [Ollama (#71)](https://github.com/PatrickSys/codebase-context/issues/71) remain open.
-
-The existing [benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) reports 25.7% expected-file recovery versus jCodeMunch's 27.1% in a fixed retrieval comparison; it does not establish a winner or coding quality.
-
-For Codex Desktop, create or merge `.codex/config.toml` in the project you want to search:
-
-```toml
-[mcp_servers.codebase-context]
-command = "npx"
-args = ["-y", "codebase-context"]
-startup_timeout_sec = 120
-```
-
-Trust the project if asked, restart Codex, and start a new task there. Use the prompt above. Config placement alone does not establish successful first use; this no-folder recipe has not been accepted in a fresh native Desktop task.
-
-Other clients use their own setup commands:
-
-| Client                      | Shortest current setup                                                       |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| Gemini CLI                  | `gemini mcp add --scope user codebase-context npx -y codebase-context` |
-| Cursor                      | Add `.cursor/mcp.json`                                                       |
-| VS Code with GitHub Copilot | Add `.vscode/mcp.json`                                                       |
-| GitHub Copilot CLI          | `copilot mcp add codebase-context -- npx -y codebase-context` |
-| Windsurf                    | Add `~/.codeium/windsurf/mcp_config.json`                                    |
-
-Check an existing same-name entry before replacing it. To give the server a default folder, append that folder's absolute path to the `npx` arguments. The [client setup guide](./docs/client-setup.md) covers scopes, optional fixed-folder configuration and the interactive setup wizard's limitations.
-
-The [client setup guide](./docs/client-setup.md) has the exact commands and config for every client, plus what was checked locally and what still relies on official instructions.
-
-The default connection is `stdio` (standard input/output): your client starts the server when it needs it. HTTP is an advanced, client-dependent option; verify the setup guide and client support before relying on it.
-
-## What your agent gets
-
-### Relevant code
-
-`search_codebase` ranks files and symbols for the task instead of returning an unstructured dump. The agent can ask for a compact result first, then read the code it needs.
-
-### Team patterns and examples
-
-`get_team_patterns` shows the approaches used in the repository and points to representative files. Dedicated analyzers for Angular, React, and Next.js ship in published 2.2.0; NestJS support (along with React and Next.js detection improvements and a reranker fix) is planned for unpublished 2.4.0.
-
-### Project memory
-
-`remember` stores a convention, decision, gotcha, or past failure for the project. `get_memory` retrieves relevant entries in later sessions, including when the agent or editor changes.
-
-### Review context
-
-The `codebase-context-review` CLI creates a bounded context packet from a committed Git diff. It gives a reviewer context; it does not review code or prove review quality. See the [review-context guide](./docs/review-context.md).
-
-## How it works
-
-1. **Index locally.** Codebase Context scans the project, builds a keyword index, and creates local semantic embeddings - numeric representations used to match code by meaning as well as exact words.
-2. **Understand the repository.** The agent can request a compact codebase map with structure, patterns, and representative files.
-3. **Find the code for the task.** Search returns ranked files and symbols; the agent reads the selected files before editing.
-
-The same information is available from the terminal. Run these commands from your project root. The first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Once it is ready, inspect the map and search for the code you need:
+The [client setup guide](./docs/client-setup.md) contains candidate instructions and dated checks for the older published package. Historical manual recipes, including Windsurf, retain their dated verification limits. For example, the following manual registration uses the registry release and does **not** select the local candidate:
 
 ```bash
-# Build or refresh the local index
-npx -y codebase-context reindex
-
-# Repository structure, patterns, and representative files
-npx -y codebase-context map
-
-# Ranked code search
-npx -y codebase-context search --query "auth middleware"
-
-# Current team patterns
-npx -y codebase-context patterns
+claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context
 ```
 
-One stdio server can route across several repositories. Supply `project` in tool calls to select the intended repository; a successful selection becomes the default for later calls in that process. Some clients also announce workspace roots: one root can auto-select, while an ambiguous selection asks for a project instead of guessing. MCP deprecated Roots in its July 2026 revision, so explicit project selection is the documented default rather than a dependency on client discovery.
+The default transport is stdio: the client starts the server. HTTP is an advanced option with client-specific setup. Explicit `project` selection is the portable default. A successful selection becomes active for later calls in that server process; select again after restarting or changing repositories.
 
-## See it
+## What your agent can inspect
 
-These are real CLI results from the open-source `angular-spotify` repository.
+- **Repository map:** structure, detected patterns and example files before narrowing to a task.
+- **Code search:** bounded, ranked results with source locations and search-quality information. The default compact response contains at most six results.
+- **Symbol references:** static identifier occurrences. They are not a runtime call graph.
+- **File relationships:** TypeScript/JavaScript imports and re-exports, with unresolved or stale edges reported. Python and Go import navigation are not supported.
+- **Team patterns:** file-level frequencies and example files. These are observations about the repository, not prescriptions about code quality.
+- **Project memory:** `remember` and `get_memory` store and retrieve project conventions, decisions, gotchas and failures.
+- **Review context:** `codebase-context-review` builds a bounded packet from a committed Git diff. It does not review code or establish reviewer quality. The [review-context guide](./docs/review-context.md) retains a separate historical version preview; it is not evidence of this candidate's publication.
 
-**Patterns and representative files**
+Dedicated analyzers in the source cover Angular, React, Next.js and NestJS. Other files use the generic analyzer and available parsers. See the [capabilities reference](./docs/capabilities.md) for scope and limitations.
 
-![Codebase Context showing repository patterns and representative files](https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/patterns.png)
+## Privacy and storage
 
-The map shows the patterns found in the project, how common they are, and files that demonstrate them.
+The default keyword index is built locally. Docker, a GPU and an API key are not required. Optional local embeddings also run on the machine. If you explicitly configure a remote embedding provider, code chunks are sent to that provider.
 
-**Search before an edit**
+Your AI client may send returned code to its own model provider; CBC does not control that connection. Project memory also travels with the repository if you commit and push it.
 
-![Codebase Context showing a ranked search and edit preflight](https://raw.githubusercontent.com/PatrickSys/codebase-context/master/docs/assets/search-query.png)
-
-The search result shows ranked files, relevant project patterns, and what the agent should read before it changes code.
-
-More examples are available in the [CLI gallery](./docs/cli.md) and [walkthrough](https://github.com/PatrickSys/codebase-context/blob/master/docs/demo.md).
-
-## Privacy
-
-Code and indexes stay on the machine with the default local embedding provider. Docker, a GPU, and an API key are not required.
-
-Cloud embeddings are optional. If you select a cloud provider, code chunks are sent to that provider to create the search index. The provider, model, project root, and local HTTP port can be changed through environment variables or the project config; see the [capabilities reference](./docs/capabilities.md).
-
-This is the privacy boundary of Codebase Context itself. Your AI client may send search results or file contents to the model provider configured in that client. Codebase Context does not control that connection. If you commit and push `.codebase-context/memory.json`, the recorded project memory also travels with the repository.
-
-Generated indexes belong in `.gitignore`. Project memory can be kept in version control when the team wants to share it:
+Generated index data should stay out of version control. To share project memory while ignoring the generated index:
 
 ```gitignore
 .codebase-context/*
 !.codebase-context/memory.json
 ```
 
-## Evidence
+## Evidence and limits
 
-Codebase Context runs locally through the Model Context Protocol (MCP), with indexed code kept on your machine by default.
+The [benchmark report](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) and [prior report archive](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark-prior-public-report.md) describe separate historical experiments. These are retrieval observations, not a winner or a coding-quality claim. This historical evidence does not establish patch correctness or end-to-end coding quality. Versions, fixtures and failure records matter; these reports do not certify this candidate. This draft makes no claim that CBC beats text search, improves coding outcomes, or reduces time or tokens.
 
-Its ranked code search combines **Match words**, **Search by meaning**, and **Rank results** to give the agent ranked files, a best example, project patterns, relationships, and relevant memory before they edit.
+The default keyword path can miss natural-language questions when their vocabulary differs from the code. A returned file and a high score are not proof that an answer is correct. Inspect the cited implementation. Optional semantic search has not established a retrieval-quality advantage for this candidate.
 
-The [benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) reports a corrected 100-attempt retrieval family across five local code-context tools: 99 completed attempts and 1 failed attempt. Codebase Context recovered 25.7% of expected gold files with 11.5% file precision in that fixed adapter run; jCodeMunch recovered 27.1% with 11.0% file precision. Raw-native is a deterministic lexical adapter here, not a full normal coding-agent baseline. These are retrieval observations, not a winner or a coding-quality claim. The [sanitized evidence extract](https://github.com/PatrickSys/codebase-context/blob/master/results/benchmark-presentation-evidence.json) records the exact values and source hashes.
+Other practical limits:
 
-The same report retains a separate 300-attempt repeatability history, a 30-run two-task full-agent pilot, and a metered replay whose tool-use validity remains unresolved. A historical Codebase Context indexing observation with embeddings enabled took about 12 minutes 31 seconds, but it does not establish warm-use speed, query latency, install cost, or a cross-tool index-speed ranking. The report does not combine these families into a pooled score and does not establish patch correctness or end-to-end coding quality. Earlier public reports are preserved separately in the [benchmark archive](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark-prior-public-report.md).
-
-The method and failures are documented so the measurements can be inspected with their limits.
-
-## Limits
-
-- Local semantic indexing does more work than a plain text index, especially on a fresh checkout and CPU-only machine.
-- Retrieval measurements describe expected-file coverage, file precision, and reported `peakPrivateGb`, not patch correctness or end-to-end coding quality.
-- The paired token observation covers two frozen investigation tasks and records observed agent behavior; it is not a universal token or time guarantee.
-- Setup checks differ by client. The detailed guide distinguishes a written config, a config recognized by the client, a local connection, and instructions checked only against official docs.
-- Dedicated Angular, React, and Next.js analyzers ship in published 2.2.0; NestJS support is planned for unpublished 2.4.0. Other projects use the generic analyzer and the language parsers available for that stack.
-- The default searchable-chunk limit is 5,000 per project. Raise it with `projects[].parsing.maxChunks` in `~/.codebase-context/config.json` (see [capabilities](docs/capabilities.md)).
-- The agent must identify its repository in tool calls when no default or unambiguous client root is available. Concurrent HTTP client isolation is not established by the stdio routing checks.
+- The default keyword index holds at most 5,000 searchable chunks per project. `projects[].parsing.maxChunks` can raise that limit.
+- Search has bounded candidate inspection. Narrow a query when the candidate budget is exhausted; refresh when source files changed or became unavailable.
+- Existing formats or incomplete generations can require an explicit rebuild or recovery choice. A failed operation is not a successful recovery.
+- Setup evidence differs by client. Config writing, protocol connectivity and native-client task completion are separate checks.
+- Stdio routing checks do not establish concurrent HTTP client isolation.
 
 ## Reference
 
-- [Client setup](./docs/client-setup.md#client-setup) - commands, config, proof level, and client limits
-- [Capabilities](./docs/capabilities.md) - tools, response fields, routing, and configuration
-- [CLI](./docs/cli.md) - terminal commands and example output
-- [Benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) - method, measurements, and failures
-- [Demo](https://github.com/PatrickSys/codebase-context/blob/master/docs/demo.md) - a complete repository walkthrough
-- [Motivation](https://github.com/PatrickSys/codebase-context/blob/master/MOTIVATION.md) - the design problem and research background
-- [Contributing](https://github.com/PatrickSys/codebase-context/blob/master/CONTRIBUTING.md) - local development and evaluation commands
-- [Changelog](https://github.com/PatrickSys/codebase-context/blob/master/CHANGELOG.md) - release history
+- [Client setup](./docs/client-setup.md) — candidate registration, dated checks and limits
+- [Capabilities](./docs/capabilities.md) — tools, routing, configuration and optional modes
+- [CLI](./docs/cli.md) — local-candidate commands and historical illustrations
+- [Benchmark](https://github.com/PatrickSys/codebase-context/blob/master/docs/benchmark.md) — historical methods, observations and failures
+- [Contributing](https://github.com/PatrickSys/codebase-context/blob/master/CONTRIBUTING.md) — local development and evaluation commands
+- [Changelog](https://github.com/PatrickSys/codebase-context/blob/master/CHANGELOG.md) — candidate changes and historical entries
 
 Elastic-2.0. See [LICENSE](./LICENSE).

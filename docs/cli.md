@@ -1,4 +1,4 @@
-# CLI Gallery (Human-readable)
+# CLI Guide (Local Candidate)
 
 `codebase-context` exposes its tools as a local CLI so humans can follow the same map-first workflow the MCP server gives to agents:
 
@@ -10,20 +10,20 @@
 
 > Output depends on the repo you run it against. The examples below are illustrative (paths, counts, and detected frameworks will vary).
 >
-> These commands use the current npm release. The examples are illustrative and were not captured from the current npm package.
+> Commands below point to the actual entrypoint of a built checkout or installed local candidate; replace the path with your installation. The npm release checked on 3 November 2026 is `2.2.0`, which does not contain these candidate changes.
 >
-> These output examples come from an earlier CLI run and do not verify the current npm package or an MCP connection.
+> Retained output illustrations come from earlier CLI runs. They are not measurements of this candidate or proof of an MCP connection.
 >
-> The commands below use `codebase-context` and require Node.js 22 or newer. The CLI is intentionally single-project per invocation and targets one root via `CODEBASE_ROOT` or the current working directory. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
+> The candidate requires Node.js 22 or newer. The CLI is intentionally single-project per invocation and targets one root via `CODEBASE_ROOT` or the current working directory. MCP registration and project selection are covered in the [client setup guide](./client-setup.md).
 
 ## How to run
 
 ```bash
 # CLI only: run from a repo root, or set CODEBASE_ROOT explicitly:
-CODEBASE_ROOT=/path/to/repo npx -y codebase-context status
+CODEBASE_ROOT=/path/to/repo node /path/to/codebase-context/dist/index.js status
 
 # Commands that show --json in their help support machine output. Human mode is default.
-npx -y codebase-context patterns --json
+node /path/to/codebase-context/dist/index.js patterns --json
 ```
 
 ### ASCII fallback
@@ -31,7 +31,7 @@ npx -y codebase-context patterns --json
 If your terminal doesn’t render Unicode box-drawing cleanly:
 
 ```bash
-CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
+CODEBASE_CONTEXT_ASCII=1 node /path/to/codebase-context/dist/index.js patterns
 ```
 
 ## Commands
@@ -53,26 +53,26 @@ CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
 `init` detects Claude Code, Codex, Cursor and OpenCode, then configures the selected tools together. In a terminal, detected tools start selected; use Space to change the selection and Enter to apply it. Without a terminal, it configures all detected tools.
 
 ```powershell
-codebase-context init --help
-codebase-context init
-codebase-context init --yes
-codebase-context init --client codex --client cursor --root "C:\path\to\project"
+node /path/to/codebase-context/dist/index.js init --help
+node /path/to/codebase-context/dist/index.js init
+node /path/to/codebase-context/dist/index.js init --yes
+node /path/to/codebase-context/dist/index.js init --client codex --client cursor --root "C:\path\to\project"
 ```
 
 Use repeatable `--client` options to choose tools explicitly. `--yes` configures every detected tool when no clients are named. `--root` selects another repository; otherwise `CODEBASE_ROOT` or the current directory is used. Setup writes client registrations but does not build an index or change agent instructions. The first search creates the index. The multi-tool flow is not in published npm `2.2.0` yet; see the [main setup guide](../README.md#set-up-your-ai-client) for its publication status and the [client setup guide](./client-setup.md) for current manual recipes.
 
-The built candidate also supports `--version` and builds a missing index when you run `map`. New indexes use keyword search without a model download; `reindex --embeddings` explicitly enables local semantic search. Preview, reindex, and map apply the same project exclusions and analyzer hints. A low-confidence search result means the matches are weak; it does not establish that code is absent.
+The built candidate also supports `--version` and builds a missing index when you run `map`. New indexes use keyword search without a model download; `reindex --embeddings` explicitly enables semantic indexing with the configured provider. The default local provider uses Transformers; an explicitly configured remote provider does not require that local model runtime. Preview, reindex, and map apply the same project exclusions and analyzer hints. A low-confidence search result means the matches are weak; it does not establish that code is absent.
 
 ---
 
 ## First use
 
-Run these CLI commands from the project root. Build or refresh the local index first; the first run downloads a local model and indexes the repository; time depends on repository size, CPU and model. Then inspect the conventions map and search for the code you need:
+Run these candidate commands from the project root. A fresh index defaults to keyword-only mode without an embedding or reranker download. An existing index keeps its recorded mode, which may use embeddings. Indexing time depends on the repository and machine; no cold-start timing is promised here. Then inspect the map and search:
 
 ```bash
-npx -y codebase-context reindex
-npx -y codebase-context map
-npx -y codebase-context search --query "auth middleware"
+node /path/to/codebase-context/dist/index.js reindex
+node /path/to/codebase-context/dist/index.js map
+node /path/to/codebase-context/dist/index.js search --query "auth middleware"
 ```
 
 This is the CLI preparation flow. It is separate from MCP client registration and does not by itself show that an MCP client connected successfully.
@@ -80,11 +80,11 @@ This is the CLI preparation flow. It is separate from MCP client registration an
 ## `map`
 
 ```bash
-npx -y codebase-context reindex
-npx -y codebase-context map
+node /path/to/codebase-context/dist/index.js reindex
+node /path/to/codebase-context/dist/index.js map
 ```
 
-The conventions map - run this first on an unfamiliar repo. It shows architecture layers, active patterns with adoption rates and trend direction, and the golden files the team treats as the strongest examples. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example.
+The conventions map - run this first on an unfamiliar repo. It shows architecture layers, active patterns with adoption rates and trend direction, and example files selected from detected patterns. This is also what the MCP server delivers to AI agents via the `codebase://context` resource on first call, before search narrows to a specific local example.
 
 Example output (truncated):
 
@@ -116,7 +116,7 @@ Example output (truncated):
 ## `metadata`
 
 ```bash
-npx -y codebase-context metadata
+node /path/to/codebase-context/dist/index.js metadata
 ```
 
 Example output:
@@ -137,7 +137,7 @@ Example output:
 ## `patterns`
 
 ```bash
-npx -y codebase-context patterns
+node /path/to/codebase-context/dist/index.js patterns
 ```
 
 Example output (truncated):
@@ -159,29 +159,20 @@ Example output (truncated):
 ## `search`
 
 ```bash
-npx -y codebase-context reindex
-npx -y codebase-context search --query "file watcher" --intent edit --limit 3
+node /path/to/codebase-context/dist/index.js reindex
+node /path/to/codebase-context/dist/index.js search --query "file watcher" --intent edit --limit 3
 ```
 
-Example output (truncated):
+Use a query from the repository you are inspecting. Search returns ranked file locations and a `searchQuality` object; scores are retrieval signals, not probabilities that an answer is correct. A low-confidence result is not proof that code is absent.
 
-```text
-┌─ Search: "file watcher" ─── intent: edit ────────────────────────────┐
-│ Quality: ok (1.00)                                                   │
-│ Ready to edit: YES                                                   │
-│                                                                      │
-│ Best example: index.ts                                               │
-└──────────────────────────────────────────────────────────────────────┘
+The CLI uses compact mode, which returns at most six results even when `--limit` is larger. For top-five checks, use `--limit 5 --json` and grade the actual returned files. MCP callers may request `mode="full"`; response budgeting still applies.
 
-1.  src/core/file-watcher.ts:44-74
-    confidence: ██████████ 1.18
-    typescript module in file-watcher.ts: startFileWatcher :: (...)
-```
+Candidate-budget exhaustion asks for a narrower symbol or path query. Changed or unavailable sources retain refresh guidance. Do not treat those two conditions as the same failure.
 
 ## `refs`
 
 ```bash
-npx -y codebase-context refs --symbol "startFileWatcher" --limit 10
+node /path/to/codebase-context/dist/index.js refs --symbol "startFileWatcher" --limit 10
 ```
 
 Example output (truncated):
@@ -200,7 +191,7 @@ Example output (truncated):
 ## `cycles`
 
 ```bash
-npx -y codebase-context cycles --scope src
+node /path/to/codebase-context/dist/index.js cycles --scope src
 ```
 
 Example output:
@@ -216,10 +207,12 @@ Example output:
 ## `status`
 
 ```bash
-npx -y codebase-context status
+node /path/to/codebase-context/dist/index.js status
 ```
 
-Example output:
+Persisted generation counts and timestamps are available in a fresh process. In-memory run details are used only when their build id matches. Cap fields distinguish total from searchable chunks.
+
+Historical illustration (not candidate measurements):
 
 ```text
 ┌─ Index Status ───────────────────────────────────────────────────────┐
@@ -240,15 +233,16 @@ In the unreleased model-free candidate, use the locally installed package:
 CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex
 CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --incremental
 CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --no-embeddings
-# Requires the optional Transformers and LanceDB runtimes; may download models.
+# Default local provider: requires optional Transformers and LanceDB; may download models.
+# A configured remote provider still requires LanceDB, but not Transformers.
 CODEBASE_ROOT=/path/to/repository node /path/to/cbc/node_modules/codebase-context/dist/index.js reindex --embeddings
 ```
 
-New projects default to model-free. Omit mode flags to preserve the successful mode; explicit changes require a full rebuild even with `--incremental`. The two mode flags are mutually exclusive and index failures return nonzero. The examples below target the older published package.
+New projects default to model-free. Omit mode flags to preserve the successful mode; explicit changes require a full rebuild even with `--incremental`. The two mode flags are mutually exclusive and index failures return nonzero. The examples below also target the local candidate.
 
 ```bash
-npx -y codebase-context reindex
-npx -y codebase-context reindex --incremental --reason "changed watcher logic"
+node /path/to/codebase-context/dist/index.js reindex
+node /path/to/codebase-context/dist/index.js reindex --incremental --reason "changed watcher logic"
 ```
 
 > **MCP server mode**: if you're running codebase-context as an MCP server (long-running process), the index auto-refreshes via a file watcher — you don't need to call `reindex` between edits. Use `reindex` for one-shot CLI runs or to force a full rebuild.
@@ -256,7 +250,7 @@ npx -y codebase-context reindex --incremental --reason "changed watcher logic"
 ## `style-guide`
 
 ```bash
-npx -y codebase-context style-guide --query "naming"
+node /path/to/codebase-context/dist/index.js style-guide --query "naming"
 ```
 
 Example output:
@@ -269,14 +263,14 @@ No style guides found.
 ## `memory`
 
 ```bash
-npx -y codebase-context memory list
-npx -y codebase-context memory list --query "watcher"
+node /path/to/codebase-context/dist/index.js memory list
+node /path/to/codebase-context/dist/index.js memory list --query "watcher"
 
-npx -y codebase-context memory add \
+node /path/to/codebase-context/dist/index.js memory add \
   --type gotcha \
   --category tooling \
   --memory "Use pnpm, not npm" \
   --reason "Workspace support and speed"
 
-npx -y codebase-context memory remove <id>
+node /path/to/codebase-context/dist/index.js memory remove <id>
 ```

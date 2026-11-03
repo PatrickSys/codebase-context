@@ -2,10 +2,16 @@
 
 ## Product candidate (not published)
 
+This entry describes a local candidate, not an approved release or an npm publication.
+
+- Index status keeps committed counts within one generation. Matching in-memory build ids can add run details; a fresh process reads persisted counts and timestamps.
+- Candidate-budget exhaustion asks for a narrower query; changed or unavailable source evidence retains refresh guidance.
+- Ticket reads use a bounded retry for the narrowly matched access-denial case and report actionable failure on exhaustion.
+
 - New projects index and search without embedding or reranker models. Existing index modes are preserved; explicit mode switches rebuild fully. Transformers and LanceDB are optional peers with actionable preflight errors.
-- Setup detects supported coding tools and configures the selected tools together. It preserves existing settings, saves version-pinned launches for the selected repository, and leaves indexing to the first search.
+- Setup detects supported coding tools and configures the selected tools together. It preserves existing settings, saves the running Node binary and package entrypoint for the selected repository (rerun setup if that installation or cache moves), and leaves indexing to the first search.
 - Added `get_code_relationships`: directed import/re-export paths up to three hops, current resolution and source checks, confined endpoints, unresolved/stale diagnostics, and a 4,000-byte response cap. Resolution selects the root's `tsconfig.json` or, when absent, `tsconfig.base.json`, without inheriting an unrelated parent configuration.
-- AST chunks preserve contiguous source and static property ownership, including concise descriptor methods, callback bodies and same-line siblings. Generated scope labels remain presentation metadata. Index format 4 rebuilds incompatible indexes even when sources are unchanged, preserves the selected embedding mode, and retains previous artifacts if rebuilding fails.
+- AST chunks preserve contiguous source and static property ownership, including concise descriptor methods, callback bodies and same-line siblings. Generated scope labels remain presentation metadata. Index format 5 requires incompatible older caches to rebuild in their recorded mode. Missing metadata or occupied recovery slots can require an explicit recovery choice; a failed rebuild is not proof of successful recovery.
 - Angular TypeScript eligibility uses parsed Angular imports; ordinary `resolve` or `validate` methods, comments, strings and imports from other packages no longer select the Angular analyzer. Other eligible analyzers retain the source and declaration context. The registry order and existing template/style routing are unchanged.
 - Compact `signaturePreview` uses a contiguous window of up to three lines around the strongest query-term match in the returned snippet, falling back to its opening lines. Default and explicit exploration searches omit edit preflight while retaining search quality and incomplete-source warnings. Explicit `edit`, `refactor`, and `migrate` intents retain mutation guards.
 - Search excludes ordinary stale/unavailable nominees without discarding verified current lower results or triggering an automatic full rebuild. Partial coverage, bounded exhaustion and failed semantic replenishment are explicit; corrupt metadata, build identity, paths and source ranges still fail closed.

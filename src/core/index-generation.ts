@@ -370,6 +370,46 @@ function isBlockedTicketReplacement(error: unknown, target: string): boolean {
   );
 }
 
+function isBlockedTicketRead(error: unknown, filename: string): boolean {
+  return (
+    process.platform === 'win32' &&
+    error instanceof Error &&
+    'code' in error &&
+    error.code === 'EPERM' &&
+    'syscall' in error &&
+    error.syscall === 'open' &&
+    'path' in error &&
+    error.path === filename
+  );
+}
+
+function unreadableTicket(cause: unknown, attempts: number): Error {
+  return Object.assign(
+    new Error(
+      `Index writer ticket stayed unreadable (Windows denied access; tried ${attempts}x). ` +
+        'Another process may be holding it; wait a moment and retry. The existing index was not changed.',
+      { cause }
+    ),
+    { code: 'EPERM', syscall: 'open' }
+  );
+}
+
+// Windows can deny opening a ticket for a moment while another writer replaces it.
+// Retry only that exact open failure, within the replacement bounds; never skip a ticket.
+async function readLeaseTicket(filename: string): Promise<string> {
+  const deadline = Date.now() + 250;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fs.readFile(filename, 'utf8');
+    } catch (error) {
+      if (!isBlockedTicketRead(error, filename)) throw error;
+      if (attempt >= 8 || Date.now() + 25 >= deadline) throw unreadableTicket(error, attempt);
+      await delay(25);
+      if (Date.now() >= deadline) throw unreadableTicket(error, attempt);
+    }
+  }
+}
+
 async function replaceLeaseTicket(
   target: string,
   owner: z.infer<typeof TicketSchema>
@@ -413,7 +453,7 @@ async function withLease<T>(
       const filename = await confinedPath(root, `${leaseDirectory}/${entry}`);
       let value: unknown;
       try {
-        value = JSON.parse(await fs.readFile(filename, 'utf8'));
+        value = JSON.parse(await readLeaseTicket(filename));
       } catch (error) {
         if (isMissing(error)) continue;
         throw error;

@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CodebaseIndexer } from '../src/core/indexer.js';
 import { readIndexMeta, validateIndexArtifacts } from '../src/core/index-meta.js';
 import { handle as searchTool } from '../src/tools/search-codebase.js';
@@ -11,6 +11,7 @@ import { makePaths, getOrCreateProject, clearProjects } from '../src/project-sta
 
 const roots: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   await clearProjects();
   for (const root of roots.splice(0)) await fs.rm(root, { recursive: true, force: true });
 });
@@ -107,6 +108,46 @@ describe('interrupted index publication', () => {
       else process.env.CODEBASE_ROOT = oldRoot;
     }
   });
+
+  it.skipIf(process.platform !== 'win32')(
+    'keeps the committed pointer and generation when a ticket stays unreadable on Windows',
+    async () => {
+      const root = await fixture();
+      const pointer = path.join(root, '.codebase-context', 'index-meta.json');
+      const generations = path.join(root, '.codebase-context', '.generations');
+      const before = {
+        pointer: await fs.readFile(pointer, 'utf8'),
+        generations: await fs.readdir(generations)
+      };
+      await fs.writeFile(path.join(root, 'route.ts'), 'export function route() { return "new"; }');
+      const read = fs.readFile.bind(fs);
+      const tickets = /[\\/]\.(writers|publication)[\\/][^\\/]+\.json$/;
+      let denials = 0;
+      vi.spyOn(fs, 'readFile').mockImplementation((file, options) => {
+        if (tickets.test(String(file))) {
+          denials++;
+          return Promise.reject(
+            Object.assign(new Error('Controlled ticket open denial'), {
+              code: 'EPERM',
+              syscall: 'open',
+              path: String(file)
+            })
+          );
+        }
+        return read(file, options);
+      });
+      await expect(
+        new CodebaseIndexer({ rootPath: root, config: { skipEmbedding: true } }).index()
+      ).rejects.toThrow(/ticket stayed unreadable/);
+      vi.restoreAllMocks();
+      expect(denials).toBeGreaterThan(1);
+      expect(await fs.readFile(pointer, 'utf8')).toBe(before.pointer);
+      expect(await fs.readdir(generations)).toEqual(before.generations);
+      const meta = await readIndexMeta(root);
+      await expect(validateIndexArtifacts(root, meta)).resolves.toBeUndefined();
+    },
+    30_000
+  );
 
   it.each([
     ['full', 'published-meta'],

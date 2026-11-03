@@ -473,12 +473,15 @@ describe('index-consuming allowlist enforcement', () => {
   });
 
   it('calls validateIndexArtifacts for every tool in INDEX_CONSUMING_TOOL_NAMES', async () => {
+    // This case uses valid fixture data, so it must start with zero rebuilds.
+    indexerMocks.index.mockClear();
+
     // Mock the gate to avoid filesystem setup and focus on coverage.
     const validateIndexArtifacts = vi.fn(async () => {});
     const readIndexMeta = vi.fn(async () => ({
       metaVersion: INDEX_META_VERSION,
       formatVersion: INDEX_FORMAT_VERSION,
-      buildId: 'test',
+      buildId: 'allowlist-build',
       generatedAt: new Date().toISOString(),
       toolVersion: 'test',
       artifacts: {
@@ -522,5 +525,10 @@ describe('index-consuming allowlist enforcement', () => {
         throw new Error(`validateIndexArtifacts was not called for tool: ${toolName}`);
       }
     }
+
+    expect(
+      indexerMocks.index,
+      'valid fixture data must not trigger a rebuild'
+    ).not.toHaveBeenCalled();
   });
 });

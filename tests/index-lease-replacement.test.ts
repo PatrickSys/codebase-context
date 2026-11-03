@@ -375,6 +375,15 @@ it.skipIf(process.platform !== 'win32')(
       admitted = true;
     });
     await expect(failed).rejects.toThrow(/ticket stayed unreadable.*tried \d+x/);
+    const message = String(
+      await failed.then(
+        () => '',
+        (error: Error) => error.message
+      )
+    );
+    expect(message).toMatch(/Another process may be holding it; wait a moment and retry\.$/);
+    // The helper cannot know what the caller already committed, so it must not promise it.
+    expect(message).not.toMatch(/not changed|unchanged/i);
     await expect(failed).rejects.toMatchObject({
       code: 'EPERM',
       syscall: 'open',

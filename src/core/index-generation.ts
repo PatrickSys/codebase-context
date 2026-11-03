@@ -387,7 +387,7 @@ function unreadableTicket(cause: unknown, attempts: number): Error {
   return Object.assign(
     new Error(
       `Index writer ticket stayed unreadable (Windows denied access; tried ${attempts}x). ` +
-        'Another process may be holding it; wait a moment and retry. The existing index was not changed.',
+        'Another process may be holding it; wait a moment and retry.',
       { cause }
     ),
     { code: 'EPERM', syscall: 'open' }

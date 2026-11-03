@@ -569,6 +569,8 @@ export class CodebaseIndexer {
           this.updateProgress('complete', 100);
           stats.duration = Date.now() - startTime;
           stats.completedAt = new Date();
+          // The counts below are restored from the baseline generation, which stays published.
+          if (baselineMeta) stats.buildId = baselineMeta.buildId;
 
           let restoredFromPersistedStats = false;
 
@@ -1257,6 +1259,7 @@ export class CodebaseIndexer {
       // post-commit housekeeping fault must not enter the staging rollback path.
       stagingDir = null;
       await publishIndexGeneration(this.rootPath, generationMeta);
+      stats.buildId = buildId;
 
       // Phase 5: Complete
       this.updateProgress('complete', 100);

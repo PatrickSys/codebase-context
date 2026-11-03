@@ -723,6 +723,8 @@ type IndexingStatusPayload = {
     totalFiles?: number;
     indexedFiles?: number;
     totalChunks?: number;
+    searchableChunks?: number;
+    omittedChunks?: number;
     duration?: string;
     incremental?: boolean;
   };
@@ -761,6 +763,16 @@ export function formatStatus(data: IndexingStatusPayload, rootPath: string): voi
     if (s.duration) parts.push(s.duration);
     if (typeof s.incremental === 'boolean') parts.push(s.incremental ? 'incremental' : 'full');
     if (parts.length > 0) lines.push(`Stats: ${parts.join(` ${g.dot} `)}`);
+    if (
+      s.omittedChunks &&
+      s.omittedChunks > 0 &&
+      s.searchableChunks != null &&
+      s.totalChunks != null
+    ) {
+      lines.push(
+        `Searchable: ${s.searchableChunks} of ${s.totalChunks} chunks (keyword index cap)`
+      );
+    }
   }
 
   if (data.progress) {

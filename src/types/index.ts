@@ -437,6 +437,8 @@ export interface IndexingStats {
   searchableChunks?: number;
   /** True when parsing.maxChunks (default 5000) truncated the searchable index. */
   chunkLimitApplied?: boolean;
+  /** Build id of the published generation these counts describe; lets status match them to disk. */
+  buildId?: string;
   totalLines: number;
   duration: number; // milliseconds
   avgChunkSize: number;

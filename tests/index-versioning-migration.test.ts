@@ -177,7 +177,8 @@ vi.mock('../src/core/indexer.js', async () => {
     }
   }
 
-  return { CodebaseIndexer };
+  // The rebuild path logs its result through this helper, so the mock must export it.
+  return { CodebaseIndexer, formatIndexingCompleteLine: () => 'Complete: mocked rebuild' };
 });
 
 describe('index versioning migration (MIGR-01)', () => {

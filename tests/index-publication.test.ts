@@ -1,11 +1,16 @@
 import { fork } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CodebaseIndexer } from '../src/core/indexer.js';
-import { readIndexMeta, validateIndexArtifacts } from '../src/core/index-meta.js';
+import {
+  readIndexMeta,
+  readIndexMetaFromFile,
+  validateIndexArtifacts
+} from '../src/core/index-meta.js';
 import { handle as searchTool } from '../src/tools/search-codebase.js';
 import { makePaths, getOrCreateProject, clearProjects } from '../src/project-state.js';
 
@@ -22,6 +27,23 @@ async function fixture() {
   await fs.writeFile(path.join(root, 'route.ts'), 'export function route() { return "old"; }');
   await new CodebaseIndexer({ rootPath: root, config: { skipEmbedding: true } }).index();
   return root;
+}
+
+/** Content hash of every file below a directory, keyed by relative path. */
+async function digestTree(directory: string): Promise<Record<string, string>> {
+  const digests: Record<string, string> = {};
+  const visit = async (current: string): Promise<void> => {
+    for (const entry of await fs.readdir(current, { withFileTypes: true })) {
+      const target = path.join(current, entry.name);
+      if (entry.isDirectory()) await visit(target);
+      else
+        digests[path.relative(directory, target)] = createHash('sha256')
+          .update(await fs.readFile(target))
+          .digest('hex');
+    }
+  };
+  await visit(directory);
+  return digests;
 }
 
 async function interrupt(root: string, mode: string, edge: string) {
@@ -147,6 +169,131 @@ describe('interrupted index publication', () => {
       await expect(validateIndexArtifacts(root, meta)).resolves.toBeUndefined();
     },
     30_000
+  );
+
+  it.skipIf(process.platform !== 'win32')(
+    'keeps the committed index and fails honestly when only the final publication lease stays unreadable on Windows',
+    async () => {
+      const root = await fixture();
+      const context = path.join(root, '.codebase-context');
+      const pointer = path.join(context, 'index-meta.json');
+      const generations = path.join(context, '.generations');
+      const committed = await readIndexMeta(root);
+      const before = {
+        pointer: await fs.readFile(pointer, 'utf8'),
+        generations: await fs.readdir(generations),
+        activeFiles: await digestTree(path.join(generations, committed.buildId))
+      };
+      await fs.writeFile(path.join(root, 'route.ts'), 'export function route() { return "new"; }');
+
+      // Writer admission and the staging lease succeed, and the new generation is built.
+      // The fault starts when its completion metadata is read, which is the last step before
+      // publishIndexGeneration takes the final .publication lease, and then never ends.
+      const read = fs.readFile.bind(fs);
+      const completion = /[\\/]\.generations[\\/]([^\\/]+)[\\/]index-meta\.json$/;
+      const publicationTicket = /[\\/]\.publication[\\/][^\\/]+\.json$/;
+      let armed = false;
+      let denials = 0;
+      let publicationReadsBeforeFault = 0;
+      vi.spyOn(fs, 'readFile').mockImplementation((file, options) => {
+        const match = completion.exec(String(file));
+        if (match && !before.generations.includes(match[1])) armed = true;
+        if (publicationTicket.test(String(file))) {
+          if (!armed) publicationReadsBeforeFault++;
+          else {
+            denials++;
+            return Promise.reject(
+              Object.assign(new Error('Controlled ticket open denial'), {
+                code: 'EPERM',
+                syscall: 'open',
+                path: String(file)
+              })
+            );
+          }
+        }
+        return read(file, options);
+      });
+      const phases: string[] = [];
+      const indexer = new CodebaseIndexer({
+        rootPath: root,
+        config: { skipEmbedding: true },
+        onProgress: (progress) => phases.push(progress.phase)
+      });
+      const message = String(
+        await indexer.index().then(
+          () => '',
+          (error: Error) => error.message
+        )
+      );
+      vi.restoreAllMocks();
+
+      // The fault hit the final lease only, and the retry was bounded.
+      expect(armed).toBe(true);
+      expect(publicationReadsBeforeFault).toBeGreaterThan(0);
+      expect(denials).toBeGreaterThan(1);
+      expect(denials).toBeLessThanOrEqual(8);
+
+      // The failure is reported, is honest about its cause, and never claims success.
+      expect(message).toMatch(/ticket stayed unreadable.*tried \d+x/);
+      expect(message).toMatch(/wait a moment and retry\.$/);
+      expect(message).not.toMatch(/not changed|unchanged/i);
+      expect(phases).not.toContain('complete');
+      expect(indexer.getProgress().phase).toBe('error');
+
+      // The old pointer and the active generation are byte-for-byte unchanged and readable.
+      expect(await fs.readFile(pointer, 'utf8')).toBe(before.pointer);
+      expect(await digestTree(path.join(generations, committed.buildId))).toEqual(
+        before.activeFiles
+      );
+      const meta = await readIndexMeta(root);
+      expect(meta.buildId).toBe(committed.buildId);
+      await expect(validateIndexArtifacts(root, meta)).resolves.toBeUndefined();
+
+      // The completed, unpublished generation is kept and complete. Its listing is not frozen.
+      const unpublished = (await fs.readdir(generations)).filter(
+        (name) => !before.generations.includes(name)
+      );
+      expect(unpublished).toHaveLength(1);
+      const completed = await readIndexMetaFromFile(
+        path.join(generations, unpublished[0], 'index-meta.json')
+      );
+      expect(completed.buildId).toBe(unpublished[0]);
+      await expect(
+        validateIndexArtifacts(root, {
+          ...completed,
+          artifacts: Object.fromEntries(
+            Object.entries(completed.artifacts).map(([name, artifact]) => [
+              name,
+              { ...artifact, path: `.generations/${completed.buildId}/${artifact.path}` }
+            ])
+          ) as typeof completed.artifacts
+        })
+      ).resolves.toBeUndefined();
+
+      // The failed lease left no ticket behind, so an explicit retry can succeed.
+      expect(await fs.readdir(path.join(context, '.publication'))).toEqual([]);
+      expect(await fs.readdir(path.join(context, '.writers'))).toEqual([]);
+      await new CodebaseIndexer({ rootPath: root, config: { skipEmbedding: true } }).index();
+      const retried = await readIndexMeta(root);
+      expect(retried.buildId).not.toBe(committed.buildId);
+      await expect(validateIndexArtifacts(root, retried)).resolves.toBeUndefined();
+      const response = await searchTool(
+        { query: 'route' },
+        {
+          rootPath: root,
+          paths: makePaths(root),
+          indexState: { status: 'indexing' },
+          performIndexing: () => undefined
+        }
+      );
+      const payload: { status: string; results?: Array<{ signaturePreview?: string }> } =
+        JSON.parse(response.content?.[0]?.text ?? '{}');
+      expect(payload.status).toBe('success');
+      expect(payload.results?.map((result) => result.signaturePreview)).toEqual([
+        'export function route() { return "new"; }'
+      ]);
+    },
+    60_000
   );
 
   it.each([

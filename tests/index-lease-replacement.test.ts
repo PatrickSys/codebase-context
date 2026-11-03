@@ -323,32 +323,171 @@ it('does not retry initial ticket creation', async () => {
   expect(admitted).toBe(false);
 });
 
-it('keeps ticket open errors fail closed', async () => {
-  const root = await fixture();
-  const read = fs.readFile.bind(fs);
-  let attempts = 0;
-  let admitted = false;
-  vi.spyOn(fs, 'readFile').mockImplementation((file, options) => {
-    if (writerTarget(file)) {
-      attempts++;
-      return Promise.reject(
-        Object.assign(new Error('Controlled ticket open denial'), {
-          code: 'EPERM',
-          syscall: 'open',
-          path: String(file)
-        })
-      );
-    }
-    return read(file, options);
+function ticketOpenDenial(file: unknown, overrides: Record<string, unknown> = {}) {
+  return Object.assign(new Error('Controlled ticket open denial'), {
+    code: 'EPERM',
+    syscall: 'open',
+    path: String(file),
+    ...overrides
   });
-  await expect(
-    withIndexWriter(root, async () => {
+}
+
+it.skipIf(process.platform !== 'win32')(
+  'retries a transient Windows ticket open denial and then admits the writer',
+  async () => {
+    const root = await fixture();
+    const read = fs.readFile.bind(fs);
+    let denials = 0;
+    let admitted = false;
+    vi.spyOn(fs, 'readFile').mockImplementation((file, options) => {
+      if (writerTarget(file) && denials < 2) {
+        denials++;
+        return Promise.reject(ticketOpenDenial(file));
+      }
+      return read(file, options);
+    });
+    await expect(
+      withIndexWriter(root, async () => {
+        admitted = true;
+        return 'admitted-after-transient-denial';
+      })
+    ).resolves.toBe('admitted-after-transient-denial');
+    expect(denials).toBe(2);
+    expect(admitted).toBe(true);
+    expect(await fs.readdir(path.join(root, '.codebase-context/.writers'))).toEqual([]);
+  }
+);
+
+it.skipIf(process.platform !== 'win32')(
+  'bounds a persistent Windows ticket open denial and fails without admission',
+  async () => {
+    const root = await fixture();
+    let attempts = 0;
+    let admitted = false;
+    vi.spyOn(fs, 'readFile').mockImplementation((file) => {
+      if (writerTarget(file)) {
+        attempts++;
+        return Promise.reject(ticketOpenDenial(file));
+      }
+      return Promise.reject(new Error('Unexpected read'));
+    });
+    const failed = withIndexWriter(root, async () => {
       admitted = true;
-    })
-  ).rejects.toMatchObject({ code: 'EPERM', syscall: 'open' });
-  expect(attempts).toBe(1);
-  expect(admitted).toBe(false);
-});
+    });
+    await expect(failed).rejects.toThrow(/ticket stayed unreadable.*tried \d+x/);
+    const message = String(
+      await failed.then(
+        () => '',
+        (error: Error) => error.message
+      )
+    );
+    expect(message).toMatch(/Another process may be holding it; wait a moment and retry\.$/);
+    // The helper cannot know what the caller already committed, so it must not promise it.
+    expect(message).not.toMatch(/not changed|unchanged/i);
+    await expect(failed).rejects.toMatchObject({
+      code: 'EPERM',
+      syscall: 'open',
+      cause: { message: 'Controlled ticket open denial' }
+    });
+    expect(attempts).toBeGreaterThan(1);
+    expect(attempts).toBeLessThanOrEqual(8);
+    expect(admitted).toBe(false);
+    expect(await fs.readdir(path.join(root, '.codebase-context/.writers'))).toEqual([]);
+  }
+);
+
+it.skipIf(process.platform !== 'win32')(
+  'starts no further ticket open attempt after its retry deadline',
+  async () => {
+    const root = await fixture();
+    const read = fs.readFile.bind(fs);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    let attempts = 0;
+    let admitted = false;
+    vi.spyOn(fs, 'readFile').mockImplementation((file, options) => {
+      if (writerTarget(file)) {
+        attempts++;
+        clock.mockReturnValue(now + 251);
+        return Promise.reject(ticketOpenDenial(file));
+      }
+      return read(file, options);
+    });
+    await expect(
+      withIndexWriter(root, async () => {
+        admitted = true;
+      })
+    ).rejects.toThrow(/ticket stayed unreadable.*tried 1x/);
+    expect(attempts).toBe(1);
+    expect(admitted).toBe(false);
+  }
+);
+
+it.each([
+  { code: 'EACCES', syscall: 'open', mismatch: '' },
+  { code: 'EBUSY', syscall: 'open', mismatch: '' },
+  { code: 'EIO', syscall: 'open', mismatch: '' },
+  { code: 'EPERM', syscall: 'read', mismatch: '' },
+  { code: 'EPERM', syscall: 'open', mismatch: 'path' },
+  { code: 'EPERM', syscall: 'open', mismatch: 'non-string-path' }
+])(
+  'does not retry a $code/$syscall ticket read error ($mismatch) and fails without admission',
+  async ({ code, syscall, mismatch }) => {
+    const root = await fixture();
+    const read = fs.readFile.bind(fs);
+    let attempts = 0;
+    let admitted = false;
+    let denial: Error | undefined;
+    vi.spyOn(fs, 'readFile').mockImplementation((file, options) => {
+      if (writerTarget(file)) {
+        attempts++;
+        denial = ticketOpenDenial(file, {
+          code,
+          syscall,
+          path:
+            mismatch === 'path'
+              ? path.join(root, 'foreign.json')
+              : mismatch === 'non-string-path'
+                ? 4
+                : String(file)
+        });
+        return Promise.reject(denial);
+      }
+      return read(file, options);
+    });
+    const failed = withIndexWriter(root, async () => {
+      admitted = true;
+    });
+    await expect(failed).rejects.toMatchObject({ code, syscall });
+    await expect(failed).rejects.toBe(denial);
+    expect(attempts).toBe(1);
+    expect(admitted).toBe(false);
+  }
+);
+
+it.skipIf(process.platform === 'win32')(
+  'does not retry a ticket open denial on other platforms',
+  async () => {
+    const root = await fixture();
+    const read = fs.readFile.bind(fs);
+    let attempts = 0;
+    let admitted = false;
+    vi.spyOn(fs, 'readFile').mockImplementation((file, options) => {
+      if (writerTarget(file)) {
+        attempts++;
+        return Promise.reject(ticketOpenDenial(file));
+      }
+      return read(file, options);
+    });
+    await expect(
+      withIndexWriter(root, async () => {
+        admitted = true;
+      })
+    ).rejects.toMatchObject({ code: 'EPERM', syscall: 'open' });
+    expect(attempts).toBe(1);
+    expect(admitted).toBe(false);
+  }
+);
 
 it('leaves generic atomic publication errors unchanged', async () => {
   const root = await fixture();

@@ -1,10 +1,10 @@
 # Client Setup
 
-The npm release checked on 3 November 2026 is `2.2.0`. The manual npx recipes below select that registry package and retain their dated evidence; they do not select a local candidate. For the unpublished candidate, start with the [local setup wizard](#setup-wizard-in-the-unreleased-candidate) and point Node at that installed copy. No candidate publication or new native-client acceptance is implied.
+As checked on 4 November 2026, npm `latest` is `2.2.0` and npm `beta` is **`2.3.1-beta.0`**. The unpinned npx recipes below may use a locally installed version; without one, they resolve npm `latest`. Their earlier verification used stable `2.2.0`. The published beta can be selected explicitly with `codebase-context@2.3.1-beta.0`; for client configuration, use the [beta setup wizard](#setup-wizard-in-the-published-beta) from an installed beta or built checkout. Publication of the beta does not establish native-client acceptance.
 
 Codebase Context runs as a local MCP server: a tool your AI editor or command-line client can call while it works. Register it without a fixed folder, then let the agent supply its current repository through the `project` tool parameter.
 
-The source candidate requires Node.js 22 or newer. Use that runtime for the candidate instructions here; the historical client checks below retain their original versions and scope.
+The 2.3.1 beta requires Node.js 22 or newer. Use that runtime for the beta instructions here; the historical client checks below retain their original versions and scope.
 
 The copyable registration commands target PowerShell or a POSIX terminal. Windows Command Prompt was not tested; OpenCode's quoted separator is shell-dependent.
 
@@ -12,7 +12,7 @@ The copyable registration commands target PowerShell or a POSIX terminal. Window
 
 Claude Code, Codex CLI and OpenCode registration commands were checked again on October 6 without a project argument. The other clients retain their older config-shape evidence; no-folder native agent use is unverified for them. See the dated notes below.
 
-Each client section says how far its earlier Windows check went. Those checks used published `2.2.0` unless another build is named; they do not verify upcoming unpublished changes:
+Each client section says how far its earlier Windows check went. Those checks used published `2.2.0` unless another build is named; they do not verify `2.3.1-beta.0`:
 
 | Status                         | What it means                                                                              |
 | ------------------------------ | ------------------------------------------------------------------------------------------ |
@@ -27,7 +27,7 @@ After registration, start a new agent session in your project and ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project when checking get_indexing_status and searching. Wait for indexing if needed, read codebase://context, then search_codebase and open a returned source file. Show me the relevant files.
 
-The candidate starts a fresh index in keyword-only mode, without downloading an embedding or reranker model. Existing indexes keep their recorded mode; explicitly enabling local embeddings can require model downloads and the optional runtimes. Prepare the candidate from the project folder with `node /path/to/codebase-context/dist/index.js reindex`. Index readiness, client connection and useful agent behavior are separate checks.
+The beta starts a fresh index in keyword-only mode, without downloading an embedding or reranker model. Existing indexes keep their recorded mode; explicitly enabling local embeddings can require model downloads and the optional runtimes. Prepare the beta from the project folder with `node /path/to/codebase-context/dist/index.js reindex`. Index readiness, client connection and useful agent behavior are separate checks.
 
 ## Claude Code
 
@@ -101,9 +101,9 @@ Trust the project if asked, restart Codex and start a new task there. Use the fi
 
 On October 6 the exact published `2.2.0` `npx` entrypoint was tested without a folder, environment root or MCP roots, launched from an unrelated directory. That check does not verify the `2.4.0` package. Its first tool call returned `selection_required`; an explicit `project` call selected the prepared fixture, search found the expected symbol, context returned its map, and the runner host opened the returned source. A later call without `project` retained that selection. This is SDK/protocol and runner-host evidence with warmed caches and a pre-indexed fixture, not a native Desktop task.
 
-## Setup wizard in the unreleased candidate
+## Setup wizard in the published beta
 
-The four-client wizard is not in published 2.2.0. From a built checkout or a locally installed candidate, run its actual entrypoint from the project you want to search:
+The four-client wizard is not in stable `2.2.0`, but is in published `2.3.1-beta.0`. From a built checkout or an installed beta, run its actual entrypoint from the project you want to search:
 
 ```bash
 # Detect Claude Code, Codex, Cursor and OpenCode, then configure the detected clients.
@@ -116,13 +116,13 @@ node /path/to/codebase-context/dist/index.js init --client codex --root /path/to
 node /path/to/codebase-context/dist/index.js init --root /path/to/project --preview
 ```
 
-Replace the paths with the candidate installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
+Replace the paths with the beta installation and project folders. With an interactive terminal, omit `--yes` to select clients together. `--client` is repeatable. `--root` takes priority over `CODEBASE_ROOT` and the current folder.
 
 Claude Code uses `.mcp.json`, Codex uses `.codex/config.toml`, Cursor uses `.cursor/mcp.json`, and OpenCode uses `opencode.json`. Generated configs save the running Node binary, the actual package entrypoint and the project folder. If setup ran through `npx`, that entrypoint is in its package cache. Rerun setup if that installation or cache is removed or moved.
 
 Existing unrelated settings are preserved. A conflicting custom Codebase Context launch stops setup before selected config files are written. To replace a custom launch, remove only its Codebase Context entry from the client config, keep the other settings, and rerun setup. Restart the client and approve the server or project trust if asked. Config generation and SDK launch tests do not establish acceptance in each native client.
 
-New candidate indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option.
+New beta indexes default to model-free search and do not initialize the optional model packages. Existing indexes keep their recorded mode; semantic indexing remains an explicit option.
 
 ## Optional fixed-folder setup and CLI preparation
 
@@ -136,7 +136,7 @@ node /path/to/codebase-context/dist/index.js reindex
 
 Omit mode flags to preserve an existing recorded mode. Use `reindex --embeddings` only after installing the optional runtimes and choosing semantic indexing; `reindex --no-embeddings` explicitly selects keyword-only mode.
 
-The older interactive HTTP wizard remains the behavior of published 2.2.0. A successful candidate wizard exit alone does not establish working client registration.
+The older interactive HTTP wizard remains the behavior of stable `2.2.0`. A successful beta wizard exit alone does not establish working client registration.
 
 ## Gemini CLI
 

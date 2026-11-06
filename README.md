@@ -4,15 +4,15 @@
 
 Local repository maps, code search and symbol references for coding agents. Codebase Context exposes these through MCP and a CLI so an agent can inspect the repository before editing it.
 
-## Local candidate: not published
+## Published beta: 2.3.1-beta.0 (stable: 2.2.0)
 
-This checkout describes an unpublished candidate and requires **Node.js 22 or newer**. The npm release checked on **3 November 2026** is `2.2.0`. An unpinned `npx -y codebase-context` command uses the registry package, not this checkout. A local version number or tarball does not mean a release has been approved or published.
+As checked on **4 November 2026**, npm `beta` points to **`2.3.1-beta.0`**, while npm `latest` remains **`2.2.0`**. The beta requires **Node.js 22 or newer**. An unpinned `npx -y codebase-context` may use an already installed local version; without one, it resolves npm `latest` (currently the stable `2.2.0`). To select the published beta explicitly, use `npx -y codebase-context@2.3.1-beta.0 --version`. A source checkout or a local tarball is separate from a verified registry release.
 
-**Fresh candidate indexes use keyword search without downloading an embedding or reranker model.** Existing indexes keep their recorded mode. Semantic indexing is an explicit option; its optional runtimes and model downloads are separate from the default path.
+**Fresh beta indexes use keyword search without downloading an embedding or reranker model.** Existing indexes keep their recorded mode. Semantic indexing is an explicit option; its optional runtimes and model downloads are separate from the default path.
 
-### Try the candidate from the terminal
+### Try the beta or a local build from the terminal
 
-Use a built checkout (`pnpm install`, then `pnpm build` in the CBC checkout) or an installed local tarball. From the repository you want to inspect, point Node at that candidate's actual entrypoint:
+Use an explicitly installed `2.3.1-beta.0`, a built checkout (`pnpm install`, then `pnpm build` in the CBC checkout) or an installed local tarball. From the repository you want to inspect, point Node at that installation's actual entrypoint:
 
 ```bash
 node /path/to/codebase-context/dist/index.js --version
@@ -29,7 +29,7 @@ To refresh the index, use `reindex`. Omitting mode flags preserves the recorded 
 
 ## Set up your AI client
 
-From the target repository, the built candidate can write project registrations for selected detected clients:
+From the target repository, the installed beta or built source can write project registrations for selected detected clients:
 
 ```bash
 node /path/to/codebase-context/dist/index.js init
@@ -43,7 +43,7 @@ After registration, restart the client and ask:
 
 > Use Codebase Context to find [feature] in this repository. Pass this repository's absolute path as project, wait for indexing if needed, and open the relevant source files.
 
-The [client setup guide](./docs/client-setup.md) contains candidate instructions and dated checks for the older published package. Historical manual recipes, including Windsurf, retain their dated verification limits. For example, the following manual registration uses the registry release and does **not** select the local candidate:
+The [client setup guide](./docs/client-setup.md) contains beta setup instructions and dated checks for the older stable package. Historical manual recipes, including Windsurf, retain their dated verification limits. For example, the following manual registration leaves the package version unpinned; it may use an already installed local version or fall back to npm `latest`, so it does **not** reliably select the beta:
 
 ```bash
 claude mcp add --scope user --transport stdio codebase-context -- npx -y codebase-context

@@ -70,6 +70,34 @@ function extractMarkdownLinks(markdown: string): string[] {
   return links;
 }
 
+function findUnpublishedPins(path: string, page: string): string[] {
+  // npm dist-tags verified 2026-11-06: https://registry.npmjs.org/-/package/codebase-context/dist-tags
+  const publishedVersions = ['2.2.0', '2.3.1-beta.0'];
+  // Stop at Markdown/JSON delimiters and shell operators, retaining any attached suffix.
+  return [...page.matchAll(/codebase-context@(\d+\.\d+\.\d+[^\s`"'<>()[\]{},;|&]*)/g)]
+    .filter((match) => {
+      const version = match[1];
+      if (publishedVersions.includes(version)) {
+        return false;
+      }
+      if (
+        version === '2.4.0' &&
+        (path === 'docs/review-context.md' || path === 'docs/client-setup.md')
+      ) {
+        const index = match.index ?? 0;
+        const surroundingText = page.slice(
+          Math.max(0, index - 300),
+          Math.min(page.length, index + 300)
+        );
+        if (/requires\s+(?:the\s+unpublished\s+)?2\.4\.0/i.test(surroundingText)) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .map((match) => `${path}: ${match[0]}`);
+}
+
 describe('release truth surfaces', () => {
   const packageJson = readJson<PackageJson>('package.json');
   const releaseManifest = readJson<ReleaseManifest>('.release-please-manifest.json');
@@ -127,7 +155,6 @@ describe('release truth surfaces', () => {
   });
 
   it('keeps pinned install commands on the published npm version', () => {
-    const publishedVersion = '2.2.0';
     const userFacingDocs = [
       'README.md',
       'docs/capabilities.md',
@@ -140,28 +167,7 @@ describe('release truth surfaces', () => {
     const pinnedCommands = userFacingDocs.flatMap((path) => {
       const page = readOptionalText(path);
       if (!page) return [];
-      return [...page.matchAll(/codebase-context@(\d+\.\d+\.\d+)/g)]
-        .filter((match) => {
-          const version = match[1];
-          if (version === publishedVersion) {
-            return false;
-          }
-          if (
-            version === '2.4.0' &&
-            (path === 'docs/review-context.md' || path === 'docs/client-setup.md')
-          ) {
-            const index = match.index ?? 0;
-            const surroundingText = page.slice(
-              Math.max(0, index - 300),
-              Math.min(page.length, index + 300)
-            );
-            if (/requires\s+(?:the\s+unpublished\s+)?2\.4\.0/i.test(surroundingText)) {
-              return false;
-            }
-          }
-          return true;
-        })
-        .map((match) => `${path}: ${match[0]}`);
+      return findUnpublishedPins(path, page);
     });
 
     expect(pinnedCommands).toEqual([]);
@@ -172,6 +178,81 @@ describe('release truth surfaces', () => {
     );
     expect(readText('docs/client-setup.md')).not.toContain('codebase-context@2.4.0 init');
     expect(readText('docs/review-context.md')).toContain('--package=codebase-context@2.4.0');
+  });
+
+  it.each<[string, string, string[]]>([
+    ['stable in backticks', '`codebase-context@2.2.0`', []],
+    ['beta in backticks', '`codebase-context@2.3.1-beta.0`', []],
+    ['stable in JSON', '{"args":["codebase-context@2.2.0","init"]}', []],
+    ['beta in JSON', '{"args":["codebase-context@2.3.1-beta.0","init"]}', []],
+    ['stable shell command', 'npx -y codebase-context@2.2.0 init; echo done', []],
+    ['beta shell command', 'npx -y codebase-context@2.3.1-beta.0 init', []],
+    ['bare unpublished stable', '`codebase-context@2.3.1`', ['2.3.1']],
+    ['unknown beta', '`codebase-context@2.3.1-beta.1`', ['2.3.1-beta.1']],
+    ['stable prerelease suffix', '"codebase-context@2.2.0-beta.1"', ['2.2.0-beta.1']],
+    ['stable build suffix', 'codebase-context@2.2.0+local', ['2.2.0+local']],
+    ['beta build suffix', '`codebase-context@2.3.1-beta.0+local`', ['2.3.1-beta.0+local']],
+    ['beta appended suffix', 'codebase-context@2.3.1-beta.0extra init', ['2.3.1-beta.0extra']],
+    ['beta extra prerelease', 'codebase-context@2.3.1-beta.0.1', ['2.3.1-beta.0.1']],
+    ['beta hyphen suffix', 'codebase-context@2.3.1-beta.0-extra', ['2.3.1-beta.0-extra']],
+    ['beta slash suffix', 'codebase-context@2.3.1-beta.0/extra', ['2.3.1-beta.0/extra']],
+    [
+      'unknown version in JSON',
+      '{"args":["codebase-context@9.8.7-rc.1+build"]}',
+      ['9.8.7-rc.1+build']
+    ],
+    ['comma boundary', '(codebase-context@2.2.0), "codebase-context@2.3.1-beta.0"', []],
+    ['shell operators', 'codebase-context@2.2.0; codebase-context@2.3.1-beta.0&&echo ok', []],
+    ['shell redirection', 'codebase-context@2.2.0>log | codebase-context@2.3.1-beta.0', []],
+    [
+      'multiple rejected pins',
+      '`codebase-context@2.2.0-beta.1` "codebase-context@2.3.1-beta.1"',
+      ['2.2.0-beta.1', '2.3.1-beta.1']
+    ]
+  ])('classifies the complete pinned version: %s', (_name, page, versions) => {
+    expect(findUnpublishedPins('README.md', page)).toEqual(
+      versions.map((version) => `README.md: codebase-context@${version}`)
+    );
+  });
+
+  it.each<[string, string, string, string[]]>([
+    [
+      'review preview',
+      'docs/review-context.md',
+      'Requires the unpublished 2.4.0: `codebase-context@2.4.0`',
+      []
+    ],
+    ['client preview', 'docs/client-setup.md', 'Requires 2.4.0: `codebase-context@2.4.0`', []],
+    ['wrong preview page', 'README.md', 'Requires 2.4.0: `codebase-context@2.4.0`', ['2.4.0']],
+    ['missing preview context', 'docs/review-context.md', '`codebase-context@2.4.0`', ['2.4.0']],
+    [
+      'distant preview context',
+      'docs/review-context.md',
+      'Requires 2.4.0' + ' '.repeat(301) + '`codebase-context@2.4.0`',
+      ['2.4.0']
+    ],
+    [
+      'preview prerelease suffix',
+      'docs/review-context.md',
+      'Requires 2.4.0: `codebase-context@2.4.0-beta.1`',
+      ['2.4.0-beta.1']
+    ],
+    [
+      'preview build suffix',
+      'docs/client-setup.md',
+      'Requires 2.4.0: `codebase-context@2.4.0+local`',
+      ['2.4.0+local']
+    ],
+    [
+      'preview appended suffix',
+      'docs/review-context.md',
+      'Requires 2.4.0: `codebase-context@2.4.0extra`',
+      ['2.4.0extra']
+    ]
+  ])('preserves the contextual preview exception: %s', (_name, path, page, versions) => {
+    expect(findUnpublishedPins(path, page)).toEqual(
+      versions.map((version) => `${path}: codebase-context@${version}`)
+    );
   });
 
   it('does not describe the unpublished 2.4.0 preview as current or published', () => {

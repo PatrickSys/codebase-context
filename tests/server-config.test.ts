@@ -307,3 +307,254 @@ describe('loadServerConfig', () => {
     });
   });
 });
+
+// Body limits belong to the transport options, not persisted server configuration.
+import http, { type Server as NodeHttpServer } from 'node:http';
+import { syncBuiltinESMExports } from 'node:module';
+import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import {
+  startHttpServer,
+  DEFAULT_MAX_REQUEST_BODY_SIZE,
+  type HttpServerHandle
+} from '../src/server/http.js';
+
+async function withHttpFixture(
+  run: (fixture: {
+    port: number;
+    created: McpServer[];
+    dispatched: ReturnType<typeof vi.fn>;
+    closed: ReturnType<typeof vi.fn>;
+  }) => Promise<void>,
+  maxRequestBodySize = 512,
+  configureServer?: (server: McpServer) => void
+) {
+  let listener: NodeHttpServer | undefined;
+  const create = http.createServer;
+  const capture = vi
+    .spyOn(http, 'createServer')
+    .mockImplementation((...args: Parameters<typeof create>) => {
+      listener = create(...args);
+      return listener;
+    });
+  syncBuiltinESMExports();
+  const created: McpServer[] = [];
+  const dispatched = vi.fn();
+  const closed = vi.fn();
+  let handle: HttpServerHandle | undefined;
+  try {
+    handle = await startHttpServer({
+      name: 'body-limit-test',
+      version: '1',
+      port: 0,
+      maxRequestBodySize,
+      registerHandlers(server) {
+        created.push(server);
+        server.onclose = closed;
+        server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+        server.setRequestHandler(CallToolRequestSchema, async () => {
+          dispatched();
+          return { content: [{ type: 'text', text: 'ok' }] };
+        });
+        configureServer?.(server);
+      }
+    });
+    const address = listener!.address();
+    if (!address || typeof address === 'string') throw new Error('Missing HTTP fixture address');
+    await run({ port: address.port, created, dispatched, closed });
+  } finally {
+    await handle?.close();
+    capture.mockRestore();
+    syncBuiltinESMExports();
+  }
+}
+
+function httpFixtureRequest(port: number, body?: string, session?: string, chunked = false) {
+  return new Promise<{ status: number; body: string; session?: string }>((resolve, reject) => {
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-protocol-version': '2025-03-26'
+    };
+    if (session) headers['mcp-session-id'] = session;
+    if (body !== undefined && !chunked) headers['content-length'] = String(Buffer.byteLength(body));
+    const request = http.request(
+      {
+        host: '127.0.0.1',
+        port,
+        path: body === undefined ? '/' : '/mcp',
+        method: body === undefined ? 'GET' : 'POST',
+        headers,
+        agent: false
+      },
+      (response) => {
+        let text = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk: string) => {
+          text += chunk;
+        });
+        response.on('end', () =>
+          resolve({
+            status: response.statusCode!,
+            body: text,
+            session: response.headers['mcp-session-id'] as string | undefined
+          })
+        );
+      }
+    );
+    request.on('error', reject);
+    request.setTimeout(5000, () => request.destroy(new Error('HTTP fixture timeout')));
+    if (chunked && body !== undefined) {
+      request.write(body.slice(0, 256));
+      request.end(body.slice(256));
+    } else request.end(body);
+  });
+}
+
+const initializeBody = JSON.stringify({
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {
+    protocolVersion: '2025-03-26',
+    capabilities: {},
+    clientInfo: { name: 'fixture', version: '1' }
+  }
+});
+
+describe('HTTP request body limit', () => {
+  it('keeps the compatible 4 MiB default explicit', () => {
+    expect(DEFAULT_MAX_REQUEST_BODY_SIZE).toBe(4 * 1024 * 1024);
+  });
+
+  it.each([0, -1, Infinity, NaN, 1.5])(
+    'rejects an invalid byte ceiling %s before listening',
+    async (limit) => {
+      await expect(
+        startHttpServer({
+          name: 'test',
+          version: '1',
+          registerHandlers() {},
+          maxRequestBodySize: limit
+        })
+      ).rejects.toThrow(RangeError);
+    }
+  );
+
+  it.each([false, true])(
+    'rejects oversized initialization (chunked=%s) and closes server/transport',
+    async (chunked) => {
+      await withHttpFixture(async ({ port, created, dispatched, closed }) => {
+        const response = await httpFixtureRequest(
+          port,
+          initializeBody + ' '.repeat(512),
+          undefined,
+          chunked
+        );
+        expect(response.status).toBe(413);
+        expect(JSON.parse(response.body)).toMatchObject({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32000, message: expect.stringContaining('512 bytes') }
+        });
+        const health = await httpFixtureRequest(port);
+        expect(JSON.parse(health.body).sessions).toBe(0);
+        expect(created).toHaveLength(1);
+        expect(created[0].transport).toBeUndefined();
+        expect(closed).toHaveBeenCalledOnce();
+        expect(dispatched).not.toHaveBeenCalled();
+      });
+    }
+  );
+
+  it.each([511, 512, 513])('enforces the byte boundary at %i bytes', async (size) => {
+    await withHttpFixture(async ({ port, created }) => {
+      const response = await httpFixtureRequest(port, initializeBody.padEnd(size, ' '));
+      expect(response.status).toBe(size <= 512 ? 200 : 413);
+      if (size > 512) expect(created[0].transport).toBeUndefined();
+    });
+  });
+
+  it.each(['connect', 'handleRequest'])(
+    'closes orphaned initialization when %s throws',
+    async (stage) => {
+      await withHttpFixture(
+        async ({ port, created, closed }) => {
+          const response = await httpFixtureRequest(port, initializeBody);
+          expect(response.status).toBe(500);
+          expect(JSON.parse((await httpFixtureRequest(port)).body).sessions).toBe(0);
+          expect(created[0].transport).toBeUndefined();
+          expect(closed).toHaveBeenCalledOnce();
+        },
+        512,
+        (server) => {
+          const connect = server.connect.bind(server);
+          vi.spyOn(server, 'connect').mockImplementation(async (transport) => {
+            await connect(transport);
+            if (stage === 'connect') throw new Error('Synthetic connect failure');
+            vi.spyOn(transport as StreamableHTTPServerTransport, 'handleRequest').mockRejectedValue(
+              new Error('Synthetic handler failure')
+            );
+          });
+        }
+      );
+    }
+  );
+
+  it('closes malformed initialization and accepts subsequent ordinary initialization/tools requests', async () => {
+    await withHttpFixture(async ({ port, created, closed, dispatched }) => {
+      const invalid = await httpFixtureRequest(port, '{invalid');
+      expect(invalid.status).toBe(400);
+      expect(JSON.parse(invalid.body).error.code).toBe(-32700);
+      expect(created[0].transport).toBeUndefined();
+      expect(closed).toHaveBeenCalledOnce();
+      const initialized = await httpFixtureRequest(port, initializeBody);
+      expect(initialized.status).toBe(200);
+      expect(initialized.session).toBeTruthy();
+      const listed = await httpFixtureRequest(
+        port,
+        JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+        initialized.session
+      );
+      expect(listed.status).toBe(200);
+      expect(listed.body).toContain('"tools":[]');
+      const called = await httpFixtureRequest(
+        port,
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: { name: 'fixture', arguments: {} }
+        }),
+        initialized.session
+      );
+      expect(called.status).toBe(200);
+      expect(dispatched).toHaveBeenCalledOnce();
+      expect(JSON.parse((await httpFixtureRequest(port)).body).sessions).toBe(1);
+    });
+  });
+
+  it.each([false, true])(
+    'does not dispatch oversized calls on a live session (chunked=%s)',
+    async (chunked) => {
+      await withHttpFixture(async ({ port, dispatched }) => {
+        const initialized = await httpFixtureRequest(port, initializeBody);
+        const response = await httpFixtureRequest(
+          port,
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'tools/call',
+            params: { name: 'fixture', arguments: { text: 'safe'.repeat(256) } }
+          }),
+          initialized.session,
+          chunked
+        );
+        expect(response.status).toBe(413);
+        expect(dispatched).not.toHaveBeenCalled();
+        expect(JSON.parse((await httpFixtureRequest(port)).body).sessions).toBe(1);
+      });
+    }
+  );
+});

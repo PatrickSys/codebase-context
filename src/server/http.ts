@@ -24,6 +24,9 @@ const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 /** How often to check for stale sessions (60 seconds) */
 const SESSION_CHECK_INTERVAL_MS = 60 * 1000;
 
+/** Preserve the SDK's compatible 4 MiB HTTP body ceiling explicitly. */
+export const DEFAULT_MAX_REQUEST_BODY_SIZE = 4 * 1024 * 1024;
+
 export type HttpServerOptions = {
   /** Server name for MCP protocol */
   name: string;
@@ -33,6 +36,8 @@ export type HttpServerOptions = {
   host?: string;
   /** Port to listen on (default: 3100) */
   port?: number;
+  /** Maximum HTTP request bytes, including chunked bodies (default: 4 MiB). */
+  maxRequestBodySize?: number;
   /** Handler registration callback — wires tool/resource handlers onto each session's Server */
   registerHandlers: RegisterHandlers;
   /**
@@ -57,6 +62,10 @@ export type HttpServerHandle = {
 export async function startHttpServer(options: HttpServerOptions): Promise<HttpServerHandle> {
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 3100;
+  const maxRequestBodySize = options.maxRequestBodySize ?? DEFAULT_MAX_REQUEST_BODY_SIZE;
+  if (!Number.isSafeInteger(maxRequestBodySize) || maxRequestBodySize <= 0) {
+    throw new RangeError('maxRequestBodySize must be a positive safe integer of bytes');
+  }
   const sessions = new Map<string, SessionEntry>();
 
   function touchSession(sessionId: string): void {
@@ -73,7 +82,8 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
     );
 
     const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID()
+      sessionIdGenerator: () => randomUUID(),
+      maxRequestBodySize
     });
 
     return { server, transport };
@@ -135,10 +145,7 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
         // No session ID — new initialization request
         const { server: mcpServer, transport } = createSessionServer();
 
-        // Connect server to transport
-        await mcpServer.connect(transport);
-
-        // Register onclose before handleRequest so cleanup always fires.
+        // Set before connect so the SDK chains its own Server cleanup callback.
         transport.onclose = () => {
           const sid = transport.sessionId;
           if (sid && sessions.has(sid)) {
@@ -147,26 +154,26 @@ export async function startHttpServer(options: HttpServerOptions): Promise<HttpS
           }
         };
 
-        // Handle the init request — this generates the session ID
-        await transport.handleRequest(req, res);
+        let retained = false;
+        try {
+          await mcpServer.connect(transport);
+          await transport.handleRequest(req, res);
 
-        // After handleRequest, the session ID is available
-        const newSessionId = transport.sessionId;
-        if (newSessionId) {
-          sessions.set(newSessionId, {
-            server: mcpServer,
-            transport,
-            lastActivity: Date.now()
-          });
-          console.error(`[HTTP] Session ${newSessionId} connected`);
-
-          // Notify caller so they can set up per-session handlers (roots refresh, etc.)
-          options.onSessionReady?.(mcpServer);
-        } else {
-          // Malformed init request — SDK didn't assign a session ID; clean up the orphan.
-          void transport.close().catch(() => {
-            /* best effort */
-          });
+          const newSessionId = transport.sessionId;
+          if (newSessionId && res.statusCode < 400) {
+            sessions.set(newSessionId, {
+              server: mcpServer,
+              transport,
+              lastActivity: Date.now()
+            });
+            retained = true;
+            console.error(`[HTTP] Session ${newSessionId} connected`);
+            options.onSessionReady?.(mcpServer);
+          }
+        } finally {
+          // Includes oversized/malformed initialization and connect/handler failures.
+          // Closing the transport also runs the SDK's chained Server cleanup.
+          if (!retained) await transport.close();
         }
 
         return;

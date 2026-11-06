@@ -82,6 +82,7 @@ let ListToolsRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js')
 let ListResourcesRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ListResourcesRequestSchema;
 let ReadResourceRequestSchema!: typeof import('@modelcontextprotocol/sdk/types.js').ReadResourceRequestSchema;
 let RootsListChangedNotificationSchema!: typeof import('@modelcontextprotocol/sdk/types.js').RootsListChangedNotificationSchema;
+let assertToolInputWithinLimits!: typeof import('./server/tool-input-limits.js').assertToolInputWithinLimits;
 let server!: Server;
 let mcpRuntimeReady = false;
 let mcpRuntimePromise: Promise<void> | undefined;
@@ -223,14 +224,21 @@ async function ensureMcpRuntimeLoaded(): Promise<void> {
   }
 
   mcpRuntimePromise ??= (async () => {
-    const [factoryModule, httpModule, configModule, stdioModule, sdkTypesModule] =
-      await Promise.all([
-        import('./server/factory.js'),
-        import('./server/http.js'),
-        import('./server/config.js'),
-        import('@modelcontextprotocol/sdk/server/stdio.js'),
-        import('@modelcontextprotocol/sdk/types.js')
-      ]);
+    const [
+      factoryModule,
+      httpModule,
+      configModule,
+      stdioModule,
+      sdkTypesModule,
+      toolInputLimitsModule
+    ] = await Promise.all([
+      import('./server/factory.js'),
+      import('./server/http.js'),
+      import('./server/config.js'),
+      import('@modelcontextprotocol/sdk/server/stdio.js'),
+      import('@modelcontextprotocol/sdk/types.js'),
+      import('./server/tool-input-limits.js')
+    ]);
 
     createServer = factoryModule.createServer;
     startHttpServer = httpModule.startHttpServer;
@@ -241,6 +249,7 @@ async function ensureMcpRuntimeLoaded(): Promise<void> {
     ListResourcesRequestSchema = sdkTypesModule.ListResourcesRequestSchema;
     ReadResourceRequestSchema = sdkTypesModule.ReadResourceRequestSchema;
     RootsListChangedNotificationSchema = sdkTypesModule.RootsListChangedNotificationSchema;
+    assertToolInputWithinLimits = toolInputLimitsModule.assertToolInputWithinLimits;
     server = createServer({ name: 'codebase-context', version: PKG_VERSION }, registerHandlers);
     mcpRuntimeReady = true;
   })();
@@ -1078,6 +1087,7 @@ export function registerHandlers(target: Server): void {
 
   target.setRequestHandler(CallToolRequestSchema, async (request) =>
     withTrackedSessionActivity(async () => {
+      assertToolInputWithinLimits(request.params.arguments);
       const { name, arguments: args } = request.params;
       const normalizedArgs =
         args && typeof args === 'object' && !Array.isArray(args)

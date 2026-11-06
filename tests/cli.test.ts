@@ -108,6 +108,17 @@ describe('CLI', () => {
     expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
   });
 
+  it('help gives the same pinned beta setup command as the README', async () => {
+    await handleCliCommand(['--help']);
+
+    const command = 'codex mcp add codebase-context -- npx -y codebase-context@2.3.1-beta.0';
+    const output = logSpy.mock.calls.map((call) => String(call[0] ?? '')).join('\n');
+    expect(output).toContain(command);
+    expect(await fs.readFile(new URL('../README.md', import.meta.url), 'utf8')).toContain(command);
+    expect(cliContextMocks.loadProjectConfig).not.toHaveBeenCalled();
+    expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
+  });
+
   it.each([
     { results: [] },
     { results: [{ file: 'src/example.ts:1-3', summary: 'Example', score: 0.2 }] }

@@ -6,7 +6,7 @@ Local repository maps, code search and symbol references for coding agents. Code
 
 ## Published beta: 2.3.1-beta.0 (stable: 2.2.0)
 
-As checked on **4 November 2026**, npm `beta` points to **`2.3.1-beta.0`**, while npm `latest` remains **`2.2.0`**. The beta requires **Node.js 22 or newer**. An unpinned `npx -y codebase-context` may use an already installed local version; without one, it resolves npm `latest` (currently the stable `2.2.0`). To select the published beta explicitly, use `npx -y codebase-context@2.3.1-beta.0 --version`. A source checkout or a local tarball is separate from a verified registry release.
+As checked on **6 November 2026**, npm `beta` points to **`2.3.1-beta.0`**, while npm `latest` remains **`2.2.0`**. The beta requires **Node.js 22 or newer**. An unpinned `npx -y codebase-context` may use an already installed local version; without one, it resolves npm `latest` (currently the stable `2.2.0`). To select the published beta explicitly, use `npx -y codebase-context@2.3.1-beta.0 --version`. A source checkout or a local tarball is separate from a verified registry release.
 
 **Fresh beta indexes use keyword search without downloading an embedding or reranker model.** Existing indexes keep their recorded mode. Semantic indexing is an explicit option; its optional runtimes and model downloads are separate from the default path.
 
@@ -38,6 +38,12 @@ node /path/to/codebase-context/dist/index.js init --client codex --root /path/to
 ```
 
 The wizard recognizes Claude Code, Codex, Cursor and OpenCode. It saves the Node binary and package entrypoint that ran setup. If that installation or its npx cache is moved or removed, rerun setup. Writing a config does not prove that a native client connected or completed a coding task.
+
+For manual Codex registration, the CLI help selects the published beta explicitly:
+
+```bash
+codex mcp add codebase-context -- npx -y codebase-context@2.3.1-beta.0
+```
 
 After registration, restart the client and ask:
 

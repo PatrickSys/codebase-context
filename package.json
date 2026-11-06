@@ -136,7 +136,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^3.0.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@typescript-eslint/typescript-estree": "^8.51.0",
     "chokidar": "^4.0.3",
     "fuse.js": "^7.0.0",
@@ -147,7 +147,7 @@
     "typescript": "^5.3.3",
     "uuid": "^14.0.0",
     "web-tree-sitter": "^0.25.10",
-    "zod": "^4.3.4"
+    "zod": "^4.6.6"
   },
   "peerDependencies": {
     "@huggingface/transformers": "^4.2.0",
@@ -194,7 +194,7 @@
       "@modelcontextprotocol/sdk>express-rate-limit": "8.2.2",
       "@huggingface/transformers>onnxruntime-node": "1.24.3",
       "path-to-regexp": "8.4.0",
-      "brace-expansion": "5.0.5",
+      "brace-expansion": "5.0.12",
       "micromatch>picomatch": "2.3.2",
       "anymatch>picomatch": "2.3.2",
       "readdirp>picomatch": "2.3.2",

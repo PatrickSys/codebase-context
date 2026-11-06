@@ -22,6 +22,7 @@ overrides:
   postcss>source-map-js: 1.2.2
   postcss>nanoid: 3.3.18
   eslint>@humanfs/node: 0.16.8
+  '@eslint/eslintrc>js-yaml': 4.3.2
 
 importers:
 
@@ -1887,8 +1888,8 @@ packages:
   jose@6.2.15:
     resolution: {integrity: sha512-qdF6ewcZARtef63fJ9AKKZPgxw+t7USH6HLXYcD4CrdmSvDp79rpJSPFEKc90QBeGS63u1KQtN2MZQHC0yDIzA==}
 
-  js-yaml@4.1.1:
-    resolution: {integrity: sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA==}
+  js-yaml@4.3.2:
+    resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
     hasBin: true
 
   json-bignum@0.0.3:
@@ -2874,7 +2875,7 @@ snapshots:
       globals: 14.0.0
       ignore: 5.3.2
       import-fresh: 3.3.1
-      js-yaml: 4.1.1
+      js-yaml: 4.3.2
       minimatch: 10.2.3
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
@@ -4448,7 +4449,7 @@ snapshots:
 
   jose@6.2.15: {}
 
-  js-yaml@4.1.1:
+  js-yaml@4.3.2:
     dependencies:
       argparse: 2.0.1
 

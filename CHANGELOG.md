@@ -1,5 +1,59 @@
 # Changelog
 
+## [2.4.0](https://github.com/PatrickSys/codebase-context/compare/v2.3.0...v2.4.0) (2026-11-06)
+
+
+### Features
+
+* **analyzers:** recognize NestJS projects ([a8e354e](https://github.com/PatrickSys/codebase-context/commit/a8e354e23826df3edbf4ae4dd50d6c494559d7f9))
+* **analyzers:** Recognize NestJS projects ([754130d](https://github.com/PatrickSys/codebase-context/commit/754130dda398b463024de7ea6668c4c849e40d2e))
+* **embeddings:** honor OPENAI_BASE_URL for OpenAI-compatible endpoints ([d162ddc](https://github.com/PatrickSys/codebase-context/commit/d162ddcffece8d003fe53a68c916c2887703f395))
+* **indexing:** Make chunk limits configurable per project ([1612414](https://github.com/PatrickSys/codebase-context/commit/161241480e08ff6e9794f91da1cff28a541edd3b))
+* **review:** add bounded review-context packets ([2c56b10](https://github.com/PatrickSys/codebase-context/commit/2c56b10ff32d588d9d660a586c0defee5a3d76d1))
+
+
+### Bug Fixes
+
+* **analyzers:** Prefer NestJS provider analysis ([6093099](https://github.com/PatrickSys/codebase-context/commit/6093099e02e39d2babff58d26a4f0fff634e0ce5))
+* **analyzers:** Recognize current React and Next patterns ([9ed8577](https://github.com/PatrickSys/codebase-context/commit/9ed8577cc930255debaba335b989295c38138b87))
+* **analyzers:** Tie React use metadata to imports ([0154f45](https://github.com/PatrickSys/codebase-context/commit/0154f45d0fd5053c6215f6d540b557bc7f2ccefd))
+* bound MCP tool input traversal and HTTP requests ([1a3143f](https://github.com/PatrickSys/codebase-context/commit/1a3143f567587afdf7a2f196a7144df057e05283))
+* **embeddings:** bust provider cache when endpoint or API key changes ([4f9867d](https://github.com/PatrickSys/codebase-context/commit/4f9867d25ac5bd036e618c05f6cd8dec1c133d74))
+* **eval:** align ContextBench harness evidence contracts ([4513979](https://github.com/PatrickSys/codebase-context/commit/45139796f4e0cc51854de906b0b40b66beb8b4e3))
+* **eval:** deduplicate blocked ContextBench rows ([99c9753](https://github.com/PatrickSys/codebase-context/commit/99c975359ef1af300ae4dbe4f430b734802bcdb9))
+* **eval:** deduplicate blocked ContextBench rows ([c41e844](https://github.com/PatrickSys/codebase-context/commit/c41e844b6d85318ff9b30b966a84147430e6c7ad))
+* **eval:** harden ContextBench fixture verification ([bed5064](https://github.com/PatrickSys/codebase-context/commit/bed5064c6177f202b24f9564b083bf68068641ba))
+* **eval:** harden ContextBench manifest checks ([04a6cfb](https://github.com/PatrickSys/codebase-context/commit/04a6cfbc2a66953420645173df3e6e5d19cd50bf))
+* **eval:** preserve ContextBench executor model provenance ([867ac70](https://github.com/PatrickSys/codebase-context/commit/867ac700d98ad141ee180f6353784f9dab1f26fc))
+* **format:** format ContextBench harness sources ([b2fa208](https://github.com/PatrickSys/codebase-context/commit/b2fa208a4df0579bfdc41d8ffe2a74b2fae6e93e))
+* **git:** scope local artifact ignores ([ef42e53](https://github.com/PatrickSys/codebase-context/commit/ef42e53b99f1deed3a7e2107d8124b554b890860))
+* **index:** drop the unchanged-index promise from the ticket error ([277abb7](https://github.com/PatrickSys/codebase-context/commit/277abb79a18bc3793e47423f9cb14ce44eb370f0))
+* **index:** retry transient Windows EPERM when opening a lease ticket ([52a6552](https://github.com/PatrickSys/codebase-context/commit/52a65520f4704f22f34ea127bd10d4359e484755))
+* **map:** keep ordinary hyphenated source files visible ([31975c4](https://github.com/PatrickSys/codebase-context/commit/31975c41db1d5018df19d97fb5a50c4ca773953b))
+* **reranker:** Score passages with the supported tokenizer pair API ([55b97b9](https://github.com/PatrickSys/codebase-context/commit/55b97b9c2261278d3c92ee1f3000d0a80920432d))
+* **search:** admit relevant candidates before retrieval budgets ([3b4f1df](https://github.com/PatrickSys/codebase-context/commit/3b4f1dfb3e1085bf4662138fae42cabf7759300c))
+* set up Claude Code and Codex from your project folder ([cfaa90b](https://github.com/PatrickSys/codebase-context/commit/cfaa90b2c2180f6c87df5d3bd978868025af6655))
+* show usage when you run the help command ([0d733f1](https://github.com/PatrickSys/codebase-context/commit/0d733f1429ebb29e6566b0428b5de69807ffe299))
+* **status:** report counts from one index generation only ([8fbcfc6](https://github.com/PatrickSys/codebase-context/commit/8fbcfc6cbe7074d0cafc3ad283868835ca36b60e))
+* **status:** report persisted index counts and clear budget-exhaustion action ([7404795](https://github.com/PatrickSys/codebase-context/commit/7404795a8804ab36edecc4c8da5e147407eb7ff7))
+* support Node 22 and 24 and explain first-run indexing ([a9cd0bd](https://github.com/PatrickSys/codebase-context/commit/a9cd0bd6fcb327ea393b194ee9c8507e44f9c72a))
+* **test:** harden ContextBench schema cleanup ([c5a74af](https://github.com/PatrickSys/codebase-context/commit/c5a74afb64c65b255a363e31974fa7be6d58242d))
+* **test:** isolate ContextBench baseline Git env ([6aed9d1](https://github.com/PatrickSys/codebase-context/commit/6aed9d1a93f540f0d4a17142ab4527769b97cecb))
+* **test:** isolate ContextBench git fixtures ([62d3110](https://github.com/PatrickSys/codebase-context/commit/62d3110503b4eca3e4ff65a8403bd0644861d61f))
+* **test:** relax slow Windows integration timeouts ([5675ebd](https://github.com/PatrickSys/codebase-context/commit/5675ebdd41f2af784d86c1ec3e25c9e756f80d6b))
+* **test:** relax slow Windows search timeouts ([cad646d](https://github.com/PatrickSys/codebase-context/commit/cad646d9d940c00ab96baa0ca806070722cced32))
+* **test:** relax zombie guard timeout jitter ([5a5bf68](https://github.com/PatrickSys/codebase-context/commit/5a5bf68302745f90b1dbdfba3ab06cfff961d4d5))
+* **test:** tolerate ContextBench runner cleanup races ([c027703](https://github.com/PatrickSys/codebase-context/commit/c027703092a81c90b5c19371873858e5a87ec00c))
+* **test:** tolerate ContextBench schema cleanup races ([a155d56](https://github.com/PatrickSys/codebase-context/commit/a155d5646dbb283ffac1e71eef7fb26b8a59fa40))
+* **test:** tolerate ContextBench temp cleanup races ([0360cb9](https://github.com/PatrickSys/codebase-context/commit/0360cb97d99337438e1922bf52a76833b9d20fd6))
+* triage quick wins for chunk cap, map, and path search ([28e71e3](https://github.com/PatrickSys/codebase-context/commit/28e71e31a21a09d14e83ca335ac5745ae1e64216))
+* update compatible ESLint humanfs dependency family ([c36dfe7](https://github.com/PatrickSys/codebase-context/commit/c36dfe736221fa015035de8c5fc54d75479b3228))
+* update compatible Hono dependency to 4.13.11 ([1c50805](https://github.com/PatrickSys/codebase-context/commit/1c50805ec12a78c92827d38500246ff32dbf905c))
+* update compatible SDK rate-limit dependency family ([b4085f2](https://github.com/PatrickSys/codebase-context/commit/b4085f2a8d72863460e244e4639388319ce0214b))
+* update compatible test-tool dependency families ([6afb011](https://github.com/PatrickSys/codebase-context/commit/6afb01168de6716a1269312d9f28378546299cda))
+* update ESLint YAML parser with bounded security regressions ([de23558](https://github.com/PatrickSys/codebase-context/commit/de23558cc275eac3a4277128ba5095c6495b3247))
+* update vulnerable dependency families ([63b7984](https://github.com/PatrickSys/codebase-context/commit/63b79848c430fab5e9dc9b6ec7dd8d0aa7d9e659))
+
 ## 2.3.1-beta.0 (published beta; stable remains 2.2.0)
 
 This entry describes the published `2.3.1-beta.0` npm beta. It is not a stable release or proof of end-to-end client acceptance.

@@ -108,6 +108,117 @@ describe('CLI', () => {
     expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { results: [] },
+    { results: [{ file: 'src/example.ts:1-3', summary: 'Example', score: 0.2 }] }
+  ])('discloses exhausted search coverage with $results.length results', async ({ results }) => {
+    toolMocks.dispatchTool.mockResolvedValue({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            status: 'success',
+            searchQuality: { status: 'low_confidence', confidence: 0.2 },
+            sourceCoverage: {
+              status: results.length ? 'partial' : 'no_fresh_results',
+              checkedFiles: 30,
+              skippedFiles: 0,
+              candidateBudgetExhausted: true
+            },
+            results
+          })
+        }
+      ]
+    });
+
+    await handleCliCommand(['search', '--query', 'example']);
+
+    const output = logSpy.mock.calls
+      .map((call) => String(call[0] ?? ''))
+      .join('\n')
+      .replace(/[│|]/g, '')
+      .replace(/\s+/g, ' ');
+    expect(output).toContain('checked 30 files');
+    expect(output).toContain('Search stopped early');
+    expect(output).toContain('candidate budget exhausted');
+    expect(output).toContain('narrow the query');
+  });
+
+  it('reports skipped search sources without claiming the candidate budget was exhausted', async () => {
+    toolMocks.dispatchTool.mockResolvedValue({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            status: 'success',
+            searchQuality: { status: 'low_confidence', confidence: 0 },
+            sourceCoverage: {
+              status: 'partial',
+              checkedFiles: 2,
+              skippedFiles: 1,
+              refreshAction: 'Refresh changed sources, then retry.'
+            },
+            results: []
+          })
+        }
+      ]
+    });
+
+    await handleCliCommand(['search', '--query', 'example']);
+
+    const output = logSpy.mock.calls
+      .map((call) => String(call[0] ?? ''))
+      .join('\n')
+      .replace(/[│|]/g, '')
+      .replace(/\s+/g, ' ');
+    expect(output).toContain('checked 2 files, skipped 1');
+    expect(output).toContain('Refresh changed sources, then retry.');
+    expect(output).not.toContain('Search stopped early');
+  });
+
+  it('does not claim an early stop for current search coverage', async () => {
+    toolMocks.dispatchTool.mockResolvedValue({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            status: 'success',
+            searchQuality: { status: 'low_confidence', confidence: 0.2 },
+            sourceCoverage: { status: 'current', checkedFiles: 2, skippedFiles: 0 },
+            results: []
+          })
+        }
+      ]
+    });
+
+    await handleCliCommand(['search', '--query', 'example']);
+
+    const output = logSpy.mock.calls.map((call) => String(call[0] ?? '')).join('\n');
+    expect(output).not.toContain('Search stopped early');
+    expect(output).toContain('low confidence');
+  });
+
+  it('preserves the raw search coverage response with --json', async () => {
+    const payload = {
+      status: 'success',
+      searchQuality: { status: 'low_confidence', confidence: 0.2 },
+      sourceCoverage: {
+        status: 'partial',
+        checkedFiles: 30,
+        skippedFiles: 0,
+        candidateBudgetExhausted: true
+      },
+      results: []
+    };
+    toolMocks.dispatchTool.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(payload) }]
+    });
+
+    await handleCliCommand(['search', '--query', 'example', '--json']);
+
+    expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toEqual(payload);
+  });
+
   it('search dispatches with typed args', async () => {
     toolMocks.dispatchTool.mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify({ ok: true }) }]

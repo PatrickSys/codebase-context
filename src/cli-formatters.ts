@@ -287,7 +287,13 @@ export function formatSearch(
   intent?: string
 ): void {
   const g = getGlyphs();
-  const { searchQuality: quality, preflight, results, relatedMemories: memories } = data;
+  const {
+    searchQuality: quality,
+    sourceCoverage,
+    preflight,
+    results,
+    relatedMemories: memories
+  } = data;
 
   const boxLines: string[] = [];
 
@@ -300,6 +306,18 @@ export function formatSearch(
     boxLines.push(`Quality: ${status} (${confStr})`);
     if (quality.hint) {
       boxLines.push(`Hint: ${quality.hint}`);
+    }
+  }
+
+  if (sourceCoverage && sourceCoverage.status !== 'current') {
+    boxLines.push(
+      `Source coverage: ${sourceCoverage.status}; checked ${sourceCoverage.checkedFiles} files, skipped ${sourceCoverage.skippedFiles}.`
+    );
+    if (sourceCoverage.candidateBudgetExhausted) {
+      boxLines.push('Search stopped early (candidate budget exhausted); narrow the query.');
+    }
+    if (sourceCoverage.refreshAction) {
+      boxLines.push(`Next: ${sourceCoverage.refreshAction}`);
     }
   }
 

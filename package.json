@@ -1,6 +1,6 @@
 {
   "name": "codebase-context",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Local repository maps, code search and symbol references for coding agents. MCP server with model-free keyword search and optional embeddings.",
   "type": "module",
   "main": "./dist/lib.js",

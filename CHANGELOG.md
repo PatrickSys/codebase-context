@@ -1,8 +1,8 @@
 # Changelog
 
-## Product candidate (not published)
+## 2.3.1-beta.0 (published beta; stable remains 2.2.0)
 
-This entry describes a local candidate, not an approved release or an npm publication.
+This entry describes the published `2.3.1-beta.0` npm beta. It is not a stable release or proof of end-to-end client acceptance.
 
 - Index status keeps committed counts within one generation. Matching in-memory build ids can add run details; a fresh process reads persisted counts and timestamps.
 - Candidate-budget exhaustion asks for a narrower query; changed or unavailable source evidence retains refresh guidance.
@@ -21,7 +21,7 @@ This entry describes a local candidate, not an approved release or an npm public
 - Query advice is limited to grounded returned source, and abstained searches omit global pattern advice. Same-named symbols in different files remain eligible after file-level deduplication; TypeScript type arguments alone no longer select the JSX analyzer.
 - The candidate requires Node 22+. CLI dispatch compares canonical entrypoint identity, including npm symlink launchers, while preserving the exported server's initialization on imports.
 - Updated the runtime parser and watcher to remove the legacy braces dependency chain. Watcher exclusions use exact directory names; quoted import and export names retain their public symbol names.
-- Known limits: model-free conceptual relevance is not guaranteed. Short requests can miss implementations when query words differ from source names; syntactic edges are not runtime calls; workspace/language-specific resolution can remain unresolved. Packed/protocol tests and scoped negative cases do not establish general agent-quality improvement or customer adoption. No npm publication is implied by this entry.
+- Known limits: model-free conceptual relevance is not guaranteed. Short requests can miss implementations when query words differ from source names; syntactic edges are not runtime calls; workspace/language-specific resolution can remain unresolved. Packed/protocol tests and scoped negative cases do not establish general agent-quality improvement or customer adoption. Beta publication does not imply a stable release or successful native-client use.
 
 ## [2.3.0](https://github.com/PatrickSys/codebase-context/compare/v2.2.0...v2.3.0) (2026-04-30)
 

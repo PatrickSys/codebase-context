@@ -19,6 +19,9 @@ import { checkbox } from '@inquirer/prompts';
 import { homedir } from 'node:os';
 import { constants } from 'node:fs';
 
+export const CODEX_BETA_SETUP_COMMAND =
+  'codex mcp add codebase-context -- npx -y codebase-context@2.3.1-beta.0';
+
 export type Client = (typeof CLIENTS)[number]['id'];
 
 export type McpConfigResult = { kind: 'file'; path: string; content: string };
@@ -507,7 +510,7 @@ function printInitUsage(): void {
   console.log(
     'Each config saves this Node binary and the package file from the npx cache, plus the project folder.'
   );
-  console.log('Codex setup line: codex mcp add codebase-context -- npx -y codebase-context');
+  console.log(`Codex beta setup line: ${CODEX_BETA_SETUP_COMMAND}`);
   console.log(
     '  --client <name>  Choose a tool (repeatable): ' +
       CLIENTS.map((client) => client.id).join(', ')

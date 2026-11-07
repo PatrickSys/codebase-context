@@ -657,7 +657,7 @@ describe('handleInitCli', () => {
     try {
       await handleInitCli(['--help']);
       expect(log.mock.calls.flat().join('\n')).toContain(
-        'codex mcp add codebase-context -- npx -y codebase-context'
+        'codex mcp add codebase-context -- npx -y codebase-context@2.3.1-beta.0'
       );
     } finally {
       log.mockRestore();

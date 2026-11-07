@@ -43,6 +43,7 @@ CODEBASE_CONTEXT_ASCII=1 node /path/to/codebase-context/dist/index.js patterns
 - `refs --symbol <name>` — concrete reference evidence
 - `cycles` — circular dependency detection
 - `status` — index status/progress
+- `relationships --file <path>` — verified imports/re-exports; `--direction incoming|outgoing`, `--max-hops 1..3`, `--max-nodes 1..100`
 - `reindex` — rebuild index (full or incremental)
 - `style-guide` — find style guide sections in docs
 - `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
@@ -66,6 +67,16 @@ The built candidate also supports `--version` and builds a missing index when yo
 ---
 
 ## First use
+
+Compact JSON search results include a `signaturePreview` of up to seven contiguous
+source lines, bounded to 480 serialized UTF-8 bytes per preview. `previewRange`
+identifies those exact lines in the result file; `readRange`, when present, identifies
+the indexed source span to open for omitted context. A preview is an excerpt, not a
+complete control-flow analysis. An oversized source line is omitted rather than cut.
+Search `nextHops` retain the MCP operation and include a CLI argument array (`cli`)
+to pass after the executable. `relationships` uses the same verified import/re-export
+tool as MCP and does not prove runtime calls. `refs --symbol <name>` uses the existing
+current-source reference finder for symbol-level continuation.
 
 Run these candidate commands from the project root. A fresh index defaults to keyword-only mode without an embedding or reranker download. An existing index keeps its recorded mode, which may use embeddings. Indexing time depends on the repository and machine; no cold-start timing is promised here. Then inspect the map and search:
 

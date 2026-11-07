@@ -1,5 +1,31 @@
 type SearchPayloadMode = 'compact' | 'full';
 
+/** Whole contiguous source lines only; never cut a condition/effect mid-line. */
+export function boundSearchPreview(
+  lines: string[],
+  anchor: number
+): { text: string; start: number; end: number } | undefined {
+  const maximumLines = 7;
+  const maximumSerializedBytes = 480;
+  let start = Math.max(0, Math.min(anchor - 2, lines.length - maximumLines));
+  let end = Math.min(lines.length, start + maximumLines);
+  while (start < end) {
+    const text = lines.slice(start, end).join('\n');
+    // Include the field key and JSON escaping, with room for the surrounding
+    // result object's indentation and comma (compact results serialize pretty).
+    if (
+      Buffer.byteLength(JSON.stringify({ signaturePreview: text }, null, 2), 'utf8') + 8 <=
+      maximumSerializedBytes
+    ) {
+      return text.trim() ? { text, start, end } : undefined;
+    }
+    // Retain the matched line, removing the furthest context line first.
+    if (anchor - start > end - 1 - anchor) start += 1;
+    else end -= 1;
+  }
+  return undefined;
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

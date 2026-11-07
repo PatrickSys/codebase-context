@@ -339,6 +339,14 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.nextHops?.length ?? 0).toBeGreaterThan(0);
     expect(payload.nextHops?.some((hop) => hop.tool === 'read_file')).toBe(false);
     expect(payload.nextHops?.[0].tool).toBe('get_code_relationships');
+    expect(payload.nextHops?.[0].cli).toEqual([
+      'relationships',
+      '--file',
+      'src/auth/auth.service.ts',
+      '--direction',
+      'outgoing',
+      '--json'
+    ]);
   });
 
   it('does not recommend an unrelated golden example for a different source result', async () => {
@@ -529,7 +537,7 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.results[0].symbolKind).toBe('class');
     expect(payload.results[0].scope).toBe('AuthModule.AuthService');
     expect(payload.results[0].signaturePreview).toBe(
-      'export class AuthService {\n  getToken() {\n    return tokenStore.read();'
+      'export class AuthService {\n  getToken() {\n    return tokenStore.read();\n  }\n}\nconst ignored = true;'
     );
   });
 
@@ -586,7 +594,7 @@ describe('search_codebase compact/full mode', () => {
     const preview = payload.results[0]?.signaturePreview;
 
     expect(preview).toContain(marker);
-    expect((preview ?? '').split('\n').length).toBeLessThanOrEqual(3);
+    expect((preview ?? '').split('\n').length).toBeLessThanOrEqual(7);
   });
 
   it('keeps compact preview lines contiguous around the strongest source match', async () => {
@@ -628,9 +636,58 @@ describe('search_codebase compact/full mode', () => {
 
     expect(previewLines).toContain('finishImport(saved);');
     expect(previewLines.length).toBeGreaterThan(0);
-    expect(previewLines.length).toBeLessThanOrEqual(3);
+    expect(previewLines.length).toBeLessThanOrEqual(7);
     expect(sourceLines.slice(previewStart, previewStart + previewLines.length)).toEqual(
       previewLines
+    );
+  });
+
+  it('keeps a condition and its effect with exact source lines in compact evidence', async () => {
+    const lines = [
+      '',
+      'function expireSession(expiry) {',
+      '  const now = Date.now();',
+      '  if (expiry <= now) {',
+      '    revokeSession();',
+      '    return false;',
+      '  }',
+      '  return true;',
+      '}'
+    ];
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ snippet: lines.join('\r\n'), startLine: 40, endLine: 48 })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'expireSession expiry' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    const result = payload.results[0];
+    expect(result.signaturePreview).toContain('if (expiry <= now) {');
+    expect(result.signaturePreview).toContain('revokeSession();');
+    expect(result.signaturePreview).toContain('return false;');
+    expect(result.previewRange).toEqual({ startLine: 41, endLine: 47 });
+    expect(result.signaturePreview).toBe(lines.slice(1, 8).join('\n'));
+    expect(result.readRange).toEqual({ startLine: 40, endLine: 48 });
+    const emittedPreview = response.content[0].text.match(
+      /"signaturePreview"\s*:\s*"(?:\\.|[^"\\])*"/
+    )?.[0];
+    expect(emittedPreview).toBeDefined();
+    expect(Buffer.byteLength(emittedPreview ?? '', 'utf8')).toBeLessThanOrEqual(480);
+    expect(payload.searchQuality.tokenEstimate).toBe(
+      Math.ceil(response.content[0].text.length / 4)
     );
   });
 

@@ -96,6 +96,7 @@ export interface SearchNextHop {
   tool: string;
   why: string;
   args?: Record<string, string>;
+  cli?: string[];
 }
 
 export interface SearchBudget {
@@ -125,6 +126,8 @@ export interface SearchResultItem {
   symbolKind?: string;
   scope?: string;
   signaturePreview?: string;
+  previewRange?: { startLine: number; endLine: number };
+  readRange?: { startLine: number; endLine: number };
   imports?: string[];
   exports?: string[];
   complexity?: number;

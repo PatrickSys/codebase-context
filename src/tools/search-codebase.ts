@@ -1302,22 +1302,32 @@ async function handlePinned(
     const patternSummary = buildPatternSummary();
     const bestExample = getBestExample(compactResults);
     const nextHops = buildNextHops(compactResults, searchQuality);
+    const previews = compactResults.map(buildSignaturePreview);
+    const evidenceHint = [
+      searchQualityBlock.hint,
+      'Selected search results are not exhaustive: they do not prove absence or repository-wide behavior.',
+      previews.some((preview) => preview.readRange)
+        ? 'Read each readRange in the host before inferring behavior; previewRange covers only the displayed excerpt.'
+        : undefined
+    ]
+      .filter(Boolean)
+      .join(' ');
     const payloadText = finalizeSearchPayloadText(
       {
         status: 'success',
         ...(sourceCoverage.status === 'partial' && { sourceCoverage }),
-        searchQuality: searchQualityBlock,
+        searchQuality: { ...searchQualityBlock, hint: evidenceHint },
         budget: { mode: 'compact', resultCount: compactResults.length },
         ...(preflightPayload && { preflight: preflightPayload }),
         ...(patternSummary && { patternSummary }),
         ...(bestExample && { bestExample }),
         ...(nextHops.length > 0 && { nextHops }),
-        results: compactResults.map((r) => {
+        results: compactResults.map((r, index) => {
           const importedByCount = getImportedByCount(r);
           const topExports = getTopExports(r.filePath);
           const scope = buildScopeHeader(r.metadata);
           const health = getResultHealth(r.filePath);
-          const preview = buildSignaturePreview(r);
+          const preview = previews[index];
           return {
             file: `${r.filePath}:${r.startLine}-${r.endLine}`,
             summary: r.summary,

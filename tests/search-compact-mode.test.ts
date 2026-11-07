@@ -691,6 +691,63 @@ describe('search_codebase compact/full mode', () => {
     );
   });
 
+  it.each([
+    { snippet: 'function selected() {\n  return first();\n}', endLine: 35 },
+    { snippet: undefined, endLine: 35 },
+    { snippet: '界'.repeat(200), endLine: 1 }
+  ])('directs source follow-through when compact evidence omits source: %j', async (source) => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ ...source, startLine: 1, filePath: path.join(tempRoot!, 'src/selected.ts') })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'selected' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.results[0].readRange).toEqual({ startLine: 1, endLine: source.endLine });
+    expect(payload.searchQuality.hint).toContain('readRange');
+    expect(payload.searchQuality.hint).toContain('not exhaustive');
+    expect(payload.searchQuality.hint).toContain('behavior');
+  });
+
+  it('does not present complete excerpts as exhaustive repository evidence', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ snippet: 'function selected() {}', startLine: 1, endLine: 1 })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'selected' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.results[0].readRange).toBeUndefined();
+    expect(payload.searchQuality.hint).toContain('not exhaustive');
+    expect(payload.searchQuality.hint).not.toContain('readRange');
+  });
+
   it('adds an exact tokenEstimate advisory to compact responses', async () => {
     searchMocks.search.mockResolvedValueOnce([makeResult()]);
 

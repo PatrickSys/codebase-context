@@ -73,6 +73,8 @@ source lines, bounded to 480 serialized UTF-8 bytes per preview. `previewRange`
 identifies those exact lines in the result file; `readRange`, when present, identifies
 the indexed source span to open for omitted context. A preview is an excerpt, not a
 complete control-flow analysis. An oversized source line is omitted rather than cut.
+Compact `searchQuality.hint` directs source reads when context is omitted and states
+that selected results cannot prove absence or repository-wide behavior.
 Search `nextHops` retain the MCP operation and include a CLI argument array (`cli`)
 to pass after the executable. `relationships` uses the same verified import/re-export
 tool as MCP and does not prove runtime calls. `refs --symbol <name>` uses the existing

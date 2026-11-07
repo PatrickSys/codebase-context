@@ -76,7 +76,9 @@ complete control-flow analysis. An oversized source line is omitted rather than 
 Compact `searchQuality.hint` directs source reads when context is omitted and states
 that selected results cannot prove absence or repository-wide behavior.
 Search `nextHops` retain the MCP operation and include a CLI argument array (`cli`)
-to pass after the executable. `relationships` uses the same verified import/re-export
+to pass after the executable. They follow the results, require a confident search
+and an indexed import edge, and choose outgoing or incoming traversal accordingly.
+`relationships` uses the same verified import/re-export
 tool as MCP and does not prove runtime calls. `refs --symbol <name>` uses the existing
 current-source reference finder for symbol-level continuation.
 

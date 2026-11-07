@@ -847,37 +847,29 @@ async function handlePinned(
     return undefined;
   }
 
-  // Build up to 2 dynamic next-hop suggestions (compact mode)
+  // Recommend an indexed edge only after source discovery has a confident result.
   function buildNextHops(compactResults: SearchResult[], sq: { status: string }): SearchNextHop[] {
-    const hops: SearchNextHop[] = [];
-    // Only advertise tools this MCP server actually supplies. Source reads belong
-    // to the host; returned result paths already identify what to open there.
-    if (compactResults.length > 0) {
-      const relativeFile = path.relative(ctx.rootPath, compactResults[0].filePath);
-      if (
-        !path.isAbsolute(relativeFile) &&
-        relativeFile !== '..' &&
-        !relativeFile.startsWith(`..${path.sep}`)
-      ) {
-        hops.push({
-          tool: 'get_code_relationships',
-          args: { file: relativeFile.replace(/\\/g, '/'), direction: 'outgoing' },
-          cli: [
-            'relationships',
-            '--file',
-            relativeFile.replace(/\\/g, '/'),
-            '--direction',
-            'outgoing',
-            '--json'
-          ],
-          why:
-            sq.status === 'low_confidence'
-              ? 'Follow current import evidence while continuing source discovery'
-              : 'Follow verified imports to related implementation files'
-        });
+    if (sq.status === 'low_confidence') return [];
+    for (const result of compactResults) {
+      const relativeFile = canonicalRootRelativePath(normalizeGraphPath(result.filePath));
+      if (!relativeFile) continue;
+      const direction = getImportsGraph()?.[relativeFile]?.length
+        ? 'outgoing'
+        : reverseImports.get(relativeFile)?.length
+          ? 'incoming'
+          : undefined;
+      if (direction) {
+        return [
+          {
+            tool: 'get_code_relationships',
+            args: { file: relativeFile, direction },
+            cli: ['relationships', '--file', relativeFile, '--direction', direction, '--json'],
+            why: 'After reading the result source, follow indexed imports/re-exports, not runtime calls.'
+          }
+        ];
       }
     }
-    return hops.slice(0, 2);
+    return [];
   }
 
   const searchQuality = assessSearchQuality(queryStr, results);
@@ -1321,7 +1313,6 @@ async function handlePinned(
         ...(preflightPayload && { preflight: preflightPayload }),
         ...(patternSummary && { patternSummary }),
         ...(bestExample && { bestExample }),
-        ...(nextHops.length > 0 && { nextHops }),
         results: compactResults.map((r, index) => {
           const importedByCount = getImportedByCount(r);
           const topExports = getTopExports(r.filePath);
@@ -1349,6 +1340,7 @@ async function handlePinned(
             ...preview
           };
         }),
+        ...(nextHops.length > 0 && { nextHops }),
         ...(strongMemories.length > 0 && {
           relatedMemories: strongMemories.map((m) => formatMemoryForOutput(m))
         })

@@ -344,9 +344,12 @@ describe('search_codebase compact/full mode', () => {
       '--file',
       'src/auth/auth.service.ts',
       '--direction',
-      'outgoing',
+      'incoming',
       '--json'
     ]);
+    expect(response.content[0].text.indexOf('"results"')).toBeLessThan(
+      response.content[0].text.indexOf('"nextHops"')
+    );
   });
 
   it('does not recommend an unrelated golden example for a different source result', async () => {
@@ -371,7 +374,35 @@ describe('search_codebase compact/full mode', () => {
     });
     const payload = parseSearchResponse(response.content[0].text);
     expect(payload.bestExample).toBeUndefined();
-    expect(payload.nextHops?.some((hop) => hop.tool === 'read_file')).toBe(false);
+    expect(payload.nextHops).toBeUndefined();
+  });
+
+  it('offers outgoing traversal only for a result with indexed imports', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ filePath: path.join(tempRoot!, 'src/app/app.module.ts') })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'auth service' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.nextHops?.[0].args).toEqual({
+      file: 'src/app/app.module.ts',
+      direction: 'outgoing'
+    });
+    expect(payload.nextHops?.[0].why).toContain('not runtime calls');
   });
 
   it('omits stale pattern examples from summaries, advice, and evidence', async () => {
@@ -469,9 +500,9 @@ describe('search_codebase compact/full mode', () => {
 
   it('suppresses grounded pattern advice when search quality requires abstention', async () => {
     searchMocks.search.mockResolvedValueOnce([
-      makeResult({ score: 0.2 }),
-      makeResult({ filePath: 'src/auth/auth.service2.ts', score: 0.19 }),
-      makeResult({ filePath: 'src/auth/auth.service3.ts', score: 0.18 })
+      makeResult({ filePath: path.join(tempRoot!, 'src/auth/auth.service.ts'), score: 0.2 }),
+      makeResult({ filePath: path.join(tempRoot!, 'src/auth/auth.service2.ts'), score: 0.19 }),
+      makeResult({ filePath: path.join(tempRoot!, 'src/auth/auth.service3.ts'), score: 0.18 })
     ]);
 
     const { server } = await import('../src/index.js');
@@ -498,6 +529,9 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.searchQuality?.status).toBe('low_confidence');
     expect(payload.preflight?.abstain).toBe(true);
     expect(payload.preflight?.patterns).toBeUndefined();
+    expect(payload.nextHops).toBeUndefined();
+    expect(payload.searchQuality.hint).toContain('Low confidence');
+    expect(payload.searchQuality.hint).toContain('not exhaustive');
   });
 
   it('compact mode serializes symbol intelligence fields from chunk metadata', async () => {

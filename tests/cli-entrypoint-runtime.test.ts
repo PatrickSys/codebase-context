@@ -19,6 +19,24 @@ type MapJson = {
 };
 
 describe('CLI entrypoint runtime', () => {
+  it('runs relationships through the executable CLI route without starting MCP', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'cbc-cli-relationships-'));
+    try {
+      const help = runCli(['relationships', '--help'], projectRoot);
+      expect(help.status, help.stderr).toBe(0);
+      expect(help.stdout).toContain('relationships --file <path>');
+      const result = runCli(['relationships', '--file', 'missing.ts', '--json'], projectRoot);
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        status: 'not_indexed_or_outside_root',
+        file: 'missing.ts'
+      });
+      expect(await readdir(projectRoot)).toEqual([]);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  }, 120_000);
+
   function runCli(args: string[], projectRoot = root) {
     return spawnSync(
       process.execPath,

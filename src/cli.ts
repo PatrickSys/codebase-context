@@ -2,7 +2,7 @@ import { resolveIndexArtifact } from './core/index-generation.js';
 /**
  * CLI subcommands for codebase-context.
  * Memory list/add/remove — vendor-neutral access without any AI agent.
- * search/metadata/status/reindex/style-guide/patterns/refs/cycles — human-facing wrappers over core read/query tools.
+ * search/metadata/status/reindex/style-guide/patterns/refs/relationships/cycles — wrappers over read/query tools.
  */
 
 import path from 'path';
@@ -42,6 +42,7 @@ const _CLI_COMMANDS = [
   'style-guide',
   'patterns',
   'refs',
+  'relationships',
   'cycles',
   'init',
   'map'
@@ -50,7 +51,7 @@ const _CLI_COMMANDS = [
 type CliCommand = (typeof _CLI_COMMANDS)[number];
 
 const CLI_COMMAND_SET: ReadonlySet<string> = new Set(_CLI_COMMANDS);
-function isCliCommand(value: string): value is CliCommand {
+export function isCliCommand(value: string): value is CliCommand {
   return CLI_COMMAND_SET.has(value);
 }
 
@@ -82,6 +83,10 @@ function printUsage(): void {
   console.log('  style-guide [--query <q>] [--category <c>]  Style guide rules');
   console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
+  console.log(
+    '  relationships --file <path>       Verified imports/re-exports (not runtime calls)'
+  );
+  console.log('         [--direction outgoing|incoming] [--max-hops 1..3] [--max-nodes 1..100]');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
   console.log('  init [--client <name>] [--yes]     Detect and configure coding tools');
   console.log('  map [--json] [--pretty]              Conventions map (indexes first if needed)');
@@ -294,6 +299,7 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
     | { toolName: 'get_style_guide'; toolArgs: StyleGuideToolArgs }
     | { toolName: 'get_team_patterns'; toolArgs: TeamPatternsToolArgs }
     | { toolName: 'get_symbol_references'; toolArgs: SymbolReferencesToolArgs }
+    | { toolName: 'get_code_relationships'; toolArgs: RelationshipToolArgs }
     | { toolName: 'detect_circular_dependencies'; toolArgs: DetectCircularDependenciesToolArgs };
 
   type SearchToolArgs = {
@@ -307,6 +313,12 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
   type StyleGuideToolArgs = { query?: string; category?: string };
   type TeamPatternsToolArgs = { category?: TeamPatternCategory };
   type SymbolReferencesToolArgs = { symbol: string; limit?: number };
+  type RelationshipToolArgs = {
+    file: string;
+    direction?: 'outgoing' | 'incoming';
+    max_hops?: number;
+    max_nodes?: number;
+  };
   type DetectCircularDependenciesToolArgs = { scope?: string };
 
   let dispatch: DispatchSpec;
@@ -421,6 +433,36 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
         toolArgs: {
           symbol,
           ...(limit != null ? { limit } : {})
+        }
+      };
+      break;
+    }
+    case 'relationships': {
+      const usage =
+        'codebase-context relationships --file <path> [--direction outgoing|incoming] [--max-hops 1..3] [--max-nodes 1..100]';
+      const file = requireStringFlag(flags, 'file', usage);
+      const direction = optionalStringFlag(flags, 'direction', usage);
+      if (direction !== undefined && direction !== 'incoming' && direction !== 'outgoing') {
+        exitWithError(`Error: --direction must be incoming or outgoing\nUsage: ${usage}`);
+      }
+      const boundedInt = (key: string, maximum: number): number | undefined => {
+        const value = optionalStringFlag(flags, key, usage);
+        if (value === undefined) return undefined;
+        const number = Number(value);
+        if (!Number.isInteger(number) || number < 1 || number > maximum) {
+          exitWithError(`Error: --${key} must be an integer from 1 to ${maximum}\nUsage: ${usage}`);
+        }
+        return number;
+      };
+      const maxHops = boundedInt('max-hops', 3);
+      const maxNodes = boundedInt('max-nodes', 100);
+      dispatch = {
+        toolName: 'get_code_relationships',
+        toolArgs: {
+          file,
+          ...(direction ? { direction } : {}),
+          ...(maxHops !== undefined ? { max_hops: maxHops } : {}),
+          ...(maxNodes !== undefined ? { max_nodes: maxNodes } : {})
         }
       };
       break;

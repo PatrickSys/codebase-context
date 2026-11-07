@@ -25,7 +25,7 @@ import { IndexSignalSchema, type IndexSignal } from './core/index-signal.js';
 export type { IndexSignal } from './core/index-signal.js';
 import { IndexCorruptedError } from './errors/index.js';
 import { appendMemoryFile } from './memory/store.js';
-import { handleCliCommand } from './cli.js';
+import { handleCliCommand, isCliCommand } from './cli.js';
 import { startFileWatcher } from './core/file-watcher.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
@@ -97,20 +97,6 @@ const KNOWN_FLAGS = new Set([
   '--version',
   '-v'
 ]);
-const CLI_SUBCOMMANDS = [
-  'memory',
-  'search',
-  'metadata',
-  'status',
-  'reindex',
-  'style-guide',
-  'patterns',
-  'refs',
-  'cycles',
-  'init',
-  'map',
-  'help'
-];
 
 function canonicalEntrypointPath(filePath: string | undefined): string | undefined {
   if (!filePath) return undefined;
@@ -131,7 +117,8 @@ const directSubcommand = process.argv[2];
 const isDirectCliSubcommand =
   isDirectRun &&
   typeof directSubcommand === 'string' &&
-  (CLI_SUBCOMMANDS.includes(directSubcommand) ||
+  (isCliCommand(directSubcommand) ||
+    directSubcommand === 'help' ||
     directSubcommand === '--help' ||
     directSubcommand === '--version' ||
     directSubcommand === '-v');
@@ -2123,7 +2110,7 @@ if (isDirectRun) {
   if (subcommand === '--version' || subcommand === '-v') {
     console.log(PKG_VERSION);
     process.exit(0);
-  } else if (CLI_SUBCOMMANDS.includes(subcommand) || subcommand === '--help') {
+  } else if (isCliCommand(subcommand) || subcommand === 'help' || subcommand === '--help') {
     handleCliCommand(process.argv.slice(2)).catch((error) => {
       console.error('Error:', error instanceof Error ? error.message : String(error));
       process.exit(1);

@@ -339,6 +339,17 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.nextHops?.length ?? 0).toBeGreaterThan(0);
     expect(payload.nextHops?.some((hop) => hop.tool === 'read_file')).toBe(false);
     expect(payload.nextHops?.[0].tool).toBe('get_code_relationships');
+    expect(payload.nextHops?.[0].cli).toEqual([
+      'relationships',
+      '--file',
+      'src/auth/auth.service.ts',
+      '--direction',
+      'incoming',
+      '--json'
+    ]);
+    expect(response.content[0].text.indexOf('"results"')).toBeLessThan(
+      response.content[0].text.indexOf('"nextHops"')
+    );
   });
 
   it('does not recommend an unrelated golden example for a different source result', async () => {
@@ -363,7 +374,35 @@ describe('search_codebase compact/full mode', () => {
     });
     const payload = parseSearchResponse(response.content[0].text);
     expect(payload.bestExample).toBeUndefined();
-    expect(payload.nextHops?.some((hop) => hop.tool === 'read_file')).toBe(false);
+    expect(payload.nextHops).toBeUndefined();
+  });
+
+  it('offers outgoing traversal only for a result with indexed imports', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ filePath: path.join(tempRoot!, 'src/app/app.module.ts') })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'auth service' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.nextHops?.[0].args).toEqual({
+      file: 'src/app/app.module.ts',
+      direction: 'outgoing'
+    });
+    expect(payload.nextHops?.[0].why).toContain('not runtime calls');
   });
 
   it('omits stale pattern examples from summaries, advice, and evidence', async () => {
@@ -461,9 +500,9 @@ describe('search_codebase compact/full mode', () => {
 
   it('suppresses grounded pattern advice when search quality requires abstention', async () => {
     searchMocks.search.mockResolvedValueOnce([
-      makeResult({ score: 0.2 }),
-      makeResult({ filePath: 'src/auth/auth.service2.ts', score: 0.19 }),
-      makeResult({ filePath: 'src/auth/auth.service3.ts', score: 0.18 })
+      makeResult({ filePath: path.join(tempRoot!, 'src/auth/auth.service.ts'), score: 0.2 }),
+      makeResult({ filePath: path.join(tempRoot!, 'src/auth/auth.service2.ts'), score: 0.19 }),
+      makeResult({ filePath: path.join(tempRoot!, 'src/auth/auth.service3.ts'), score: 0.18 })
     ]);
 
     const { server } = await import('../src/index.js');
@@ -490,6 +529,9 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.searchQuality?.status).toBe('low_confidence');
     expect(payload.preflight?.abstain).toBe(true);
     expect(payload.preflight?.patterns).toBeUndefined();
+    expect(payload.nextHops).toBeUndefined();
+    expect(payload.searchQuality.hint).toContain('Low confidence');
+    expect(payload.searchQuality.hint).toContain('not exhaustive');
   });
 
   it('compact mode serializes symbol intelligence fields from chunk metadata', async () => {
@@ -529,7 +571,7 @@ describe('search_codebase compact/full mode', () => {
     expect(payload.results[0].symbolKind).toBe('class');
     expect(payload.results[0].scope).toBe('AuthModule.AuthService');
     expect(payload.results[0].signaturePreview).toBe(
-      'export class AuthService {\n  getToken() {\n    return tokenStore.read();'
+      'export class AuthService {\n  getToken() {\n    return tokenStore.read();\n  }\n}\nconst ignored = true;'
     );
   });
 
@@ -586,7 +628,7 @@ describe('search_codebase compact/full mode', () => {
     const preview = payload.results[0]?.signaturePreview;
 
     expect(preview).toContain(marker);
-    expect((preview ?? '').split('\n').length).toBeLessThanOrEqual(3);
+    expect((preview ?? '').split('\n').length).toBeLessThanOrEqual(7);
   });
 
   it('keeps compact preview lines contiguous around the strongest source match', async () => {
@@ -628,10 +670,116 @@ describe('search_codebase compact/full mode', () => {
 
     expect(previewLines).toContain('finishImport(saved);');
     expect(previewLines.length).toBeGreaterThan(0);
-    expect(previewLines.length).toBeLessThanOrEqual(3);
+    expect(previewLines.length).toBeLessThanOrEqual(7);
     expect(sourceLines.slice(previewStart, previewStart + previewLines.length)).toEqual(
       previewLines
     );
+  });
+
+  it('keeps a condition and its effect with exact source lines in compact evidence', async () => {
+    const lines = [
+      '',
+      'function expireSession(expiry) {',
+      '  const now = Date.now();',
+      '  if (expiry <= now) {',
+      '    revokeSession();',
+      '    return false;',
+      '  }',
+      '  return true;',
+      '}'
+    ];
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ snippet: lines.join('\r\n'), startLine: 40, endLine: 48 })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'expireSession expiry' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    const result = payload.results[0];
+    expect(result.signaturePreview).toContain('if (expiry <= now) {');
+    expect(result.signaturePreview).toContain('revokeSession();');
+    expect(result.signaturePreview).toContain('return false;');
+    expect(result.previewRange).toEqual({ startLine: 41, endLine: 47 });
+    expect(result.signaturePreview).toBe(lines.slice(1, 8).join('\n'));
+    expect(result.readRange).toEqual({ startLine: 40, endLine: 48 });
+    const emittedPreview = response.content[0].text.match(
+      /"signaturePreview"\s*:\s*"(?:\\.|[^"\\])*"/
+    )?.[0];
+    expect(emittedPreview).toBeDefined();
+    expect(Buffer.byteLength(emittedPreview ?? '', 'utf8')).toBeLessThanOrEqual(480);
+    expect(payload.searchQuality.tokenEstimate).toBe(
+      Math.ceil(response.content[0].text.length / 4)
+    );
+  });
+
+  it.each([
+    { snippet: 'function selected() {\n  return first();\n}', endLine: 35 },
+    { snippet: undefined, endLine: 35 },
+    { snippet: '界'.repeat(200), endLine: 1 }
+  ])('directs source follow-through when compact evidence omits source: %j', async (source) => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ ...source, startLine: 1, filePath: path.join(tempRoot!, 'src/selected.ts') })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'selected' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.results[0].readRange).toEqual({ startLine: 1, endLine: source.endLine });
+    expect(payload.searchQuality.hint).toContain('readRange');
+    expect(payload.searchQuality.hint).toContain('not exhaustive');
+    expect(payload.searchQuality.hint).toContain('behavior');
+  });
+
+  it('does not present complete excerpts as exhaustive repository evidence', async () => {
+    searchMocks.search.mockResolvedValueOnce([
+      makeResult({ snippet: 'function selected() {}', startLine: 1, endLine: 1 })
+    ]);
+    const { server } = await import('../src/index.js');
+    const handler = (
+      server as {
+        _requestHandlers?: Map<
+          string,
+          (request: unknown) => Promise<{ content: Array<{ type: string; text: string }> }>
+        >;
+      }
+    )._requestHandlers?.get('tools/call');
+    if (!handler) throw new Error('Expected tools/call handler');
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'search_codebase', arguments: { query: 'selected' } }
+    });
+    const payload = parseSearchResponse(response.content[0].text);
+    expect(payload.results[0].readRange).toBeUndefined();
+    expect(payload.searchQuality.hint).toContain('not exhaustive');
+    expect(payload.searchQuality.hint).not.toContain('readRange');
   });
 
   it('adds an exact tokenEstimate advisory to compact responses', async () => {

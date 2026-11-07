@@ -149,6 +149,48 @@ describe('CLI', () => {
     expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
   });
 
+  it('relationships follows the existing verified import tool with bounded options', async () => {
+    const payload = { status: 'success', paths: [], note: 'Imports never imply runtime calls.' };
+    toolMocks.dispatchTool.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(payload) }]
+    });
+    await handleCliCommand([
+      'relationships',
+      '--file',
+      'src/session.ts',
+      '--direction',
+      'incoming',
+      '--max-hops',
+      '3',
+      '--max-nodes',
+      '12',
+      '--json'
+    ]);
+    expect(toolMocks.dispatchTool).toHaveBeenCalledWith(
+      'get_code_relationships',
+      {
+        file: 'src/session.ts',
+        direction: 'incoming',
+        max_hops: 3,
+        max_nodes: 12
+      },
+      expect.objectContaining({ rootPath: expect.any(String) })
+    );
+    expect(logSpy).toHaveBeenCalledWith(JSON.stringify(payload));
+  });
+
+  it.each([
+    ['--file'],
+    ['--file', 'src/a.ts', '--direction', 'callers'],
+    ['--file', 'src/a.ts', '--max-hops', '4'],
+    ['--file', 'src/a.ts', '--max-hops', '1.5'],
+    ['--file', 'src/a.ts', '--max-nodes', '101'],
+    ['--file', 'src/a.ts', '--max-nodes', '0']
+  ])('rejects invalid relationship options %j before dispatch', async (...args) => {
+    await expect(handleCliCommand(['relationships', ...args])).rejects.toThrow(/process\.exit:1/);
+    expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
+  });
+
   it('status renders human output (not raw JSON)', async () => {
     const originalAscii = process.env.CODEBASE_CONTEXT_ASCII;
     process.env.CODEBASE_CONTEXT_ASCII = '1';

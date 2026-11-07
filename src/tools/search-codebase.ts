@@ -3,7 +3,13 @@ import { withToolIndexSnapshot } from './index-snapshot.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { ToolContext, ToolResponse, DecisionCard } from './types.js';
+import type {
+  ToolContext,
+  ToolResponse,
+  DecisionCard,
+  SearchNextHop,
+  SearchResultItem
+} from './types.js';
 import { presentSourceCoverage } from '../core/source-coverage-action.js';
 import { CodebaseSearcher } from '../core/search.js';
 import type { SearchIntentProfile, SearchSourceCoverage } from '../core/search.js';
@@ -29,7 +35,7 @@ import { indexHealthByFile, normalizeHealthLookupKey, readHealthFile } from '../
 import { InternalFileGraph } from '../utils/usage-tracker.js';
 import type { FileExport } from '../utils/usage-tracker.js';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
-import { finalizeSearchPayloadText } from './search-payload-budget.js';
+import { boundSearchPreview, finalizeSearchPayloadText } from './search-payload-budget.js';
 
 // Stop words for compact-mode memory relevance filter (mirrors QUERY_STOP_WORDS in search.ts)
 const COMPACT_STOP_WORDS = new Set([
@@ -841,32 +847,29 @@ async function handlePinned(
     return undefined;
   }
 
-  // Build up to 2 dynamic next-hop suggestions (compact mode)
-  function buildNextHops(
-    compactResults: SearchResult[],
-    sq: { status: string }
-  ): Array<{ tool: string; args?: Record<string, string>; why: string }> {
-    const hops: Array<{ tool: string; args?: Record<string, string>; why: string }> = [];
-    // Only advertise tools this MCP server actually supplies. Source reads belong
-    // to the host; returned result paths already identify what to open there.
-    if (compactResults.length > 0) {
-      const relativeFile = path.relative(ctx.rootPath, compactResults[0].filePath);
-      if (
-        !path.isAbsolute(relativeFile) &&
-        relativeFile !== '..' &&
-        !relativeFile.startsWith(`..${path.sep}`)
-      ) {
-        hops.push({
-          tool: 'get_code_relationships',
-          args: { file: relativeFile.replace(/\\/g, '/'), direction: 'outgoing' },
-          why:
-            sq.status === 'low_confidence'
-              ? 'Follow current import evidence while continuing source discovery'
-              : 'Follow verified imports to related implementation files'
-        });
+  // Recommend an indexed edge only after source discovery has a confident result.
+  function buildNextHops(compactResults: SearchResult[], sq: { status: string }): SearchNextHop[] {
+    if (sq.status === 'low_confidence') return [];
+    for (const result of compactResults) {
+      const relativeFile = canonicalRootRelativePath(normalizeGraphPath(result.filePath));
+      if (!relativeFile) continue;
+      const direction = getImportsGraph()?.[relativeFile]?.length
+        ? 'outgoing'
+        : reverseImports.get(relativeFile)?.length
+          ? 'incoming'
+          : undefined;
+      if (direction) {
+        return [
+          {
+            tool: 'get_code_relationships',
+            args: { file: relativeFile, direction },
+            cli: ['relationships', '--file', relativeFile, '--direction', direction, '--json'],
+            why: 'After reading the result source, follow indexed imports/re-exports, not runtime calls.'
+          }
+        ];
       }
     }
-    return hops.slice(0, 2);
+    return [];
   }
 
   const searchQuality = assessSearchQuality(queryStr, results);
@@ -1240,10 +1243,24 @@ async function handlePinned(
   // Compact mode (default): bounded response with light graph context
   const isCompact = mode !== 'full';
 
-  function buildSignaturePreview(snippet: string | undefined): string | undefined {
-    if (!snippet) return undefined;
-
-    const lines = snippet.replace(/^\r?\n+/, '').split('\n');
+  function buildSignaturePreview(
+    result: SearchResult
+  ): Pick<SearchResultItem, 'signaturePreview' | 'previewRange' | 'readRange'> {
+    const readRange = { startLine: result.startLine, endLine: result.endLine };
+    if (!result.snippet) return { readRange };
+    // Snippets are source prefixes. Keep their offsets, but never present the
+    // searcher's synthetic truncation footer as source evidence.
+    const lines = result.snippet.replace(/\r\n/g, '\n').split('\n');
+    if (
+      lines.length === 22 &&
+      lines[20] === '' &&
+      /^\.\.\. \[\d+ more lines\]$/.test(lines[21]) &&
+      result.endLine - result.startLine + 1 > 20
+    )
+      lines.splice(20);
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+    const leading = lines.findIndex((line) => line.trim());
+    if (leading < 0) return { readRange };
     const previewTerms = [...new Set(queryTerms.filter((term) => term.length > 3))];
     const strongestMatch = lines
       .map((line, index) => ({
@@ -1253,17 +1270,22 @@ async function handlePinned(
       .filter((entry) => entry.matches > 0)
       .sort((a, b) => b.matches - a.matches || a.index - b.index)[0];
 
-    let previewLines = lines.slice(0, 3);
-    if (strongestMatch) {
-      const windowLength = Math.min(3, lines.length);
-      const windowStart = Math.max(
-        0,
-        Math.min(strongestMatch.index - 1, lines.length - windowLength)
-      );
-      previewLines = lines.slice(windowStart, windowStart + windowLength);
-    }
-
-    return previewLines.join('\n').trim() || undefined;
+    const selected = boundSearchPreview(
+      lines.slice(leading),
+      Math.max(0, (strongestMatch?.index ?? leading) - leading)
+    );
+    if (!selected) return { readRange };
+    const previewRange = {
+      startLine: result.startLine + leading + selected.start,
+      endLine: result.startLine + leading + selected.end - 1
+    };
+    return {
+      signaturePreview: selected.text,
+      previewRange,
+      ...(previewRange.startLine > result.startLine || previewRange.endLine < result.endLine
+        ? { readRange }
+        : {})
+    };
   }
 
   if (isCompact) {
@@ -1272,22 +1294,31 @@ async function handlePinned(
     const patternSummary = buildPatternSummary();
     const bestExample = getBestExample(compactResults);
     const nextHops = buildNextHops(compactResults, searchQuality);
+    const previews = compactResults.map(buildSignaturePreview);
+    const evidenceHint = [
+      searchQualityBlock.hint,
+      'Selected search results are not exhaustive: they do not prove absence or repository-wide behavior.',
+      previews.some((preview) => preview.readRange)
+        ? 'Read each readRange in the host before inferring behavior; previewRange covers only the displayed excerpt.'
+        : undefined
+    ]
+      .filter(Boolean)
+      .join(' ');
     const payloadText = finalizeSearchPayloadText(
       {
         status: 'success',
         ...(sourceCoverage.status === 'partial' && { sourceCoverage }),
-        searchQuality: searchQualityBlock,
+        searchQuality: { ...searchQualityBlock, hint: evidenceHint },
         budget: { mode: 'compact', resultCount: compactResults.length },
         ...(preflightPayload && { preflight: preflightPayload }),
         ...(patternSummary && { patternSummary }),
         ...(bestExample && { bestExample }),
-        ...(nextHops.length > 0 && { nextHops }),
-        results: compactResults.map((r) => {
+        results: compactResults.map((r, index) => {
           const importedByCount = getImportedByCount(r);
           const topExports = getTopExports(r.filePath);
           const scope = buildScopeHeader(r.metadata);
           const health = getResultHealth(r.filePath);
-          const signaturePreview = buildSignaturePreview(r.snippet);
+          const preview = previews[index];
           return {
             file: `${r.filePath}:${r.startLine}-${r.endLine}`,
             summary: r.summary,
@@ -1306,9 +1337,10 @@ async function handlePinned(
             ...(r.metadata?.symbolKind && { symbolKind: r.metadata.symbolKind }),
             ...(scope && { scope }),
             ...(health && { health }),
-            ...(signaturePreview && { signaturePreview })
+            ...preview
           };
         }),
+        ...(nextHops.length > 0 && { nextHops }),
         ...(strongMemories.length > 0 && {
           relatedMemories: strongMemories.map((m) => formatMemoryForOutput(m))
         })
